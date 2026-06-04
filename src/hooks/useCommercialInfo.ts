@@ -30,7 +30,7 @@ export function useCommercialInfo() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['commercial_info', brandId] });
 
   const addInfo = useMutation({
-    mutationFn: async (input: { rawText: string; structured: CommercialInfoStructured; source?: 'owner' | 'nilia' }) => {
+    mutationFn: async (input: { rawText: string; structured: CommercialInfoStructured; source?: 'owner' | 'mark' | 'nilia' }) => {
       if (!brandId) throw new Error('Δεν έχει επιλεγεί brand');
       const uid = getAuth().currentUser?.uid ?? null;
       return createCommercialInfo({

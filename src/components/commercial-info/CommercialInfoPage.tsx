@@ -73,7 +73,7 @@ function InfoCard({
               {item.horizonFrom ?? '…'} → {item.horizonTo ?? '…'}
             </Badge>
           )}
-          {item.source === 'nilia' && <Badge variant="orange">από Nilia</Badge>}
+          {(item.source === 'mark' || item.source === 'nilia') && <Badge variant="orange">από Mark</Badge>}
         </div>
 
         {scope.length > 0 && (
@@ -157,7 +157,7 @@ export function CommercialInfoPage() {
         }
         description={
           <p className="text-[14px] text-[var(--nts-medium-gray)]">
-            Κατέγραψε γνώση, εξελίξεις αγοράς ή το εμπορικό σου ένστικτο. Η Nilia τα δομεί και τα λαμβάνει υπόψη στο
+            Κατέγραψε γνώση, εξελίξεις αγοράς ή το εμπορικό σου ένστικτο. Ο Mark τα δομεί και τα λαμβάνει υπόψη στο
             Marketing Plan, στις προβλέψεις πωλήσεων και στις προτάσεις πολιτικής.
           </p>
         }
@@ -177,7 +177,7 @@ export function CommercialInfoPage() {
           />
           <div className="flex items-center justify-between">
             <p className="text-xs text-[var(--nts-medium-gray)]">
-              Η Nilia θα αναγνωρίσει κατηγορίες, parent SKU, επωνυμίες, κατεύθυνση και ορίζοντα.
+              Ο Mark θα αναγνωρίσει κατηγορίες, parent SKU, επωνυμίες, κατεύθυνση και ορίζοντα.
             </p>
             <Button variant="primary" onClick={handleAdd} disabled={!draft.trim() || saving || !brandId} icon={saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}>
               {saving ? 'Καταχώριση…' : 'Καταχώριση'}
@@ -199,7 +199,7 @@ export function CommercialInfoPage() {
             {active.length === 0 ? (
               <Card>
                 <div className="p-8 text-center text-sm text-[var(--nts-medium-gray)]">
-                  Δεν υπάρχουν ενεργές εμπορικές πληροφορίες. Πρόσθεσε την πρώτη παραπάνω ή πες την στη Nilia.
+                  Δεν υπάρχουν ενεργές εμπορικές πληροφορίες. Πρόσθεσε την πρώτη παραπάνω ή πες την στον Mark.
                 </div>
               </Card>
             ) : (

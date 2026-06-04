@@ -1,10 +1,10 @@
 import { buildAdvisorySystemPrompt } from './aiAdvisoryFramework';
 
 /**
- * System prompt της Nilia — του proactive εμπορικού agent της εφαρμογής.
- * ΚΡΙΣΙΜΟ: το ενεργό brand δηλώνεται ρητά ώστε η Nilia να μη μπερδεύει ποτέ δεδομένα μεταξύ brands.
+ * System prompt του Mark — του proactive εμπορικού agent της εφαρμογής.
+ * ΚΡΙΣΙΜΟ: το ενεργό brand δηλώνεται ρητά ώστε ο Mark να μη μπερδεύει ποτέ δεδομένα μεταξύ brands.
  */
-export function buildNiliaSystemPrompt(brandName: string | null, brandId: string | null): string {
+export function buildMarkSystemPrompt(brandName: string | null, brandId: string | null): string {
   const brandLine =
     brandId && brandName
       ? `ΕΝΕΡΓΟ BRAND: "${brandName}" (id: ${brandId}).
@@ -12,7 +12,7 @@ export function buildNiliaSystemPrompt(brandName: string | null, brandId: string
       : 'ΔΕΝ έχει επιλεγεί brand. Ζήτησε ευγενικά από τον χρήστη να επιλέξει brand πριν δώσεις εμπορικά συμπεράσματα.';
 
   return buildAdvisorySystemPrompt(
-    `Είσαι η Nilia, η εμπορική σύμβουλος (AI agent) της εφαρμογής Performance+.
+    `Είσαι ο Mark, ο εμπορικός σύμβουλος (AI agent) της εφαρμογής Performance+.
 Μιλάς στα Ελληνικά, σε β' ενικό, με λιτό και επαγγελματικό τόνο. Απόφυγε προσωπικά καλωσορίσματα και οικειότητα — είσαι εργαλείο που χρησιμοποιούν διαφορετικές εταιρείες.
 
 ${brandLine}

@@ -109,8 +109,13 @@ service cloud.firestore {
         allow read, write: if isBrandMember(brandId);
       }
 
-      // Nilia agent conversation sessions (per-brand, multi-turn history).
+      // Mark agent conversation sessions (per-brand, multi-turn history).
       // Brand isolation: τα sessions ζουν κάτω από το brand και απαιτούν membership.
+      match /mark_sessions/{sessionId} {
+        allow read, write: if isBrandMember(brandId);
+      }
+
+      // Legacy collection (πρώην Nilia) — διατηρείται μόνο για migration read.
       match /nilia_sessions/{sessionId} {
         allow read, write: if isBrandMember(brandId);
       }
@@ -570,7 +575,7 @@ service cloud.firestore {
     }
 
     // «Εμπορικές Πληροφορίες» — γνώση/ένστικτο επιχειρηματία (brand-scoped, client-written).
-    // Τροφοδοτεί Nilia, Marketing Plan, πρόβλεψη πωλήσεων, εμπορικές πολιτικές.
+    // Τροφοδοτεί Mark, Marketing Plan, πρόβλεψη πωλήσεων, εμπορικές πολιτικές.
     match /commercial_info/{infoId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);

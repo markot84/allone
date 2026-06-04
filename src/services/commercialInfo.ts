@@ -43,7 +43,7 @@ export interface CommercialInfo extends CommercialInfoStructured {
   brandId: string;
   rawText: string;
   status: CommercialInfoStatus;
-  source: 'owner' | 'nilia';
+  source: 'owner' | 'mark' | 'nilia';
   createdBy: string | null;
   createdAt?: Timestamp;
 }
@@ -53,7 +53,7 @@ interface CommercialInfoDoc {
   brandId: string;
   rawText: string;
   status: CommercialInfoStatus;
-  source: 'owner' | 'nilia';
+  source: 'owner' | 'mark' | 'nilia';
   createdBy: string | null;
   createdAt: Timestamp;
   structured: CommercialInfoStructured;
@@ -159,7 +159,7 @@ export async function createCommercialInfo(input: {
   brandId: string;
   rawText: string;
   structured: CommercialInfoStructured;
-  source?: 'owner' | 'nilia';
+  source?: 'owner' | 'mark' | 'nilia';
   createdBy?: string | null;
   status?: CommercialInfoStatus;
 }): Promise<string> {

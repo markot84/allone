@@ -74,7 +74,7 @@ const ContentStrategy = lazyNamedWithRetry(() => import('./components/content'),
 const Help = lazyNamedWithRetry(() => import('./components/help'), 'Help');
 const Concept = lazyNamedWithRetry(() => import('./components/concept'), 'Concept');
 const AIInsightsPage = lazyNamedWithRetry(() => import('./components/insights/AIInsightsPage'), 'AIInsightsPage');
-const NiliaAgent = lazyNamedWithRetry(() => import('./components/insights/AIAssistant'), 'NiliaAgent');
+const MarkAgent = lazyNamedWithRetry(() => import('./components/insights/AIAssistant'), 'MarkAgent');
 const CommercialInfoPage = lazyNamedWithRetry(() => import('./components/commercial-info/CommercialInfoPage'), 'CommercialInfoPage');
 const DataImport = lazyNamedWithRetry(() => import('./components/data'), 'DataImport');
 const SuppliersPage = lazyNamedWithRetry(() => import('./components/inventory/SuppliersPage'), 'SuppliersPage');
@@ -216,9 +216,9 @@ function AppMain() {
   };
 
   const [activeSection, setActiveSection] = useState(getInitialSection);
-  // Global Nilia agent: lazy-mounted στο πρώτο άνοιγμα, διαθέσιμη από κάθε σελίδα.
-  const [niliaOpen, setNiliaOpen] = useState(false);
-  const [niliaMounted, setNiliaMounted] = useState(false);
+  // Global Mark agent: lazy-mounted στο πρώτο άνοιγμα, διαθέσιμος από κάθε σελίδα.
+  const [markOpen, setMarkOpen] = useState(false);
+  const [markMounted, setMarkMounted] = useState(false);
 
   // Πριν από child effects: αποθήκευση OAuth query (connector/status) — αλλιώς χάνεται από hash sync ή race.
   useLayoutEffect(() => {
@@ -401,12 +401,12 @@ function AppMain() {
       </AppShell>
 
       {activeSection !== 'insights' && (
-        <AIInsightsTriggerWrapper onClick={() => { setNiliaMounted(true); setNiliaOpen(true); }} />
+        <AIInsightsTriggerWrapper onClick={() => { setMarkMounted(true); setMarkOpen(true); }} />
       )}
 
-      {niliaMounted && (
+      {markMounted && (
         <Suspense fallback={null}>
-          <NiliaAgent isOpen={niliaOpen} onClose={() => setNiliaOpen(false)} />
+          <MarkAgent isOpen={markOpen} onClose={() => setMarkOpen(false)} />
         </Suspense>
       )}
     </div>

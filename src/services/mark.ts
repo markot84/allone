@@ -1,7 +1,7 @@
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { callGemini, type GeminiChatTurn } from './geminiProxy';
-import { buildNiliaSystemPrompt } from '../data/niliaPrompt';
+import { buildMarkSystemPrompt } from '../data/markPrompt';
 import { getCachedBriefing } from './morningBriefing';
 
 const MODEL_NAME = 'gemini-2.5-pro';
@@ -9,8 +9,11 @@ const MODEL_NAME = 'gemini-2.5-pro';
 const MAX_HISTORY_TURNS = 12;
 /** Σταθερό session id ανά brand — μία τρέχουσα συνομιλία ανά brand. */
 const CURRENT_SESSION = 'current';
+/** Νέα collection sessions. Παλιό όνομα (nilia_sessions) διαβάζεται για migration. */
+const SESSIONS_COLLECTION = 'mark_sessions';
+const LEGACY_SESSIONS_COLLECTION = 'nilia_sessions';
 
-export interface NiliaMessage {
+export interface MarkMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
@@ -23,34 +26,50 @@ export interface NiliaMessage {
   proactive?: boolean;
 }
 
-interface NiliaSessionDoc {
+interface MarkSessionDoc {
   brandId: string;
-  messages: NiliaMessage[];
+  messages: MarkMessage[];
   updatedAt: Timestamp;
 }
 
 function sessionRef(brandId: string) {
-  return doc(db, 'brands', brandId, 'nilia_sessions', CURRENT_SESSION);
+  return doc(db, 'brands', brandId, SESSIONS_COLLECTION, CURRENT_SESSION);
+}
+
+function legacySessionRef(brandId: string) {
+  return doc(db, 'brands', brandId, LEGACY_SESSIONS_COLLECTION, CURRENT_SESSION);
 }
 
 /**
  * Φόρτωση της τρέχουσας συνομιλίας του brand.
  * BRAND ISOLATION: επιστρέφει μηνύματα ΜΟΝΟ αν το doc ανήκει στο ίδιο brandId.
+ * MIGRATION: αν δεν υπάρχει νέο session, διαβάζει το παλιό (nilia_sessions) και το μεταφέρει.
  */
-export async function loadNiliaSession(brandId: string): Promise<NiliaMessage[]> {
+export async function loadMarkSession(brandId: string): Promise<MarkMessage[]> {
   if (!brandId) return [];
   try {
     const snap = await getDoc(sessionRef(brandId));
-    if (!snap.exists()) return [];
-    const data = snap.data() as NiliaSessionDoc;
-    if (data.brandId !== brandId) return []; // guard κατά mismatch
-    return Array.isArray(data.messages) ? data.messages : [];
+    if (snap.exists()) {
+      const data = snap.data() as MarkSessionDoc;
+      if (data.brandId !== brandId) return []; // guard κατά mismatch
+      return Array.isArray(data.messages) ? data.messages : [];
+    }
+    // Migration από παλιό collection (μία φορά).
+    const legacy = await getDoc(legacySessionRef(brandId));
+    if (legacy.exists()) {
+      const data = legacy.data() as MarkSessionDoc;
+      if (data.brandId === brandId && Array.isArray(data.messages)) {
+        await saveMarkSession(brandId, data.messages);
+        return data.messages;
+      }
+    }
+    return [];
   } catch {
     return [];
   }
 }
 
-export async function saveNiliaSession(brandId: string, messages: NiliaMessage[]): Promise<void> {
+export async function saveMarkSession(brandId: string, messages: MarkMessage[]): Promise<void> {
   if (!brandId) return;
   try {
     // Κρατάμε λογικό όριο μεγέθους doc (τελευταία ~60 μηνύματα).
@@ -59,23 +78,23 @@ export async function saveNiliaSession(brandId: string, messages: NiliaMessage[]
       brandId,
       messages: trimmed,
       updatedAt: Timestamp.now(),
-    } satisfies NiliaSessionDoc);
+    } satisfies MarkSessionDoc);
   } catch {
     /* μη κρίσιμο — η συνομιλία συνεχίζει in-memory */
   }
 }
 
-export async function clearNiliaSession(brandId: string): Promise<void> {
+export async function clearMarkSession(brandId: string): Promise<void> {
   if (!brandId) return;
   try {
-    await setDoc(sessionRef(brandId), { brandId, messages: [], updatedAt: Timestamp.now() } satisfies NiliaSessionDoc);
+    await setDoc(sessionRef(brandId), { brandId, messages: [], updatedAt: Timestamp.now() } satisfies MarkSessionDoc);
   } catch {
     /* ignore */
   }
 }
 
 /** Μετατροπή ιστορικού μηνυμάτων σε turns για το Gemini (assistant -> model). */
-export function toGeminiHistory(messages: NiliaMessage[]): GeminiChatTurn[] {
+export function toGeminiHistory(messages: MarkMessage[]): GeminiChatTurn[] {
   return messages
     .filter((m) => !m.proactive && m.content.trim().length > 0)
     .slice(-MAX_HISTORY_TURNS)
@@ -96,8 +115,8 @@ export async function buildProactiveGreeting(params: {
   const lines: string[] = [];
   lines.push(
     brandName
-      ? `**Nilia** — εμπορική σύμβουλος για το **${brandName}**.`
-      : '**Nilia** — εμπορική σύμβουλος. Επίλεξε brand για προτάσεις.'
+      ? `**Mark** — εμπορικός σύμβουλος για το **${brandName}**.`
+      : '**Mark** — εμπορικός σύμβουλος. Επίλεξε brand για προτάσεις.'
   );
 
   try {
@@ -129,10 +148,10 @@ export async function buildProactiveGreeting(params: {
 }
 
 /**
- * Παραγωγή απάντησης Nilia (multi-turn).
+ * Παραγωγή απάντησης Mark (multi-turn).
  * BRAND ISOLATION: το brandId περνά στο prompt (system) και στο logging (server).
  */
-export async function generateNiliaReply(params: {
+export async function generateMarkReply(params: {
   brandId: string;
   brandName: string | null;
   userQuery: string;
@@ -165,7 +184,7 @@ ${userQuery}
 Απάντησε σύντομα στα Ελληνικά. Αν ο χρήστης μοιράζεται νέα εμπορική πληροφορία, κάνε 1-2 διευκρινιστικές ερωτήσεις και πρότεινε αν θες να την καταχωρήσουμε.`;
 
   const text = await callGemini({
-    systemPrompt: buildNiliaSystemPrompt(brandName, brandId),
+    systemPrompt: buildMarkSystemPrompt(brandName, brandId),
     userPrompt,
     model: MODEL_NAME,
     temperature: 0.4,

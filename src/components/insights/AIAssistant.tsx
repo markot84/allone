@@ -22,14 +22,14 @@ import {
   type AssistantTenantPack,
 } from '../../services/aiAssistantChat';
 import {
-  loadNiliaSession,
-  saveNiliaSession,
-  clearNiliaSession,
-  generateNiliaReply,
+  loadMarkSession,
+  saveMarkSession,
+  clearMarkSession,
+  generateMarkReply,
   buildProactiveGreeting,
   toGeminiHistory,
-  type NiliaMessage,
-} from '../../services/nilia';
+  type MarkMessage,
+} from '../../services/mark';
 import { formatCommercialInfoForPrompt, structureCommercialInfo } from '../../services/commercialInfo';
 import { useCommercialInfo } from '../../hooks/useCommercialInfo';
 import { useSpeechToText } from '../../hooks/useSpeechToText';
@@ -54,7 +54,7 @@ interface Message {
   savedInfoId?: string;
 }
 
-function toNilia(m: Message): NiliaMessage {
+function toMark(m: Message): MarkMessage {
   return {
     id: m.id,
     role: m.type,
@@ -67,7 +67,7 @@ function toNilia(m: Message): NiliaMessage {
   };
 }
 
-function fromNilia(m: NiliaMessage): Message {
+function fromMark(m: MarkMessage): Message {
   return {
     id: m.id,
     type: m.role,
@@ -85,7 +85,7 @@ interface AIAssistantProps {
   onClose: () => void;
 }
 
-export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
+export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   const { currentBrand } = useBrand();
   const commercialInfo = useCommercialInfo();
   const ecomm = useEcommerceSummary();
@@ -258,11 +258,11 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
     }
 
     (async () => {
-      const stored = await loadNiliaSession(brandId);
+      const stored = await loadMarkSession(brandId);
       if (cancelled || loadedBrandRef.current !== brandId) return;
 
       if (stored.length > 0) {
-        setMessages(stored.map(fromNilia));
+        setMessages(stored.map(fromMark));
         hydratedRef.current = true;
         return;
       }
@@ -271,7 +271,7 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
       const greeting = await buildProactiveGreeting({ brandId, brandName, openInfoCount });
       if (cancelled || loadedBrandRef.current !== brandId) return;
       setMessages([
-        { id: `nilia-welcome-${Date.now()}`, type: 'assistant', content: greeting, timestamp: new Date(), proactive: true },
+        { id: `mark-welcome-${Date.now()}`, type: 'assistant', content: greeting, timestamp: new Date(), proactive: true },
       ]);
       hydratedRef.current = true;
     })();
@@ -287,7 +287,7 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
   useEffect(() => {
     if (!brandId || !hydratedRef.current || loadedBrandRef.current !== brandId) return;
     if (messages.length === 0) return;
-    void saveNiliaSession(brandId, messages.map(toNilia));
+    void saveMarkSession(brandId, messages.map(toMark));
   }, [messages, brandId]);
 
   useEffect(() => {
@@ -307,7 +307,7 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
     const requestBrandName = brandName;
     if (!requestBrandId) return;
 
-    const historyTurns = toGeminiHistory(messages.map(toNilia));
+    const historyTurns = toGeminiHistory(messages.map(toMark));
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
@@ -343,7 +343,7 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
         try {
           const kbExcerpts = formatKnowledgeExcerptsForPrompt(userQuery);
           const webBlock = webSources.length > 0 ? formatWebSnippetsForPrompt(webSources) : undefined;
-          response = await generateNiliaReply({
+          response = await generateMarkReply({
             brandId: requestBrandId,
             brandName: requestBrandName,
             userQuery,
@@ -354,7 +354,7 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
             webContext: webBlock,
           });
         } catch (geminiErr) {
-          console.error('[Nilia] Gemini:', geminiErr);
+          console.error('[Mark] Gemini:', geminiErr);
           response = fallbackKnowledgeAnswer(userQuery, articleCandidates);
           const errMsg = geminiErr instanceof Error ? geminiErr.message : '';
           if (errMsg.includes('Rate limit') || errMsg.includes('429')) {
@@ -378,7 +378,7 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
       }
 
       const assistantMessage: Message = {
-        id: `nilia-${Date.now()}`,
+        id: `mark-${Date.now()}`,
         type: 'assistant',
         content: response,
         relatedArticles: articleRefs.length > 0 ? articleRefs : undefined,
@@ -395,7 +395,7 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
       }
       setMessages((prev) => [
         ...prev,
-        { id: `nilia-error-${Date.now()}`, type: 'assistant', content: 'Συγγνώμη, προέκυψε σφάλμα. Δοκίμασε ξανά.', timestamp: new Date() },
+        { id: `mark-error-${Date.now()}`, type: 'assistant', content: 'Συγγνώμη, προέκυψε σφάλμα. Δοκίμασε ξανά.', timestamp: new Date() },
       ]);
       setIsTyping(false);
     }
@@ -416,7 +416,7 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
           setSavingInfo(false);
           return;
         }
-        const id = await commercialInfo.addInfo.mutateAsync({ rawText: raw, structured, source: 'nilia' });
+        const id = await commercialInfo.addInfo.mutateAsync({ rawText: raw, structured, source: 'mark' });
         const scope = [
           structured.brands.length ? `επωνυμίες: ${structured.brands.join(', ')}` : '',
           structured.categories.length ? `κατηγορίες: ${structured.categories.join(', ')}` : '',
@@ -427,13 +427,13 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
         const confirm = `Καταχώρισα την εμπορική πληροφορία ✓\n\n**${structured.summary}**\n${scope ? `\n${scope}` : ''}\n\nΘα τη λαμβάνω υπόψη στο Marketing Plan και στις προτάσεις. Θες να φτιάξουμε ένα πλάνο ενεργειών γύρω από αυτό;`;
         setMessages((prev) => [
           ...prev,
-          { id: `nilia-info-${Date.now()}`, type: 'assistant', content: confirm, timestamp: new Date(), savedInfoId: id },
+          { id: `mark-info-${Date.now()}`, type: 'assistant', content: confirm, timestamp: new Date(), savedInfoId: id },
         ]);
       } catch (e) {
-        console.error('[Nilia] save info:', e);
+        console.error('[Mark] save info:', e);
         setMessages((prev) => [
           ...prev,
-          { id: `nilia-info-err-${Date.now()}`, type: 'assistant', content: 'Δεν κατάφερα να καταχωρήσω την πληροφορία. Δοκίμασε ξανά.', timestamp: new Date() },
+          { id: `mark-info-err-${Date.now()}`, type: 'assistant', content: 'Δεν κατάφερα να καταχωρήσω την πληροφορία. Δοκίμασε ξανά.', timestamp: new Date() },
         ]);
       } finally {
         setSavingInfo(false);
@@ -444,9 +444,9 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
 
   const handleResetSession = useCallback(async () => {
     if (!brandId) return;
-    await clearNiliaSession(brandId);
+    await clearMarkSession(brandId);
     const greeting = await buildProactiveGreeting({ brandId, brandName, openInfoCount });
-    setMessages([{ id: `nilia-welcome-${Date.now()}`, type: 'assistant', content: greeting, timestamp: new Date(), proactive: true }]);
+    setMessages([{ id: `mark-welcome-${Date.now()}`, type: 'assistant', content: greeting, timestamp: new Date(), proactive: true }]);
   }, [brandId, brandName, openInfoCount]);
 
   const stt = useSpeechToText({ onResult: (text) => setInput((prev) => (prev ? `${prev} ${text}` : text)) });
@@ -485,8 +485,8 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center overflow-hidden">
                     <img
-                      src="/nilia.png"
-                      alt="Nilia"
+                      src="/mark.png"
+                      alt="Mark"
                       className="w-full h-full object-contain"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
@@ -496,7 +496,7 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
                     />
                   </div>
                   <div>
-                    <h2 className="font-bold text-[var(--nts-charcoal)] text-[15px]">Nilia</h2>
+                    <h2 className="font-bold text-[var(--nts-charcoal)] text-[15px]">Mark</h2>
                     <p className="text-[12px] text-[var(--nts-medium-gray)]">
                       {brandName ? (
                         <>Brand: <span className="font-semibold text-[var(--nts-charcoal)]">{brandName}</span></>
@@ -534,8 +534,8 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
                   {message.type === 'assistant' && (
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center flex-shrink-0 overflow-hidden">
                       <img
-                        src="/nilia.png"
-                        alt="Nilia"
+                        src="/mark.png"
+                        alt="Mark"
                         className="w-full h-full object-contain"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
@@ -633,7 +633,7 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
               {isTyping && (
                 <div className="flex gap-3 justify-start">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    <img src="/nilia.png" alt="" className="w-full h-full object-contain animate-pulse" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    <img src="/mark.png" alt="" className="w-full h-full object-contain animate-pulse" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   </div>
                   <div className="bg-[var(--nts-light-gray)] rounded-lg p-3">
                     <div className="flex gap-1">
@@ -677,14 +677,14 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
               </div>
               <div className="flex gap-2">
                 <input
-                  id="nilia-input"
-                  name="nilia-input"
+                  id="mark-input"
+                  name="mark-input"
                   ref={inputRef}
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  placeholder={savingInfo ? 'Καταχώριση πληροφορίας…' : 'Γράψε στη Nilia ή πάτησε το μικρόφωνο…'}
+                  placeholder={savingInfo ? 'Καταχώριση πληροφορίας…' : 'Γράψε στον Mark ή πάτησε το μικρόφωνο…'}
                   className="flex-1 px-4 py-2 border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
                   disabled={isTyping || savingInfo}
                 />
@@ -731,5 +731,5 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
   );
 }
 
-/** Backward-compatible alias — η Nilia είναι η εξέλιξη του παλιού AI Assistant. */
-export const AIAssistant = NiliaAgent;
+/** Backward-compatible alias — ο Mark είναι η εξέλιξη του παλιού AI Assistant. */
+export const AIAssistant = MarkAgent;

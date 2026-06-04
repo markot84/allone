@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * Speech-to-text μέσω Web Speech API (browser-native, μηδενικό κόστος).
- * Εναλλακτική είσοδος για τη Nilia. Graceful fallback αν δεν υποστηρίζεται.
+ * Εναλλακτική είσοδος για τον Mark. Graceful fallback αν δεν υποστηρίζεται.
  */
 
 type SpeechRecognitionLike = {

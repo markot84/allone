@@ -2506,7 +2506,7 @@ export const geminiProxy = onRequest(
             .map((h) => ({ role: h.role, parts: [{ text: h.text }] }))
         : [];
       // Το Gemini απαιτεί το πρώτο content να έχει role 'user' — αφαιρούμε leading 'model' turns
-      // (π.χ. proactive καλωσόρισμα της Nilia).
+      // (π.χ. proactive καλωσόρισμα του Mark).
       while (cleanedHistory.length > 0 && cleanedHistory[0].role === 'model') cleanedHistory.shift();
 
       const result =

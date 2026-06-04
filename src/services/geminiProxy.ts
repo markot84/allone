@@ -13,7 +13,7 @@ export interface GeminiProxyParams {
   userPrompt: string;
   model?: string;
   temperature?: number;
-  /** Ιστορικό συνομιλίας για multi-turn (η Nilia). Το πρώτο 'user' turn ορίζει την έναρξη. */
+  /** Ιστορικό συνομιλίας για multi-turn (ο Mark). Το πρώτο 'user' turn ορίζει την έναρξη. */
   history?: GeminiChatTurn[];
   /** Ενεργό brand — για per-brand λογιστική κόστους (ai_usage) στον server. */
   brandId?: string;
