@@ -65,6 +65,7 @@ interface Message {
 }
 
 const MARK_VOICE_REPLIES_KEY = 'mark_voice_replies_enabled';
+const VOICE_AUTO_SUBMIT_DELAY_MS = 2000;
 
 function readVoiceRepliesPreference(): boolean {
   if (typeof window === 'undefined') return false;
@@ -170,7 +171,7 @@ const MarkMessageItem = memo(function MarkMessageItem({
   return (
     <div className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
       {message.type === 'assistant' && (
-        <div className="mark-avatar-orb w-8 h-8 rounded-lg bg-white border border-[var(--nts-accent)]/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
+        <div className="mark-avatar-orb h-8 w-8 aspect-square rounded-full bg-white border border-[var(--nts-accent)]/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
           <img
             src="/mark-orb.png"
             alt="Mark"
@@ -538,6 +539,8 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const lastSpokenMessageIdRef = useRef<string | null>(null);
+  const voiceAutoSubmitTimerRef = useRef<number | null>(null);
+  const voiceDraftRef = useRef('');
   /** Το brandId του οποίου το session είναι φορτωμένο — guard κατά mismatch. */
   const loadedBrandRef = useRef<string | null>(null);
   const hydratedRef = useRef(false);
@@ -645,6 +648,13 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
+  const clearVoiceAutoSubmit = useCallback(() => {
+    if (voiceAutoSubmitTimerRef.current) {
+      window.clearTimeout(voiceAutoSubmitTimerRef.current);
+      voiceAutoSubmitTimerRef.current = null;
+    }
+  }, []);
+
   const handleMessagesScroll = useCallback(() => {
     const el = messagesScrollRef.current;
     if (!el) return;
@@ -658,6 +668,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   }, [messages, isTyping]);
 
   const handleSend = async (overrideText?: string) => {
+    clearVoiceAutoSubmit();
     const userQuery = (overrideText ?? input).trim();
     if (!userQuery || isTyping) return;
 
@@ -677,6 +688,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    voiceDraftRef.current = '';
     setIsTyping(true);
 
     try {
@@ -840,7 +852,19 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   const stt = useSpeechToText({
     onResult: (text) => {
       const normalized = normalizeMarkTranscript(text);
-      setInput((prev) => (prev ? `${prev} ${normalized}` : normalized));
+      setVoiceRepliesEnabled(true);
+      clearVoiceAutoSubmit();
+      let nextDraft = normalized;
+      setInput((prev) => {
+        nextDraft = prev ? `${prev} ${normalized}` : normalized;
+        voiceDraftRef.current = nextDraft;
+        return nextDraft;
+      });
+      voiceAutoSubmitTimerRef.current = window.setTimeout(() => {
+        const draft = voiceDraftRef.current.trim();
+        if (!draft) return;
+        void handleSend(draft);
+      }, VOICE_AUTO_SUBMIT_DELAY_MS);
     },
   });
 
@@ -848,8 +872,9 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     if (!isOpen || !voiceRepliesEnabled || !tts.supported) return;
     const latest = getLatestSpeakableAssistantMessage(messages);
     if (!latest || latest.id === lastSpokenMessageIdRef.current) return;
-    lastSpokenMessageIdRef.current = latest.id;
-    tts.speak(latest.content);
+    if (tts.speak(latest.content)) {
+      lastSpokenMessageIdRef.current = latest.id;
+    }
   }, [isOpen, messages, tts, voiceRepliesEnabled]);
 
   useEffect(() => {
@@ -859,6 +884,8 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   useEffect(() => {
     if (stt.listening) tts.stop();
   }, [stt.listening, tts]);
+
+  useEffect(() => clearVoiceAutoSubmit, [clearVoiceAutoSubmit]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -892,7 +919,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
             <div className="p-5 border-b border-[var(--nts-border-gray)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="mark-avatar-orb w-10 h-10 rounded-lg bg-white border border-[var(--nts-accent)]/20 flex items-center justify-center overflow-hidden">
+                  <div className="mark-avatar-orb h-10 w-10 aspect-square rounded-full bg-white border border-[var(--nts-accent)]/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
                     <img
                       src="/mark-orb.png"
                       alt="Mark"
@@ -979,7 +1006,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
 
               {isTyping && (
                 <div className="flex gap-3 justify-start">
-                  <div className="mark-avatar-orb mark-avatar-orb-thinking w-8 h-8 rounded-lg bg-white border border-[var(--nts-accent)]/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  <div className="mark-avatar-orb mark-avatar-orb-thinking h-8 w-8 aspect-square rounded-full bg-white border border-[var(--nts-accent)]/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
                     <img src="/mark-orb.png" alt="" className="mark-orb-img w-full h-full object-cover scale-110" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   </div>
                   <div className="bg-[var(--nts-light-gray)] rounded-lg p-3">
@@ -1038,6 +1065,8 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
                 <button
                   onClick={stt.supported ? () => {
                     tts.stop();
+                    setVoiceRepliesEnabled(true);
+                    clearVoiceAutoSubmit();
                     stt.toggle();
                   } : undefined}
                   disabled={!stt.supported}

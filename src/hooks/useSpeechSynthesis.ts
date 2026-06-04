@@ -78,11 +78,12 @@ export function useSpeechSynthesis() {
   const speak = useCallback(
     (text: string, opts?: { full?: boolean }) => {
       const synth = synthRef.current;
-      if (!synth) return;
+      if (!synth) return false;
       const spokenText = cleanTextForSpeech(text, opts?.full ? 4000 : MAX_AUTO_READ_CHARS);
-      if (!spokenText) return;
+      if (!spokenText) return false;
 
       synth.cancel();
+      if (synth.paused) synth.resume();
       const utterance = new SpeechSynthesisUtterance(spokenText);
       utterance.lang = selectedVoice?.lang || 'el-GR';
       if (selectedVoice) utterance.voice = selectedVoice;
@@ -92,6 +93,10 @@ export function useSpeechSynthesis() {
       utterance.onend = () => setSpeaking(false);
       utterance.onerror = () => setSpeaking(false);
       synth.speak(utterance);
+      window.setTimeout(() => {
+        if (synth.paused) synth.resume();
+      }, 250);
+      return true;
     },
     [selectedVoice]
   );
