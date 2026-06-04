@@ -60,6 +60,7 @@ import {
 } from '../../utils/actionableProducts';
 import { scenarios } from '../../data';
 import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
+import { formatBrandProfileForPrompt, hashBrandProfilePromptText } from '../../services/brandProfile';
 import { useProductSignals } from '../../hooks/useProductSignals';
 import { buildTriagePromptContext, buildProvenancePromptContext } from '../../utils/aiPromptContext';
 import { rankSegments } from '../../utils/segmentRelevance';
@@ -248,6 +249,14 @@ interface ChannelActivationProps {
 
 export function ChannelActivation({ onSectionChange }: ChannelActivationProps = {}) {
   const { currentBrand } = useBrand();
+  const brandProfileText = useMemo(
+    () => formatBrandProfileForPrompt(currentBrand?.brandProfile),
+    [currentBrand?.brandProfile]
+  );
+  const brandProfileContextSig = useMemo(
+    () => hashBrandProfilePromptText(brandProfileText),
+    [brandProfileText]
+  );
   const pageTitle = getModuleLabel('channels', effectiveBrandTypeForModules(currentBrand));
   const { products } = useProductSource();
   const { isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
@@ -376,7 +385,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         scenario,
         segment,
         fitLevel: 'good',
-        brandContext: { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats },
+        brandContext: { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats, brandProfileText },
         segmentFitList,
         context: 'activation',
         triage: triagePromptCtx,
@@ -404,7 +413,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       if (silent) setIsSilentUpgrading(false);
       else setAiGenerating(false);
     }
-  }, [strategyId, scenarioId, currentBrand, rfmSegments, products, queryClient, toast, activeStrategy, signalCoverage, dataCoverage]);
+  }, [strategyId, scenarioId, currentBrand, brandProfileText, rfmSegments, products, queryClient, toast, activeStrategy, signalCoverage, dataCoverage]);
 
   useEffect(() => {
     if (autoGenTriggered.current) return;
@@ -432,15 +441,17 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     // Trigger upgrade αν οποιοδήποτε customer-facing message περιέχει segment names ή internal jargon.
     // Χρησιμοποιούμε τον κεντρικό sanitizer detector (DRY με render-time sanitization).
     const violatingMessages = playbook.some((e) => containsForbiddenContent(e.message));
+    const staleBrandProfileContext = aiRecommendation.brandProfileContextSig !== brandProfileContextSig;
     if (
       hasPerSegmentSignal &&
       !tooFewSegments &&
-      !violatingMessages
+      !violatingMessages &&
+      !staleBrandProfileContext
     )
       return;
     silentUpgradeAttempts.current += 1;
     generateRecommendation(true);
-  }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, generateRecommendation]);
+  }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, brandProfileContextSig, generateRecommendation]);
 
   const { getStatus, getNote, isIncluded, updateActivation, isSaving } = useChannelActivations(strategyId);
 

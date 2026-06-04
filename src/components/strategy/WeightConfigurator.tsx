@@ -47,6 +47,7 @@ import {
 } from '../../data';
 import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
 import { generateContentSuggestions } from '../../services/aiContentSuggestions';
+import { formatBrandProfileForPrompt } from '../../services/brandProfile';
 import { FirestoreService } from '../../services/firestore';
 import { BriefingDrawer } from '../coordination/BriefingDrawer';
 import { getPreviewConfig, type PreviewColumnId } from '../../data/strategyPreviewConfig';
@@ -668,6 +669,7 @@ export function WeightConfigurator({
     const topCats = [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
     const segmentNames = rfmSegments.map(s => s.name || s.id).slice(0, 6);
     const scenarioName = scenarioObj?.name || scenarioId;
+    const brandProfileText = formatBrandProfileForPrompt(currentBrand?.brandProfile);
 
     const saveField = async (field: string, value: unknown) => {
       const clean = JSON.parse(JSON.stringify(value));
@@ -684,7 +686,7 @@ export function WeightConfigurator({
         generateChannelRecommendations({
           scenario: scenarioObj, segment,
           fitLevel: segmentFitMap[selectedSegment]?.fit ?? 'good',
-          brandContext: currentBrand ? { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats } : undefined,
+          brandContext: currentBrand ? { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats, brandProfileText } : undefined,
           segmentFitList: rankedSegments.map(rs => ({ name: rs.segment.name, fit: rs.fit, description: rs.segment.description, count: rs.segment.count, revenueShare: rs.segment.revenue_share })),
           context: 'activation',
           triage: triagePromptCtx,
@@ -706,7 +708,7 @@ export function WeightConfigurator({
 
     promises.push(
       generateContentSuggestions({
-        scenarioId, scenarioName, weights: strategyWeights, brandName: currentBrand?.name, topCategories: topCats, segmentNames,
+        scenarioId, scenarioName, weights: strategyWeights, brandName: currentBrand?.name, brandProfileText, topCategories: topCats, segmentNames,
         triage: triagePromptCtx,
         provenance: provenancePromptCtx,
         audience: dataCoverage,

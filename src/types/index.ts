@@ -509,6 +509,8 @@ export interface ChannelRecommendation {
   targetSegments?: RecommendedSegment[];
   /** Per (segment, channel) campaign brief / marketing brief — από AI. */
   channelPlaybook?: ChannelPlaybookEntry[];
+  /** Signature of Brand Profile prompt context used to generate customer-facing copy. */
+  brandProfileContextSig?: string;
 }
 
 /** Επιπλέον κόστη marketing (agency, εργαλεία, one-off) — αποθηκεύονται στην ενεργή στρατηγική, χρησιμοποιούνται στο ROI. */

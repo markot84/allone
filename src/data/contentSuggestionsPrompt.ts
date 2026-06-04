@@ -41,6 +41,7 @@ export interface StrategyContext {
   avoid?: string[];
   sampleHeadlines?: string[];
   brandName?: string;
+  brandProfileText?: string;
   topCategories?: string[];
   segmentNames?: string[];
   /** Διαγνωστική ρίζα από Decision Buckets (αν η στρατηγική προέκυψε από bucket triage). */
@@ -120,6 +121,13 @@ export function buildContentSuggestionsUserPrompt(ctx: StrategyContext): string 
     ? `\nΧρησιμοποίησε το brand name «${ctx.brandName}» στα titles, headlines και brief — ΠΑΝΤΑ ως "το brand ${ctx.brandName}" (ουδέτερο), ποτέ με άρθρο γένους.${ctx.topCategories?.length ? ` Ανέφερε πραγματικές κατηγορίες (${ctx.topCategories.slice(0, 3).join(', ')}).` : ''}${ctx.segmentNames?.length ? ` Ανέφερε πραγματικά segments (${ctx.segmentNames.slice(0, 4).join(', ')}) στις κατευθύνσεις.` : ''}`
     : '';
 
+  const brandProfileSection = ctx.brandProfileText?.trim()
+    ? `\nBRAND PROFILE CONTEXT:
+${ctx.brandProfileText.trim()}
+
+Κανόνας Brand Profile: καθοδηγεί tone of voice, positioning, archetype, ICPs, CTA style, campaign angle και offer framing. Δεν υπερισχύει των πραγματικών data, stock constraints, segments ή εμπορικής στρατηγικής.\n`
+    : '';
+
   return `${brandSection}Ενεργή στρατηγική: ${ctx.scenarioName}
 Βάρη: ${weightsStr}
 
@@ -128,7 +136,7 @@ ${ctx.contentTypes?.length ? `Τύποι περιεχομένου: ${ctx.content
 ${ctx.channels?.length ? `Κατάλληλα κανάλια: ${ctx.channels.join(', ')}` : ''}
 ${ctx.ctaStyle ? `Ύφος προτροπής: ${ctx.ctaStyle}` : ''}
 ${ctx.avoid?.length ? `Αποφυγή: ${ctx.avoid.join(', ')}` : ''}
-${ctx.sampleHeadlines?.length ? `Ενδεικτικοί τίτλοι: ${ctx.sampleHeadlines.slice(0, 3).join(' | ')}` : ''}
+${ctx.sampleHeadlines?.length ? `Ενδεικτικοί τίτλοι: ${ctx.sampleHeadlines.slice(0, 3).join(' | ')}` : ''}${brandProfileSection}
 ${ctx.triage ? `\nΔΙΑΓΝΩΣΤΙΚΗ ΡΙΖΑ (Decision Bucket):
 - Bucket: «${ctx.triage.bucketLabel}»${ctx.triage.bucketDescription ? ` — ${ctx.triage.bucketDescription}` : ''}
 - Σκοπευμένα SKUs: ${ctx.triage.skuCount}${ctx.triage.tiedCapital ? ` | Δεσμευμένα κεφάλαια: €${Math.round(ctx.triage.tiedCapital).toLocaleString('el-GR')}` : ''}${ctx.triage.topSkus?.length ? `\n- Ενδεικτικά SKUs: ${ctx.triage.topSkus.slice(0, 5).join(', ')}` : ''}

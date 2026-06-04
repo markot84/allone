@@ -163,3 +163,17 @@ export function formatBrandProfileForPrompt(profile: BrandProfile | null | undef
     ? lines.join('\n')
     : '(Δεν έχει συμπληρωθεί Brand Profile. Μη μαντεύεις archetype/tone/ICP.)';
 }
+
+export function getBrandProfilePromptSignature(profile: BrandProfile | null | undefined): string {
+  const text = formatBrandProfileForPrompt(profile);
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (Math.imul(31, h) + text.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+export function hashBrandProfilePromptText(text: string | null | undefined): string {
+  const normalized = (text ?? '').trim();
+  let h = 0;
+  for (let i = 0; i < normalized.length; i++) h = (Math.imul(31, h) + normalized.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
