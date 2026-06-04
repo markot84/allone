@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAuth } from 'firebase/auth';
 import {
@@ -82,6 +82,117 @@ function fromMark(m: MarkMessage): Message {
     savedInfoId: m.savedInfoId,
   };
 }
+
+/**
+ * Memoized bubble — ΚΡΙΣΙΜΟ για performance: χωρίς αυτό, κάθε πάτημα πλήκτρου στο input
+ * ξανα-render-άρει ΟΛΑ τα μηνύματα (markdown + DOMPurify parsing), παγώνοντας το tab σε μεγάλες
+ * απαντήσεις. Με `memo`, τα bubbles ξανα-render-άρουν μόνο όταν αλλάξει το ίδιο το μήνυμα.
+ */
+const MarkMessageItem = memo(function MarkMessageItem({
+  message,
+  onClose,
+}: {
+  message: Message;
+  onClose: () => void;
+}) {
+  return (
+    <div className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+      {message.type === 'assistant' && (
+        <div className="w-8 h-8 rounded-lg bg-white border border-[var(--nts-accent)]/15 flex items-center justify-center flex-shrink-0 overflow-hidden">
+          <img
+            src="/mark-orb.png"
+            alt="Mark"
+            className="w-full h-full object-cover scale-110"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              target.parentElement!.innerHTML =
+                '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v1h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1V7a5 5 0 0 1 5-5z"/><circle cx="9" cy="13" r="1" fill="white"/><circle cx="15" cy="13" r="1" fill="white"/></svg>';
+            }}
+          />
+        </div>
+      )}
+      <div
+        className={`max-w-[80%] rounded-lg p-3 ${
+          message.type === 'user'
+            ? 'bg-[var(--nts-accent)] text-white'
+            : 'bg-[var(--nts-light-gray)] text-[var(--nts-charcoal)]'
+        }`}
+      >
+        {message.type === 'assistant' ? (
+          <div className="text-sm [&_p]:text-sm [&_li]:text-sm">
+            <FormattedProse content={message.content} variant="compact" />
+          </div>
+        ) : (
+          <p className="text-sm whitespace-pre-line">{message.content}</p>
+        )}
+
+        {message.webSources && message.webSources.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-[var(--nts-border-gray)]/20">
+            <p className="text-xs font-medium mb-2 flex items-center gap-1">
+              <ExternalLink size={12} />
+              Πηγές από το διαδίκτυο:
+            </p>
+            <div className="space-y-2">
+              {message.webSources.map((source, idx) => (
+                <a
+                  key={idx}
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-xs p-2 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] transition-colors"
+                >
+                  <div className="font-medium mb-1 flex items-center gap-1">
+                    {source.title}
+                    <ExternalLink size={10} />
+                  </div>
+                  <div className="text-[11px] text-[var(--nts-medium-gray)] line-clamp-2">{source.snippet}</div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {message.relatedArticles && message.relatedArticles.length > 0 && (
+          <div className={`mt-3 pt-3 border-t border-[var(--nts-border-gray)]/20 ${message.webSources ? '' : 'mt-3'}`}>
+            <p className="text-xs font-medium mb-2 flex items-center gap-1">
+              <BookOpen size={12} />
+              Σχετικά άρθρα από το Knowledge Library:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {message.relatedArticles.map((articleId) => {
+                const article = getArticleById(articleId);
+                if (!article) return null;
+                return (
+                  <a
+                    key={articleId}
+                    href={`#help?article=${articleId}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      window.location.hash = `help?article=${articleId}`;
+                      window.dispatchEvent(new HashChangeEvent('hashchange'));
+                      window.dispatchEvent(new CustomEvent('navigate-to-help'));
+                      onClose();
+                    }}
+                    className="text-xs px-2 py-1 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] transition-colors flex items-center gap-1"
+                  >
+                    {article.title}
+                    <ExternalLink size={10} />
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+      {message.type === 'user' && (
+        <div className="w-8 h-8 rounded-full bg-[var(--nts-accent)] flex items-center justify-center flex-shrink-0">
+          <MessageCircle size={16} className="text-white" />
+        </div>
+      )}
+    </div>
+  );
+});
 
 interface AIAssistantProps {
   isOpen: boolean;
@@ -593,107 +704,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  {message.type === 'assistant' && (
-                    <div className="w-8 h-8 rounded-lg bg-white border border-[var(--nts-accent)]/15 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      <img
-                        src="/mark-orb.png"
-                        alt="Mark"
-                        className="w-full h-full object-cover scale-110"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                          target.parentElement!.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v1h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1V7a5 5 0 0 1 5-5z"/><circle cx="9" cy="13" r="1" fill="white"/><circle cx="15" cy="13" r="1" fill="white"/></svg>';
-                        }}
-                      />
-                    </div>
-                  )}
-                  <div
-                    className={`max-w-[80%] rounded-lg p-3 ${
-                      message.type === 'user'
-                        ? 'bg-[var(--nts-accent)] text-white'
-                        : 'bg-[var(--nts-light-gray)] text-[var(--nts-charcoal)]'
-                    }`}
-                  >
-                    {message.type === 'assistant' ? (
-                      <div className="text-sm [&_p]:text-sm [&_li]:text-sm">
-                        <FormattedProse content={message.content} variant="compact" />
-                      </div>
-                    ) : (
-                      <p className="text-sm whitespace-pre-line">{message.content}</p>
-                    )}
-                    
-                    {/* Web Sources */}
-                    {message.webSources && message.webSources.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-[var(--nts-border-gray)]/20">
-                        <p className="text-xs font-medium mb-2 flex items-center gap-1">
-                          <ExternalLink size={12} />
-                          Πηγές από το διαδίκτυο:
-                        </p>
-                        <div className="space-y-2">
-                          {message.webSources.map((source, idx) => (
-                            <a
-                              key={idx}
-                              href={source.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block text-xs p-2 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] transition-colors"
-                            >
-                              <div className="font-medium mb-1 flex items-center gap-1">
-                                {source.title}
-                                <ExternalLink size={10} />
-                              </div>
-                              <div className="text-[11px] text-[var(--nts-medium-gray)] line-clamp-2">
-                                {source.snippet}
-                              </div>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Related Articles */}
-                    {message.relatedArticles && message.relatedArticles.length > 0 && (
-                      <div className={`mt-3 pt-3 border-t border-[var(--nts-border-gray)]/20 ${message.webSources ? '' : 'mt-3'}`}>
-                        <p className="text-xs font-medium mb-2 flex items-center gap-1">
-                          <BookOpen size={12} />
-                          Σχετικά άρθρα από το Knowledge Library:
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {message.relatedArticles.map((articleId) => {
-                            const article = getArticleById(articleId);
-                            if (!article) return null;
-                            return (
-                              <a
-                                key={articleId}
-                                href={`#help?article=${articleId}`}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  window.location.hash = `help?article=${articleId}`;
-                                  window.dispatchEvent(new HashChangeEvent('hashchange'));
-                                  window.dispatchEvent(new CustomEvent('navigate-to-help'));
-                                  onClose();
-                                }}
-                                className="text-xs px-2 py-1 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] transition-colors flex items-center gap-1"
-                              >
-                                {article.title}
-                                <ExternalLink size={10} />
-                              </a>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  {message.type === 'user' && (
-                    <div className="w-8 h-8 rounded-full bg-[var(--nts-accent)] flex items-center justify-center flex-shrink-0">
-                      <MessageCircle size={16} className="text-white" />
-                    </div>
-                  )}
-                </div>
+                <MarkMessageItem key={message.id} message={message} onClose={onClose} />
               ))}
 
               {isTyping && (

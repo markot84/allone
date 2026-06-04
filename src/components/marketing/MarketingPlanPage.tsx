@@ -270,12 +270,12 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         procurementSignals: procurementSignals.signalsBySku,
       });
       const assemble = (coreMessage: MarketingPlanCoreMessage) =>
-        buildMarketingPlanDraft({
-          presetId: preset,
-          monthlyBudget: activeStrategy?.monthlyBudget,
-          campaigns: campaigns as never[],
-          storeRevenue12m: ecomm.totalRevenue,
-          hasGa4: ga4.hasData,
+      buildMarketingPlanDraft({
+        presetId: preset,
+        monthlyBudget: activeStrategy?.monthlyBudget,
+        campaigns: campaigns as never[],
+        storeRevenue12m: ecomm.totalRevenue,
+        hasGa4: ga4.hasData,
           insight,
           coreMessage,
           segments: segments.segments,
@@ -482,7 +482,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             disabled={!brandId || generating}
           >
             {generating ? 'Δημιουργία…' : draft ? 'Επαναδημιουργία plan' : 'Δημιουργία enriched plan'}
-          </Button>
+        </Button>
           {loadingContext && !draft && (
             <span className="text-xs text-[#6B7280]">Φόρτωση δεδομένων βάσης (περσινές πωλήσεις & απόθεμα)…</span>
           )}
@@ -518,7 +518,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                 <Metric label="SKU match" value={`${draft.dataQuality?.lineItemCoveragePct ?? 0}%`} color={
                   (draft.dataQuality?.lineItemCoveragePct ?? 0) >= 70 ? 'green' : (draft.dataQuality?.lineItemCoveragePct ?? 0) >= 30 ? 'amber' : 'red'
                 } />
-              </div>
+            </div>
             )}
             {draft.totalSkusCovered != null && (
               <p className="mt-3 text-xs text-[#6B7280]">

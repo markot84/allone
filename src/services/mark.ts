@@ -230,7 +230,7 @@ ${userQuery}
     systemPrompt: buildMarkSystemPrompt(brandName, brandId),
     userPrompt,
     model: MODEL_NAME,
-    temperature: 0.4,
+    temperature: 0.7,
     history,
     brandId,
   });
