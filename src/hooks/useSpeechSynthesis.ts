@@ -110,8 +110,16 @@ function amountToGreekWords(value: number): string {
   return `${sign}${euroText}${centText}`;
 }
 
+function replaceCurrencyAmount(raw: string): string {
+  const value = parseLocalizedNumber(raw);
+  return value === null ? raw : amountToGreekWords(value);
+}
+
 function formatNumbersForSpeech(text: string): string {
   const numberSource = String.raw`[+-]?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|[+-]?\d+(?:[.,]\d+)?`;
+  const broadNumberSource = String.raw`[+-]?\d(?:[\d.,\u00A0 ]*\d)?`;
+  const broadLeadingCurrencyPattern = new RegExp(String.raw`(?:€|eur(?:o)?\b|e\s*euro\b|ευρώ\b|ευρω\b)\s*(${broadNumberSource})`, 'gi');
+  const broadTrailingCurrencyPattern = new RegExp(String.raw`(${broadNumberSource})\s*(?:€|eur(?:o)?\b|e(?:\s*euro)?\b|ευρώ\b|ευρω\b)`, 'gi');
   const trailingCurrencyPattern = new RegExp(String.raw`(${numberSource})\s*(?:€|eur(?:o)?\b|e(?:\s*euro)?\b|ευρώ\b|ευρω\b)`, 'gi');
   const leadingCurrencyPattern = new RegExp(String.raw`(?:€|eur(?:o)?\b|e\s*euro\b|ευρώ\b|ευρω\b)\s*(${numberSource})`, 'gi');
   const percentPattern = /([+-]?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|[+-]?\d+(?:[.,]\d+)?)(?:\s*)%/g;
@@ -119,12 +127,20 @@ function formatNumbersForSpeech(text: string): string {
 
   return text
     .replace(leadingCurrencyPattern, (_match, raw: string) => {
-      const value = parseLocalizedNumber(raw);
-      return value === null ? _match : amountToGreekWords(value);
+      const replacement = replaceCurrencyAmount(raw);
+      return replacement === raw ? _match : replacement;
     })
     .replace(trailingCurrencyPattern, (_match, raw: string) => {
-      const value = parseLocalizedNumber(raw);
-      return value === null ? _match : amountToGreekWords(value);
+      const replacement = replaceCurrencyAmount(raw);
+      return replacement === raw ? _match : replacement;
+    })
+    .replace(broadLeadingCurrencyPattern, (_match, raw: string) => {
+      const replacement = replaceCurrencyAmount(raw);
+      return replacement === raw ? _match : replacement;
+    })
+    .replace(broadTrailingCurrencyPattern, (_match, raw: string) => {
+      const replacement = replaceCurrencyAmount(raw);
+      return replacement === raw ? _match : replacement;
     })
     .replace(percentPattern, (_match, raw: string) => {
       const value = parseLocalizedNumber(raw);
