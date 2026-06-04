@@ -123,10 +123,11 @@ function IcpEditor({
 }
 
 export function BrandProfilePage() {
-  const { currentBrand, refreshBrands } = useBrand();
+  const { currentBrand, setCurrentBrand, refreshBrands } = useBrand();
   const toast = useToast();
   const [profile, setProfile] = useState<BrandProfile>(() => normalizeBrandProfile(currentBrand?.brandProfile));
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setProfile(normalizeBrandProfile(currentBrand?.brandProfile));
@@ -147,12 +148,17 @@ export function BrandProfilePage() {
   const save = async () => {
     if (!currentBrand?.id || saving) return;
     setSaving(true);
+    setError(null);
     try {
-      await saveBrandProfile(currentBrand.id, profile);
-      await refreshBrands();
+      const savedProfile: BrandProfile = { ...profile, updatedAt: new Date().toISOString() };
+      await saveBrandProfile(currentBrand.id, savedProfile);
+      setProfile(savedProfile);
+      setCurrentBrand({ ...currentBrand, brandProfile: savedProfile });
+      void refreshBrands().catch((err) => console.warn('[BrandProfile] background refresh:', err));
       toast.success('Το Brand Profile αποθηκεύτηκε.');
     } catch (err) {
       console.error('[BrandProfile] save:', err);
+      setError('Δεν ολοκληρώθηκε η αποθήκευση. Δοκίμασε ξανά σε λίγο.');
     } finally {
       setSaving(false);
     }
@@ -176,6 +182,11 @@ export function BrandProfilePage() {
 
       <Card padding="lg">
         <CardHeader title="Προφίλ brand" icon={<Palette size={18} className="text-[var(--nts-accent)]" />} />
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </div>
+        )}
         <div className="mt-4">
           <TextareaField
             label="Brand profile"

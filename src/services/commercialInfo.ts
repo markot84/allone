@@ -6,6 +6,7 @@ import { parseJsonObject } from '../utils/aiJson';
 
 const COLLECTION = 'commercial_info';
 const STRUCTURE_MODEL = 'gemini-2.5-flash';
+const STRUCTURE_TIMEOUT_MS = 8000;
 
 export type CommercialFactorType =
   | 'event' // αθλητικό/πολιτιστικό γεγονός, λανσάρισμα, σεζόν
@@ -101,6 +102,21 @@ function coerceStructured(raw: unknown, fallbackText: string): CommercialInfoStr
   };
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = globalThis.setTimeout(() => reject(new Error(`commercial_info_structure_timeout_${ms}`)), ms);
+    promise
+      .then((value) => {
+        globalThis.clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        globalThis.clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
 const STRUCTURE_SYSTEM = buildAdvisorySystemPrompt(
   `Λαμβάνεις ελεύθερο κείμενο με εμπορική πληροφορία/ένστικτο του επιχειρηματία (π.χ. αθλητικό γεγονός, τάση, ακρίβεια, κίνηση ανταγωνισμού).
 Δούλεψέ το σε δομημένη μορφή ώστε να τροφοδοτήσει το εμπορικό πλάνο. Μην εφευρίσκεις δεδομένα — αν κάτι δεν προκύπτει, άφησέ το κενό/null.`,
@@ -145,13 +161,16 @@ ${catsHint}
 }`;
 
   try {
-    const out = await callGemini({
-      systemPrompt: STRUCTURE_SYSTEM,
-      userPrompt,
-      model: STRUCTURE_MODEL,
-      temperature: 0.1,
-      brandId: undefined,
-    });
+    const out = await withTimeout(
+      callGemini({
+        systemPrompt: STRUCTURE_SYSTEM,
+        userPrompt,
+        model: STRUCTURE_MODEL,
+        temperature: 0.1,
+        brandId: undefined,
+      }),
+      STRUCTURE_TIMEOUT_MS
+    );
     const parsed = parseJsonObject(out);
     return coerceStructured(parsed, text);
   } catch {

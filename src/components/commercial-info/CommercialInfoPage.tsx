@@ -127,6 +127,8 @@ export function CommercialInfoPage() {
   const { items, isLoading, brandId, brandName, addInfo, setStatus, removeInfo, structure } = useCommercialInfo();
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  const [savingStep, setSavingStep] = useState<'structure' | 'save' | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const active = items.filter((i) => i.status === 'active');
   const archived = items.filter((i) => i.status !== 'active');
@@ -135,14 +137,19 @@ export function CommercialInfoPage() {
     const raw = draft.trim();
     if (!raw || saving || !brandId) return;
     setSaving(true);
+    setSavingStep('structure');
+    setError(null);
     try {
       const structured = await structure(raw, { brandName });
+      setSavingStep('save');
       await addInfo.mutateAsync({ rawText: raw, structured, source: 'owner' });
       setDraft('');
     } catch (e) {
       console.error('[CommercialInfo] add:', e);
+      setError('Δεν ολοκληρώθηκε η καταχώρηση. Δοκίμασε ξανά σε λίγο.');
     } finally {
       setSaving(false);
+      setSavingStep(null);
     }
   };
 
@@ -157,7 +164,7 @@ export function CommercialInfoPage() {
         }
         description={
           <p className="text-[14px] text-[var(--nts-medium-gray)]">
-            Κατέγραψε γνώση, εξελίξεις αγοράς ή το εμπορικό σου ένστικτο. Ο Mark τα δομεί και τα λαμβάνει υπόψη στο
+            Κατέγραψε γνώση, εξελίξεις αγοράς ή το εμπορικό σου ένστικτο. Η εφαρμογή τα δομεί και ο Mark τα λαμβάνει υπόψη στο
             Marketing Plan, στις προβλέψεις πωλήσεων και στις προτάσεις πολιτικής.
           </p>
         }
@@ -177,12 +184,21 @@ export function CommercialInfoPage() {
           />
           <div className="flex items-center justify-between">
             <p className="text-xs text-[var(--nts-medium-gray)]">
-              Ο Mark θα αναγνωρίσει κατηγορίες, parent SKU, επωνυμίες, κατεύθυνση και ορίζοντα.
+              {savingStep === 'structure'
+                ? 'Δομείται η πληροφορία σε κατηγορίες, επωνυμίες, κατεύθυνση και ορίζοντα…'
+                : savingStep === 'save'
+                  ? 'Αποθηκεύεται ώστε να χρησιμοποιηθεί από Mark και Marketing Plan…'
+                  : 'Η εφαρμογή θα αναγνωρίσει κατηγορίες, parent SKU, επωνυμίες, κατεύθυνση και ορίζοντα.'}
             </p>
             <Button variant="primary" onClick={handleAdd} disabled={!draft.trim() || saving || !brandId} icon={saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}>
               {saving ? 'Καταχώριση…' : 'Καταχώριση'}
             </Button>
           </div>
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {error}
+            </div>
+          )}
         </div>
       </Card>
 
