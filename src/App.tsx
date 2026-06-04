@@ -149,6 +149,11 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               // ecommerce_summary: η compact 'summary' έκδοση επιτρέπεται· η 'sku' έκδοση κουβαλά
               // ολόκληρο το skuStats map (βαρύ) → εκτός localStorage.
               if (key === 'ecommerce_summary' && query.queryKey[2] === 'sku') return false;
+              // ga4_data_chunks: dailyTrafficByChannel (έως ~1 έτος ημερήσια×κανάλια) + organic fallback rows.
+              // ΒΑΡΥ payload — αν έμπαινε στο localStorage φούσκωνε το quota → ο sync persister σιωπηλά
+              // έσβηνε ΟΛΟ το persisted cache (incl. το compact `ga4_data`) → ο πίνακας GA4 στο Dashboard
+              // περίμενε το δίκτυο σε κάθε hard refresh. Χρειάζεται μόνο στο Analytics page (refetch εκεί).
+              if (key === 'ga4_data_chunks') return false;
               // Policy Impact scenarios: ΜΕΓΑΛΟ payload (εκατοντάδες rows) με ΔΙΚΟ του durable cache
               // (dedicated localStorage key `pp-erp-scenario` + Firestore `commercial_scenario_cache`).
               // Αν έμπαινε κι εδώ, διπλασίαζε το localStorage και ξεπερνούσε το quota → σιωπηλό σβήσιμο
