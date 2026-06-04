@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { ArrowDownRight, ArrowUpRight, Megaphone, RefreshCw, Tag } from 'lucide-react';
 import { Card, CardHeader, Badge, ProductThumbnail, Tooltip } from '../common';
 import { useCommercialScenarioImpacts } from '../../hooks/useCommercialScenarioImpacts';
@@ -70,13 +70,6 @@ export function CommercialScenarioPanels({
   const filteredRows = activeTab === 'price' ? filteredPriceRows : filteredMarketingRows;
   const filteredCount = filteredRows.length;
 
-  useEffect(() => {
-    if (visibleTabs.length === 0 || visibleTabs.some((t) => t.key === tab)) return;
-    setTab(visibleTabs[0].key);
-    setFilter('all');
-    setShowDetails(false);
-  }, [tab, visibleTabs]);
-
   return (
     <Card padding="lg" className="relative overflow-hidden">
       <CardHeader
@@ -134,6 +127,15 @@ export function CommercialScenarioPanels({
         </div>
       )}
 
+      {data.analysisScope?.isQuickSample && !data.isLoading && !data.isRefreshing && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Γρήγορη προβολή για να μη βαραίνει η σελίδα: αναλύονται οι πρόσφατες παραγγελίες από{' '}
+          <strong>{formatShortDate(data.analysisScope.fromDate)}</strong> έως{' '}
+          <strong>{formatShortDate(data.analysisScope.toDate)}</strong>. Για πλήρη υπολογισμό όλης της περιόδου, πάτησε{' '}
+          <strong>Ανανέωση</strong>.
+        </div>
+      )}
+
       {activeTab === 'price' && data.price && <ScenarioKpis summary={data.price.summary} filter={filter} onFilterChange={setFilter} />}
       {activeTab === 'marketing' && data.marketing && <MarketingKpis summary={data.marketing.summary} filter={filter} onFilterChange={setFilter} />}
 
@@ -187,6 +189,12 @@ function progressPct(progress: { loaded: number; total: number } | null | undefi
   if (!progress || progress.total <= 0) return null;
   // Κρατάμε λίγο «αέρα» (έως 98%) μέχρι να ολοκληρωθεί και η ανάλυση μετά το fetch.
   return Math.min(98, Math.round((progress.loaded / progress.total) * 100));
+}
+
+function formatShortDate(ymd: string): string {
+  const [y, m, d] = ymd.split('-');
+  if (!y || !m || !d) return ymd;
+  return `${parseInt(d, 10)}/${parseInt(m, 10)}/${y}`;
 }
 
 function ProgressBar({ progress }: { progress?: { loaded: number; total: number } | null }) {

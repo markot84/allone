@@ -46,6 +46,7 @@ type ProductStockFields = {
 };
 
 const ERP_SCENARIO_CACHE_MS = SCENARIO_CACHE_TTL_MS;
+const MAX_AUTO_ANALYSIS_DAYS = 120;
 
 /** Παραχωρεί τον έλεγχο στο main thread (επόμενο macrotask) ώστε να γίνει paint και να μην «παγώνει» το UI. */
 function yieldToMain(): Promise<void> {
@@ -75,6 +76,18 @@ function monthWindows(periodFrom: string, periodTo: string): Array<{ startDate: 
   }
 
   return windows.filter((w) => w.startDate <= w.endDate);
+}
+
+function daysBetweenInclusive(fromDate: string, toDate: string): number {
+  const from = new Date(`${fromDate}T00:00:00Z`).getTime();
+  const to = new Date(`${toDate}T00:00:00Z`).getTime();
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return 0;
+  return Math.floor((to - from) / 86_400_000) + 1;
+}
+
+function quickAnalysisFromDate(periodFrom: string, periodTo: string): string {
+  const boundedFrom = shiftIsoDate(periodTo, -(MAX_AUTO_ANALYSIS_DAYS - 1));
+  return boundedFrom > periodFrom ? boundedFrom : periodFrom;
 }
 
 function summarizeRows<T extends WindowedScenarioRow>(rows: T[], lookbackDays = 30) {
@@ -200,16 +213,19 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
         }
       }
 
-      const lookbackFrom = shiftIsoDate(period.fromDate, -30);
+      const shouldUseQuickInitialAnalysis =
+        forceRefreshKey === 0 && daysBetweenInclusive(period.fromDate, period.toDate) > MAX_AUTO_ANALYSIS_DAYS;
+      const analysisFrom = shouldUseQuickInitialAnalysis ? quickAnalysisFromDate(period.fromDate, period.toDate) : period.fromDate;
+      const lookbackFrom = shiftIsoDate(analysisFrom, -30);
       setProgress({ loaded: 0, total: 0 });
       // Platform-only (e-shop) orders με line items — όχι το ακριβό ERP-invoice διπλό fetch.
-      // fetchAll: paginated ΟΛΟ το εύρος (αλλιώς desc+limit 5000 κόβει τους παλιότερους μήνες σε high-volume brands).
+      // Σε μεγάλο initial range αποφεύγουμε full client-side scan. Το πλήρες fetchAll τρέχει με manual refresh.
       const orders = await fetchEcommercePlatformOrders(brandId, scenarioPlatforms, {
         sinceDate: lookbackFrom,
         untilDate: period.toDate,
         cacheFirst: true,
         revenueMode: 'all',
-        fetchAll: true,
+        fetchAll: !shouldUseQuickInitialAnalysis,
         onProgress: (info) => setProgress(info),
       });
 
@@ -217,7 +233,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
 
       // Chunked & non-blocking: η ανάλυση τρέχει σε batches με yield στο main thread ανάμεσα στα
       // windows/chunks, ώστε σε high-volume brands να μη «παγώνει» η σελίδα (page not responding).
-      for (const window of monthWindows(period.fromDate, period.toDate)) {
+      for (const window of monthWindows(analysisFrom, period.toDate)) {
         const res = await analyzePriceChangeImpactAsync(
           { orders, periodFrom: window.startDate, periodTo: window.endDate, costBySku, priceBySku, skuNames },
           { chunkSize: 3000, yieldFn: yieldToMain }
@@ -250,7 +266,17 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       });
 
       const ordersWithLines = orders.filter((o) => o.lineItems.length > 0).length;
-      const result = { price, marketing, orderCount: orders.length, ordersWithLines };
+      const result = {
+        price,
+        marketing,
+        orderCount: orders.length,
+        ordersWithLines,
+        analysisScope: {
+          fromDate: analysisFrom,
+          toDate: period.toDate,
+          isQuickSample: shouldUseQuickInitialAnalysis,
+        },
+      };
 
       // Cap rows before caching. Πλέον το scenario ΔΕΝ μπαίνει στο shared persist blob, οπότε το
       // dedicated localStorage key χωράει άνετα όλες τις rows τυπικού brand (π.χ. e-tennis ~577) →
@@ -263,9 +289,11 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
         price: { ...result.price, rows: result.price.rows.slice(0, MAX_PRICE_CACHE) },
         marketing: { ...result.marketing, rows: result.marketing.rows.slice(0, MAX_MKT_CACHE) },
       };
-      writeScenarioCache(brandId, period.fromDate, period.toDate, cachePayload);
-      // Durable Firestore cache (fire-and-forget): ώστε ο βαρύς υπολογισμός να μη ξανατρέξει σε reload.
-      void writeScenarioCacheRemote(brandId, period.fromDate, period.toDate, cachePayload);
+      if (!shouldUseQuickInitialAnalysis) {
+        writeScenarioCache(brandId, period.fromDate, period.toDate, cachePayload);
+        // Durable Firestore cache (fire-and-forget): ώστε ο βαρύς υπολογισμός να μη ξανατρέξει σε reload.
+        void writeScenarioCacheRemote(brandId, period.fromDate, period.toDate, cachePayload);
+      }
       setProgress(null);
       return result;
     },
@@ -308,6 +336,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     isLoading,
     isRefreshing: !!query.data && query.isFetching,
     progress,
+    analysisScope: query.data?.analysisScope,
     hasOrderLines: (query.data?.ordersWithLines ?? 0) > 0,
     hasCostData: costBySku.size > 0,
     stockBySku,
@@ -355,5 +384,6 @@ function emptyPayload() {
     },
     orderCount: 0,
     ordersWithLines: 0,
+    analysisScope: null,
   };
 }
