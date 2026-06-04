@@ -260,6 +260,11 @@ service cloud.firestore {
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
       allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
+    match /commercial_info/{infoId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
     // Connectors: keyed by brandId directly
     match /connectors/{brandId} {
       allow read: if isBrandMember(brandId);

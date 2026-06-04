@@ -146,7 +146,10 @@ export function CommercialInfoPage() {
       setDraft('');
     } catch (e) {
       console.error('[CommercialInfo] add:', e);
-      setError('Δεν ολοκληρώθηκε η καταχώρηση. Δοκίμασε ξανά σε λίγο.');
+      const message = e instanceof Error && /permission|insufficient permissions/i.test(e.message)
+        ? 'Δεν υπάρχει άδεια καταχώρησης για αυτό το brand. Ανανεώθηκε ο κανόνας ασφαλείας και χρειάζεται deploy.'
+        : 'Δεν ολοκληρώθηκε η καταχώρηση. Δοκίμασε ξανά σε λίγο.';
+      setError(message);
     } finally {
       setSaving(false);
       setSavingStep(null);
