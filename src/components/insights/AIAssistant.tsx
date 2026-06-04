@@ -499,9 +499,9 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
                     <h2 className="font-bold text-[var(--nts-charcoal)] text-[15px]">Nilia</h2>
                     <p className="text-[12px] text-[var(--nts-medium-gray)]">
                       {brandName ? (
-                        <>μιλάς για: <span className="font-semibold text-[var(--nts-charcoal)]">{brandName}</span></>
+                        <>Brand: <span className="font-semibold text-[var(--nts-charcoal)]">{brandName}</span></>
                       ) : (
-                        'Επίλεξε brand για εξατομικευμένες προτάσεις'
+                        'Επίλεξε brand για προτάσεις'
                       )}
                     </p>
                   </div>
@@ -688,19 +688,24 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
                   className="flex-1 px-4 py-2 border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
                   disabled={isTyping || savingInfo}
                 />
-                {stt.supported && (
-                  <button
-                    onClick={stt.toggle}
-                    title={stt.listening ? 'Διακοπή' : 'Ομιλία (μικρόφωνο)'}
-                    className={`p-2 rounded-lg border transition-colors ${
-                      stt.listening
-                        ? 'bg-red-500 text-white border-red-500 animate-pulse'
-                        : 'bg-white text-[var(--nts-medium-gray)] border-[var(--nts-border-gray)] hover:text-[var(--nts-accent)]'
-                    }`}
-                  >
-                    <Mic size={18} />
-                  </button>
-                )}
+                <button
+                  onClick={stt.supported ? stt.toggle : undefined}
+                  disabled={!stt.supported}
+                  title={
+                    !stt.supported
+                      ? 'Ο browser δεν υποστηρίζει φωνητική είσοδο (δοκίμασε Chrome/Edge)'
+                      : stt.listening
+                        ? 'Διακοπή'
+                        : 'Ομιλία (μικρόφωνο)'
+                  }
+                  className={`p-2 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    stt.listening
+                      ? 'bg-red-500 text-white border-red-500 animate-pulse'
+                      : 'bg-white text-[var(--nts-medium-gray)] border-[var(--nts-border-gray)] hover:text-[var(--nts-accent)]'
+                  }`}
+                >
+                  <Mic size={18} />
+                </button>
                 <button
                   onClick={() => handleSend()}
                   disabled={!input.trim() || isTyping || savingInfo}
@@ -709,8 +714,14 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
                   <Send size={18} />
                 </button>
               </div>
+              {stt.listening && (
+                <p className="mt-2 text-center text-xs font-medium text-red-500">Μίλα τώρα…</p>
+              )}
+              {stt.error && (
+                <p className="mt-2 text-center text-xs text-red-500">{stt.error}</p>
+              )}
               <p className="text-xs text-[var(--nts-medium-gray)] mt-2 text-center leading-snug">
-                Η Nilia απαντά με βάση τα τρέχοντα δεδομένα του brand, το Help και (όταν χρειάζεται) το διαδίκτυο. Όριο χρήσης για προστασία κόστους.
+                Απαντά με βάση τα τρέχοντα δεδομένα του brand, το Help και (όταν χρειάζεται) το διαδίκτυο. Ισχύει όριο χρήσης.
               </p>
             </div>
           </motion.div>

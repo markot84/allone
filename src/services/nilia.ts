@@ -93,15 +93,18 @@ export async function buildProactiveGreeting(params: {
   period?: string;
 }): Promise<string> {
   const { brandId, brandName, openInfoCount, period } = params;
-  const brandRef = brandName ? `το brand ${brandName}` : 'το brand σου';
   const lines: string[] = [];
-  lines.push(`Καλημέρα! Είμαι η **Nilia**, η εμπορική σου σύμβουλος για ${brandRef}.`);
+  lines.push(
+    brandName
+      ? `**Nilia** — εμπορική σύμβουλος για το **${brandName}**.`
+      : '**Nilia** — εμπορική σύμβουλος. Επίλεξε brand για προτάσεις.'
+  );
 
   try {
     const brief = await getCachedBriefing(brandId, period ?? 'current_month');
     if (brief?.narrative) {
       lines.push('');
-      lines.push(`**Η εικόνα της ημέρας:** ${brief.narrative}`);
+      lines.push(`**Εικόνα της ημέρας:** ${brief.narrative}`);
       if (Array.isArray(brief.actions) && brief.actions.length > 0) {
         lines.push('');
         lines.push('**Προτεινόμενες ενέργειες:**');
@@ -109,17 +112,17 @@ export async function buildProactiveGreeting(params: {
       }
     }
   } catch {
-    /* αν δεν υπάρχει brief, συνεχίζουμε με το καλωσόρισμα */
+    /* αν δεν υπάρχει brief, συνεχίζουμε με το μήνυμα έναρξης */
   }
 
   lines.push('');
   if (openInfoCount > 0) {
     lines.push(
-      `Έχεις **${openInfoCount}** ενεργές εμπορικές πληροφορίες που λαμβάνω υπόψη. Υπάρχει κάτι νέο που πρέπει να ξέρω;`
+      `**${openInfoCount}** ενεργές εμπορικές πληροφορίες λαμβάνονται υπόψη. Υπάρχει κάποια νέα;`
     );
   } else {
     lines.push(
-      'Υπάρχει κάποια νέα εμπορική πληροφορία που πρέπει να ξέρω; (π.χ. εξέλιξη στην αγορά, γεγονός, κίνηση προμηθευτή, τάση ή το ένστικτό σου). Μπορώ επίσης να σου εξηγήσω οποιοδήποτε KPI ή ενότητα.'
+      'Καταχώρισε νέα εμπορική πληροφορία (εξέλιξη αγοράς, γεγονός, κίνηση προμηθευτή, τάση) ή ζήτησε εξήγηση για οποιοδήποτε KPI ή ενότητα.'
     );
   }
   return lines.join('\n');
