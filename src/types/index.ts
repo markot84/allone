@@ -28,6 +28,7 @@ export type ModuleId =
 export type BrandModuleOverrides = Partial<Record<ModuleId, boolean>>;
 export type AppSectionId =
   | 'brands'
+  | 'brand-profile'
   | 'dashboard'
   | 'strategy'
   | 'policy-impact'
@@ -72,6 +73,7 @@ export interface Brand {
   type: 'B2B' | 'B2C';
   plan?: BrandPlan;
   enabledModules?: BrandModuleOverrides;
+  brandProfile?: BrandProfile;
   createdAt: string;
   createdBy: string;
   logoUrl?: string;
@@ -102,6 +104,40 @@ export interface Brand {
    * Όταν κενό, θεωρείται `eshop_classified` (default).
    */
   revenueSourceMode?: 'eshop_classified' | 'eshop_all' | 'erp';
+}
+
+export type BrandArchetype =
+  | 'ruler'
+  | 'hero'
+  | 'sage'
+  | 'explorer'
+  | 'creator'
+  | 'caregiver'
+  | 'everyman'
+  | 'lover'
+  | 'magician'
+  | 'outlaw'
+  | 'jester'
+  | 'innocent';
+
+export type BrandIcpPriceSensitivity = 'low' | 'medium' | 'high';
+
+export interface BrandICP {
+  id: string;
+  name: string;
+  description: string;
+  needs: string;
+  objections: string;
+  preferredMessages: string;
+  priceSensitivity: BrandIcpPriceSensitivity;
+}
+
+export interface BrandProfile {
+  description: string;
+  archetype: BrandArchetype | '';
+  toneOfVoice: string;
+  icps: BrandICP[];
+  updatedAt?: string;
 }
 
 export interface UserProfile {

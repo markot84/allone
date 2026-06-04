@@ -15,7 +15,7 @@ Return only valid JSON with:
   "proofPoints": ["up to 3 evidence bullets in Greek"],
   "ctaIdeas": ["up to 3 CTA ideas in Greek"]
 }
-Use only the provided evidence. Do not invent metrics.`;
+Use only the provided evidence. Do not invent metrics. Brand profile guides tone, positioning, ICP, CTAs and campaign angle, but it must not override hard performance evidence.`;
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
@@ -38,7 +38,12 @@ export function parseMarketingPlanMessage(text: string): MarketingPlanCoreMessag
   };
 }
 
-function buildUserPrompt(insight: MarketingPlanInsight, brandName?: string, commercialInfoText?: string): string {
+function buildUserPrompt(
+  insight: MarketingPlanInsight,
+  brandName?: string,
+  commercialInfoText?: string,
+  brandProfileText?: string
+): string {
   const topGroups = insight.reorderPlan.slice(0, 5).map((row) => ({
     category: row.category,
     subcategory: row.subcategory,
@@ -62,8 +67,10 @@ function buildUserPrompt(insight: MarketingPlanInsight, brandName?: string, comm
     topGroups,
     // Εμπορική γνώση/ένστικτο επιχειρηματία (από τη σελίδα «Εμπορικές Πληροφορίες»).
     commercialContext: commercialInfoText && commercialInfoText.trim() ? commercialInfoText : undefined,
+    // Brand identity context: tone/archetype/ICPs. Δεν αντικαθιστά τα evidence metrics.
+    brandProfileContext: brandProfileText && brandProfileText.trim() ? brandProfileText : undefined,
     instruction:
-      'Γράψε το βασικό μήνυμα της περιόδου για marketing plan. Να συνδέεται με περσινή ζήτηση, τρέχον απόθεμα και εμπορική προτεραιότητα. Αν υπάρχει commercialContext, ενσωμάτωσέ τον ως ισχυρό σήμα για την κατεύθυνση/χρονισμό της καμπάνιας.',
+      'Γράψε το βασικό μήνυμα της περιόδου για marketing plan. Να συνδέεται με περσινή ζήτηση, τρέχον απόθεμα και εμπορική προτεραιότητα. Αν υπάρχει commercialContext, ενσωμάτωσέ τον ως ισχυρό σήμα για την κατεύθυνση/χρονισμό της καμπάνιας. Αν υπάρχει brandProfileContext, κράτησε το μήνυμα συμβατό με το archetype, tone of voice και ICPs, χωρίς να επινοήσεις νέα νούμερα.',
   });
 }
 
@@ -72,6 +79,8 @@ export async function generateMarketingPlanMessage(input: {
   brandName?: string;
   /** Συμπυκνωμένες ενεργές εμπορικές πληροφορίες (formatCommercialInfoForPrompt). */
   commercialInfoText?: string;
+  /** Συμπυκνωμένο Brand Profile context (formatBrandProfileForPrompt). */
+  brandProfileText?: string;
 }): Promise<MarketingPlanCoreMessage> {
   const fallback = buildFallbackCoreMessage(input.insight);
   const hasContext = !!(input.commercialInfoText && input.commercialInfoText.trim());
@@ -82,7 +91,7 @@ export async function generateMarketingPlanMessage(input: {
   try {
     const text = await callGemini({
       systemPrompt: SYSTEM_PROMPT,
-      userPrompt: buildUserPrompt(input.insight, input.brandName, input.commercialInfoText),
+      userPrompt: buildUserPrompt(input.insight, input.brandName, input.commercialInfoText, input.brandProfileText),
       model: MODEL_NAME,
       temperature: 0.2,
     });

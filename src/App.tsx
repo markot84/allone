@@ -58,6 +58,7 @@ const SuperAdminDashboard = lazyNamedWithRetry(() => import('./components/admin'
 const WeightConfigurator = lazyNamedWithRetry(() => import('./components/strategy'), 'WeightConfigurator');
 const PolicyImpactPage = lazyNamedWithRetry(() => import('./components/strategy/PolicyImpactPage'), 'PolicyImpactPage');
 const MarketingPlanPage = lazyNamedWithRetry(() => import('./components/marketing/MarketingPlanPage'), 'MarketingPlanPage');
+const BrandProfilePage = lazyNamedWithRetry(() => import('./components/brand-profile/BrandProfilePage'), 'BrandProfilePage');
 const Reports = lazyNamedWithRetry(() => import('./components/reports'), 'Reports');
 const BusinessFinances = lazyNamedWithRetry(() => import('./components/finances'), 'BusinessFinances');
 const ProcurementPage = lazyNamedWithRetry(() => import('./components/procurement/ProcurementPage'), 'ProcurementPage');
@@ -306,6 +307,8 @@ function AppMain() {
         return <PolicyImpactPage onSectionChange={handleSectionChange} />;
       case 'marketing-plan':
         return <MarketingPlanPage onSectionChange={handleSectionChange} />;
+      case 'brand-profile':
+        return <BrandProfilePage />;
       case 'commercial-info':
         return <CommercialInfoPage />;
       case 'rfm':

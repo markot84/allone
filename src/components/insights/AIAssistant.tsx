@@ -33,6 +33,7 @@ import {
   type MarkMessage,
 } from '../../services/mark';
 import { formatCommercialInfoForPrompt, structureCommercialInfo } from '../../services/commercialInfo';
+import { formatBrandProfileForPrompt } from '../../services/brandProfile';
 import { useCommercialInfo } from '../../hooks/useCommercialInfo';
 import { useSpeechToText } from '../../hooks/useSpeechToText';
 import { useBrand } from '../../hooks/useBrand';
@@ -370,6 +371,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     return {
       brandName: currentBrand?.name ?? null,
       brandId: currentBrand?.id ?? null,
+      brandProfileContext: formatBrandProfileForPrompt(currentBrand?.brandProfile),
       ecommerce: {
         hasData: ecomm.hasData,
         totalRevenue: ecomm.totalRevenue,
@@ -431,6 +433,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   }, [
     currentBrand?.id,
     currentBrand?.name,
+    currentBrand?.brandProfile,
     ecomm.hasData,
     ecomm.totalRevenue,
     ecomm.orderCount,
@@ -470,8 +473,10 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [savingInfo, setSavingInfo] = useState(false);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const shouldAutoScrollRef = useRef(true);
   /** Το brandId του οποίου το session είναι φορτωμένο — guard κατά mismatch. */
   const loadedBrandRef = useRef<string | null>(null);
   const hydratedRef = useRef(false);
@@ -557,8 +562,16 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    shouldAutoScrollRef.current = distanceFromBottom < 96;
+  }, []);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!shouldAutoScrollRef.current) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, isTyping]);
 
   const handleSend = async (overrideText?: string) => {
@@ -571,6 +584,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     if (!requestBrandId) return;
 
     const historyTurns = toGeminiHistory(messages.map(toMark));
+    shouldAutoScrollRef.current = true;
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
@@ -819,7 +833,11 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div
+              ref={messagesScrollRef}
+              onScroll={handleMessagesScroll}
+              className="flex-1 overflow-y-auto p-4 space-y-4"
+            >
               {messages.map((message) => (
                 <MarkMessageItem
                   key={message.id}

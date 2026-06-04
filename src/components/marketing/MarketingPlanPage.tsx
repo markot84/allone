@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart3, Calendar, ChevronDown, ChevronRight, ChevronUp, Megaphone, PackagePlus,
@@ -36,6 +36,7 @@ import { fetchDataAnalysisOrders, fetchEcommercePlatformOrders } from '../../ser
 import { buildCommercialLearnings, type CommercialLearning } from '../../services/commercialLearnings';
 import { shiftIsoDate } from '../../services/commercialScenarioMetrics';
 import { formatCommercialInfoForPrompt } from '../../services/commercialInfo';
+import { formatBrandProfileForPrompt } from '../../services/brandProfile';
 import { useCommercialInfo } from '../../hooks/useCommercialInfo';
 import type { Campaign } from '../../types';
 import { FirestoreService } from '../../services/firestore';
@@ -144,6 +145,10 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     [commercialInfo.items]
   );
   const activeInfoText = useMemo(() => formatCommercialInfoForPrompt(activeInfo), [activeInfo]);
+  const brandProfileText = useMemo(
+    () => formatBrandProfileForPrompt(currentBrand?.brandProfile),
+    [currentBrand?.brandProfile]
+  );
   const markPlanContext = useMemo(
     () => activeInfo.filter((i) => i.source === 'mark' && (i.markContext?.summaryBullets?.length || i.summary)),
     [activeInfo]
@@ -153,15 +158,17 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     () => activeInfo.map((i) => `${i.id}:${i.direction}:${i.magnitude}`).sort().join('|'),
     [activeInfo]
   );
+  const profileSig = useMemo(
+    () => JSON.stringify(currentBrand?.brandProfile ?? {}),
+    [currentBrand?.brandProfile]
+  );
+  const contextSig = useMemo(
+    () => [infoSig, profileSig].filter(Boolean).join('|'),
+    [infoSig, profileSig]
+  );
 
   const [preset, setPreset] = useState<MarketingPlanPresetId>('next_month');
   const [learningsOpen, setLearningsOpen] = useState(false);
-  /**
-   * Το (δευτερεύον) learnings fetch είναι βαρύ. Το τρέχουμε ΜΟΝΟ αφού ετοιμαστεί το plan draft,
-   * ώστε στο αρχικό load να μην ανταγωνίζεται το κρίσιμο «Περσινές πωλήσεις» για bandwidth/CPU
-   * (σε high-volume brands π.χ. e-tennis αυτό πάγωνε τη σελίδα για λεπτά).
-   */
-  const [planDraftReady, setPlanDraftReady] = useState(false);
   const [openSections, setOpenSections] = useState<Set<SectionKey>>(
     new Set(['analysis', 'inventory', 'paid', 'organic', 'audience', 'pricing', 'message'])
   );
@@ -182,42 +189,6 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           })
         : Promise.resolve([]),
     enabled: !!brandId,
-    staleTime: 10 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
-
-  // Μαθήματα από προηγούμενες αποφάσεις (trailing 90 ημέρες, ανεξάρτητα από τη μελλοντική περίοδο plan).
-  const learnTo = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const learnFrom = useMemo(() => shiftIsoDate(learnTo, -90), [learnTo]);
-  const learningsQuery = useQuery({
-    queryKey: ['marketingPlanLearnings', brandId, learnFrom, learnTo, [...ecomm.connectedPlatforms].sort().join('|'), campaigns.length, Object.keys(procurementSignals.signalsBySku).length],
-    queryFn: async () => {
-      if (!brandId) return null;
-      // Orders από windowFrom-30 (price baseline) έως σήμερα· platform-only.
-      // ΟΧΙ fetchAll: bounded στις πιο πρόσφατες ~5.000 παραγγελίες του παραθύρου. Το πλήρες
-      // pagination (έως 40k docs) μονοπωλούσε δίκτυο/CPU και πάγωνε τη σελίδα σε high-volume brands.
-      const orders = await fetchEcommercePlatformOrders(brandId, ecomm.connectedPlatforms, {
-        sinceDate: shiftIsoDate(learnFrom, -30),
-        untilDate: learnTo,
-        cacheFirst: true,
-        revenueMode: 'all',
-      });
-      // Κόστος ανά SKU από procurement signals → margin-aware learnings.
-      const costBySku = new Map<string, number>();
-      for (const [sku, sig] of Object.entries(procurementSignals.signalsBySku)) {
-        const cost = (sig as { cost_unit?: number }).cost_unit;
-        if (typeof cost === 'number' && cost > 0) costBySku.set(sku, cost);
-      }
-      return buildCommercialLearnings({
-        campaigns: campaigns as Campaign[],
-        orders,
-        windowFrom: learnFrom,
-        windowTo: learnTo,
-        costBySku: costBySku.size > 0 ? costBySku : undefined,
-      });
-    },
-    enabled: !!brandId && planDraftReady,
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -254,7 +225,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   // Το plan draft ζει στο React Query cache (επιβιώνει της πλοήγησης) + localStorage (επιβιώνει reload),
   // με daily staleTime. Έτσι ΔΕΝ ξανατρέχει η βαριά ανάλυση + AI σε κάθε είσοδο στη σελίδα.
   const planQuery = useQuery<MarketingPlanDraft>({
-    queryKey: ['marketingPlanDraft', 'v2', brandId, preset, infoSig],
+    queryKey: ['marketingPlanDraft', 'v2', brandId, preset, contextSig],
     enabled: baseDataReady,
     staleTime: PLAN_CACHE_TTL_MS,
     gcTime: PLAN_CACHE_TTL_MS,
@@ -262,8 +233,8 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     retry: false,
-    initialData: () => readPlanCacheEntry(brandId, preset, infoSig)?.plan,
-    initialDataUpdatedAt: () => readPlanCacheEntry(brandId, preset, infoSig)?.savedAt,
+    initialData: () => readPlanCacheEntry(brandId, preset, contextSig)?.plan,
+    initialDataUpdatedAt: () => readPlanCacheEntry(brandId, preset, contextSig)?.savedAt,
     queryFn: async () => {
       const insight = buildMarketingPlanInsight({
         period,
@@ -288,17 +259,18 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       // 1) Άμεσο draft με deterministic fallback μήνυμα: γράφεται στο cache + εμφανίζεται ΤΩΡΑ,
       //    ώστε ΑΚΟΜΗ κι αν ο χρήστης κάνει reload όσο τρέχει το (αργό) AI, να μην ξαναρχίζει η ανάλυση.
       const fastDraft = assemble(buildFallbackCoreMessage(insight));
-      if (brandId) writePlanCache(brandId, preset, fastDraft, infoSig);
-      queryClient.setQueryData(['marketingPlanDraft', 'v2', brandId, preset, infoSig], fastDraft);
+      if (brandId) writePlanCache(brandId, preset, fastDraft, contextSig);
+      queryClient.setQueryData(['marketingPlanDraft', 'v2', brandId, preset, contextSig], fastDraft);
 
       // 2) Μη-μπλοκαριστικό AI enhancement: ενσωματώνει και τις εμπορικές πληροφορίες.
       const coreMessage = await generateMarketingPlanMessage({
         insight,
         brandName: currentBrand?.name,
         commercialInfoText: activeInfo.length > 0 ? activeInfoText : undefined,
+        brandProfileText,
       });
       const built = coreMessage.source === 'ai' ? assemble(coreMessage) : fastDraft;
-      if (brandId) writePlanCache(brandId, preset, built, infoSig);
+      if (brandId) writePlanCache(brandId, preset, built, contextSig);
       return built;
     },
   });
@@ -306,15 +278,42 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const draft = planQuery.data ?? null;
   const generating = planQuery.isFetching;
 
-  // Σε αλλαγή brand, ξανακλειδώνουμε το learnings μέχρι να ετοιμαστεί το νέο draft.
-  useEffect(() => {
-    setPlanDraftReady(false);
-  }, [brandId]);
-
-  // Μόλις υπάρξει draft (έστω το fast/cached), ξεκλειδώνουμε το δευτερεύον learnings fetch.
-  useEffect(() => {
-    if (draft && !planDraftReady) setPlanDraftReady(true);
-  }, [draft, planDraftReady]);
+  // Μαθήματα από προηγούμενες αποφάσεις (trailing 90 ημέρες, ανεξάρτητα από τη μελλοντική περίοδο plan).
+  // Το βαρύ fetch τρέχει μόνο αφού υπάρχει draft, ώστε να μην ανταγωνίζεται το αρχικό plan load.
+  const learnTo = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const learnFrom = useMemo(() => shiftIsoDate(learnTo, -90), [learnTo]);
+  const learningsQuery = useQuery({
+    queryKey: ['marketingPlanLearnings', brandId, learnFrom, learnTo, [...ecomm.connectedPlatforms].sort().join('|'), campaigns.length, Object.keys(procurementSignals.signalsBySku).length],
+    queryFn: async () => {
+      if (!brandId) return null;
+      // Orders από windowFrom-30 (price baseline) έως σήμερα· platform-only.
+      // ΟΧΙ fetchAll: bounded στις πιο πρόσφατες ~5.000 παραγγελίες του παραθύρου. Το πλήρες
+      // pagination (έως 40k docs) μονοπωλούσε δίκτυο/CPU και πάγωνε τη σελίδα σε high-volume brands.
+      const orders = await fetchEcommercePlatformOrders(brandId, ecomm.connectedPlatforms, {
+        sinceDate: shiftIsoDate(learnFrom, -30),
+        untilDate: learnTo,
+        cacheFirst: true,
+        revenueMode: 'all',
+      });
+      // Κόστος ανά SKU από procurement signals → margin-aware learnings.
+      const costBySku = new Map<string, number>();
+      for (const [sku, sig] of Object.entries(procurementSignals.signalsBySku)) {
+        const cost = (sig as { cost_unit?: number }).cost_unit;
+        if (typeof cost === 'number' && cost > 0) costBySku.set(sku, cost);
+      }
+      return buildCommercialLearnings({
+        campaigns: campaigns as Campaign[],
+        orders,
+        windowFrom: learnFrom,
+        windowTo: learnTo,
+        costBySku: costBySku.size > 0 ? costBySku : undefined,
+      });
+    },
+    enabled: !!brandId && !!draft,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
 
   const generateError = planQuery.isError
     ? (planQuery.error instanceof Error ? planQuery.error.message : 'Αποτυχία δημιουργίας plan. Δοκίμασε ξανά.')
@@ -323,7 +322,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   // Manual «Επαναδημιουργία»: καθάρισε το daily cache και ξανατρέξε τον υπολογισμό.
   const regenerate = () => {
     if (!brandId) return;
-    clearPlanCache(brandId, preset, infoSig);
+    clearPlanCache(brandId, preset, contextSig);
     void planQuery.refetch();
   };
 

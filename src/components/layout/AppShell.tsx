@@ -622,6 +622,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'sales', label: moduleConfig.sales.label, icon: Handshake, group: 'commercial' },
         { id: 'offers', label: moduleConfig.offers.label, icon: ClipboardList, group: 'commercial' },
         { id: 'marketing-plan', label: 'Marketing Plan', icon: ClipboardList, group: 'marketing' },
+        { id: 'brand-profile', label: 'Brand Profile', icon: Palette, group: 'marketing' },
         { id: 'commercial-info', label: 'Εμπορικές Πληροφορίες', icon: Lightbulb, group: 'marketing' },
         { id: 'channels', label: moduleConfig.channels.label, icon: MegaphoneIcon, group: 'marketing' },
         { id: 'campaigns', label: moduleConfig.campaigns.label, icon: Target, group: 'marketing' },
@@ -643,11 +644,11 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       const ordered = isB2B
         ? [
             'brands', 'dashboard', 'roi', 'insights', 'reports', 'accounts', 'competitive', 'strategy', 'policy-impact', 'markets', 'sales', 'offers',
-            'marketing-plan', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'hr', 'territories', 'coordination', 'automation', 'data', 'invite', 'help',
+            'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'hr', 'territories', 'coordination', 'automation', 'data', 'invite', 'help',
           ]
         : [
             'brands', 'dashboard', 'roi', 'insights', 'reports', 'ecommerce', 'rfm', 'competitive', 'strategy', 'policy-impact',
-            'marketing-plan', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'coordination', 'automation', 'data', 'invite', 'help',
+            'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'coordination', 'automation', 'data', 'invite', 'help',
           ];
 
       const itemMap = new Map(commonItems.map((item) => [item.id, item]));
