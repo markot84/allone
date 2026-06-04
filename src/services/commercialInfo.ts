@@ -1,4 +1,4 @@
-import { where, orderBy, Timestamp } from 'firebase/firestore';
+import { where, Timestamp } from 'firebase/firestore';
 import { FirestoreService } from './firestore';
 import { callGemini } from './geminiProxy';
 import { buildAdvisorySystemPrompt } from '../data/aiAdvisoryFramework';
@@ -228,10 +228,12 @@ export async function listCommercialInfo(brandId: string): Promise<CommercialInf
   if (!brandId) return [];
   const docs = await FirestoreService.getDocuments<{ id: string } & CommercialInfoDoc>(
     COLLECTION,
-    [orderBy('createdAt', 'desc')],
+    [],
     brandId
   );
-  return docs.map((d) => flatten(d.id, d));
+  return docs
+    .map((d) => flatten(d.id, d))
+    .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
 }
 
 /** Μόνο ενεργές πληροφορίες — αυτές που τροφοδοτούν πλάνο/προβλέψεις. */

@@ -28,7 +28,9 @@ export function useCommercialInfo() {
     staleTime: STALE,
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['commercial_info', brandId] });
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ['commercial_info', brandId] });
+  };
 
   const addInfo = useMutation({
     mutationFn: async (input: {
@@ -39,7 +41,7 @@ export function useCommercialInfo() {
     }) => {
       if (!brandId) throw new Error('Δεν έχει επιλεγεί brand');
       const uid = getAuth().currentUser?.uid ?? null;
-      return createCommercialInfo({
+      const id = await createCommercialInfo({
         brandId,
         rawText: input.rawText,
         structured: input.structured,
@@ -47,6 +49,18 @@ export function useCommercialInfo() {
         createdBy: uid,
         markContext: input.markContext,
       });
+      const optimistic: CommercialInfo = {
+        id,
+        brandId,
+        rawText: input.rawText,
+        status: 'active',
+        source: input.source ?? 'owner',
+        createdBy: uid,
+        markContext: input.markContext,
+        ...input.structured,
+      };
+      qc.setQueryData<CommercialInfo[]>(['commercial_info', brandId], (old = []) => [optimistic, ...old]);
+      return id;
     },
     onSuccess: invalidate,
   });
