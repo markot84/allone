@@ -43,7 +43,7 @@ const SUPER_ADMINS = {
   uids: [
     'yPIEMSB1jXXxGX2hHCOvLYoJY7L2',
     'KApqDr7UlNa7TseQ25pakM8DRrd2',
-    'BAi5ZTMwFdWFCUR6k3IZq8cjPfp2',
+    'BAi5ZTMwFdWFCUR6k3IZq8cjPfp2', // pragma: allowlist secret -- Firebase Auth UID (identifier, NOT a credential)
   ],
   emails: [
     'makis@notthesame.gr',

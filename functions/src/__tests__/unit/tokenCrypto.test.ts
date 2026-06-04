@@ -24,7 +24,9 @@ describe('tokenCrypto', () => {
   describe('encryptToken -> decryptToken round-trip (key present)', () => {
     it('encryptToken returns an enc:v1: string and decryptToken recovers the original plaintext', () => {
       // Arrange
-      const plain = 'ya29.super-secret-oauth-access-token';
+      // A representative connector token (NOT a real credential — deliberately
+      // avoids any provider token prefix so secret scanners don't flag it).
+      const plain = 'connector-token-sample-value';
 
       // Act
       const encrypted = encryptToken(plain);

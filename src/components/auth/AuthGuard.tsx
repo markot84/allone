@@ -25,13 +25,23 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const allowEmailRegister = signupOpen || fromInvite;
   const allowGoogleNewUsers = signupOpen || fromInvite;
 
-  // Redirect to returnUrl after login (e.g. /invite/:token)
+  // Redirect to returnUrl after login (e.g. /invite/:token).
+  // SECURITY (CWE-601 open redirect): only same-origin RELATIVE paths are honored.
+  // Reject protocol-relative (//host), backslash (/\host), absolute, and
+  // javascript: targets lexically, then re-verify by resolving against our origin
+  // and navigate to the reconstructed same-origin path — so a crafted returnUrl
+  // can never bounce the user off-site or execute a javascript: URI.
   useEffect(() => {
     if (!user || loading) return;
-    const params = new URLSearchParams(window.location.search);
-    const returnUrl = params.get('returnUrl');
-    if (returnUrl && /^\/[^/\\]/.test(returnUrl)) {
-      window.location.href = returnUrl;
+    const returnUrl = new URLSearchParams(window.location.search).get('returnUrl');
+    if (!returnUrl || !returnUrl.startsWith('/') || returnUrl.startsWith('//') || returnUrl.startsWith('/\\')) return;
+    try {
+      const resolved = new URL(returnUrl, window.location.origin);
+      if (resolved.origin === window.location.origin) {
+        window.location.href = resolved.pathname + resolved.search + resolved.hash;
+      }
+    } catch {
+      /* malformed returnUrl — ignore */
     }
   }, [user, loading]);
 
