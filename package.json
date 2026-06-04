@@ -11,6 +11,12 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:rules": "firebase emulators:exec --only firestore --project=demo-test \"vitest run --config vitest.rules.config.ts\"",
+    "test:functions": "cd functions && npm test",
+    "test:e2e": "node scripts/check-e2e-env.cjs && playwright test e2e/smoke.spec.ts",
+    "test:e2e:all": "node scripts/check-e2e-env.cjs && playwright test",
+    "test:all": "npm run test && npm run test:rules && npm run test:functions",
     "firebase:deploy": "npm run build && npx cross-env FUNCTIONS_DISCOVERY_TIMEOUT=90 firebase deploy --only hosting",
     "firebase:deploy:functions": "cd functions && npm run build && cd .. && npx cross-env FUNCTIONS_DISCOVERY_TIMEOUT=90 firebase deploy --only functions",
     "firebase:deploy:full": "npm run build && cd functions && npm run build && cd .. && npx cross-env FUNCTIONS_DISCOVERY_TIMEOUT=90 firebase deploy",
@@ -46,11 +52,14 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@firebase/rules-unit-testing": "^5.0.1",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@types/react-simple-maps": "^3.0.6",
     "@vitejs/plugin-react": "^5.1.1",
+    "@vitest/coverage-v8": "^3.2.6",
     "cross-env": "^7.0.3",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -70,6 +79,11 @@
     "picomatch": "^4.0.4",
     "rollup": "^4.60.4",
     "@grpc/grpc-js": "^1.9.16",
-    "brace-expansion": "^1.1.14"
+    "brace-expansion": "^1.1.14",
+    "test-exclude": {
+      "minimatch": {
+        "brace-expansion": "^5.0.5"
+      }
+    }
   }
 }

@@ -44,6 +44,14 @@ ui-debug.log
 functions/lib/
 functions/node_modules/
 
+# Test artifacts
+coverage/
+functions/coverage/
+playwright-report/
+test-results/
+/blob-report/
+.playwright/
+
 # Local one-off scripts and secrets — never commit
 .tmp/
 .tmp_docs/

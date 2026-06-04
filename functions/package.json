@@ -5,6 +5,9 @@
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage --passWithNoTests",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "deploy": "firebase deploy --only functions",
@@ -27,7 +30,9 @@
     "@types/busboy": "^1.5.4",
     "@types/nodemailer": "^7.0.11",
     "@types/uuid": "^10.0.0",
-    "typescript": "~5.7.0"
+    "@vitest/coverage-v8": "^4.1.8",
+    "typescript": "~5.7.0",
+    "vitest": "^4.1.8"
   },
   "overrides": {
     "path-to-regexp": "0.1.13",
