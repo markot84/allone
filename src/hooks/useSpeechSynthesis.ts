@@ -118,10 +118,11 @@ function replaceCurrencyAmount(raw: string): string {
 function formatNumbersForSpeech(text: string): string {
   const numberSource = String.raw`[+-]?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|[+-]?\d+(?:[.,]\d+)?`;
   const broadNumberSource = String.raw`[+-]?\d(?:[\d.,\u00A0 ]*\d)?`;
-  const broadLeadingCurrencyPattern = new RegExp(String.raw`(?:€|eur(?:o)?\b|e\s*euro\b|ευρώ\b|ευρω\b)\s*(${broadNumberSource})`, 'gi');
-  const broadTrailingCurrencyPattern = new RegExp(String.raw`(${broadNumberSource})\s*(?:€|eur(?:o)?\b|e(?:\s*euro)?\b|ευρώ\b|ευρω\b)`, 'gi');
-  const trailingCurrencyPattern = new RegExp(String.raw`(${numberSource})\s*(?:€|eur(?:o)?\b|e(?:\s*euro)?\b|ευρώ\b|ευρω\b)`, 'gi');
-  const leadingCurrencyPattern = new RegExp(String.raw`(?:€|eur(?:o)?\b|e\s*euro\b|ευρώ\b|ευρω\b)\s*(${numberSource})`, 'gi');
+  const currencyToken = String.raw`(?:€|eur(?:o)?\b|[eΕε](?:\s*euro)?\b|ευρώ\b|ευρω\b)`;
+  const broadLeadingCurrencyPattern = new RegExp(String.raw`${currencyToken}\s*(${broadNumberSource})`, 'gi');
+  const broadTrailingCurrencyPattern = new RegExp(String.raw`(${broadNumberSource})\s*${currencyToken}`, 'gi');
+  const trailingCurrencyPattern = new RegExp(String.raw`(${numberSource})\s*${currencyToken}`, 'gi');
+  const leadingCurrencyPattern = new RegExp(String.raw`${currencyToken}\s*(${numberSource})`, 'gi');
   const percentPattern = /([+-]?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|[+-]?\d+(?:[.,]\d+)?)(?:\s*)%/g;
   const thousandsPattern = /\b\d{1,3}(?:[.,]\d{3})+\b/g;
 
@@ -150,7 +151,9 @@ function formatNumbersForSpeech(text: string): string {
     .replace(thousandsPattern, (raw) => {
       const value = parseLocalizedNumber(raw);
       return value === null ? raw : integerToGreekWords(value);
-    });
+    })
+    .replace(/€/g, ' ευρώ ')
+    .replace(/\b(?:eur(?:o)?|[eΕε]\s*euro)\b/gi, ' ευρώ ');
 }
 
 export function cleanTextForSpeech(text: string, maxChars = MAX_AUTO_READ_CHARS): string {
