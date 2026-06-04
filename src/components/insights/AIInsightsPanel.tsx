@@ -34,9 +34,9 @@ export function AIInsightsTrigger({ onClick }: { onClick: () => void }) {
         aria-label="AI Insights — άνοιγμα σελίδας"
       >
         <img
-          src="/mark.png"
+          src="/mark-orb.png"
           alt=""
-          className="w-10 h-10 object-contain"
+          className="w-12 h-12 object-contain"
           style={{ filter: 'contrast(1.05)' }}
           onError={(e) => {
             const target = e.target as HTMLImageElement;
