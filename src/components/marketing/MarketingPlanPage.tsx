@@ -325,7 +325,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           cacheFirst: true,
           revenueMode: 'all',
         }),
-        25_000,
+        8_000,
         'Το βήμα περσινών πωλήσεων άργησε υπερβολικά και παραλείφθηκε για να μην κολλήσει το πλάνο.'
       );
       writeLastYearOrdersCache(brandId, lastYearFrom, lastYearTo, platformsKey, orders);
@@ -394,8 +394,11 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   };
 
   // Base data έτοιμα → το plan υπολογίζεται μία φορά (ανά brand/preset/context) και διατηρείται.
-  const baseDataReady = !!brandId && contextReady && !cacheLookupPending && !lastYearOrdersQuery.isLoading && !inventoryLoading && !procurementSignals.isLoading;
-  const loadingContext = !effectiveCachedPlanEntry && (cacheLookupPending || !contextReady || lastYearOrdersQuery.isLoading || inventoryLoading || procurementSignals.isLoading);
+  // Οι περσινές πωλήσεις ΔΕΝ μπλοκάρουν το initial draft: αν αργούν, το plan δημιουργείται με
+  // διαθέσιμα inventory/ERP/context και το βήμα σημειώνεται ως skipped/σε εξέλιξη αντί να ξανατρέχει
+  // όλη η ανάλυση κάθε φορά που ο χρήστης αλλάζει σελίδα.
+  const baseDataReady = !!brandId && contextReady && !cacheLookupPending && !inventoryLoading && !procurementSignals.isLoading;
+  const loadingContext = !effectiveCachedPlanEntry && (cacheLookupPending || !contextReady || inventoryLoading || procurementSignals.isLoading);
 
   // Το plan draft ζει στο React Query cache (επιβιώνει της πλοήγησης) + localStorage (επιβιώνει reload),
   // με daily staleTime. Έτσι ΔΕΝ ξανατρέχει η βαριά ανάλυση + AI σε κάθε είσοδο στη σελίδα.
