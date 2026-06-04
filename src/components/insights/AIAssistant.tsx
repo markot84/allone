@@ -240,15 +240,37 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   // Κρατάμε πλήρη ημερήσια σειρά όπου υπάρχει, γιατί ερωτήσεις τύπου «πέρυσι την ίδια ημέρα»
   // χρειάζονται ακριβή daily lookup και όχι μόνο τα τελευταία 90 ημερήσια σημεία.
   const revenueSeries = useMemo((): AssistantTenantPack['revenue'] => {
+    const buildYoyDailyPairs = (daily: Array<{ date: string; revenue: number }>) => {
+      const byDate = new Map(daily.map((d) => [d.date, d.revenue]));
+      return daily
+        .slice(-21)
+        .map((d) => {
+          const previousYearDate = `${String(Number(d.date.slice(0, 4)) - 1)}${d.date.slice(4)}`;
+          const previousYearRevenue = byDate.get(previousYearDate);
+          return previousYearRevenue == null
+            ? null
+            : {
+                date: d.date,
+                revenue: d.revenue,
+                previousYearDate,
+                previousYearRevenue,
+              };
+        })
+        .filter((d): d is { date: string; revenue: number; previousYearDate: string; previousYearRevenue: number } => d != null);
+    };
+
+    const businessDaily = Object.entries(businessRev.revenueByDayRecord)
+      .map(([date, revenue]) => ({ date, revenue: Number(revenue) || 0 }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
     const business: RevenueSeries | undefined = businessRev.hasErpRevenueData
       ? {
           label: `ERP (${businessRev.source})`,
           totalRevenue: businessRev.totalRevenue,
           orderCount: businessRev.orderCount,
           monthly: businessRev.monthlyRevenue,
-          recentDaily: Object.entries(businessRev.revenueByDayRecord)
-            .map(([date, revenue]) => ({ date, revenue: Number(revenue) || 0 }))
-            .sort((a, b) => a.date.localeCompare(b.date)),
+          recentDaily: businessDaily,
+          yoyDaily: buildYoyDailyPairs(businessDaily),
         }
       : undefined;
 
@@ -261,6 +283,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
             orderCount: ecomm.orderCount,
             monthly: ecomm.monthlyRevenue,
             recentDaily: eshopDaily,
+            yoyDaily: buildYoyDailyPairs(eshopDaily),
           }
         : undefined;
 

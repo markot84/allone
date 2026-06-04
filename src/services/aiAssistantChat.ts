@@ -23,6 +23,8 @@ export type RevenueSeries = {
   monthly: Array<{ month: string; revenue: number }>;
   /** Ημερήσια σειρά (YYYY-MM-DD → revenue), ταξινομημένη χρονολογικά. */
   recentDaily: Array<{ date: string; revenue: number }>;
+  /** Έτοιμα ζεύγη σύγκρισης ίδιας ημερομηνίας με πέρυσι, για follow-ups τύπου «πέρυσι την ίδια ημέρα». */
+  yoyDaily?: Array<{ date: string; revenue: number; previousYearDate: string; previousYearRevenue: number }>;
 };
 
 export type AssistantTenantPack = {
@@ -143,6 +145,12 @@ function formatRevenueSeries(label: string, series: RevenueSeries): string {
     );
     const dailyStr = recentDaily.map((d) => `${d.date}:€${Math.round(d.revenue)}`).join(', ');
     out.push(`  Ημερήσια σειρά: ${dailyStr}`);
+    if (series.yoyDaily && series.yoyDaily.length > 0) {
+      const yoyStr = series.yoyDaily
+        .map((d) => `${d.date}:€${Math.round(d.revenue)} ↔ ${d.previousYearDate}:€${Math.round(d.previousYearRevenue)}`)
+        .join(', ');
+      out.push(`  Ίδια ημέρα πέρυσι (έτοιμα ζεύγη): ${yoyStr}`);
+    }
   } else {
     out.push('  Ημερήσια ανάλυση: μη διαθέσιμη (μόνο μηνιαία σύνολα) — για ερώτηση συγκεκριμένης ημέρας ζήτησε διευκρίνιση ή πρότεινε μηνιαία ανάλυση.');
   }
