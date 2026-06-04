@@ -289,8 +289,10 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
         price: { ...result.price, rows: result.price.rows.slice(0, MAX_PRICE_CACHE) },
         marketing: { ...result.marketing, rows: result.marketing.rows.slice(0, MAX_MKT_CACHE) },
       };
+      // Γράφουμε και το quick result στο localStorage με `analysisScope.isQuickSample`,
+      // ώστε page switch / back να μη ξανατρέχει τον ίδιο υπολογισμό.
+      writeScenarioCache(brandId, period.fromDate, period.toDate, cachePayload);
       if (!shouldUseQuickInitialAnalysis) {
-        writeScenarioCache(brandId, period.fromDate, period.toDate, cachePayload);
         // Durable Firestore cache (fire-and-forget): ώστε ο βαρύς υπολογισμός να μη ξανατρέξει σε reload.
         void writeScenarioCacheRemote(brandId, period.fromDate, period.toDate, cachePayload);
       }
