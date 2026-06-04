@@ -451,13 +451,20 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         }
       />
 
-      {markPlanContext.length > 0 && (
-        <Card padding="lg" className="border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/5">
-          <CardHeader
-            title="Context από Mark"
-            subtitle="Σημαντικά συμπεράσματα από τον διάλογο που τροφοδοτούν αυτό το Marketing Plan."
-            icon={<MessageSquareText size={18} className="text-[var(--nts-accent)]" />}
-          />
+      <Card padding="lg" className="border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/5">
+        <CardHeader
+          title="Context από Mark"
+          subtitle="Σημαντικά συμπεράσματα από τον διάλογο που τροφοδοτούν αυτό το Marketing Plan."
+          icon={<MessageSquareText size={18} className="text-[var(--nts-accent)]" />}
+        />
+        {markPlanContext.length === 0 ? (
+          <div className="mt-4 rounded-xl border border-dashed border-[var(--nts-accent)]/25 bg-white/70 p-3">
+            <p className="text-sm font-medium text-[#1A1A1A]">Δεν έχει συνδεθεί ακόμη διάλογος Mark με αυτό το Marketing Plan.</p>
+            <p className="mt-1 text-xs text-[#6B7280]">
+              Ρώτησε τον Mark για εμπορικό σενάριο και πάτησε «Καταχώριση & άνοιγμα Marketing Plan» ώστε να αποθηκευτούν εδώ τα βασικά συμπεράσματα.
+            </p>
+          </div>
+        ) : (
           <div className="mt-4 space-y-3">
             {markPlanContext.slice(0, 3).map((info) => (
               <div key={info.id} className="rounded-xl border border-white/70 bg-white/80 p-3">
@@ -482,8 +489,8 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
               </div>
             ))}
           </div>
-        </Card>
-      )}
+        )}
+      </Card>
 
       {/* Period selector */}
       <Card padding="lg">
