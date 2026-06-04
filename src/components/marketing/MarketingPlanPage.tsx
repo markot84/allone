@@ -35,9 +35,7 @@ import { generateMarketingPlanMessage } from '../../services/marketingPlanMessag
 import { fetchDataAnalysisOrders, fetchEcommercePlatformOrders } from '../../services/ecommerceRawOrders';
 import { buildCommercialLearnings, type CommercialLearning } from '../../services/commercialLearnings';
 import { shiftIsoDate } from '../../services/commercialScenarioMetrics';
-import { buildSalesForecast, type ForecastGroupInput } from '../../services/salesForecast';
 import { formatCommercialInfoForPrompt } from '../../services/commercialInfo';
-import { resolveParentSku } from '../../utils/parentSku';
 import { useCommercialInfo } from '../../hooks/useCommercialInfo';
 import type { Campaign } from '../../types';
 import { FirestoreService } from '../../services/firestore';
@@ -318,37 +316,6 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     if (draft && !planDraftReady) setPlanDraftReady(true);
   }, [draft, planDraftReady]);
 
-  // Πρόβλεψη πωλήσεων σε επίπεδο Κατηγορίας / Parent SKU με baseline το περσινό αντίστοιχο
-  // διάστημα (από το reorderPlan/skuSuggestions) και προσαρμογή από τις εμπορικές πληροφορίες.
-  const forecast = useMemo(() => {
-    if (!draft) return null;
-    const catMap = new Map<string, ForecastGroupInput>();
-    for (const row of draft.reorderPlan) {
-      const cat = row.category || 'Λοιπά';
-      const cur = catMap.get(cat) ?? { category: cat, pastRevenue: 0, pastUnits: 0 };
-      cur.pastRevenue += row.lastYearRevenue || 0;
-      cur.pastUnits += row.lastYearUnits || 0;
-      catMap.set(cat, cur);
-    }
-
-    const pskMap = new Map<string, ForecastGroupInput>();
-    for (const s of draft.skuSuggestions) {
-      const parent = resolveParentSku(s.sku);
-      if (!parent) continue;
-      const cat = s.category || 'Λοιπά';
-      const key = `${cat}__${parent}`;
-      const cur = pskMap.get(key) ?? { category: cat, parentSku: parent, pastRevenue: 0, pastUnits: 0 };
-      cur.pastRevenue += s.lastYearRevenue || 0;
-      cur.pastUnits += s.lastYearUnits || 0;
-      pskMap.set(key, cur);
-    }
-
-    return buildSalesForecast({
-      categoryGroups: [...catMap.values()].filter((g) => g.pastRevenue > 0 || g.pastUnits > 0),
-      parentSkuGroups: [...pskMap.values()].filter((g) => g.pastRevenue > 0 || g.pastUnits > 0),
-      activeInfo,
-    });
-  }, [draft, activeInfo]);
   const generateError = planQuery.isError
     ? (planQuery.error instanceof Error ? planQuery.error.message : 'Αποτυχία δημιουργίας plan. Δοκίμασε ξανά.')
     : null;
@@ -624,104 +591,6 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
               </>
             )}
           </PlanSection>
-
-          {/* Πρόβλεψη πωλήσεων (Κατηγορία / Parent SKU) */}
-          {forecast && forecast.categories.length > 0 && (
-            <Card>
-              <CardHeader
-                title="Πρόβλεψη πωλήσεων — Κατηγορίες & Parent SKU"
-                subtitle={
-                  forecast.appliedInfoCount > 0
-                    ? `Baseline περσινής περιόδου + προσαρμογή από ${forecast.appliedInfoCount} εμπορικές πληροφορίες`
-                    : 'Baseline περσινής αντίστοιχης περιόδου (καμία ενεργή εμπορική πληροφορία)'
-                }
-              />
-              <div className="p-4 pt-0 space-y-4">
-                <div className="flex flex-wrap items-center gap-4 text-sm">
-                  <div>
-                    <span className="text-[#6B7280]">Baseline: </span>
-                    <span className="font-mono font-semibold">{formatCurrency(forecast.totalBaselineRevenue, 0)}</span>
-                  </div>
-                  <ArrowUpRight size={16} className="text-[#9CA3AF]" />
-                  <div>
-                    <span className="text-[#6B7280]">Πρόβλεψη: </span>
-                    <span className="font-mono font-semibold text-[var(--nts-charcoal)]">{formatCurrency(forecast.totalForecastRevenue, 0)}</span>
-                  </div>
-                  {forecast.totalBaselineRevenue > 0 && (
-                    <Badge variant={forecast.totalForecastRevenue >= forecast.totalBaselineRevenue ? 'success' : 'warning'}>
-                      {forecast.totalForecastRevenue >= forecast.totalBaselineRevenue ? '+' : ''}
-                      {Math.round(((forecast.totalForecastRevenue - forecast.totalBaselineRevenue) / forecast.totalBaselineRevenue) * 100)}%
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
-                  <table className="w-full text-sm">
-                    <thead className="bg-[#F9FAFB] text-xs text-[#6B7280]">
-                      <tr>
-                        <th className="px-3 py-2 text-left">Κατηγορία</th>
-                        <th className="px-3 py-2 text-right">Baseline</th>
-                        <th className="px-3 py-2 text-right">Προσαρμογή</th>
-                        <th className="px-3 py-2 text-right">Πρόβλεψη</th>
-                        <th className="px-3 py-2 text-left">Σήμα</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {forecast.categories.slice(0, 12).map((r) => (
-                        <tr key={r.key} className="border-t border-[#E5E7EB]">
-                          <td className="px-3 py-2 font-medium">{r.category}</td>
-                          <td className="px-3 py-2 text-right font-mono text-[#6B7280]">{formatCurrency(r.baselineRevenue, 0)}</td>
-                          <td className="px-3 py-2 text-right font-mono">
-                            {r.upliftPct === 0 ? (
-                              <span className="text-[#9CA3AF]">—</span>
-                            ) : (
-                              <span className={r.upliftPct > 0 ? 'text-emerald-600' : 'text-red-500'}>
-                                {r.upliftPct > 0 ? '+' : ''}
-                                {Math.round(r.upliftPct * 100)}%
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono font-semibold">{formatCurrency(r.forecastRevenue, 0)}</td>
-                          <td className="px-3 py-2 text-xs text-[#6B7280] max-w-[220px] truncate" title={r.drivers.join(' · ')}>
-                            {r.drivers.length > 0 ? r.drivers[0] : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {forecast.parentSkus.filter((r) => r.upliftPct !== 0).length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">Parent SKU με σήμα από εμπορική πληροφορία</p>
-                    <div className="flex flex-wrap gap-2">
-                      {forecast.parentSkus
-                        .filter((r) => r.upliftPct !== 0)
-                        .slice(0, 10)
-                        .map((r) => (
-                          <span
-                            key={r.key}
-                            className="text-xs px-2 py-1 rounded-full bg-[#F3F4F6] text-[var(--nts-charcoal)]"
-                            title={r.drivers.join(' · ')}
-                          >
-                            {r.parentSku} <span className={r.upliftPct > 0 ? 'text-emerald-600' : 'text-red-500'}>{r.upliftPct > 0 ? '+' : ''}{Math.round(r.upliftPct * 100)}%</span>
-                          </span>
-                        ))}
-                    </div>
-                  </div>
-                )}
-
-                {forecast.appliedInfoCount === 0 && (
-                  <button
-                    onClick={() => onSectionChange?.('commercial-info')}
-                    className="text-xs text-[var(--nts-accent)] hover:underline"
-                  >
-                    + Πρόσθεσε εμπορική πληροφορία για πιο ακριβή πρόβλεψη
-                  </button>
-                )}
-              </div>
-            </Card>
-          )}
 
           {/* Section 3: Paid Media */}
           <PlanSection
