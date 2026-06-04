@@ -59,7 +59,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/react-simple-maps": "^3.0.6",
     "@vitejs/plugin-react": "^5.1.1",
-    "@vitest/coverage-v8": "^3.2.6",
+    "@vitest/coverage-v8": "^4.1.8",
     "cross-env": "^7.0.3",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -69,7 +69,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.3.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.8"
   },
   "overrides": {
     "protobufjs": "^7.5.8",
@@ -80,6 +80,7 @@
     "rollup": "^4.60.4",
     "@grpc/grpc-js": "^1.9.16",
     "brace-expansion": "^1.1.14",
+    "uuid": "^11.1.1",
     "test-exclude": {
       "minimatch": {
         "brace-expansion": "^5.0.5"

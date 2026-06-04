@@ -38,6 +38,9 @@ export function AuthGuard({ children }: AuthGuardProps) {
     try {
       const resolved = new URL(returnUrl, window.location.origin);
       if (resolved.origin === window.location.origin) {
+        // Same-origin verified above (origin equality + lexical //,/\ guard); we
+        // navigate only to the reconstructed path/search/hash, never a host/scheme.
+        // nosemgrep: javascript.browser.security.open-redirect.js-open-redirect
         window.location.href = resolved.pathname + resolved.search + resolved.hash;
       }
     } catch {

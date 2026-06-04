@@ -37,6 +37,8 @@
   "overrides": {
     "path-to-regexp": "0.1.13",
     "node-forge": "^1.4.0",
-    "protobufjs": "^7.5.8"
+    "protobufjs": "^7.5.8",
+    "uuid": "^11.1.1",
+    "qs": "^6.15.0"
   }
 }
