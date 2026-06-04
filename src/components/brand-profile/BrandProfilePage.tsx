@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, CardHeader, PageHeader, Spinner, useToast } from '../common';
+import { Button, Card, CardHeader, PageHeader, Spinner, useToast } from '../common';
 import { Palette, Plus, Save, Trash2, UserRound } from 'lucide-react';
 import { useBrand } from '../../hooks/useBrand';
 import {
@@ -238,10 +238,6 @@ export function BrandProfilePage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-semibold text-[#1A1A1A]">{item.label}</span>
-                    <div className="flex gap-1">
-                      {profile.archetype === item.id && <Badge variant="orange">Βασικό</Badge>}
-                      {profile.secondaryArchetype === item.id && <Badge variant="info">Συμπληρωματικό</Badge>}
-                    </div>
                   </div>
                   <p className="mt-1 text-xs text-[#6B7280]">{item.description}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
