@@ -12,13 +12,14 @@ export function AIInsightsTrigger({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       whileHover={{ scale: 1.08 }}
       whileTap={{ scale: 0.95 }}
-      className="fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-xl flex items-center justify-center z-30 overflow-hidden bg-white border-2 border-[var(--nts-accent)]/20"
+      className="fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-xl flex items-center justify-center z-30 overflow-hidden"
       aria-label="AI Insights — άνοιγμα σελίδας"
     >
       <img
         src="/nilia.png"
         alt=""
-        className="w-12 h-12 object-contain"
+        className="w-full h-full object-cover"
+        style={{ filter: 'contrast(1.15) saturate(1.2)' }}
         onError={(e) => {
           const target = e.target as HTMLImageElement;
           target.style.display = 'none';
