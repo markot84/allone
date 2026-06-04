@@ -77,6 +77,16 @@ function readVoiceRepliesPreference(): boolean {
   }
 }
 
+function buildVoiceProcessingCue(text: string): string {
+  const normalized = text.toLowerCase();
+  const complexIntent =
+    text.length > 90 ||
+    /πλάνο|ανάλυση|στρατηγ|σύγκριν|πρόβλεψ|marketing plan|campaign|καμπάνια|μήνα|τρίμηνο/.test(normalized);
+  return complexIntent
+    ? 'Γεια σου. Δώσε μου λίγο χρόνο να επεξεργαστώ την απάντησή μου.'
+    : 'Το κοιτάω.';
+}
+
 function toMark(m: Message): MarkMessage {
   return {
     id: m.id,
@@ -693,6 +703,9 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     setInput('');
     voiceDraftRef.current = '';
     setIsTyping(true);
+    if (voiceRepliesEnabled && tts.supported) {
+      tts.speak(buildVoiceProcessingCue(userQuery));
+    }
 
     try {
       const articleCandidates = searchArticles(userQuery).slice(0, 5);

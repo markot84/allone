@@ -2,6 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const MAX_AUTO_READ_CHARS = 1400;
 
+const MALE_VOICE_HINTS = [
+  'male',
+  'man',
+  'masculine',
+  'nikos',
+  'stefanos',
+  'stephanos',
+  'andreas',
+  'george',
+  'γιωργ',
+  'νικ',
+  'ανδρ',
+  'στεφαν',
+];
+
 function getSpeechSynthesis(): SpeechSynthesis | null {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
   return window.speechSynthesis;
@@ -13,18 +28,111 @@ function isGreekVoice(voice: SpeechSynthesisVoice): boolean {
 }
 
 function pickVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  const greekVoices = voices.filter((voice) => voice.lang.toLowerCase() === 'el-gr' || voice.lang.toLowerCase().startsWith('el') || isGreekVoice(voice));
+  const maleGreek = greekVoices.find((voice) => {
+    const haystack = `${voice.name} ${voice.voiceURI}`.toLowerCase();
+    return MALE_VOICE_HINTS.some((hint) => haystack.includes(hint));
+  });
   return (
-    voices.find((voice) => voice.lang.toLowerCase() === 'el-gr') ??
-    voices.find((voice) => voice.lang.toLowerCase().startsWith('el')) ??
-    voices.find(isGreekVoice) ??
+    maleGreek ??
+    greekVoices.find((voice) => voice.lang.toLowerCase() === 'el-gr') ??
+    greekVoices[0] ??
     voices.find((voice) => voice.default) ??
     voices[0] ??
     null
   );
 }
 
+function parseLocalizedNumber(raw: string): number | null {
+  const compact = raw.replace(/\s/g, '');
+  const lastComma = compact.lastIndexOf(',');
+  const lastDot = compact.lastIndexOf('.');
+  let normalized = compact;
+
+  if (lastComma !== -1 && lastDot !== -1) {
+    const decimalSep = lastComma > lastDot ? ',' : '.';
+    const thousandSep = decimalSep === ',' ? '.' : ',';
+    normalized = compact.replaceAll(thousandSep, '').replace(decimalSep, '.');
+  } else if (lastComma !== -1) {
+    const [, decimals = ''] = compact.split(',');
+    normalized = decimals.length === 3 ? compact.replaceAll(',', '') : compact.replace(',', '.');
+  } else if (lastDot !== -1) {
+    const [, decimals = ''] = compact.split('.');
+    normalized = decimals.length === 3 ? compact.replaceAll('.', '') : compact;
+  }
+
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
+}
+
+function integerToGreekWords(value: number): string {
+  const n = Math.trunc(Math.abs(value));
+  const units = ['', 'ένα', 'δύο', 'τρία', 'τέσσερα', 'πέντε', 'έξι', 'επτά', 'οκτώ', 'εννέα'];
+  const teens = ['δέκα', 'έντεκα', 'δώδεκα', 'δεκατρία', 'δεκατέσσερα', 'δεκαπέντε', 'δεκαέξι', 'δεκαεπτά', 'δεκαοκτώ', 'δεκαεννέα'];
+  const tens = ['', '', 'είκοσι', 'τριάντα', 'σαράντα', 'πενήντα', 'εξήντα', 'εβδομήντα', 'ογδόντα', 'ενενήντα'];
+  const hundreds = ['', 'εκατό', 'διακόσια', 'τριακόσια', 'τετρακόσια', 'πεντακόσια', 'εξακόσια', 'επτακόσια', 'οκτακόσια', 'εννιακόσια'];
+
+  const underThousand = (num: number) => {
+    const parts: string[] = [];
+    const h = Math.floor(num / 100);
+    const rest = num % 100;
+    if (h) parts.push(hundreds[h]);
+    if (rest >= 10 && rest < 20) parts.push(teens[rest - 10]);
+    else {
+      const t = Math.floor(rest / 10);
+      const u = rest % 10;
+      if (t) parts.push(tens[t]);
+      if (u) parts.push(units[u]);
+    }
+    return parts.join(' ');
+  };
+
+  if (n === 0) return 'μηδέν';
+  if (n < 1000) return underThousand(n);
+  if (n < 1_000_000) {
+    const thousands = Math.floor(n / 1000);
+    const rest = n % 1000;
+    const thousandsText = thousands === 1 ? 'χίλια' : `${underThousand(thousands)} χιλιάδες`;
+    return [thousandsText, rest ? underThousand(rest) : ''].filter(Boolean).join(' ');
+  }
+  const millions = Math.floor(n / 1_000_000);
+  const rest = n % 1_000_000;
+  const millionsText = millions === 1 ? 'ένα εκατομμύριο' : `${integerToGreekWords(millions)} εκατομμύρια`;
+  return [millionsText, rest ? integerToGreekWords(rest) : ''].filter(Boolean).join(' ');
+}
+
+function amountToGreekWords(value: number): string {
+  const euros = Math.trunc(Math.abs(value));
+  const cents = Math.round((Math.abs(value) - euros) * 100);
+  const sign = value < 0 ? 'μείον ' : '';
+  const euroText = `${integerToGreekWords(euros)} ${euros === 1 ? 'ευρώ' : 'ευρώ'}`;
+  const centText = cents > 0 ? ` και ${integerToGreekWords(cents)} λεπτά` : '';
+  return `${sign}${euroText}${centText}`;
+}
+
+function formatNumbersForSpeech(text: string): string {
+  const currencyPattern = /(?:€\s*)?([+-]?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|[+-]?\d+(?:[.,]\d+)?)(?:\s*)(?:€|EUR|E\b|ευρώ)/gi;
+  const percentPattern = /([+-]?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|[+-]?\d+(?:[.,]\d+)?)(?:\s*)%/g;
+  const thousandsPattern = /\b\d{1,3}(?:[.,]\d{3})+\b/g;
+
+  return text
+    .replace(currencyPattern, (_match, raw: string) => {
+      const value = parseLocalizedNumber(raw);
+      return value === null ? _match : amountToGreekWords(value);
+    })
+    .replace(percentPattern, (_match, raw: string) => {
+      const value = parseLocalizedNumber(raw);
+      if (value === null) return _match;
+      return `${integerToGreekWords(Math.round(value))} τοις εκατό`;
+    })
+    .replace(thousandsPattern, (raw) => {
+      const value = parseLocalizedNumber(raw);
+      return value === null ? raw : integerToGreekWords(value);
+    });
+}
+
 export function cleanTextForSpeech(text: string, maxChars = MAX_AUTO_READ_CHARS): string {
-  const cleaned = text
+  const cleaned = formatNumbersForSpeech(text)
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
@@ -41,7 +149,7 @@ export function cleanTextForSpeech(text: string, maxChars = MAX_AUTO_READ_CHARS)
 
   const slice = cleaned.slice(0, maxChars);
   const lastSentence = Math.max(slice.lastIndexOf('.'), slice.lastIndexOf(';'), slice.lastIndexOf('!'), slice.lastIndexOf('?'));
-  return `${slice.slice(0, lastSentence > 400 ? lastSentence + 1 : maxChars).trim()} Θα σταματήσω εδώ για να μη γίνει πολύ μεγάλο.`;
+  return slice.slice(0, lastSentence > 400 ? lastSentence + 1 : maxChars).trim();
 }
 
 export function useSpeechSynthesis() {
@@ -104,7 +212,7 @@ export function useSpeechSynthesis() {
       utterance.lang = selectedVoice?.lang || 'el-GR';
       if (selectedVoice) utterance.voice = selectedVoice;
       utterance.rate = 0.96;
-      utterance.pitch = 1;
+      utterance.pitch = 0.86;
       utterance.onstart = () => {
         opts?.onStart?.();
         setSpeaking(true);
