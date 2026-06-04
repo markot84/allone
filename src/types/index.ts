@@ -134,7 +134,10 @@ export interface BrandICP {
 
 export interface BrandProfile {
   description: string;
+  /** Primary archetype. Kept as `archetype` for backwards compatibility with existing saved profiles. */
   archetype: BrandArchetype | '';
+  /** Optional complementary archetype used as a secondary tone/positioning influence. */
+  secondaryArchetype?: BrandArchetype | '';
   toneOfVoice: string;
   icps: BrandICP[];
   updatedAt?: string;

@@ -79,6 +79,7 @@ export const BRAND_ARCHETYPES: Array<{ id: BrandArchetype; label: string; toneHi
 export const EMPTY_BRAND_PROFILE: BrandProfile = {
   description: '',
   archetype: '',
+  secondaryArchetype: '',
   toneOfVoice: '',
   icps: [],
 };
@@ -96,9 +97,13 @@ export function createEmptyIcp(): BrandICP {
 }
 
 export function normalizeBrandProfile(profile: BrandProfile | null | undefined): BrandProfile {
+  const primary = profile?.archetype ?? '';
+  const secondary = profile?.secondaryArchetype === primary ? '' : profile?.secondaryArchetype ?? '';
   return {
     ...EMPTY_BRAND_PROFILE,
     ...(profile ?? {}),
+    archetype: primary,
+    secondaryArchetype: secondary,
     icps: Array.isArray(profile?.icps) ? profile.icps : [],
   };
 }
@@ -107,6 +112,9 @@ export async function saveBrandProfile(brandId: string, profile: BrandProfile): 
   const clean: BrandProfile = {
     description: profile.description.trim(),
     archetype: profile.archetype,
+    secondaryArchetype: profile.secondaryArchetype && profile.secondaryArchetype !== profile.archetype
+      ? profile.secondaryArchetype
+      : '',
     toneOfVoice: profile.toneOfVoice.trim(),
     icps: profile.icps
       .map((icp) => ({
@@ -129,7 +137,11 @@ export function formatBrandProfileForPrompt(profile: BrandProfile | null | undef
   if (p.description.trim()) lines.push(`Brand profile: ${p.description.trim()}`);
   if (p.archetype) {
     const archetype = BRAND_ARCHETYPES.find((a) => a.id === p.archetype);
-    lines.push(`Brand archetype: ${archetype?.label ?? p.archetype}${archetype ? ` — ${archetype.description}` : ''}`);
+    lines.push(`Primary brand archetype: ${archetype?.label ?? p.archetype}${archetype ? ` — ${archetype.description}` : ''}`);
+  }
+  if (p.secondaryArchetype) {
+    const archetype = BRAND_ARCHETYPES.find((a) => a.id === p.secondaryArchetype);
+    lines.push(`Complementary brand archetype: ${archetype?.label ?? p.secondaryArchetype}${archetype ? ` — ${archetype.description}` : ''}`);
   }
   if (p.toneOfVoice.trim()) lines.push(`Tone of voice: ${p.toneOfVoice.trim()}`);
   const icps = p.icps.filter((icp) => icp.name || icp.description).slice(0, 5);

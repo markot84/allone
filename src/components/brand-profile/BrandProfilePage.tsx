@@ -133,10 +133,33 @@ export function BrandProfilePage() {
     setProfile(normalizeBrandProfile(currentBrand?.brandProfile));
   }, [currentBrand?.id, currentBrand?.brandProfile]);
 
-  const selectedArchetype = useMemo(
+  const primaryArchetype = useMemo(
     () => BRAND_ARCHETYPES.find((a) => a.id === profile.archetype),
     [profile.archetype]
   );
+  const secondaryArchetype = useMemo(
+    () => BRAND_ARCHETYPES.find((a) => a.id === profile.secondaryArchetype),
+    [profile.secondaryArchetype]
+  );
+
+  const setArchetypeRole = (id: BrandArchetype, role: 'primary' | 'secondary') => {
+    setProfile((prev) => {
+      if (role === 'primary') {
+        const nextPrimary = prev.archetype === id ? '' : id;
+        return {
+          ...prev,
+          archetype: nextPrimary,
+          secondaryArchetype: prev.secondaryArchetype === nextPrimary ? '' : prev.secondaryArchetype,
+          toneOfVoice: prev.toneOfVoice || BRAND_ARCHETYPES.find((a) => a.id === id)?.toneHint || '',
+        };
+      }
+      const nextSecondary = prev.secondaryArchetype === id ? '' : id;
+      return {
+        ...prev,
+        secondaryArchetype: nextSecondary === prev.archetype ? '' : nextSecondary,
+      };
+    });
+  };
 
   const updateIcp = (id: string, patch: Partial<BrandICP>) => {
     setProfile((prev) => ({
@@ -202,39 +225,64 @@ export function BrandProfilePage() {
         <CardHeader title="Brand archetype & tone of voice" />
         <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Archetype</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Archetype έως 2 επιλογές</p>
             <div className="grid gap-2 sm:grid-cols-2">
               {BRAND_ARCHETYPES.map((item) => (
-                <button
+                <div
                   key={item.id}
-                  type="button"
-                  onClick={() =>
-                    setProfile((prev) => ({
-                      ...prev,
-                      archetype: item.id as BrandArchetype,
-                      toneOfVoice: prev.toneOfVoice || item.toneHint,
-                    }))
-                  }
                   className={`rounded-xl border p-3 text-left transition-colors ${
-                    profile.archetype === item.id
+                    profile.archetype === item.id || profile.secondaryArchetype === item.id
                       ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10'
                       : 'border-[#E5E7EB] bg-white hover:border-[var(--nts-accent)]/60'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-semibold text-[#1A1A1A]">{item.label}</span>
-                    {profile.archetype === item.id && <Badge variant="orange">active</Badge>}
+                    <div className="flex gap-1">
+                      {profile.archetype === item.id && <Badge variant="orange">Βασικό</Badge>}
+                      {profile.secondaryArchetype === item.id && <Badge variant="info">Συμπληρωματικό</Badge>}
+                    </div>
                   </div>
                   <p className="mt-1 text-xs text-[#6B7280]">{item.description}</p>
-                </button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setArchetypeRole(item.id, 'primary')}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                        profile.archetype === item.id
+                          ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
+                          : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
+                      }`}
+                    >
+                      Βασικό
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setArchetypeRole(item.id, 'secondary')}
+                      disabled={profile.archetype === item.id}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                        profile.secondaryArchetype === item.id
+                          ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
+                          : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
+                      }`}
+                    >
+                      Συμπληρωματικό
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
           <div className="space-y-3">
-            {selectedArchetype && (
+            {(primaryArchetype || secondaryArchetype) && (
               <div className="rounded-xl border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/5 p-3">
                 <p className="text-xs font-semibold uppercase text-[var(--nts-accent)]">Tone starter</p>
-                <p className="mt-1 text-sm text-[#4A4A4A]">{selectedArchetype.toneHint}</p>
+                <p className="mt-1 text-sm text-[#4A4A4A]">
+                  {[
+                    primaryArchetype ? `Βασικό (${primaryArchetype.label}): ${primaryArchetype.toneHint}` : '',
+                    secondaryArchetype ? `Συμπληρωματικό (${secondaryArchetype.label}): ${secondaryArchetype.toneHint}` : '',
+                  ].filter(Boolean).join(' · ')}
+                </p>
               </div>
             )}
             <TextareaField
