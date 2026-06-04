@@ -21,6 +21,8 @@ import { AttributionProvider } from './contexts/AttributionContext';
 import { APP_SECTIONS } from './config/modules';
 import { BarChart3, ClipboardList, MessageCircle } from 'lucide-react';
 
+const MARK_START_VOICE_EVENT = 'performance-plus:start-mark-voice';
+
 const CHUNK_RELOAD_ONCE_KEY = 'pp_chunk_reload_once';
 const isChunkLoadError = (msg: string) =>
   /Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError|Unexpected token|Importing a module script failed/i.test(msg);
@@ -114,7 +116,10 @@ function MobileQuickActions({
       <div className="flex items-center gap-2 rounded-2xl border border-white/70 bg-white/95 p-2 shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur">
         <button
           type="button"
-          onClick={onOpenMark}
+          onClick={() => {
+            onOpenMark();
+            window.dispatchEvent(new CustomEvent(MARK_START_VOICE_EVENT));
+          }}
           className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--nts-accent)] px-3 text-sm font-bold text-white shadow-sm active:scale-[0.98]"
         >
           <MessageCircle size={18} />
@@ -276,8 +281,10 @@ function AppMain() {
     const query = window.location.hash.split('?')[1] ?? '';
     return new URLSearchParams(query).get('mark') === '1';
   })();
+  const shouldPreloadMarkForMobile = () =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
   const [markOpen, setMarkOpen] = useState(Boolean(shouldOpenMarkOnBoot));
-  const [markMounted, setMarkMounted] = useState(Boolean(shouldOpenMarkOnBoot));
+  const [markMounted, setMarkMounted] = useState(() => Boolean(shouldOpenMarkOnBoot) || shouldPreloadMarkForMobile());
 
   // Πριν από child effects: αποθήκευση OAuth query (connector/status) — αλλιώς χάνεται από hash sync ή race.
   useLayoutEffect(() => {

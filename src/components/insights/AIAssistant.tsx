@@ -66,6 +66,7 @@ interface Message {
 
 const MARK_VOICE_REPLIES_KEY = 'mark_voice_replies_enabled';
 const VOICE_AUTO_SUBMIT_DELAY_MS = 2000;
+const MARK_START_VOICE_EVENT = 'performance-plus:start-mark-voice';
 
 function readVoiceRepliesPreference(): boolean {
   if (typeof window === 'undefined') return false;
@@ -871,6 +872,20 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     },
   });
 
+  const startVoiceInput = useCallback(() => {
+    if (!stt.supported || savingInfo || isTyping) return;
+    tts.stop();
+    tts.prime();
+    setVoiceRepliesEnabled(true);
+    clearVoiceAutoSubmit();
+    stt.start();
+  }, [clearVoiceAutoSubmit, isTyping, savingInfo, stt, tts]);
+
+  useEffect(() => {
+    window.addEventListener(MARK_START_VOICE_EVENT, startVoiceInput);
+    return () => window.removeEventListener(MARK_START_VOICE_EVENT, startVoiceInput);
+  }, [startVoiceInput]);
+
   useEffect(() => {
     if (!isOpen || !voiceRepliesEnabled || !tts.supported) return;
     const latest = getLatestSpeakableAssistantMessage(messages);
@@ -1070,11 +1085,8 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
                 />
                 <button
                   onClick={stt.supported ? () => {
-                    tts.stop();
-                    tts.prime();
-                    setVoiceRepliesEnabled(true);
-                    clearVoiceAutoSubmit();
-                    stt.toggle();
+                    if (stt.listening) stt.stop();
+                    else startVoiceInput();
                   } : undefined}
                   disabled={!stt.supported}
                   title={
