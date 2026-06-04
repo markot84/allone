@@ -208,7 +208,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--nts-accent)]/20 to-violet-500/10 flex items-center justify-center overflow-hidden border border-[#F0F0F0]">
                   <img
-                    src="/mascot.png"
+                    src="/nilia.png"
                     alt=""
                     className="w-9 h-9 object-contain"
                     onError={(e) => {

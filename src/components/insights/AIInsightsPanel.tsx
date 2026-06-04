@@ -16,7 +16,7 @@ export function AIInsightsTrigger({ onClick }: { onClick: () => void }) {
       aria-label="AI Insights — άνοιγμα σελίδας"
     >
       <img
-        src="/mascot.png"
+        src="/nilia.png"
         alt=""
         className="w-12 h-12 object-contain"
         onError={(e) => {

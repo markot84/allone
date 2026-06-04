@@ -485,8 +485,8 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center overflow-hidden">
                     <img
-                      src="/mascot.png"
-                      alt="AI Assistant"
+                      src="/nilia.png"
+                      alt="Nilia"
                       className="w-full h-full object-contain"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
@@ -534,8 +534,8 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
                   {message.type === 'assistant' && (
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center flex-shrink-0 overflow-hidden">
                       <img
-                        src="/mascot.png"
-                        alt="AI Assistant"
+                        src="/nilia.png"
+                        alt="Nilia"
                         className="w-full h-full object-contain"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
@@ -633,7 +633,7 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
               {isTyping && (
                 <div className="flex gap-3 justify-start">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    <img src="/mascot.png" alt="" className="w-full h-full object-contain animate-pulse" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    <img src="/nilia.png" alt="" className="w-full h-full object-contain animate-pulse" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   </div>
                   <div className="bg-[var(--nts-light-gray)] rounded-lg p-3">
                     <div className="flex gap-1">
