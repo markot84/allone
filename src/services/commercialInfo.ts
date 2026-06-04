@@ -46,6 +46,15 @@ export interface CommercialInfo extends CommercialInfoStructured {
   source: 'owner' | 'mark' | 'nilia';
   createdBy: string | null;
   createdAt?: Timestamp;
+  markContext?: MarkDialogueContext;
+}
+
+export interface MarkDialogueContext {
+  /** Συμπυκνωμένα συμπεράσματα/ενέργειες από τη σχετική απάντηση του Mark. */
+  summaryBullets: string[];
+  /** Πλήρης απάντηση Mark για μελλοντική αναφορά/debug. */
+  assistantResponse?: string;
+  sourceMessageId?: string;
 }
 
 /** Firestore doc shape (structured nested ώστε να μένει καθαρό το top-level). */
@@ -57,6 +66,7 @@ interface CommercialInfoDoc {
   createdBy: string | null;
   createdAt: Timestamp;
   structured: CommercialInfoStructured;
+  markContext?: MarkDialogueContext;
 }
 
 const VALID_FACTORS: CommercialFactorType[] = ['event', 'trend', 'pricing', 'competition', 'instinct', 'macro'];
@@ -162,6 +172,7 @@ export async function createCommercialInfo(input: {
   source?: 'owner' | 'mark' | 'nilia';
   createdBy?: string | null;
   status?: CommercialInfoStatus;
+  markContext?: MarkDialogueContext;
 }): Promise<string> {
   const id = genId(input.brandId);
   const doc: CommercialInfoDoc = {
@@ -172,6 +183,7 @@ export async function createCommercialInfo(input: {
     createdBy: input.createdBy ?? null,
     createdAt: Timestamp.now(),
     structured: input.structured,
+    ...(input.markContext ? { markContext: input.markContext } : {}),
   };
   await FirestoreService.setDocument(COLLECTION, id, doc);
   return id;
@@ -187,6 +199,7 @@ function flatten(id: string, doc: CommercialInfoDoc & { structured?: CommercialI
     source: doc.source ?? 'owner',
     createdBy: doc.createdBy ?? null,
     createdAt: doc.createdAt,
+    markContext: doc.markContext,
     ...s,
   };
 }

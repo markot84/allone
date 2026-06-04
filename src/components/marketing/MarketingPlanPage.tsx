@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart3, Calendar, ChevronDown, ChevronRight, ChevronUp, Megaphone, PackagePlus,
   Sparkles, Tag, TrendingUp, Users, ArrowUpRight, ArrowDownRight,
-  CheckCircle2, Circle,
+  CheckCircle2, Circle, MessageSquareText,
 } from 'lucide-react';
 import { Card, CardHeader, Button, PageHeader, Badge, Spinner } from '../common';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
@@ -146,6 +146,10 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     [commercialInfo.items]
   );
   const activeInfoText = useMemo(() => formatCommercialInfoForPrompt(activeInfo), [activeInfo]);
+  const markPlanContext = useMemo(
+    () => activeInfo.filter((i) => i.source === 'mark' && (i.markContext?.summaryBullets?.length || i.summary)),
+    [activeInfo]
+  );
   // Υπογραφή για το queryKey: το draft ξαναϋπολογίζεται όταν αλλάζουν οι πληροφορίες.
   const infoSig = useMemo(
     () => activeInfo.map((i) => `${i.id}:${i.direction}:${i.magnitude}`).sort().join('|'),
@@ -446,6 +450,40 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           </div>
         }
       />
+
+      {markPlanContext.length > 0 && (
+        <Card padding="lg" className="border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/5">
+          <CardHeader
+            title="Context από Mark"
+            subtitle="Σημαντικά συμπεράσματα από τον διάλογο που τροφοδοτούν αυτό το Marketing Plan."
+            icon={<MessageSquareText size={18} className="text-[var(--nts-accent)]" />}
+          />
+          <div className="mt-4 space-y-3">
+            {markPlanContext.slice(0, 3).map((info) => (
+              <div key={info.id} className="rounded-xl border border-white/70 bg-white/80 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="orange">{info.factorType}</Badge>
+                  <span className="text-xs text-[#6B7280]">
+                    ένταση {info.magnitude} · εμπιστοσύνη {info.confidence}
+                    {(info.horizonFrom || info.horizonTo) ? ` · ${info.horizonFrom ?? '…'} → ${info.horizonTo ?? '…'}` : ''}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm font-semibold text-[#1A1A1A]">{info.summary}</p>
+                {info.markContext?.summaryBullets && info.markContext.summaryBullets.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-xs text-[#4A4A4A]">
+                    {info.markContext.summaryBullets.map((bullet, idx) => (
+                      <li key={`${info.id}-${idx}`} className="flex gap-2">
+                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nts-accent)]" />
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Period selector */}
       <Card padding="lg">

@@ -10,6 +10,7 @@ import {
   type CommercialInfo,
   type CommercialInfoStructured,
   type CommercialInfoStatus,
+  type MarkDialogueContext,
 } from '../services/commercialInfo';
 
 const STALE = 5 * 60 * 1000;
@@ -30,7 +31,12 @@ export function useCommercialInfo() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['commercial_info', brandId] });
 
   const addInfo = useMutation({
-    mutationFn: async (input: { rawText: string; structured: CommercialInfoStructured; source?: 'owner' | 'mark' | 'nilia' }) => {
+    mutationFn: async (input: {
+      rawText: string;
+      structured: CommercialInfoStructured;
+      source?: 'owner' | 'mark' | 'nilia';
+      markContext?: MarkDialogueContext;
+    }) => {
       if (!brandId) throw new Error('Δεν έχει επιλεγεί brand');
       const uid = getAuth().currentUser?.uid ?? null;
       return createCommercialInfo({
@@ -39,6 +45,7 @@ export function useCommercialInfo() {
         structured: input.structured,
         source: input.source ?? 'owner',
         createdBy: uid,
+        markContext: input.markContext,
       });
     },
     onSuccess: invalidate,

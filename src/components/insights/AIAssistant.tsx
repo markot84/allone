@@ -55,6 +55,8 @@ interface Message {
   /** Proactive καλωσόρισμα — δεν στέλνεται ως context turn στο μοντέλο. */
   proactive?: boolean;
   savedInfoId?: string;
+  /** Κείμενο που μπορεί να αποθηκευτεί ως εμπορική πληροφορία από CTA. */
+  pendingInfoText?: string;
 }
 
 function toMark(m: Message): MarkMessage {
@@ -67,6 +69,7 @@ function toMark(m: Message): MarkMessage {
     webSources: m.webSources,
     proactive: m.proactive,
     savedInfoId: m.savedInfoId,
+    pendingInfoText: m.pendingInfoText,
   };
 }
 
@@ -80,7 +83,28 @@ function fromMark(m: MarkMessage): Message {
     timestamp: new Date(m.ts || Date.now()),
     proactive: m.proactive,
     savedInfoId: m.savedInfoId,
+    pendingInfoText: m.pendingInfoText,
   };
+}
+
+function shouldOfferCommercialInfoCta(userQuery: string, response: string): boolean {
+  const asksToSave = /καταχωρ|αποθηκεύ|λαμβάνω υπόψη|μελλοντική αναφορά/i.test(response);
+  if (!asksToSave) return false;
+  return /ακρίβεια|αγορά|τάση|ανταγωνισ|προμηθευ|καλοκαίρ|χειμώνα|σεζόν|ζήτηση|κόστος|τιμ|γεγονός|event|trend/i.test(userQuery)
+    || userQuery.trim().length > 80;
+}
+
+function buildMarkContextBullets(response: string): string[] {
+  const cleaned = response
+    .replace(/\*\*/g, '')
+    .replace(/^#+\s*/gm, '')
+    .split('\n')
+    .map((line) => line.replace(/^[-•\d.]+\s*/, '').trim())
+    .filter((line) => line.length > 24 && !/^θέλεις να καταχωρήσω/i.test(line));
+  const priority = cleaned.filter((line) =>
+    /προτεραι|προτείν|ενέργεια|ρίσκο|καμπάνια|στόχευ|προσφορά|τζίρ|απόθεμα|segment|πελάτ/i.test(line)
+  );
+  return (priority.length ? priority : cleaned).slice(0, 5);
 }
 
 /**
@@ -91,9 +115,18 @@ function fromMark(m: MarkMessage): Message {
 const MarkMessageItem = memo(function MarkMessageItem({
   message,
   onClose,
+  onSaveInfo,
+  savingInfo,
 }: {
   message: Message;
   onClose: () => void;
+  onSaveInfo: (text: string, options?: {
+    appendUserMessage?: boolean;
+    openMarketingPlan?: boolean;
+    markResponse?: string;
+    markMessageId?: string;
+  }) => void;
+  savingInfo: boolean;
 }) {
   return (
     <div className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -182,6 +215,27 @@ const MarkMessageItem = memo(function MarkMessageItem({
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {message.type === 'assistant' && message.pendingInfoText && !message.savedInfoId && (
+          <div className="mt-3 pt-3 border-t border-[var(--nts-border-gray)]/20">
+            <button
+              type="button"
+              onClick={() => onSaveInfo(message.pendingInfoText!, {
+                appendUserMessage: false,
+                openMarketingPlan: true,
+                markResponse: message.content,
+                markMessageId: message.id,
+              })}
+              disabled={savingInfo}
+              className="w-full rounded-lg bg-[var(--nts-accent)] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[var(--nts-accent)]/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {savingInfo ? 'Καταχώριση…' : 'Καταχώριση & άνοιγμα Marketing Plan'}
+            </button>
+            <p className="mt-1.5 text-[11px] text-[var(--nts-medium-gray)]">
+              Θα αποθηκευτεί ως ενεργή εμπορική πληροφορία και θα επηρεάσει το νέο Marketing Plan.
+            </p>
           </div>
         )}
       </div>
@@ -592,6 +646,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
         content: response,
         relatedArticles: articleRefs.length > 0 ? articleRefs : undefined,
         webSources: webSources.length > 0 ? webSources : undefined,
+        pendingInfoText: shouldOfferCommercialInfoCta(userQuery, response) ? userQuery : undefined,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
@@ -612,20 +667,38 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
 
   /** Καταχώριση εμπορικής πληροφορίας: δομεί το κείμενο και το αποθηκεύει (brand-scoped). */
   const handleSaveInfo = useCallback(
-    async (text: string) => {
+    async (text: string, options: {
+      appendUserMessage?: boolean;
+      openMarketingPlan?: boolean;
+      markResponse?: string;
+      markMessageId?: string;
+    } = {}) => {
       const raw = text.trim();
       const requestBrandId = brandId;
       if (!raw || savingInfo || !requestBrandId) return;
       setSavingInfo(true);
       setInput('');
-      setMessages((prev) => [...prev, { id: `user-info-${Date.now()}`, type: 'user', content: raw, timestamp: new Date() }]);
+      if (options.appendUserMessage !== false) {
+        setMessages((prev) => [...prev, { id: `user-info-${Date.now()}`, type: 'user', content: raw, timestamp: new Date() }]);
+      }
       try {
         const structured = await structureCommercialInfo(raw, { brandName });
         if (loadedBrandRef.current !== requestBrandId) {
           setSavingInfo(false);
           return;
         }
-        const id = await commercialInfo.addInfo.mutateAsync({ rawText: raw, structured, source: 'mark' });
+        const id = await commercialInfo.addInfo.mutateAsync({
+          rawText: raw,
+          structured,
+          source: 'mark',
+          markContext: options.markResponse
+            ? {
+                summaryBullets: buildMarkContextBullets(options.markResponse),
+                assistantResponse: options.markResponse,
+                sourceMessageId: options.markMessageId,
+              }
+            : undefined,
+        });
         const scope = [
           structured.brands.length ? `επωνυμίες: ${structured.brands.join(', ')}` : '',
           structured.categories.length ? `κατηγορίες: ${structured.categories.join(', ')}` : '',
@@ -635,9 +708,16 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
           .join(' · ');
         const confirm = `Καταχώρισα την εμπορική πληροφορία ✓\n\n**${structured.summary}**\n${scope ? `\n${scope}` : ''}\n\nΘα τη λαμβάνω υπόψη στο Marketing Plan και στις προτάσεις. Θες να φτιάξουμε ένα πλάνο ενεργειών γύρω από αυτό;`;
         setMessages((prev) => [
-          ...prev,
+          ...prev.map((m) =>
+            m.pendingInfoText === raw ? { ...m, pendingInfoText: undefined, savedInfoId: id } : m
+          ),
           { id: `mark-info-${Date.now()}`, type: 'assistant', content: confirm, timestamp: new Date(), savedInfoId: id },
         ]);
+        if (options.openMarketingPlan) {
+          window.location.hash = 'marketing-plan';
+          window.dispatchEvent(new HashChangeEvent('hashchange'));
+          onClose();
+        }
       } catch (e) {
         console.error('[Mark] save info:', e);
         setMessages((prev) => [
@@ -648,7 +728,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
         setSavingInfo(false);
       }
     },
-    [brandId, brandName, savingInfo, commercialInfo.addInfo]
+    [brandId, brandName, savingInfo, commercialInfo.addInfo, onClose]
   );
 
   const handleResetSession = useCallback(async () => {
@@ -741,7 +821,13 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((message) => (
-                <MarkMessageItem key={message.id} message={message} onClose={onClose} />
+                <MarkMessageItem
+                  key={message.id}
+                  message={message}
+                  onClose={onClose}
+                  onSaveInfo={handleSaveInfo}
+                  savingInfo={savingInfo}
+                />
               ))}
 
               {isTyping && (

@@ -65,6 +65,8 @@ export interface MarkMessage {
   webSources?: Array<{ title: string; url: string; snippet: string }>;
   /** Αν αυτό το μήνυμα οδήγησε σε καταχώριση εμπορικής πληροφορίας. */
   savedInfoId?: string;
+  /** Ελεύθερο κείμενο που μπορεί να καταχωρηθεί ως εμπορική πληροφορία από CTA στο chat. */
+  pendingInfoText?: string;
   /** Proactive καλωσόρισμα (δεν στέλνεται ως context turn). */
   proactive?: boolean;
 }
