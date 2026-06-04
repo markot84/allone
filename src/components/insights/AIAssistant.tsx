@@ -302,6 +302,23 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
         : null,
     };
   }, [campaignsHook.campaigns]);
+  const campaignChannelSummary = useMemo(() => {
+    const byChannel = new Map<string, { channel: string; count: number; spend: number; revenue: number }>();
+    for (const campaign of campaignsHook.campaigns) {
+      const channel = campaign.channel || 'Other';
+      const current = byChannel.get(channel) ?? { channel, count: 0, spend: 0, revenue: 0 };
+      current.count += 1;
+      current.spend += campaign.amount_spent || 0;
+      current.revenue += campaign.conversion_value || campaign.purchase_conversion_value || 0;
+      byChannel.set(channel, current);
+    }
+    return [...byChannel.values()]
+      .map((row) => ({
+        ...row,
+        roas: row.spend > 0 ? row.revenue / row.spend : 0,
+      }))
+      .sort((a, b) => b.spend - a.spend);
+  }, [campaignsHook.campaigns]);
 
   // Χρονοσειρές τζίρου (ERP + e-shop) ώστε ο Mark να απαντά για ΟΠΟΙΑΔΗΠΟΤΕ περίοδο με δεδομένα.
   // Κρατάμε πλήρη ημερήσια σειρά όπου υπάρχει, γιατί ερωτήσεις τύπου «πέρυσι την ίδια ημέρα»
@@ -429,6 +446,8 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
       campaigns: {
         count: campaignsHook.count,
         hasImported: campaignsHook.hasImported,
+        isLoading: campaignsHook.isLoading,
+        channels: campaignChannelSummary,
       },
       products: {
         count: productSrc.count,
@@ -459,6 +478,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     campaignMetrics.roas,
     campaignSignals.topCampaign,
     campaignSignals.weakCampaign,
+    campaignChannelSummary,
     productIntelligence.aggregate,
     segmentsDataSource,
     totalCustomers,
@@ -467,6 +487,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     rfmSegments,
     campaignsHook.count,
     campaignsHook.hasImported,
+    campaignsHook.isLoading,
     productSrc.count,
     productSrc.hasImported,
     ga4.hasData,

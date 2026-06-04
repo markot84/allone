@@ -79,7 +79,12 @@ export type AssistantTenantPack = {
     ordersAttributed?: number;
     rows: AssistantSegmentRow[];
   };
-  campaigns: { count: number; hasImported: boolean };
+  campaigns: {
+    count: number;
+    hasImported: boolean;
+    isLoading?: boolean;
+    channels?: Array<{ channel: string; count: number; spend: number; revenue: number; roas: number }>;
+  };
   products: { count: number; hasImported: boolean };
   ga4: {
     hasData: boolean;
@@ -95,6 +100,7 @@ const ASSISTANT_SYSTEM_PROMPT = buildAdvisorySystemPrompt(`Είσαι το εν�
 Κανόνες:
 - Χρησιμοποίησε ΜΟΝΟ αριθμούς και γεγονότα που εμφανίζονται ρητά στο μπλοκ «ΤΡΕΧΟΥΣΑ ΣΥΝΟΨΗ ΛΟΓΑΡΙΑΣΜΟΥ». Μην επινοείς KPIs, ημερομηνίες ή νούμερα που δεν δίνονται.
 - Αν η ερώτηση αφορά νούμερα του λογαριασμού και λείπουν από τη σύνοψη, πες τι λείπει (π.χ. σύνδεση connector) αντί να μαντεύεις.
+- Αν το block «Campaigns» δείχνει imports ή κανάλια (π.χ. Google Ads, Meta), ΜΗΝ πεις ότι δεν υπάρχουν συνδεδεμένα δεδομένα διαφημιστικών πλατφορμών. Αν γράφει «φορτώνει», πες ότι τα campaign data φορτώνουν ακόμη.
 - ΕΠΙΤΡΕΠΕΤΑΙ να υπολογίζεις αθροίσματα/μέσους όρους για ΟΠΟΙΑΔΗΠΟΤΕ περίοδο ζητήσει ο χρήστης, χρησιμοποιώντας τις χρονοσειρές τζίρου (μηνιαία/ημερήσια/έτοιμα rollups). Αυτό ΔΕΝ θεωρείται επινόηση. Προτίμησε τα έτοιμα rollups όταν ταιριάζουν· αλλιώς άθροισε τους σχετικούς μήνες/ημέρες.
 - Αν η ζητούμενη περίοδος ξεπερνά την «κάλυψη δεδομένων», απάντησε για το διαθέσιμο διάστημα και ανέφερε ρητά τι καλύπτεις (π.χ. «έχω δεδομένα από …»).
 - ΖΗΤΑ ΔΙΕΥΚΡΙΝΙΣΗ (αντί να μαντέψεις ή να πεις «€0») όταν: (α) η περίοδος είναι ασαφής/διφορούμενη, (β) ζητείται συγκεκριμένη ημέρα αλλά δεν υπάρχει ημερήσια ανάλυση ή η ημέρα είναι εκτός του διαθέσιμου ημερήσιου εύρους, ή (γ) δεν είσαι βέβαιος σε ποια ημερομηνία αντιστοιχεί ένας σχετικός όρος. Διατύπωσε σύντομη, στοχευμένη ερώτηση (π.χ. «Εννοείς την Τρίτη 2/6; Έχω ημερήσια δεδομένα έως {τελευταία ημέρα}.») και πρότεινε εναλλακτική ανάλυση που μπορείς να δώσεις.
@@ -252,9 +258,19 @@ export function formatTenantPackForPrompt(pack: AssistantTenantPack): string {
     );
   }
 
-  lines.push(
-    `Campaigns εγγεγραμμένα: ${pack.campaigns.count}${pack.campaigns.hasImported ? '' : ' (χωρίς imports)'}`
-  );
+  if (pack.campaigns.isLoading && !pack.campaigns.hasImported) {
+    lines.push('Campaigns / Ads: φορτώνουν ακόμη — ΜΗΝ πεις ότι δεν υπάρχουν συνδεδεμένα δεδομένα διαφημιστικών πλατφορμών.');
+  } else {
+    lines.push(
+      `Campaigns / Ads εγγεγραμμένα: ${pack.campaigns.count}${pack.campaigns.hasImported ? '' : ' (χωρίς imports)'}`
+    );
+    if (pack.campaigns.channels && pack.campaigns.channels.length > 0) {
+      const channelText = pack.campaigns.channels
+        .map((c) => `${c.channel}: campaigns=${c.count}, spend≈€${Math.round(c.spend)}, revenue≈€${Math.round(c.revenue)}, ROAS≈${c.roas.toFixed(2)}x`)
+        .join(' | ');
+      lines.push(`Συνδεδεμένα/imported ads κανάλια: ${channelText}`);
+    }
+  }
 
   lines.push(
     pack.ga4.hasData
