@@ -20,6 +20,7 @@ import {
   formatWebSnippetsForPrompt,
   fallbackKnowledgeAnswer,
   type AssistantTenantPack,
+  type RevenueSeries,
 } from '../../services/aiAssistantChat';
 import {
   loadMarkSession,
@@ -36,6 +37,7 @@ import { useCommercialInfo } from '../../hooks/useCommercialInfo';
 import { useSpeechToText } from '../../hooks/useSpeechToText';
 import { useBrand } from '../../hooks/useBrand';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useBusinessRevenueSummary } from '../../hooks/useBusinessRevenueSummary';
 import { useSegments } from '../../hooks/useSegments';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useGA4Data } from '../../hooks/useGA4Data';
@@ -90,6 +92,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   const { currentBrand } = useBrand();
   const commercialInfo = useCommercialInfo();
   const ecomm = useEcommerceSummary();
+  const businessRev = useBusinessRevenueSummary();
   const {
     segments: rfmSegments,
     totalCustomers,
@@ -120,6 +123,56 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     };
   }, [campaignsHook.campaigns]);
 
+  // Χρονοσειρές τζίρου (ERP + e-shop) ώστε ο Mark να απαντά για ΟΠΟΙΑΔΗΠΟΤΕ περίοδο με δεδομένα.
+  const revenueSeries = useMemo((): AssistantTenantPack['revenue'] => {
+    const recentCutoff = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 90);
+      return d.toISOString().slice(0, 10);
+    })();
+
+    const business: RevenueSeries | undefined = businessRev.hasErpRevenueData
+      ? {
+          label: `ERP (${businessRev.source})`,
+          totalRevenue: businessRev.totalRevenue,
+          orderCount: businessRev.orderCount,
+          monthly: businessRev.monthlyRevenue,
+          recentDaily: Object.entries(businessRev.revenueByDayRecord)
+            .filter(([date]) => date >= recentCutoff)
+            .map(([date, revenue]) => ({ date, revenue: Number(revenue) || 0 }))
+            .sort((a, b) => a.date.localeCompare(b.date)),
+        }
+      : undefined;
+
+    const eshopRecent = ecomm.dailyRevenue
+      .filter((d) => d.date >= recentCutoff)
+      .map((d) => ({ date: d.date, revenue: Number(d.revenue) || 0 }));
+    const ecommerce: RevenueSeries | undefined =
+      ecomm.dailyRevenue.length > 0 || ecomm.monthlyRevenue.length > 0
+        ? {
+            label: 'E-shop',
+            totalRevenue: ecomm.totalRevenue,
+            orderCount: ecomm.orderCount,
+            monthly: ecomm.monthlyRevenue,
+            recentDaily: eshopRecent,
+          }
+        : undefined;
+
+    if (!business && !ecommerce) return undefined;
+    return { business, ecommerce };
+  }, [
+    businessRev.hasErpRevenueData,
+    businessRev.source,
+    businessRev.totalRevenue,
+    businessRev.orderCount,
+    businessRev.monthlyRevenue,
+    businessRev.revenueByDayRecord,
+    ecomm.dailyRevenue,
+    ecomm.monthlyRevenue,
+    ecomm.totalRevenue,
+    ecomm.orderCount,
+  ]);
+
   const tenantPack = useMemo((): AssistantTenantPack => {
     const rows = [...rfmSegments]
       .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))
@@ -141,6 +194,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
         aov: ecomm.aov,
         connectedPlatforms: ecomm.connectedPlatforms,
       },
+      revenue: revenueSeries,
       commercial: {
         adSpend: campaignMetrics.totalSpend,
         attributedRevenue: campaignMetrics.totalRevenue,
@@ -198,6 +252,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     ecomm.orderCount,
     ecomm.aov,
     ecomm.connectedPlatforms,
+    revenueSeries,
     campaignMetrics.totalSpend,
     campaignMetrics.totalRevenue,
     campaignMetrics.roas,
