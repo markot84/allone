@@ -118,12 +118,19 @@ export type UseSegmentsOptions = {
    * (το βαρύ client-side RFM μένει στη σελίδα RFM).
    */
   skipOrderHydration?: boolean;
+  /**
+   * Dashboard: χρησιμοποίησε το έτοιμο server RFM aggregate (`data_analysis_rfm/{brandId}`, 1 doc read)
+   * ως πηγή segments αντί για client-side υπολογισμό. Συνδυάζεται με `skipOrderHydration` ώστε να
+   * εμφανίζονται πραγματικά segments γρήγορα, χωρίς να κατεβαίνουν παραγγελίες.
+   */
+  useServerAggregate?: boolean;
 };
 
 export function useSegments(options: UseSegmentsOptions = {}) {
   const variant = options.variant ?? 'default';
   const isDataAnalysis = variant === 'data_analysis';
   const skipOrderHydration = options.skipOrderHydration === true;
+  const useServerAggregate = options.useServerAggregate === true;
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
@@ -189,7 +196,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const { data: dataAnalysisAggregate = null, isPending: dataAnalysisAggregatePending } = useQuery({
     queryKey: ['dataAnalysisRfmAggregate', brandId],
     queryFn: () => (brandId ? fetchDataAnalysisRfmAggregate(brandId, syncVersion) : Promise.resolve(null)),
-    enabled: isDataAnalysis && !!brandId,
+    enabled: (isDataAnalysis || useServerAggregate) && !!brandId,
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 7 * 24 * 60 * 60 * 1000,
     placeholderData: (previousData) => previousData,
@@ -201,7 +208,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const aggregateScope = isDataAnalysis
     ? dataAnalysisAggregate?.scopes?.[aggregateScopeKey] ?? null
     : dataAnalysisAggregate?.status === 'ready'
-      ? dataAnalysisAggregate.scopes?.[aggregateScopeKey] ?? null
+      ? dataAnalysisAggregate.scopes?.[aggregateScopeKey]
+          ?? dataAnalysisAggregate.scopes?.all
+          ?? dataAnalysisAggregate.scopes?.identified
+          ?? null
       : null;
   const aggregateIsBuilding = isDataAnalysis && dataAnalysisAggregate?.status === 'running';
   const isDataAnalysisAggregatePending = isDataAnalysis && dataAnalysisAggregatePending && !dataAnalysisAggregate;
@@ -434,8 +444,9 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     ecommReady &&
     ecomm.connectedPlatforms.length === 0 &&
     !ecomm.hasData;
+  const serverAggregatePending = useServerAggregate && dataAnalysisAggregatePending && !dataAnalysisAggregate;
   const isLoading = skipOrderHydration
-    ? blocksOnImportedSegmentsOnly
+    ? serverAggregatePending || blocksOnImportedSegmentsOnly
     : (isDataAnalysis && !dataAnalysisAggregate && dataAnalysisAggregatePending) ||
       (!isDataAnalysis && aggregateIsBuilding && !usableSnapshot && !orderRfm.canCompute) ||
       isDataAnalysisAggregatePending ||

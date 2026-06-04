@@ -12,8 +12,11 @@ import { generateInsightsFromData } from '../../services/insights';
  *   για client-side RFM (παγώνει το main thread σε brands με χιλιάδες orders). Χρησιμοποιεί
  *   imported/aggregate segments — ίδια πηγή με το dashboard segment grid.
  */
-export function useAiInsightsData(options: { skipOrderHydration?: boolean } = {}) {
-  const { segments } = useSegments({ skipOrderHydration: options.skipOrderHydration });
+export function useAiInsightsData(options: { skipOrderHydration?: boolean; useServerAggregate?: boolean } = {}) {
+  const { segments } = useSegments({
+    skipOrderHydration: options.skipOrderHydration,
+    useServerAggregate: options.useServerAggregate,
+  });
   const { products } = useProducts();
   const { suppliers } = useSuppliers();
   const ecomm = useEcommerceSummary();

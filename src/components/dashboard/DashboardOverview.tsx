@@ -200,6 +200,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const { isB2B, enabledModules } = useModules();
   const { segments: rfmSegments, hasImported: hasSegments, isLoading: segmentsLoading } = useSegments({
     skipOrderHydration: true,
+    // Τροφοδότηση από το έτοιμο server RFM aggregate (1 doc read) → πραγματικά segments γρήγορα,
+    // χωρίς client-side υπολογισμό από 400ήμερες παραγγελίες.
+    useServerAggregate: true,
   });
   const { segmentStats } = useSegmentAggregates();
   const lastGoodRfmSegmentsRef = useRef<{ brandId: string | null; segments: typeof rfmSegments }>({
@@ -859,7 +862,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       console.debug('[Dashboard] Organic revenue:', totalOrganicRevenue, 'hasOrganic:', hasOrganic);
     }
   }, [totalOrganicRevenue, hasOrganic]);
-  const { aiInsights } = useAiInsightsData({ skipOrderHydration: true });
+  const { aiInsights } = useAiInsightsData({ skipOrderHydration: true, useServerAggregate: true });
 
   // Handle insight action clicks
   const handleInsightAction = (insight: AIInsight) => {
