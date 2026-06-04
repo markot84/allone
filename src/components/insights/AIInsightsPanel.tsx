@@ -36,7 +36,7 @@ export function AIInsightsTrigger({ onClick }: { onClick: () => void }) {
         <img
           src="/mark-orb.png"
           alt=""
-          className="w-12 h-12 object-contain"
+          className="w-full h-full object-cover scale-110"
           style={{ filter: 'contrast(1.05)' }}
           onError={(e) => {
             const target = e.target as HTMLImageElement;

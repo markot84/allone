@@ -483,11 +483,11 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
             <div className="p-5 border-b border-[var(--nts-border-gray)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center overflow-hidden">
+                  <div className="w-10 h-10 rounded-lg bg-white border border-[var(--nts-accent)]/15 flex items-center justify-center overflow-hidden">
                     <img
-                      src="/mark.png"
+                      src="/mark-orb.png"
                       alt="Mark"
-                      className="w-full h-full object-contain"
+                      className="w-full h-full object-cover scale-110"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         target.style.display = 'none';
@@ -532,11 +532,11 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
                   className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {message.type === 'assistant' && (
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <div className="w-8 h-8 rounded-lg bg-white border border-[var(--nts-accent)]/15 flex items-center justify-center flex-shrink-0 overflow-hidden">
                       <img
-                        src="/mark.png"
+                        src="/mark-orb.png"
                         alt="Mark"
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-cover scale-110"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.style.display = 'none';
@@ -632,8 +632,8 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
 
               {isTyping && (
                 <div className="flex gap-3 justify-start">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    <img src="/mark.png" alt="" className="w-full h-full object-contain animate-pulse" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <div className="w-8 h-8 rounded-lg bg-white border border-[var(--nts-accent)]/15 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <img src="/mark-orb.png" alt="" className="w-full h-full object-cover scale-110 animate-pulse" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   </div>
                   <div className="bg-[var(--nts-light-gray)] rounded-lg p-3">
                     <div className="flex gap-1">
