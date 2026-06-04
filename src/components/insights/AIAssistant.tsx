@@ -28,6 +28,7 @@ import {
   generateMarkReply,
   buildProactiveGreeting,
   toGeminiHistory,
+  normalizeMarkTranscript,
   type MarkMessage,
 } from '../../services/mark';
 import { formatCommercialInfoForPrompt, structureCommercialInfo } from '../../services/commercialInfo';
@@ -449,7 +450,12 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     setMessages([{ id: `mark-welcome-${Date.now()}`, type: 'assistant', content: greeting, timestamp: new Date(), proactive: true }]);
   }, [brandId, brandName, openInfoCount]);
 
-  const stt = useSpeechToText({ onResult: (text) => setInput((prev) => (prev ? `${prev} ${text}` : text)) });
+  const stt = useSpeechToText({
+    onResult: (text) => {
+      const normalized = normalizeMarkTranscript(text);
+      setInput((prev) => (prev ? `${prev} ${normalized}` : normalized));
+    },
+  });
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

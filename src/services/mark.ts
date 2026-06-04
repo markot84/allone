@@ -13,6 +13,27 @@ const CURRENT_SESSION = 'current';
 const SESSIONS_COLLECTION = 'mark_sessions';
 const LEGACY_SESSIONS_COLLECTION = 'nilia_sessions';
 
+/**
+ * Η ελληνική φωνητική αναγνώριση γράφει συχνά λάθος το όνομα «Mark» — π.χ. «μάρκτη», «μάρκο»,
+ * «μάρκη», «μάρκος». Κανονικοποιούμε ΜΟΝΟ ξεκάθαρες παραλλαγές του wake word σε «Mark»,
+ * χωρίς να πειράζουμε υπαρκτές λέξεις όπως «μάρκα» ή «μάρκετινγκ» (λόγω του lookahead σε όριο λέξης).
+ */
+const MARK_WAKE_ALIASES = [
+  'μάρκτη', 'μαρκτη', 'μάρκος', 'μάρκου', 'μάρκο', 'μάρκη', 'μάρκε', 'μάρκι', 'μαρκι',
+  'μαρκς', 'μάρκ', 'μαρκ', 'marko', 'marc', 'mark',
+];
+
+export function normalizeMarkTranscript(text: string): string {
+  if (!text) return text;
+  const aliasGroup = MARK_WAKE_ALIASES.join('|');
+  // (αρχή/κενό) + προαιρετικός χαιρετισμός + alias, μόνο όταν ακολουθεί όριο λέξης/σημείο στίξης/τέλος.
+  const re = new RegExp(
+    `(^|\\s)(γει[άα]\\s+σου|γεια|έλα|οκ|hey)?\\s*(?:${aliasGroup})(?=\\s|[.,!?;:·]|$)`,
+    'iu'
+  );
+  return text.replace(re, (_m, pre: string, greet?: string) => `${pre}${greet ? `${greet} ` : ''}Mark`);
+}
+
 export interface MarkMessage {
   id: string;
   role: 'user' | 'assistant';
