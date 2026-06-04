@@ -8,18 +8,15 @@ export function AIInsightsPanel() {
 export function AIInsightsTrigger({ onClick }: { onClick: () => void }) {
   return (
     <div className="fixed bottom-6 right-6 z-30 w-14 h-14">
-      {/* Ακτινωτή λάμψη — δαχτυλίδια που εκπέμπονται προς τα έξω */}
-      {[0, 1].map((i) => (
-        <motion.span
-          key={i}
-          aria-hidden
-          className="absolute inset-0 rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(245,130,32,0.45) 0%, rgba(245,130,32,0) 70%)' }}
-          initial={{ scale: 0.8, opacity: 0.6 }}
-          animate={{ scale: 2.1, opacity: 0 }}
-          transition={{ duration: 2.4, repeat: Infinity, ease: 'easeOut', delay: i * 1.2 }}
-        />
-      ))}
+      {/* Διακριτική πορτοκαλί ακτινωτή λάμψη */}
+      <motion.span
+        aria-hidden
+        className="absolute inset-0 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(245,130,32,0.22) 0%, rgba(245,130,32,0) 70%)' }}
+        initial={{ scale: 0.85, opacity: 0.35 }}
+        animate={{ scale: 1.5, opacity: 0 }}
+        transition={{ duration: 3.4, repeat: Infinity, ease: 'easeOut' }}
+      />
       <motion.button
         type="button"
         onClick={onClick}
@@ -27,20 +24,20 @@ export function AIInsightsTrigger({ onClick }: { onClick: () => void }) {
         whileTap={{ scale: 0.95 }}
         animate={{
           boxShadow: [
-            '0 0 0 0 rgba(245,130,32,0.0)',
-            '0 0 18px 4px rgba(245,130,32,0.55)',
-            '0 0 0 0 rgba(245,130,32,0.0)',
+            '0 2px 8px 0 rgba(0,0,0,0.12)',
+            '0 0 10px 2px rgba(245,130,32,0.28)',
+            '0 2px 8px 0 rgba(0,0,0,0.12)',
           ],
         }}
-        transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-        className="relative w-14 h-14 rounded-full shadow-xl flex items-center justify-center overflow-hidden"
+        transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
+        className="relative w-14 h-14 rounded-full flex items-center justify-center overflow-hidden bg-white border border-[var(--nts-accent)]/15"
         aria-label="AI Insights — άνοιγμα σελίδας"
       >
         <img
-        src="/mark.png"
-        alt=""
-        className="w-full h-full object-cover"
-          style={{ filter: 'contrast(1.15) saturate(1.2)' }}
+          src="/mark.png"
+          alt=""
+          className="w-10 h-10 object-contain"
+          style={{ filter: 'contrast(1.05)' }}
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             target.style.display = 'none';
