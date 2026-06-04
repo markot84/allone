@@ -81,6 +81,7 @@ export function analyzePriceChangeImpact(input: {
   periodTo: string;
   lookbackDays?: number;
   costBySku: Map<string, number>;
+  priceBySku?: Map<string, number>;
   skuNames?: Map<string, string>;
 }): { rows: PriceChangeImpactRow[]; summary: PriceChangeImpactSummary } {
   const { beforeBySku, afterBySku } = aggregateSkuWindows(input);
@@ -98,6 +99,7 @@ export async function analyzePriceChangeImpactAsync(
     periodTo: string;
     lookbackDays?: number;
     costBySku: Map<string, number>;
+    priceBySku?: Map<string, number>;
     skuNames?: Map<string, string>;
   },
   opts?: { chunkSize?: number; yieldFn?: () => Promise<void> }
@@ -107,7 +109,14 @@ export async function analyzePriceChangeImpactAsync(
 }
 
 function finalizePriceChangeRows(
-  input: { periodFrom: string; periodTo: string; lookbackDays?: number; costBySku: Map<string, number>; skuNames?: Map<string, string> },
+  input: {
+    periodFrom: string;
+    periodTo: string;
+    lookbackDays?: number;
+    costBySku: Map<string, number>;
+    priceBySku?: Map<string, number>;
+    skuNames?: Map<string, string>;
+  },
   beforeBySku: Map<string, SkuWindowAgg>,
   afterBySku: Map<string, SkuWindowAgg>
 ): { rows: PriceChangeImpactRow[]; summary: PriceChangeImpactSummary } {

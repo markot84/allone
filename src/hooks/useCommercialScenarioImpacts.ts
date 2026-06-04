@@ -6,10 +6,11 @@ import { useEcommerceSummary } from './useEcommerceSummary';
 import { useProcurement } from './useProcurement';
 import { useProcurementSignals } from './useProcurementSignals';
 import { useProducts } from './useProducts';
-import { fetchEcommercePlatformOrders } from '../services/ecommerceRawOrders';
+import { ECOMMERCE_ORDER_COLLECTIONS, fetchEcommercePlatformOrders } from '../services/ecommerceRawOrders';
 import {
   buildSkuNameMapFromPricingRows,
   buildUnitCostBySku,
+  buildUnitPriceBySku,
   shiftIsoDate,
   type SkuWindowMetrics,
 } from '../services/commercialScenarioMetrics';
@@ -36,6 +37,12 @@ type WindowedScenarioRow = {
   before: SkuWindowMetrics;
   after: SkuWindowMetrics;
   confidence?: 'low' | 'medium' | 'high';
+};
+
+type ProductStockFields = {
+  stock_level?: unknown;
+  available_stock?: unknown;
+  stock_on_hand?: unknown;
 };
 
 const ERP_SCENARIO_CACHE_MS = SCENARIO_CACHE_TTL_MS;
@@ -109,9 +116,18 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
   const { products } = useProducts();
   const [forceRefreshKey, setForceRefreshKey] = useState(0);
   const [progress, setProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const scenarioPlatforms = useMemo(
+    () => (ecomm.connectedPlatforms.length > 0 ? ecomm.connectedPlatforms : Object.keys(ECOMMERCE_ORDER_COLLECTIONS)),
+    [ecomm.connectedPlatforms]
+  );
 
   const costBySku = useMemo(
     () => buildUnitCostBySku(procurement.data.pricing_policy ?? []),
+    [procurement.data.pricing_policy]
+  );
+
+  const priceBySku = useMemo(
+    () => buildUnitPriceBySku(procurement.data.pricing_policy ?? []),
     [procurement.data.pricing_policy]
   );
 
@@ -126,7 +142,8 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     for (const p of products) {
       const sku = String(p.sku || '').trim().toUpperCase();
       if (!sku) continue;
-      const stock = (p as any).stock_level ?? (p as any).available_stock ?? (p as any).stock_on_hand;
+      const stockFields = p as typeof p & ProductStockFields;
+      const stock = stockFields.stock_level ?? stockFields.available_stock ?? stockFields.stock_on_hand;
       if (stock != null) map.set(sku, Number(stock));
     }
     // Source 2: procurement signals (ERP / manual import) — overrides if present
@@ -187,7 +204,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       setProgress({ loaded: 0, total: 0 });
       // Platform-only (e-shop) orders με line items — όχι το ακριβό ERP-invoice διπλό fetch.
       // fetchAll: paginated ΟΛΟ το εύρος (αλλιώς desc+limit 5000 κόβει τους παλιότερους μήνες σε high-volume brands).
-      const orders = await fetchEcommercePlatformOrders(brandId, ecomm.connectedPlatforms, {
+      const orders = await fetchEcommercePlatformOrders(brandId, scenarioPlatforms, {
         sinceDate: lookbackFrom,
         untilDate: period.toDate,
         cacheFirst: true,
@@ -202,7 +219,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       // windows/chunks, ώστε σε high-volume brands να μη «παγώνει» η σελίδα (page not responding).
       for (const window of monthWindows(period.fromDate, period.toDate)) {
         const res = await analyzePriceChangeImpactAsync(
-          { orders, periodFrom: window.startDate, periodTo: window.endDate, costBySku, skuNames },
+          { orders, periodFrom: window.startDate, periodTo: window.endDate, costBySku, priceBySku, skuNames },
           { chunkSize: 3000, yieldFn: yieldToMain }
         );
         priceRows.push(...res.rows);
@@ -271,10 +288,10 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
 
   const isLoading = !query.data && (query.isPending || (!hasLocalCache && (procurement.isLoading || procurementSignals.isLoading || campaignsLoading)));
 
-  const cachedAt = useMemo(() => {
+  const cachedAt = (() => {
     if (!brandId || !period?.fromDate || !period?.toDate) return null;
     return readScenarioCache(brandId, period.fromDate, period.toDate)?.savedAt ?? null;
-  }, [brandId, period?.fromDate, period?.toDate, forceRefreshKey]);
+  })();
 
   const refresh = () => {
     if (!brandId || !period?.fromDate || !period?.toDate) return;

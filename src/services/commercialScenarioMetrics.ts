@@ -37,7 +37,18 @@ export function pctChange(current: number, baseline: number): number | null {
 
 function parseNum(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
-  const s = String(value ?? '').trim().replace(/\s/g, '').replace(',', '.');
+  const raw = String(value ?? '')
+    .trim()
+    .replace(/\s/g, '')
+    .replace(/[^\d,.-]/g, '');
+  const lastComma = raw.lastIndexOf(',');
+  const lastDot = raw.lastIndexOf('.');
+  const decimalSep = lastComma > lastDot ? ',' : lastDot > lastComma ? '.' : null;
+  const s = decimalSep
+    ? raw
+        .replace(new RegExp(`\\${decimalSep === ',' ? '.' : ','}`, 'g'), '')
+        .replace(decimalSep, '.')
+    : raw.replace(',', '.');
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : 0;
 }
@@ -53,6 +64,37 @@ export function buildUnitCostBySku(pricingRows: unknown[]): Map<string, number> 
     const purchase = parseNum(row['ΚΟΣΤΟΣ ΑΓΟΡΑΣ'] ?? row['ΚΟΣΤΟΣ_ΑΓΟΡΑΣ']);
     const unit = totalCost > 0 ? totalCost : primary > 0 ? primary : purchase;
     if (unit > 0) map.set(sku, unit);
+  }
+  return map;
+}
+
+export function buildUnitPriceBySku(pricingRows: unknown[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const raw of pricingRows) {
+    const row = raw as Record<string, unknown>;
+    const sku = String(row['ΚΩΔΙΚΟΣ'] ?? row['Κωδικός'] ?? row.sku ?? '').trim().toUpperCase();
+    if (!sku) continue;
+    const price = [
+      row['ΤΙΜΗ_ΠΩΛΗΣΗΣ'],
+      row['ΤΙΜΗ ΠΩΛΗΣΗΣ'],
+      row['ΤΙΜΗ_ΛΙΑΝΙΚΗΣ'],
+      row['ΤΙΜΗ ΛΙΑΝΙΚΗΣ'],
+      row['ΛΙΑΝΙΚΗ'],
+      row['ΤΙΜΗ'],
+      row['Τιμή'],
+      row['Sell_Price'],
+      row['Sell Price'],
+      row.sell_price,
+      row.price,
+      row.Price,
+      row['Unit_Price'],
+      row['unit_price'],
+      row['Retail_Price'],
+      row['retail_price'],
+    ]
+      .map(parseNum)
+      .find((value) => value > 0);
+    if (price && price > 0) map.set(sku, price);
   }
   return map;
 }
@@ -106,6 +148,7 @@ export function aggregateSkuWindows(input: {
   periodTo: string;
   lookbackDays?: number;
   costBySku: Map<string, number>;
+  priceBySku?: Map<string, number>;
 }): { beforeBySku: Map<string, SkuWindowAgg>; afterBySku: Map<string, SkuWindowAgg> } {
   const lookbackDays = input.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
   const baselineFrom = shiftIsoDate(input.periodFrom, -lookbackDays);
@@ -134,7 +177,8 @@ export function aggregateSkuWindows(input: {
       }
       if (inAfter) {
         const agg = afterBySku.get(sku) ?? emptyAgg();
-        afterBySku.set(sku, addLine(agg, price, qty, unitCost));
+        const afterPrice = input.priceBySku?.get(sku) ?? price;
+        afterBySku.set(sku, addLine(agg, afterPrice, qty, unitCost));
       }
     }
   }
@@ -154,6 +198,7 @@ export async function aggregateSkuWindowsChunked(
     periodTo: string;
     lookbackDays?: number;
     costBySku: Map<string, number>;
+    priceBySku?: Map<string, number>;
   },
   opts?: { chunkSize?: number; yieldFn?: () => Promise<void> }
 ): Promise<{ beforeBySku: Map<string, SkuWindowAgg>; afterBySku: Map<string, SkuWindowAgg> }> {
@@ -182,7 +227,10 @@ export async function aggregateSkuWindowsChunked(
           if (price <= 0 || qty <= 0) continue;
           const unitCost = input.costBySku.get(sku) ?? 0;
           if (inBefore) beforeBySku.set(sku, addLine(beforeBySku.get(sku) ?? emptyAgg(), price, qty, unitCost));
-          if (inAfter) afterBySku.set(sku, addLine(afterBySku.get(sku) ?? emptyAgg(), price, qty, unitCost));
+          if (inAfter) {
+            const afterPrice = input.priceBySku?.get(sku) ?? price;
+            afterBySku.set(sku, addLine(afterBySku.get(sku) ?? emptyAgg(), afterPrice, qty, unitCost));
+          }
         }
       }
     }
