@@ -75,6 +75,44 @@ interface MarkSessionDoc {
   updatedAt: Timestamp;
 }
 
+function localSessionKey(brandId: string) {
+  return `mark_session_${brandId}`;
+}
+
+function readLocalSession(brandId: string): MarkMessage[] {
+  if (typeof window === 'undefined' || !brandId) return [];
+  try {
+    const raw = window.localStorage.getItem(localSessionKey(brandId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { brandId?: string; messages?: MarkMessage[] };
+    if (parsed.brandId !== brandId || !Array.isArray(parsed.messages)) return [];
+    return parsed.messages;
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalSession(brandId: string, messages: MarkMessage[]) {
+  if (typeof window === 'undefined' || !brandId) return;
+  try {
+    window.localStorage.setItem(
+      localSessionKey(brandId),
+      JSON.stringify({ brandId, messages: messages.slice(-60), updatedAt: Date.now() })
+    );
+  } catch {
+    /* local fallback is best-effort */
+  }
+}
+
+function clearLocalSession(brandId: string) {
+  if (typeof window === 'undefined' || !brandId) return;
+  try {
+    window.localStorage.removeItem(localSessionKey(brandId));
+  } catch {
+    /* ignore */
+  }
+}
+
 function sessionRef(brandId: string) {
   return doc(db, 'brands', brandId, SESSIONS_COLLECTION, CURRENT_SESSION);
 }
@@ -95,7 +133,9 @@ export async function loadMarkSession(brandId: string): Promise<MarkMessage[]> {
     if (snap.exists()) {
       const data = snap.data() as MarkSessionDoc;
       if (data.brandId !== brandId) return []; // guard κατά mismatch
-      return Array.isArray(data.messages) ? data.messages : [];
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      if (messages.length > 0) writeLocalSession(brandId, messages);
+      return messages;
     }
     // Migration από παλιό collection (μία φορά).
     const legacy = await getDoc(legacySessionRef(brandId));
@@ -106,17 +146,18 @@ export async function loadMarkSession(brandId: string): Promise<MarkMessage[]> {
         return data.messages;
       }
     }
-    return [];
+    return readLocalSession(brandId);
   } catch {
-    return [];
+    return readLocalSession(brandId);
   }
 }
 
 export async function saveMarkSession(brandId: string, messages: MarkMessage[]): Promise<void> {
   if (!brandId) return;
+  const trimmed = messages.slice(-60);
+  writeLocalSession(brandId, trimmed);
   try {
     // Κρατάμε λογικό όριο μεγέθους doc (τελευταία ~60 μηνύματα).
-    const trimmed = messages.slice(-60);
     await setDoc(sessionRef(brandId), {
       brandId,
       messages: trimmed,
@@ -129,6 +170,7 @@ export async function saveMarkSession(brandId: string, messages: MarkMessage[]):
 
 export async function clearMarkSession(brandId: string): Promise<void> {
   if (!brandId) return;
+  clearLocalSession(brandId);
   try {
     await setDoc(sessionRef(brandId), { brandId, messages: [], updatedAt: Timestamp.now() } satisfies MarkSessionDoc);
   } catch {

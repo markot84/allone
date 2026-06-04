@@ -431,19 +431,34 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     [commercialInfo.items]
   );
 
-  // ── BRAND ISOLATION: φόρτωση session του ΕΝΕΡΓΟΥ brand· reset σε κάθε αλλαγή brand ──
+  // ── BRAND ISOLATION: φόρτωση session του ΕΝΕΡΓΟΥ brand.
+  // Σημαντικό: σε auth/data refresh το currentBrand μπορεί να γίνει προσωρινά null.
+  // Δεν καθαρίζουμε τα messages σε τέτοιο transient state, γιατί ο χρήστης βλέπει το chat να "χάνεται".
+  // Reset κάνουμε μόνο σε πραγματική αλλαγή από ένα non-null brand σε άλλο non-null brand.
   useEffect(() => {
     let cancelled = false;
-    hydratedRef.current = false;
-    loadedBrandRef.current = brandId;
-    setMessages([]);
-    setInput('');
-    setIsTyping(false);
+    const previousLoadedBrand = loadedBrandRef.current;
 
     if (!brandId) {
-      hydratedRef.current = true;
-      return;
+      setIsTyping(false);
+      return () => {
+        cancelled = true;
+      };
     }
+
+    if (previousLoadedBrand === brandId && hydratedRef.current) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    hydratedRef.current = false;
+    loadedBrandRef.current = brandId;
+    if (previousLoadedBrand && previousLoadedBrand !== brandId) {
+      setMessages([]);
+      setInput('');
+    }
+    setIsTyping(false);
 
     (async () => {
       const stored = await loadMarkSession(brandId);
@@ -451,6 +466,12 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
 
       if (stored.length > 0) {
         setMessages(stored.map(fromMark));
+        hydratedRef.current = true;
+        return;
+      }
+
+      if (previousLoadedBrand === brandId) {
+        // Αν το Firestore read γυρίσει προσωρινά άδειο/αποτύχει, μη σβήσεις το υπάρχον in-memory chat.
         hydratedRef.current = true;
         return;
       }
