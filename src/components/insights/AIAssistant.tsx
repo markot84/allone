@@ -108,6 +108,18 @@ function buildMarkContextBullets(response: string): string[] {
   return (priority.length ? priority : cleaned).slice(0, 5);
 }
 
+function buildInstantWelcome(brandName: string | null): Message {
+  return {
+    id: `mark-welcome-${Date.now()}`,
+    type: 'assistant',
+    content: brandName
+      ? `Γεια σου, πώς μπορώ να βοηθήσω;\n\nΜπορείς να μου ζητήσεις εξήγηση για KPI, ανάλυση τζίρου/καμπανιών, ιδέες για Marketing Plan ή να μου δώσεις μια νέα εμπορική πληροφορία.`
+      : 'Γεια σου, πώς μπορώ να βοηθήσω;\n\nΕπίλεξε brand για να σου απαντήσω με βάση τα σωστά δεδομένα.',
+    timestamp: new Date(),
+    proactive: true,
+  };
+}
+
 /**
  * Memoized bubble — ΚΡΙΣΙΜΟ για performance: χωρίς αυτό, κάθε πάτημα πλήκτρου στο input
  * ξανα-render-άρει ΟΛΑ τα μηνύματα (markdown + DOMPurify parsing), παγώνοντας το tab σε μεγάλες
@@ -520,6 +532,9 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     setIsTyping(false);
 
     (async () => {
+      if (!previousLoadedBrand || previousLoadedBrand !== brandId) {
+        setMessages([buildInstantWelcome(brandName)]);
+      }
       const stored = await loadMarkSession(brandId);
       if (cancelled || loadedBrandRef.current !== brandId) return;
 
@@ -539,7 +554,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
       const greeting = await buildProactiveGreeting({ brandId, brandName, openInfoCount });
       if (cancelled || loadedBrandRef.current !== brandId) return;
       setMessages([
-        { id: `mark-welcome-${Date.now()}`, type: 'assistant', content: greeting, timestamp: new Date(), proactive: true },
+        { ...buildInstantWelcome(brandName), content: greeting },
       ]);
       hydratedRef.current = true;
     })();
@@ -749,7 +764,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     if (!brandId) return;
     await clearMarkSession(brandId);
     const greeting = await buildProactiveGreeting({ brandId, brandName, openInfoCount });
-    setMessages([{ id: `mark-welcome-${Date.now()}`, type: 'assistant', content: greeting, timestamp: new Date(), proactive: true }]);
+    setMessages([{ ...buildInstantWelcome(brandName), content: greeting }]);
   }, [brandId, brandName, openInfoCount]);
 
   const stt = useSpeechToText({

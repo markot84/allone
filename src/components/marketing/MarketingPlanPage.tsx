@@ -32,7 +32,7 @@ import {
   type MarketingPlanSkuSuggestion,
 } from '../../services/marketingPlanInsights';
 import { generateMarketingPlanMessage } from '../../services/marketingPlanMessage';
-import { fetchDataAnalysisOrders, fetchEcommercePlatformOrders } from '../../services/ecommerceRawOrders';
+import { fetchDataAnalysisOrders, fetchEcommercePlatformOrders, type EcommerceRawOrder } from '../../services/ecommerceRawOrders';
 import { buildCommercialLearnings, type CommercialLearning } from '../../services/commercialLearnings';
 import { shiftIsoDate } from '../../services/commercialScenarioMetrics';
 import { formatCommercialInfoForPrompt } from '../../services/commercialInfo';
@@ -68,6 +68,7 @@ type PlanStage = {
 // πλοήγηση μέσα στην εφαρμογή να ΜΗΝ ξανατρέχει τη βαριά ανάλυση + AI κάθε φορά.
 const PLAN_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 type PlanCacheEntry = { savedAt: number; plan: MarketingPlanDraft };
+type LastYearOrdersCacheEntry = { savedAt: number; orders: EcommerceRawOrder[] };
 
 // v2: το draft περιλαμβάνει πλέον per-group SKU (για τα expandable reorder cards) — bump
 // ώστε παλιά cached drafts χωρίς `skus` να ξαναϋπολογιστούν.
@@ -125,6 +126,52 @@ function clearPlanCache(brandId: string, preset: string, sig = ''): void {
   }
 }
 
+function lastYearOrdersCacheKey(brandId: string, from: string, to: string, platformsKey: string): string {
+  return `mp_last_year_orders_v1_${brandId}_${from}_${to}_${hashSig(platformsKey || 'all')}`;
+}
+
+function readLastYearOrdersCache(
+  brandId: string | null,
+  from: string,
+  to: string,
+  platformsKey: string
+): LastYearOrdersCacheEntry | null {
+  if (!brandId || typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(lastYearOrdersCacheKey(brandId, from, to, platformsKey));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as LastYearOrdersCacheEntry;
+    if (!parsed?.savedAt || !Array.isArray(parsed.orders)) return null;
+    if (Date.now() - parsed.savedAt > PLAN_CACHE_TTL_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeLastYearOrdersCache(
+  brandId: string,
+  from: string,
+  to: string,
+  platformsKey: string,
+  orders: EcommerceRawOrder[]
+): void {
+  if (typeof localStorage === 'undefined') return;
+  const key = lastYearOrdersCacheKey(brandId, from, to, platformsKey);
+  try {
+    localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), orders }));
+  } catch {
+    try {
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith('mp_last_year_orders_') && k !== key)
+        .forEach((k) => localStorage.removeItem(k));
+      localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), orders }));
+    } catch {
+      /* cache best-effort only */
+    }
+  }
+}
+
 export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: string) => void } = {}) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
@@ -176,22 +223,33 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const period = useMemo(() => ({ presetId: preset, ...resolvePlanPeriod(preset) }), [preset]);
   const lastYearFrom = shiftIsoDateByYears(period.fromDate, -1);
   const lastYearTo = shiftIsoDateByYears(period.toDate, -1);
+  const platformsKey = useMemo(() => [...ecomm.connectedPlatforms].sort().join('|'), [ecomm.connectedPlatforms]);
+  const cachedPlanEntry = useMemo(
+    () => readPlanCacheEntry(brandId, preset, contextSig),
+    [brandId, preset, contextSig]
+  );
 
   const lastYearOrdersQuery = useQuery({
-    queryKey: ['marketingPlanLastYearOrders', brandId, lastYearFrom, lastYearTo, [...ecomm.connectedPlatforms].sort().join('|')],
-    queryFn: () =>
-      brandId
-        ? fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, {
+    queryKey: ['marketingPlanLastYearOrders', brandId, lastYearFrom, lastYearTo, platformsKey],
+    queryFn: async () => {
+      if (!brandId) return [];
+      const orders = await fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, {
             sinceDate: lastYearFrom,
             untilDate: lastYearTo,
             cacheFirst: true,
             revenueMode: 'all',
-          })
-        : Promise.resolve([]),
-    enabled: !!brandId,
-    staleTime: 10 * 60 * 1000,
+      });
+      writeLastYearOrdersCache(brandId, lastYearFrom, lastYearTo, platformsKey, orders);
+      return orders;
+    },
+    enabled: !!brandId && !ecomm.isLoading && !cachedPlanEntry,
+    staleTime: PLAN_CACHE_TTL_MS,
     gcTime: 60 * 60 * 1000,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    initialData: () => readLastYearOrdersCache(brandId, lastYearFrom, lastYearTo, platformsKey)?.orders,
+    initialDataUpdatedAt: () => readLastYearOrdersCache(brandId, lastYearFrom, lastYearTo, platformsKey)?.savedAt,
   });
 
   const savedQuery = useQuery({
@@ -220,21 +278,21 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
 
   // Base data έτοιμα → το plan υπολογίζεται μία φορά (ανά brand/preset/ημέρα) και διατηρείται.
   const baseDataReady = !!brandId && !lastYearOrdersQuery.isLoading && !inventoryLoading && !procurementSignals.isLoading;
-  const loadingContext = lastYearOrdersQuery.isLoading || inventoryLoading || procurementSignals.isLoading;
+  const loadingContext = !cachedPlanEntry && (lastYearOrdersQuery.isLoading || inventoryLoading || procurementSignals.isLoading);
 
   // Το plan draft ζει στο React Query cache (επιβιώνει της πλοήγησης) + localStorage (επιβιώνει reload),
   // με daily staleTime. Έτσι ΔΕΝ ξανατρέχει η βαριά ανάλυση + AI σε κάθε είσοδο στη σελίδα.
   const planQuery = useQuery<MarketingPlanDraft>({
     queryKey: ['marketingPlanDraft', 'v2', brandId, preset, contextSig],
-    enabled: baseDataReady,
+    enabled: baseDataReady && !cachedPlanEntry,
     staleTime: PLAN_CACHE_TTL_MS,
     gcTime: PLAN_CACHE_TTL_MS,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     retry: false,
-    initialData: () => readPlanCacheEntry(brandId, preset, contextSig)?.plan,
-    initialDataUpdatedAt: () => readPlanCacheEntry(brandId, preset, contextSig)?.savedAt,
+    initialData: () => cachedPlanEntry?.plan,
+    initialDataUpdatedAt: () => cachedPlanEntry?.savedAt,
     queryFn: async () => {
       const insight = buildMarketingPlanInsight({
         period,
