@@ -10,6 +10,9 @@ import {
   Mic,
   Plus,
   RotateCcw,
+  Square,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { searchArticles, getArticleById } from '../../data/knowledgeBase';
 import { FormattedProse } from '../common';
@@ -36,6 +39,7 @@ import { formatCommercialInfoForPrompt, structureCommercialInfo } from '../../se
 import { formatBrandProfileForPrompt } from '../../services/brandProfile';
 import { useCommercialInfo } from '../../hooks/useCommercialInfo';
 import { useSpeechToText } from '../../hooks/useSpeechToText';
+import { useSpeechSynthesis } from '../../hooks/useSpeechSynthesis';
 import { useBrand } from '../../hooks/useBrand';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBusinessRevenueSummary } from '../../hooks/useBusinessRevenueSummary';
@@ -58,6 +62,17 @@ interface Message {
   savedInfoId?: string;
   /** Κείμενο που μπορεί να αποθηκευτεί ως εμπορική πληροφορία από CTA. */
   pendingInfoText?: string;
+}
+
+const MARK_VOICE_REPLIES_KEY = 'mark_voice_replies_enabled';
+
+function readVoiceRepliesPreference(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(MARK_VOICE_REPLIES_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 function toMark(m: Message): MarkMessage {
@@ -118,6 +133,17 @@ function buildInstantWelcome(brandName: string | null): Message {
     timestamp: new Date(),
     proactive: true,
   };
+}
+
+function getLatestSpeakableAssistantMessage(messages: Message[]): Message | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.type !== 'assistant') continue;
+    if (message.proactive || message.savedInfoId) continue;
+    if (/^Καταχώρισα/i.test(message.content.trim())) continue;
+    return message;
+  }
+  return null;
 }
 
 /**
@@ -506,13 +532,16 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [savingInfo, setSavingInfo] = useState(false);
+  const [voiceRepliesEnabled, setVoiceRepliesEnabled] = useState(readVoiceRepliesPreference);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const shouldAutoScrollRef = useRef(true);
+  const lastSpokenMessageIdRef = useRef<string | null>(null);
   /** Το brandId του οποίου το session είναι φορτωμένο — guard κατά mismatch. */
   const loadedBrandRef = useRef<string | null>(null);
   const hydratedRef = useRef(false);
+  const tts = useSpeechSynthesis();
 
   const activeInfoText = useMemo(
     () => formatCommercialInfoForPrompt(commercialInfo.items.filter((i) => i.status === 'active')),
@@ -522,6 +551,20 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     () => commercialInfo.items.filter((i) => i.status === 'active').length,
     [commercialInfo.items]
   );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(MARK_VOICE_REPLIES_KEY, voiceRepliesEnabled ? '1' : '0');
+    } catch {
+      /* preference is best-effort */
+    }
+  }, [voiceRepliesEnabled]);
+
+  const handleClose = useCallback(() => {
+    tts.stop();
+    onClose();
+  }, [onClose, tts]);
 
   // ── BRAND ISOLATION: φόρτωση session του ΕΝΕΡΓΟΥ brand.
   // Σημαντικό: σε auth/data refresh το currentBrand μπορεί να γίνει προσωρινά null.
@@ -547,6 +590,8 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     hydratedRef.current = false;
     loadedBrandRef.current = brandId;
     if (previousLoadedBrand && previousLoadedBrand !== brandId) {
+      tts.stop();
+      lastSpokenMessageIdRef.current = null;
       setMessages([]);
       setInput('');
     }
@@ -560,7 +605,9 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
       if (cancelled || loadedBrandRef.current !== brandId) return;
 
       if (stored.length > 0) {
-        setMessages(stored.map(fromMark));
+        const restored = stored.map(fromMark);
+        lastSpokenMessageIdRef.current = getLatestSpeakableAssistantMessage(restored)?.id ?? null;
+        setMessages(restored);
         hydratedRef.current = true;
         return;
       }
@@ -766,7 +813,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
         if (options.openMarketingPlan) {
           window.location.hash = 'marketing-plan';
           window.dispatchEvent(new HashChangeEvent('hashchange'));
-          onClose();
+          handleClose();
         }
       } catch (e) {
         console.error('[Mark] save info:', e);
@@ -778,15 +825,17 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
         setSavingInfo(false);
       }
     },
-    [brandId, brandName, savingInfo, commercialInfo.addInfo, onClose]
+    [brandId, brandName, savingInfo, commercialInfo.addInfo, handleClose]
   );
 
   const handleResetSession = useCallback(async () => {
     if (!brandId) return;
+    tts.stop();
+    lastSpokenMessageIdRef.current = null;
     await clearMarkSession(brandId);
     const greeting = await buildProactiveGreeting({ brandId, brandName, openInfoCount });
     setMessages([{ ...buildInstantWelcome(brandName), content: greeting }]);
-  }, [brandId, brandName, openInfoCount]);
+  }, [brandId, brandName, openInfoCount, tts]);
 
   const stt = useSpeechToText({
     onResult: (text) => {
@@ -794,6 +843,22 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
       setInput((prev) => (prev ? `${prev} ${normalized}` : normalized));
     },
   });
+
+  useEffect(() => {
+    if (!isOpen || !voiceRepliesEnabled || !tts.supported) return;
+    const latest = getLatestSpeakableAssistantMessage(messages);
+    if (!latest || latest.id === lastSpokenMessageIdRef.current) return;
+    lastSpokenMessageIdRef.current = latest.id;
+    tts.speak(latest.content);
+  }, [isOpen, messages, tts, voiceRepliesEnabled]);
+
+  useEffect(() => {
+    if (!isOpen) tts.stop();
+  }, [isOpen, tts]);
+
+  useEffect(() => {
+    if (stt.listening) tts.stop();
+  }, [stt.listening, tts]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -811,7 +876,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={handleClose}
             className="fixed inset-0 bg-black/20 z-40"
           />
 
@@ -851,6 +916,34 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
+                  {tts.supported && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (voiceRepliesEnabled) tts.stop();
+                        setVoiceRepliesEnabled((prev) => !prev);
+                      }}
+                      title={voiceRepliesEnabled ? 'Απενεργοποίηση φωνητικών απαντήσεων' : 'Ενεργοποίηση φωνητικών απαντήσεων'}
+                      aria-pressed={voiceRepliesEnabled}
+                      className={`p-2 rounded-md transition-colors ${
+                        voiceRepliesEnabled
+                          ? 'bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
+                          : 'hover:bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)]'
+                      }`}
+                    >
+                      {voiceRepliesEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                    </button>
+                  )}
+                  {tts.supported && tts.speaking && (
+                    <button
+                      type="button"
+                      onClick={tts.stop}
+                      title="Σταμάτημα φωνητικής απάντησης"
+                      className="p-2 rounded-md text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                      <Square size={15} />
+                    </button>
+                  )}
                   <button
                     onClick={handleResetSession}
                     title="Νέα συνομιλία"
@@ -859,7 +952,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
                     <RotateCcw size={16} className="text-[var(--nts-medium-gray)]" />
                   </button>
                   <button
-                    onClick={onClose}
+                    onClick={handleClose}
                     className="p-2 rounded-md hover:bg-[var(--nts-light-gray)] transition-colors"
                   >
                     <X size={18} className="text-[var(--nts-medium-gray)]" />
@@ -878,7 +971,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
                 <MarkMessageItem
                   key={message.id}
                   message={message}
-                  onClose={onClose}
+                  onClose={handleClose}
                   onSaveInfo={handleSaveInfo}
                   savingInfo={savingInfo}
                 />
@@ -943,7 +1036,10 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
                   disabled={isTyping || savingInfo}
                 />
                 <button
-                  onClick={stt.supported ? stt.toggle : undefined}
+                  onClick={stt.supported ? () => {
+                    tts.stop();
+                    stt.toggle();
+                  } : undefined}
                   disabled={!stt.supported}
                   title={
                     !stt.supported

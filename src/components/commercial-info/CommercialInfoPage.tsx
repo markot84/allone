@@ -13,15 +13,42 @@ import type {
 const FACTOR_LABEL: Record<CommercialFactorType, string> = {
   event: 'Γεγονός',
   trend: 'Τάση',
-  pricing: 'Τιμολόγηση/Ακρίβεια',
+  pricing: 'Τιμές/Κόστη',
   competition: 'Ανταγωνισμός',
-  instinct: 'Ένστικτο',
+  instinct: 'Εμπειρική εκτίμηση',
   macro: 'Μακροοικονομικά',
 };
 
-const DIRECTION_LABEL: Record<CommercialDirection, string> = { up: 'Άνοδος', down: 'Πτώση', neutral: 'Ουδέτερο' };
+const DIRECTION_LABEL: Record<CommercialDirection, string> = { up: 'Αυξητική επίδραση', down: 'Πτωτική επίδραση', neutral: 'Ουδέτερη επίδραση' };
 const MAG_LABEL: Record<CommercialMagnitude, string> = { low: 'Χαμηλή', medium: 'Μέτρια', high: 'Υψηλή' };
 const CONF_LABEL: Record<CommercialConfidence, string> = { low: 'Χαμηλή', medium: 'Μέτρια', high: 'Υψηλή' };
+
+const FACTOR_HELP: Record<CommercialFactorType, string> = {
+  event: 'Συμβάν ή περίοδος που μπορεί να αλλάξει προσωρινά τη ζήτηση.',
+  trend: 'Μεταβολή στη συμπεριφορά της αγοράς ή των πελατών.',
+  pricing: 'Πληροφορία για κόστος, ανατιμήσεις, εκπτώσεις ή πίεση τιμών.',
+  competition: 'Κίνηση ανταγωνιστή που επηρεάζει positioning, budget ή προσφορές.',
+  instinct: 'Εμπορική εκτίμηση από εμπειρία, πωλήσεις ή σήματα που δεν υπάρχουν ακόμη στα δεδομένα.',
+  macro: 'Εξωτερικός παράγοντας όπως οικονομία, καιρός, κανονισμοί ή κοινωνική συγκυρία.',
+};
+
+const DIRECTION_HELP: Record<CommercialDirection, string> = {
+  up: 'Περιμένουμε θετική επίδραση σε ζήτηση, έσοδα ή προτεραιότητα.',
+  down: 'Περιμένουμε αρνητική πίεση ή ανάγκη προσοχής.',
+  neutral: 'Η πληροφορία είναι χρήσιμο context, χωρίς καθαρή κατεύθυνση ακόμη.',
+};
+
+const MAG_HELP: Record<CommercialMagnitude, string> = {
+  low: 'Μικρή επίδραση, κυρίως για monitoring.',
+  medium: 'Αξίζει να ληφθεί υπόψη στο πλάνο και στις προτεραιότητες.',
+  high: 'Πιθανή ισχυρή επίδραση, θέλει άμεση εμπορική προσοχή.',
+};
+
+const CONF_HELP: Record<CommercialConfidence, string> = {
+  low: 'Υπόθεση ή πρώιμο σήμα.',
+  medium: 'Υπάρχουν αρκετές ενδείξεις, αλλά θέλει επιβεβαίωση.',
+  high: 'Ισχυρή πληροφορία ή πολύ αξιόπιστη εκτίμηση.',
+};
 
 function DirectionIcon({ d }: { d: CommercialDirection }) {
   if (d === 'up') return <TrendingUp size={14} className="text-emerald-600" />;
@@ -64,9 +91,9 @@ function InfoCard({
           <Badge variant={item.direction === 'up' ? 'success' : item.direction === 'down' ? 'danger' : 'default'}>
             {DIRECTION_LABEL[item.direction]}
           </Badge>
-          <Badge variant="default">Ένταση: {MAG_LABEL[item.magnitude]}</Badge>
+          <Badge variant="default">Επίδραση: {MAG_LABEL[item.magnitude]}</Badge>
           <Badge variant={item.confidence === 'high' ? 'success' : item.confidence === 'medium' ? 'info' : 'warning'}>
-            Εμπιστοσύνη: {CONF_LABEL[item.confidence]}
+            Βεβαιότητα: {CONF_LABEL[item.confidence]}
           </Badge>
           {(item.horizonFrom || item.horizonTo) && (
             <Badge variant="default">
@@ -123,6 +150,45 @@ function InfoCard({
   );
 }
 
+function CommercialInfoGuide() {
+  return (
+    <Card>
+      <div className="grid gap-4 p-4 md:grid-cols-[1.1fr_0.9fr]">
+        <div>
+          <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Πώς θα αξιοποιηθεί</p>
+          <p className="mt-1 text-sm leading-6 text-[var(--nts-medium-gray)]">
+            Οι ενεργές πληροφορίες γίνονται εμπορικό context για το Marketing Plan, είτε το δημιουργήσεις από τη σελίδα του πλάνου είτε το συζητήσεις με τον Mark. Βοηθούν επίσης τις προτάσεις πολιτικής, προτεραιοποίησης καναλιών και ζήτησης να μη βασίζονται μόνο σε ιστορικά δεδομένα.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <div className="rounded-xl border border-[var(--nts-border-gray)] bg-white px-3 py-2">
+              <p className="text-xs font-semibold text-[var(--nts-charcoal)]">1. Καταγραφή</p>
+              <p className="mt-1 text-xs text-[var(--nts-medium-gray)]">Γράφεις ελεύθερα αυτό που ξέρεις ή υποψιάζεσαι.</p>
+            </div>
+            <div className="rounded-xl border border-[var(--nts-border-gray)] bg-white px-3 py-2">
+              <p className="text-xs font-semibold text-[var(--nts-charcoal)]">2. Δόμηση</p>
+              <p className="mt-1 text-xs text-[var(--nts-medium-gray)]">Η εφαρμογή εντοπίζει κατηγορία, brands, κατεύθυνση και ορίζοντα.</p>
+            </div>
+            <div className="rounded-xl border border-[var(--nts-border-gray)] bg-white px-3 py-2">
+              <p className="text-xs font-semibold text-[var(--nts-charcoal)]">3. Χρήση</p>
+              <p className="mt-1 text-xs text-[var(--nts-medium-gray)]">Το context μπαίνει στις προτάσεις, όχι ως απόλυτο δεδομένο.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+          <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Τι σημαίνουν οι ετικέτες</p>
+          <div className="mt-3 space-y-2 text-xs text-[var(--nts-medium-gray)]">
+            <p><span className="font-semibold text-[var(--nts-charcoal)]">Τύπος</span>: π.χ. {FACTOR_LABEL.instinct} = {FACTOR_HELP.instinct}</p>
+            <p><span className="font-semibold text-[var(--nts-charcoal)]">Κατεύθυνση</span>: {DIRECTION_HELP.up} Αν δεν είναι καθαρό, μπαίνει ως ουδέτερο context.</p>
+            <p><span className="font-semibold text-[var(--nts-charcoal)]">Επίδραση</span>: {MAG_HELP.medium}</p>
+            <p><span className="font-semibold text-[var(--nts-charcoal)]">Βεβαιότητα</span>: {CONF_HELP.low}</p>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function CommercialInfoPage() {
   const { items, isLoading, brandId, brandName, addInfo, setStatus, removeInfo, structure } = useCommercialInfo();
   const [draft, setDraft] = useState('');
@@ -167,11 +233,12 @@ export function CommercialInfoPage() {
         }
         description={
           <p className="text-[14px] text-[var(--nts-medium-gray)]">
-            Κατέγραψε γνώση, εξελίξεις αγοράς ή το εμπορικό σου ένστικτο. Η εφαρμογή τα δομεί και ο Mark τα λαμβάνει υπόψη στο
-            Marketing Plan, στις προβλέψεις πωλήσεων και στις προτάσεις πολιτικής.
+            Κατέγραψε πληροφορίες που δεν φαίνονται πάντα στα δεδομένα: αλλαγές αγοράς, κινήσεις ανταγωνισμού, ανατιμήσεις, εποχικότητα ή εμπορικές εκτιμήσεις. Η εφαρμογή τις δομεί και τις χρησιμοποιεί ως context στο Marketing Plan, στις προτάσεις πολιτικής και στις εκτιμήσεις ζήτησης.
           </p>
         }
       />
+
+      <CommercialInfoGuide />
 
       {/* Composer */}
       <Card>
@@ -188,10 +255,10 @@ export function CommercialInfoPage() {
           <div className="flex items-center justify-between">
             <p className="text-xs text-[var(--nts-medium-gray)]">
               {savingStep === 'structure'
-                ? 'Δομείται η πληροφορία σε κατηγορίες, επωνυμίες, κατεύθυνση και ορίζοντα…'
+                ? 'Δομείται η πληροφορία σε τύπο, κατεύθυνση, επίδραση, βεβαιότητα και ορίζοντα…'
                 : savingStep === 'save'
-                  ? 'Αποθηκεύεται ώστε να χρησιμοποιηθεί από Mark και Marketing Plan…'
-                  : 'Η εφαρμογή θα αναγνωρίσει κατηγορίες, parent SKU, επωνυμίες, κατεύθυνση και ορίζοντα.'}
+                  ? 'Αποθηκεύεται ώστε να χρησιμοποιηθεί από το Marketing Plan, τον Mark και τις προτάσεις πολιτικής…'
+                  : 'Η εφαρμογή θα αναγνωρίσει τύπο πληροφορίας, κατηγορίες, επωνυμίες, κατεύθυνση, επίδραση και ορίζοντα.'}
             </p>
             <Button variant="primary" onClick={handleAdd} disabled={!draft.trim() || saving || !brandId} icon={saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}>
               {saving ? 'Καταχώριση…' : 'Καταχώριση'}

@@ -54,6 +54,33 @@ const PRESETS: { id: MarketingPlanPresetId; label: string }[] = [
 
 type SectionKey = 'analysis' | 'inventory' | 'paid' | 'organic' | 'audience' | 'pricing' | 'message';
 
+const COMMERCIAL_FACTOR_LABEL: Record<string, string> = {
+  event: 'Γεγονός',
+  trend: 'Τάση',
+  pricing: 'Τιμές/Κόστη',
+  competition: 'Ανταγωνισμός',
+  instinct: 'Εμπειρική εκτίμηση',
+  macro: 'Μακροοικονομικά',
+};
+
+const COMMERCIAL_DIRECTION_LABEL: Record<string, string> = {
+  up: 'αυξητική επίδραση',
+  down: 'πτωτική επίδραση',
+  neutral: 'ουδέτερη επίδραση',
+};
+
+const COMMERCIAL_MAGNITUDE_LABEL: Record<string, string> = {
+  low: 'χαμηλή',
+  medium: 'μέτρια',
+  high: 'υψηλή',
+};
+
+const COMMERCIAL_CONFIDENCE_LABEL: Record<string, string> = {
+  low: 'χαμηλή',
+  medium: 'μέτρια',
+  high: 'υψηλή',
+};
+
 type PlanStage = {
   id: string;
   label: string;
@@ -69,6 +96,15 @@ type PlanStage = {
 const PLAN_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 type PlanCacheEntry = { savedAt: number; plan: MarketingPlanDraft };
 type LastYearOrdersCacheEntry = { savedAt: number; orders: EcommerceRawOrder[] };
+type MarketingPlanCacheDoc = PlanCacheEntry & {
+  id: string;
+  brandId: string;
+  kind: 'auto_cache';
+  preset: string;
+  contextSigHash: string;
+  contextSig?: string;
+  savedAtIso: string;
+};
 
 // v2: το draft περιλαμβάνει πλέον per-group SKU (για τα expandable reorder cards) — bump
 // ώστε παλιά cached drafts χωρίς `skus` να ξαναϋπολογιστούν.
@@ -81,6 +117,26 @@ function hashSig(s: string): string {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
   return (h >>> 0).toString(36);
+}
+
+function planCacheDocId(brandId: string, preset: string, sig = ''): string {
+  const safeBrand = brandId.replace(/[^A-Za-z0-9_-]/g, '_');
+  return `mp_cache_${safeBrand}_${preset}_${hashSig(sig || 'base')}`;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = globalThis.setTimeout(() => reject(new Error(message)), ms);
+    promise
+      .then((value) => {
+        globalThis.clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        globalThis.clearTimeout(timer);
+        reject(error);
+      });
+  });
 }
 
 function readPlanCacheEntry(brandId: string | null, preset: string, sig = ''): PlanCacheEntry | null {
@@ -196,10 +252,6 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     () => formatBrandProfileForPrompt(currentBrand?.brandProfile),
     [currentBrand?.brandProfile]
   );
-  const markPlanContext = useMemo(
-    () => activeInfo.filter((i) => i.source === 'mark' && (i.markContext?.summaryBullets?.length || i.summary)),
-    [activeInfo]
-  );
   // Υπογραφή για το queryKey: το draft ξαναϋπολογίζεται όταν αλλάζουν οι πληροφορίες.
   const infoSig = useMemo(
     () => activeInfo.map((i) => `${i.id}:${i.direction}:${i.magnitude}`).sort().join('|'),
@@ -228,26 +280,64 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     () => readPlanCacheEntry(brandId, preset, contextSig),
     [brandId, preset, contextSig]
   );
+  const contextReady = !commercialInfo.isLoading;
+  const remotePlanCacheDocId = useMemo(
+    () => (brandId ? planCacheDocId(brandId, preset, contextSig) : null),
+    [brandId, preset, contextSig]
+  );
+  const remotePlanCacheQuery = useQuery<PlanCacheEntry | null>({
+    queryKey: ['marketingPlanDraftRemoteCache', 'v1', brandId, preset, contextSig],
+    queryFn: async () => {
+      if (!remotePlanCacheDocId) return null;
+      const cached = await FirestoreService.getDocumentWithTimeout<MarketingPlanCacheDoc>(
+        'marketing_plans',
+        remotePlanCacheDocId,
+        8_000
+      ).catch(() => null);
+      if (!cached?.plan || !cached.savedAt) return null;
+      if (Date.now() - cached.savedAt > PLAN_CACHE_TTL_MS) return null;
+      if (brandId) writePlanCache(brandId, preset, cached.plan, contextSig);
+      queryClient.setQueryData(
+        ['marketingPlanDraft', 'v2', brandId, preset, contextSig],
+        cached.plan
+      );
+      return { savedAt: cached.savedAt, plan: cached.plan };
+    },
+    enabled: !!brandId && !!remotePlanCacheDocId && !cachedPlanEntry && contextReady,
+    staleTime: PLAN_CACHE_TTL_MS,
+    gcTime: PLAN_CACHE_TTL_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: false,
+  });
+  const effectiveCachedPlanEntry = cachedPlanEntry ?? remotePlanCacheQuery.data ?? null;
+  const cacheLookupPending = !effectiveCachedPlanEntry && remotePlanCacheQuery.isLoading;
 
   const lastYearOrdersQuery = useQuery({
     queryKey: ['marketingPlanLastYearOrders', brandId, lastYearFrom, lastYearTo, platformsKey],
     queryFn: async () => {
       if (!brandId) return [];
-      const orders = await fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, {
-            sinceDate: lastYearFrom,
-            untilDate: lastYearTo,
-            cacheFirst: true,
-            revenueMode: 'all',
-      });
+      const orders = await withTimeout(
+        fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, {
+          sinceDate: lastYearFrom,
+          untilDate: lastYearTo,
+          cacheFirst: true,
+          revenueMode: 'all',
+        }),
+        25_000,
+        'Το βήμα περσινών πωλήσεων άργησε υπερβολικά και παραλείφθηκε για να μην κολλήσει το πλάνο.'
+      );
       writeLastYearOrdersCache(brandId, lastYearFrom, lastYearTo, platformsKey, orders);
       return orders;
     },
-    enabled: !!brandId && !ecomm.isLoading && !cachedPlanEntry,
+    enabled: !!brandId && contextReady && !ecomm.isLoading && !effectiveCachedPlanEntry && !cacheLookupPending,
     staleTime: PLAN_CACHE_TTL_MS,
     gcTime: 60 * 60 * 1000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
+    retry: false,
     initialData: () => readLastYearOrdersCache(brandId, lastYearFrom, lastYearTo, platformsKey)?.orders,
     initialDataUpdatedAt: () => readLastYearOrdersCache(brandId, lastYearFrom, lastYearTo, platformsKey)?.savedAt,
   });
@@ -256,13 +346,17 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     queryKey: ['marketing_plans', brandId],
     queryFn: async () => {
       if (!brandId) return [];
-      return FirestoreService.getDocuments<{ id: string; plan: MarketingPlanDraft; savedAt: string }>(
+      return FirestoreService.getDocuments<{ id: string; plan: MarketingPlanDraft; savedAt: string | number; kind?: string }>(
         'marketing_plans', [], brandId
       );
     },
     enabled: !!brandId,
     staleTime: 30 * 1000,
   });
+  const savedPlans = useMemo(
+    () => (savedQuery.data ?? []).filter((row) => row.kind !== 'auto_cache'),
+    [savedQuery.data]
+  );
 
   const saveMutation = useMutation({
     mutationFn: async (plan: MarketingPlanDraft) => {
@@ -276,23 +370,46 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     },
   });
 
-  // Base data έτοιμα → το plan υπολογίζεται μία φορά (ανά brand/preset/ημέρα) και διατηρείται.
-  const baseDataReady = !!brandId && !lastYearOrdersQuery.isLoading && !inventoryLoading && !procurementSignals.isLoading;
-  const loadingContext = !cachedPlanEntry && (lastYearOrdersQuery.isLoading || inventoryLoading || procurementSignals.isLoading);
+  const writeRemotePlanCache = (plan: MarketingPlanDraft) => {
+    if (!brandId || !remotePlanCacheDocId) return;
+    const savedAt = Date.now();
+    void FirestoreService.setDocument('marketing_plans', remotePlanCacheDocId, {
+      id: remotePlanCacheDocId,
+      brandId,
+      kind: 'auto_cache',
+      preset,
+      contextSig,
+      contextSigHash: hashSig(contextSig || 'base'),
+      plan,
+      savedAt,
+      savedAtIso: new Date(savedAt).toISOString(),
+    } satisfies MarketingPlanCacheDoc).then(() => {
+      queryClient.setQueryData<PlanCacheEntry | null>(
+        ['marketingPlanDraftRemoteCache', 'v1', brandId, preset, contextSig],
+        { savedAt, plan }
+      );
+    }).catch((error) => {
+      console.warn('[MarketingPlan] remote cache write failed:', error);
+    });
+  };
+
+  // Base data έτοιμα → το plan υπολογίζεται μία φορά (ανά brand/preset/context) και διατηρείται.
+  const baseDataReady = !!brandId && contextReady && !cacheLookupPending && !lastYearOrdersQuery.isLoading && !inventoryLoading && !procurementSignals.isLoading;
+  const loadingContext = !effectiveCachedPlanEntry && (cacheLookupPending || !contextReady || lastYearOrdersQuery.isLoading || inventoryLoading || procurementSignals.isLoading);
 
   // Το plan draft ζει στο React Query cache (επιβιώνει της πλοήγησης) + localStorage (επιβιώνει reload),
   // με daily staleTime. Έτσι ΔΕΝ ξανατρέχει η βαριά ανάλυση + AI σε κάθε είσοδο στη σελίδα.
   const planQuery = useQuery<MarketingPlanDraft>({
     queryKey: ['marketingPlanDraft', 'v2', brandId, preset, contextSig],
-    enabled: baseDataReady && !cachedPlanEntry,
+    enabled: baseDataReady && !effectiveCachedPlanEntry,
     staleTime: PLAN_CACHE_TTL_MS,
     gcTime: PLAN_CACHE_TTL_MS,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     retry: false,
-    initialData: () => cachedPlanEntry?.plan,
-    initialDataUpdatedAt: () => cachedPlanEntry?.savedAt,
+    initialData: () => effectiveCachedPlanEntry?.plan,
+    initialDataUpdatedAt: () => effectiveCachedPlanEntry?.savedAt,
     queryFn: async () => {
       const insight = buildMarketingPlanInsight({
         period,
@@ -318,6 +435,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       //    ώστε ΑΚΟΜΗ κι αν ο χρήστης κάνει reload όσο τρέχει το (αργό) AI, να μην ξαναρχίζει η ανάλυση.
       const fastDraft = assemble(buildFallbackCoreMessage(insight));
       if (brandId) writePlanCache(brandId, preset, fastDraft, contextSig);
+      writeRemotePlanCache(fastDraft);
       queryClient.setQueryData(['marketingPlanDraft', 'v2', brandId, preset, contextSig], fastDraft);
 
       // 2) Μη-μπλοκαριστικό AI enhancement: ενσωματώνει και τις εμπορικές πληροφορίες.
@@ -329,6 +447,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       });
       const built = coreMessage.source === 'ai' ? assemble(coreMessage) : fastDraft;
       if (brandId) writePlanCache(brandId, preset, built, contextSig);
+      writeRemotePlanCache(built);
       return built;
     },
   });
@@ -392,6 +511,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   // Στάδια φόρτωσης/ανάλυσης για τον progress loader (ώστε ο χρήστης να βλέπει πρόοδο, όχι αόριστο spinner).
   const planStages = useMemo<PlanStage[]>(() => {
     const salesDone = !lastYearOrdersQuery.isLoading;
+    const salesSkipped = lastYearOrdersQuery.isError;
     const inventoryDone = !inventoryLoading;
     const erpDone = !procurementSignals.isLoading;
     const synthesisDone = !!draft;
@@ -400,7 +520,11 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         id: 'sales',
         label: 'Περσινές πωλήσεις βάσης',
         detail: `${lastYearFrom} → ${lastYearTo}`,
-        meta: salesDone && lastYearOrdersQuery.data ? `${formatNumber(lastYearOrdersQuery.data.length)} παραγγελίες` : undefined,
+        meta: salesSkipped
+          ? 'Παραλείφθηκε προσωρινά λόγω καθυστέρησης'
+          : salesDone && lastYearOrdersQuery.data
+            ? `${formatNumber(lastYearOrdersQuery.data.length)} παραγγελίες`
+            : undefined,
         done: salesDone,
       },
       {
@@ -433,7 +557,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       return { ...s, active };
     });
   }, [
-    lastYearOrdersQuery.isLoading, lastYearOrdersQuery.data, inventoryLoading,
+    lastYearOrdersQuery.isLoading, lastYearOrdersQuery.isError, lastYearOrdersQuery.data, inventoryLoading,
     inventoryProducts.length, procurementSignals.isLoading, skuCoverage,
     draft, generating, lastYearFrom, lastYearTo,
   ]);
@@ -477,29 +601,44 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
 
       <Card padding="lg" className="border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/5">
         <CardHeader
-          title="Context από Mark"
-          subtitle="Σημαντικά συμπεράσματα από τον διάλογο που τροφοδοτούν αυτό το Marketing Plan."
+          title="Εμπορικό context"
+          subtitle="Ενεργές πληροφορίες από τη σελίδα Εμπορικές Πληροφορίες και από διαλόγους με τον Mark που τροφοδοτούν αυτό το Marketing Plan."
           icon={<MessageSquareText size={18} className="text-[var(--nts-accent)]" />}
         />
-        {markPlanContext.length === 0 ? (
+        {activeInfo.length === 0 ? (
           <div className="mt-4 rounded-xl border border-dashed border-[var(--nts-accent)]/25 bg-white/70 p-3">
-            <p className="text-sm font-medium text-[#1A1A1A]">Δεν έχει συνδεθεί ακόμη διάλογος Mark με αυτό το Marketing Plan.</p>
+            <p className="text-sm font-medium text-[#1A1A1A]">Δεν υπάρχουν ακόμη ενεργές εμπορικές πληροφορίες για αυτό το Marketing Plan.</p>
             <p className="mt-1 text-xs text-[#6B7280]">
-              Ρώτησε τον Mark για εμπορικό σενάριο και πάτησε «Καταχώριση & άνοιγμα Marketing Plan» ώστε να αποθηκευτούν εδώ τα βασικά συμπεράσματα.
+              Πρόσθεσε πληροφορίες από τη σελίδα «Εμπορικές Πληροφορίες» ή ρώτησε τον Mark και πάτησε «Καταχώριση & άνοιγμα Marketing Plan». Θα χρησιμοποιηθούν ως context, όχι ως απόλυτα δεδομένα.
             </p>
+            <Button className="mt-3" variant="ghost" size="sm" onClick={() => onSectionChange?.('commercial-info')}>
+              Άνοιγμα Εμπορικών Πληροφοριών
+            </Button>
           </div>
         ) : (
           <div className="mt-4 space-y-3">
-            {markPlanContext.slice(0, 3).map((info) => (
+            {activeInfo.slice(0, 4).map((info) => (
               <div key={info.id} className="rounded-xl border border-white/70 bg-white/80 p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="orange">{info.factorType}</Badge>
+                  <Badge variant={info.source === 'mark' ? 'orange' : 'info'}>
+                    {info.source === 'mark' ? 'από Mark' : 'Εμπορικές Πληροφορίες'}
+                  </Badge>
+                  <Badge variant="default">{COMMERCIAL_FACTOR_LABEL[info.factorType] ?? info.factorType}</Badge>
                   <span className="text-xs text-[#6B7280]">
-                    ένταση {info.magnitude} · εμπιστοσύνη {info.confidence}
+                    {COMMERCIAL_DIRECTION_LABEL[info.direction] ?? info.direction} · επίδραση {COMMERCIAL_MAGNITUDE_LABEL[info.magnitude] ?? info.magnitude} · βεβαιότητα {COMMERCIAL_CONFIDENCE_LABEL[info.confidence] ?? info.confidence}
                     {(info.horizonFrom || info.horizonTo) ? ` · ${info.horizonFrom ?? '…'} → ${info.horizonTo ?? '…'}` : ''}
                   </span>
                 </div>
                 <p className="mt-2 text-sm font-semibold text-[#1A1A1A]">{info.summary}</p>
+                {(info.brands.length > 0 || info.categories.length > 0 || info.parentSkus.length > 0) && (
+                  <p className="mt-1 text-xs text-[#6B7280]">
+                    {[
+                      info.brands.length ? `επωνυμίες: ${info.brands.join(', ')}` : '',
+                      info.categories.length ? `κατηγορίες: ${info.categories.join(', ')}` : '',
+                      info.parentSkus.length ? `parent SKU: ${info.parentSkus.join(', ')}` : '',
+                    ].filter(Boolean).join(' · ')}
+                  </p>
+                )}
                 {info.markContext?.summaryBullets && info.markContext.summaryBullets.length > 0 && (
                   <ul className="mt-2 space-y-1 text-xs text-[#4A4A4A]">
                     {info.markContext.summaryBullets.map((bullet, idx) => (
@@ -512,6 +651,11 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                 )}
               </div>
             ))}
+            {activeInfo.length > 4 && (
+              <p className="text-xs text-[#6B7280]">
+                +{activeInfo.length - 4} ακόμη ενεργές πληροφορίες λαμβάνονται υπόψη στο πλάνο.
+              </p>
+            )}
           </div>
         )}
       </Card>
@@ -837,15 +981,15 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       />
 
       {/* Saved plans */}
-      {savedQuery.data && savedQuery.data.length > 0 && (
+      {savedPlans.length > 0 && (
         <Card padding="md">
           <p className="mb-3 text-xs font-semibold uppercase text-[#9CA3AF]">Αποθηκευμένα plans</p>
           <ul className="divide-y divide-[#E5E7EB]">
-            {savedQuery.data.slice(0, 8).map((row) => (
+            {savedPlans.slice(0, 8).map((row) => (
               <li key={row.id} className="flex items-center justify-between py-2">
                 <div>
                   <span className="text-sm font-medium text-[#1A1A1A]">{row.plan?.periodLabel}</span>
-                  <span className="ml-2 text-xs text-[#9CA3AF]">{row.savedAt?.slice(0, 10)}</span>
+                  <span className="ml-2 text-xs text-[#9CA3AF]">{String(row.savedAt ?? '').slice(0, 10)}</span>
                   {row.plan?.fromDate && (
                     <span className="ml-2 text-xs text-[#9CA3AF]">{row.plan.fromDate} – {row.plan.toDate}</span>
                   )}
