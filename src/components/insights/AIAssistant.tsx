@@ -721,7 +721,7 @@ export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
                 <p className="mt-2 text-center text-xs text-red-500">{stt.error}</p>
               )}
               <p className="text-xs text-[var(--nts-medium-gray)] mt-2 text-center leading-snug">
-                Απαντά με βάση τα τρέχοντα δεδομένα του brand, το Help και (όταν χρειάζεται) το διαδίκτυο. Ισχύει όριο χρήσης.
+                Απαντά με βάση τα τρέχοντα δεδομένα του brand, το Help και (όταν χρειάζεται) το διαδίκτυο. Υπάρχουν όρια χρήσης.
               </p>
             </div>
           </motion.div>
