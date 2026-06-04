@@ -111,12 +111,18 @@ function amountToGreekWords(value: number): string {
 }
 
 function formatNumbersForSpeech(text: string): string {
-  const currencyPattern = /(?:€\s*)?([+-]?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|[+-]?\d+(?:[.,]\d+)?)(?:\s*)(?:€|EUR|E\b|ευρώ)/gi;
+  const numberSource = String.raw`[+-]?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|[+-]?\d+(?:[.,]\d+)?`;
+  const trailingCurrencyPattern = new RegExp(String.raw`(${numberSource})\s*(?:€|eur(?:o)?\b|e(?:\s*euro)?\b|ευρώ\b|ευρω\b)`, 'gi');
+  const leadingCurrencyPattern = new RegExp(String.raw`(?:€|eur(?:o)?\b|e\s*euro\b|ευρώ\b|ευρω\b)\s*(${numberSource})`, 'gi');
   const percentPattern = /([+-]?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|[+-]?\d+(?:[.,]\d+)?)(?:\s*)%/g;
   const thousandsPattern = /\b\d{1,3}(?:[.,]\d{3})+\b/g;
 
   return text
-    .replace(currencyPattern, (_match, raw: string) => {
+    .replace(leadingCurrencyPattern, (_match, raw: string) => {
+      const value = parseLocalizedNumber(raw);
+      return value === null ? _match : amountToGreekWords(value);
+    })
+    .replace(trailingCurrencyPattern, (_match, raw: string) => {
       const value = parseLocalizedNumber(raw);
       return value === null ? _match : amountToGreekWords(value);
     })
@@ -211,8 +217,8 @@ export function useSpeechSynthesis() {
       const utterance = new SpeechSynthesisUtterance(spokenText);
       utterance.lang = selectedVoice?.lang || 'el-GR';
       if (selectedVoice) utterance.voice = selectedVoice;
-      utterance.rate = 0.96;
-      utterance.pitch = 0.86;
+      utterance.rate = 0.94;
+      utterance.pitch = 0.68;
       utterance.onstart = () => {
         opts?.onStart?.();
         setSpeaking(true);
