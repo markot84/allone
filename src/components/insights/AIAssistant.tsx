@@ -237,13 +237,9 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   }, [campaignsHook.campaigns]);
 
   // Χρονοσειρές τζίρου (ERP + e-shop) ώστε ο Mark να απαντά για ΟΠΟΙΑΔΗΠΟΤΕ περίοδο με δεδομένα.
+  // Κρατάμε πλήρη ημερήσια σειρά όπου υπάρχει, γιατί ερωτήσεις τύπου «πέρυσι την ίδια ημέρα»
+  // χρειάζονται ακριβή daily lookup και όχι μόνο τα τελευταία 90 ημερήσια σημεία.
   const revenueSeries = useMemo((): AssistantTenantPack['revenue'] => {
-    const recentCutoff = (() => {
-      const d = new Date();
-      d.setDate(d.getDate() - 90);
-      return d.toISOString().slice(0, 10);
-    })();
-
     const business: RevenueSeries | undefined = businessRev.hasErpRevenueData
       ? {
           label: `ERP (${businessRev.source})`,
@@ -251,15 +247,12 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
           orderCount: businessRev.orderCount,
           monthly: businessRev.monthlyRevenue,
           recentDaily: Object.entries(businessRev.revenueByDayRecord)
-            .filter(([date]) => date >= recentCutoff)
             .map(([date, revenue]) => ({ date, revenue: Number(revenue) || 0 }))
             .sort((a, b) => a.date.localeCompare(b.date)),
         }
       : undefined;
 
-    const eshopRecent = ecomm.dailyRevenue
-      .filter((d) => d.date >= recentCutoff)
-      .map((d) => ({ date: d.date, revenue: Number(d.revenue) || 0 }));
+    const eshopDaily = ecomm.dailyRevenue.map((d) => ({ date: d.date, revenue: Number(d.revenue) || 0 }));
     const ecommerce: RevenueSeries | undefined =
       ecomm.dailyRevenue.length > 0 || ecomm.monthlyRevenue.length > 0
         ? {
@@ -267,7 +260,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
             totalRevenue: ecomm.totalRevenue,
             orderCount: ecomm.orderCount,
             monthly: ecomm.monthlyRevenue,
-            recentDaily: eshopRecent,
+            recentDaily: eshopDaily,
           }
         : undefined;
 

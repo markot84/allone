@@ -21,7 +21,7 @@ export type RevenueSeries = {
   orderCount?: number;
   /** Μηνιαία σειρά (YYYY-MM → revenue), ταξινομημένη χρονολογικά. */
   monthly: Array<{ month: string; revenue: number }>;
-  /** Πρόσφατα ημερήσια (YYYY-MM-DD → revenue), τελευταίες ~90 ημέρες. */
+  /** Ημερήσια σειρά (YYYY-MM-DD → revenue), ταξινομημένη χρονολογικά. */
   recentDaily: Array<{ date: string; revenue: number }>;
 };
 
@@ -115,7 +115,7 @@ function isoDaysAgo(days: number): string {
 
 /**
  * Μορφοποιεί μια χρονοσειρά τζίρου σε συμπαγές μπλοκ: εύρος κάλυψης, σύνολο,
- * έτοιμα rollups (7/30/90 ημ.), πρόσφατη ημερήσια σειρά και μηνιαία σειρά.
+ * έτοιμα rollups (7/30/90 ημ.), ημερήσια σειρά και μηνιαία σειρά.
  * Η ημερήσια σειρά είναι απαραίτητη για ερωτήσεις όπως «χθες/προχθές».
  */
 function formatRevenueSeries(label: string, series: RevenueSeries): string {
@@ -142,7 +142,7 @@ function formatRevenueSeries(label: string, series: RevenueSeries): string {
       `  Ημερήσια ανάλυση διαθέσιμη: ${firstDay}…${lastDay} (πιο πρόσφατη ημέρα με δεδομένα: ${lastDay}). Για ερωτήσεις συγκεκριμένης ημέρας εκτός αυτού του εύρους, ζήτησε διευκρίνιση.`
     );
     const dailyStr = recentDaily.map((d) => `${d.date}:€${Math.round(d.revenue)}`).join(', ');
-    out.push(`  Πρόσφατη ημερήσια σειρά: ${dailyStr}`);
+    out.push(`  Ημερήσια σειρά: ${dailyStr}`);
   } else {
     out.push('  Ημερήσια ανάλυση: μη διαθέσιμη (μόνο μηνιαία σύνολα) — για ερώτηση συγκεκριμένης ημέρας ζήτησε διευκρίνιση ή πρότεινε μηνιαία ανάλυση.');
   }
