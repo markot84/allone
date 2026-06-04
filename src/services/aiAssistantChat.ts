@@ -115,8 +115,8 @@ function isoDaysAgo(days: number): string {
 
 /**
  * Μορφοποιεί μια χρονοσειρά τζίρου σε συμπαγές μπλοκ: εύρος κάλυψης, σύνολο,
- * έτοιμα rollups (7/30/90 ημ., τρέχων/προηγούμενος μήνας, YTD) και τη μηνιαία σειρά.
- * Έτσι ο Mark μπορεί να απαντήσει για οποιαδήποτε περίοδο ζητήσει ο χρήστης.
+ * έτοιμα rollups (7/30/90 ημ.), πρόσφατη ημερήσια σειρά και μηνιαία σειρά.
+ * Η ημερήσια σειρά είναι απαραίτητη για ερωτήσεις όπως «χθες/προχθές».
  */
 function formatRevenueSeries(label: string, series: RevenueSeries): string {
   const out: string[] = [];
@@ -141,6 +141,8 @@ function formatRevenueSeries(label: string, series: RevenueSeries): string {
     out.push(
       `  Ημερήσια ανάλυση διαθέσιμη: ${firstDay}…${lastDay} (πιο πρόσφατη ημέρα με δεδομένα: ${lastDay}). Για ερωτήσεις συγκεκριμένης ημέρας εκτός αυτού του εύρους, ζήτησε διευκρίνιση.`
     );
+    const dailyStr = recentDaily.map((d) => `${d.date}:€${Math.round(d.revenue)}`).join(', ');
+    out.push(`  Πρόσφατη ημερήσια σειρά: ${dailyStr}`);
   } else {
     out.push('  Ημερήσια ανάλυση: μη διαθέσιμη (μόνο μηνιαία σύνολα) — για ερώτηση συγκεκριμένης ημέρας ζήτησε διευκρίνιση ή πρότεινε μηνιαία ανάλυση.');
   }
