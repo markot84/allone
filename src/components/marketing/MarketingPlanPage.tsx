@@ -106,11 +106,11 @@ type MarketingPlanCacheDoc = PlanCacheEntry & {
   savedAtIso: string;
 };
 
-// v2: το draft περιλαμβάνει πλέον per-group SKU (για τα expandable reorder cards) — bump
-// ώστε παλιά cached drafts χωρίς `skus` να ξαναϋπολογιστούν.
+// v3: το draft σφραγίζεται πλέον ΜΟΝΟ αφού «κλείσουν» οι περσινές πωλήσεις (σωστή Ανάλυση βάσης)
+// — bump ώστε παλιά cached drafts με κενή βάση (0 τζίρος/τεμάχια) να ξαναϋπολογιστούν.
 function planCacheStorageKey(brandId: string, preset: string, sig = ''): string {
   // Το sig (υπογραφή εμπορικών πληροφοριών) εξασφαλίζει recompute όταν αλλάζουν οι πληροφορίες.
-  return `mp_draft_v2_${brandId}_${preset}${sig ? `_${hashSig(sig)}` : ''}`;
+  return `mp_draft_v3_${brandId}_${preset}${sig ? `_${hashSig(sig)}` : ''}`;
 }
 
 function hashSig(s: string): string {
@@ -121,7 +121,7 @@ function hashSig(s: string): string {
 
 function planCacheDocId(brandId: string, preset: string, sig = ''): string {
   const safeBrand = brandId.replace(/[^A-Za-z0-9_-]/g, '_');
-  return `mp_cache_${safeBrand}_${preset}_${hashSig(sig || 'base')}`;
+  return `mp_cache_v3_${safeBrand}_${preset}_${hashSig(sig || 'base')}`;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
@@ -298,7 +298,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       if (Date.now() - cached.savedAt > PLAN_CACHE_TTL_MS) return null;
       if (brandId) writePlanCache(brandId, preset, cached.plan, contextSig);
       queryClient.setQueryData(
-        ['marketingPlanDraft', 'v2', brandId, preset, contextSig],
+        ['marketingPlanDraft', 'v3', brandId, preset, contextSig],
         cached.plan
       );
       return { savedAt: cached.savedAt, plan: cached.plan };
@@ -325,7 +325,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           cacheFirst: true,
           revenueMode: 'all',
         }),
-        8_000,
+        15_000,
         'Το βήμα περσινών πωλήσεων άργησε υπερβολικά και παραλείφθηκε για να μην κολλήσει το πλάνο.'
       );
       writeLastYearOrdersCache(brandId, lastYearFrom, lastYearTo, platformsKey, orders);
@@ -393,17 +393,24 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     });
   };
 
+  // Οι περσινές πωλήσεις τροφοδοτούν την «Ανάλυση βάσης» (τζίρος/τεμάχια/AOV/SKU match). Το draft
+  // ΔΕΝ πρέπει να σφραγιστεί πριν αυτές «κλείσουν» (settle), αλλιώς αποθηκεύεται μόνιμα με κενά
+  // (0 παντού) αφού δεν ξαναϋπολογίζεται. «Settled» = έχει δεδομένα (έστω []) ή απέτυχε/έληξε
+  // (8-15s timeout, bounded 1-μηνη query) → δεν μπλοκάρει το UI επ' αόριστον.
+  const lastYearOrdersSettled = lastYearOrdersQuery.data !== undefined || lastYearOrdersQuery.isError;
+
   // Base data έτοιμα → το plan υπολογίζεται μία φορά (ανά brand/preset/context) και διατηρείται.
-  // Οι περσινές πωλήσεις ΔΕΝ μπλοκάρουν το initial draft: αν αργούν, το plan δημιουργείται με
-  // διαθέσιμα inventory/ERP/context και το βήμα σημειώνεται ως skipped/σε εξέλιξη αντί να ξανατρέχει
-  // όλη η ανάλυση κάθε φορά που ο χρήστης αλλάζει σελίδα.
-  const baseDataReady = !!brandId && contextReady && !cacheLookupPending && !inventoryLoading && !procurementSignals.isLoading;
-  const loadingContext = !effectiveCachedPlanEntry && (cacheLookupPending || !contextReady || inventoryLoading || procurementSignals.isLoading);
+  const baseDataReady =
+    !!brandId && contextReady && !cacheLookupPending && !inventoryLoading &&
+    !procurementSignals.isLoading && lastYearOrdersSettled;
+  const loadingContext =
+    !effectiveCachedPlanEntry &&
+    (cacheLookupPending || !contextReady || inventoryLoading || procurementSignals.isLoading || !lastYearOrdersSettled);
 
   // Το plan draft ζει στο React Query cache (επιβιώνει της πλοήγησης) + localStorage (επιβιώνει reload),
   // με daily staleTime. Έτσι ΔΕΝ ξανατρέχει η βαριά ανάλυση + AI σε κάθε είσοδο στη σελίδα.
   const planQuery = useQuery<MarketingPlanDraft>({
-    queryKey: ['marketingPlanDraft', 'v2', brandId, preset, contextSig],
+    queryKey: ['marketingPlanDraft', 'v3', brandId, preset, contextSig],
     enabled: baseDataReady && !effectiveCachedPlanEntry,
     staleTime: PLAN_CACHE_TTL_MS,
     gcTime: PLAN_CACHE_TTL_MS,
@@ -439,7 +446,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       const fastDraft = assemble(buildFallbackCoreMessage(insight));
       if (brandId) writePlanCache(brandId, preset, fastDraft, contextSig);
       writeRemotePlanCache(fastDraft);
-      queryClient.setQueryData(['marketingPlanDraft', 'v2', brandId, preset, contextSig], fastDraft);
+      queryClient.setQueryData(['marketingPlanDraft', 'v3', brandId, preset, contextSig], fastDraft);
 
       // 2) Μη-μπλοκαριστικό AI enhancement: ενσωματώνει και τις εμπορικές πληροφορίες.
       const coreMessage = await generateMarketingPlanMessage({
@@ -1002,7 +1009,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                   size="sm"
                   onClick={() => {
                     if (row.plan && brandId) {
-                      queryClient.setQueryData(['marketingPlanDraft', 'v2', brandId, preset], row.plan);
+                      queryClient.setQueryData(['marketingPlanDraft', 'v3', brandId, preset, contextSig], row.plan);
                       setOpenSections(new Set(['analysis', 'inventory', 'paid', 'organic', 'audience', 'pricing', 'message']));
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }
