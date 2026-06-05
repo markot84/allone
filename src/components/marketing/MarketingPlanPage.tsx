@@ -106,11 +106,11 @@ type MarketingPlanCacheDoc = PlanCacheEntry & {
   savedAtIso: string;
 };
 
-// v3: το draft σφραγίζεται πλέον ΜΟΝΟ αφού «κλείσουν» οι περσινές πωλήσεις (σωστή Ανάλυση βάσης)
+// v4: το «σύμπαν» SKU = πλήρης ERP κατάλογος (όχι μόνο τα procurement signals) — bust παλιών drafts
 // — bump ώστε παλιά cached drafts με κενή βάση (0 τζίρος/τεμάχια) να ξαναϋπολογιστούν.
 function planCacheStorageKey(brandId: string, preset: string, sig = ''): string {
   // Το sig (υπογραφή εμπορικών πληροφοριών) εξασφαλίζει recompute όταν αλλάζουν οι πληροφορίες.
-  return `mp_draft_v3_${brandId}_${preset}${sig ? `_${hashSig(sig)}` : ''}`;
+  return `mp_draft_v4_${brandId}_${preset}${sig ? `_${hashSig(sig)}` : ''}`;
 }
 
 function hashSig(s: string): string {
@@ -121,7 +121,7 @@ function hashSig(s: string): string {
 
 function planCacheDocId(brandId: string, preset: string, sig = ''): string {
   const safeBrand = brandId.replace(/[^A-Za-z0-9_-]/g, '_');
-  return `mp_cache_v3_${safeBrand}_${preset}_${hashSig(sig || 'base')}`;
+  return `mp_cache_v4_${safeBrand}_${preset}_${hashSig(sig || 'base')}`;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
@@ -298,7 +298,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       if (Date.now() - cached.savedAt > PLAN_CACHE_TTL_MS) return null;
       if (brandId) writePlanCache(brandId, preset, cached.plan, contextSig);
       queryClient.setQueryData(
-        ['marketingPlanDraft', 'v3', brandId, preset, contextSig],
+        ['marketingPlanDraft', 'v4', brandId, preset, contextSig],
         cached.plan
       );
       return { savedAt: cached.savedAt, plan: cached.plan };
@@ -410,7 +410,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   // Το plan draft ζει στο React Query cache (επιβιώνει της πλοήγησης) + localStorage (επιβιώνει reload),
   // με daily staleTime. Έτσι ΔΕΝ ξανατρέχει η βαριά ανάλυση + AI σε κάθε είσοδο στη σελίδα.
   const planQuery = useQuery<MarketingPlanDraft>({
-    queryKey: ['marketingPlanDraft', 'v3', brandId, preset, contextSig],
+    queryKey: ['marketingPlanDraft', 'v4', brandId, preset, contextSig],
     enabled: baseDataReady && !effectiveCachedPlanEntry,
     staleTime: PLAN_CACHE_TTL_MS,
     gcTime: PLAN_CACHE_TTL_MS,
@@ -446,7 +446,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       const fastDraft = assemble(buildFallbackCoreMessage(insight));
       if (brandId) writePlanCache(brandId, preset, fastDraft, contextSig);
       writeRemotePlanCache(fastDraft);
-      queryClient.setQueryData(['marketingPlanDraft', 'v3', brandId, preset, contextSig], fastDraft);
+      queryClient.setQueryData(['marketingPlanDraft', 'v4', brandId, preset, contextSig], fastDraft);
 
       // 2) Μη-μπλοκαριστικό AI enhancement: ενσωματώνει και τις εμπορικές πληροφορίες.
       const coreMessage = await generateMarketingPlanMessage({
@@ -513,10 +513,14 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     void planQuery.refetch();
   };
 
+  // Κάλυψη SKU = ΟΛΟΚΛΗΡΟ το ενεργό «σύμπαν» που λαμβάνει υπόψη το πλάνο: ο πλήρης ERP κατάλογος
+  // (`products`) όταν είναι μεγαλύτερος από τα procurement signals (custom report subset). Έτσι το KPI
+  // δείχνει τα ~6.000 ενεργά SKU του e-tennis αντί μόνο τα 724 του report.
   const skuCoverage = useMemo(() => {
     const signalCount = Object.keys(procurementSignals.signalsBySku).length;
-    return signalCount > 0 ? signalCount : null;
-  }, [procurementSignals.signalsBySku]);
+    const universe = Math.max(signalCount, inventoryProducts.length);
+    return universe > 0 ? universe : null;
+  }, [procurementSignals.signalsBySku, inventoryProducts.length]);
 
   // Στάδια φόρτωσης/ανάλυσης για τον progress loader (ώστε ο χρήστης να βλέπει πρόοδο, όχι αόριστο spinner).
   const planStages = useMemo<PlanStage[]>(() => {
@@ -693,8 +697,8 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           <ContextPill label="Νέα περίοδος" value={`${period.fromDate} → ${period.toDate}`} />
           <ContextPill label="Βάση σύγκρισης" value={`${lastYearFrom} → ${lastYearTo}`} />
           <ContextPill
-            label="SKU coverage"
-            value={skuCoverage ? `${formatNumber(skuCoverage)} SKU` : 'Χωρίς procurement data'}
+            label="Κάλυψη SKU"
+            value={skuCoverage ? `${formatNumber(skuCoverage)} ενεργά SKU` : 'Χωρίς δεδομένα καταλόγου'}
           />
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -745,7 +749,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             )}
             {draft.totalSkusCovered != null && (
               <p className="mt-3 text-xs text-[#6B7280]">
-                Κάλυψη αποθέματος: <span className="font-semibold text-[#374151]">{formatNumber(draft.totalSkusCovered)} SKU</span> από procurement signals
+                Κάλυψη αποθέματος: <span className="font-semibold text-[#374151]">{formatNumber(draft.totalSkusCovered)} SKU</span> από τον ενεργό κατάλογο (εμπλουτισμένο με procurement signals όπου υπάρχουν)
               </p>
             )}
             {draft.risks.length > 0 && (
@@ -1009,7 +1013,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                   size="sm"
                   onClick={() => {
                     if (row.plan && brandId) {
-                      queryClient.setQueryData(['marketingPlanDraft', 'v3', brandId, preset, contextSig], row.plan);
+                      queryClient.setQueryData(['marketingPlanDraft', 'v4', brandId, preset, contextSig], row.plan);
                       setOpenSections(new Set(['analysis', 'inventory', 'paid', 'organic', 'audience', 'pricing', 'message']));
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }

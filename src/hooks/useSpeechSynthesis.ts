@@ -282,7 +282,7 @@ export function useSpeechSynthesis() {
   }, [selectedVoice]);
 
   const speak = useCallback(
-    (text: string, opts?: { full?: boolean; onStart?: () => void; onError?: () => void }) => {
+    (text: string, opts?: { full?: boolean; onStart?: () => void; onEnd?: () => void; onError?: () => void }) => {
       const synth = synthRef.current;
       if (!synth) return false;
       const spokenText = cleanTextForSpeech(text, opts?.full ? 4000 : MAX_AUTO_READ_CHARS);
@@ -299,7 +299,10 @@ export function useSpeechSynthesis() {
         opts?.onStart?.();
         setSpeaking(true);
       };
-      utterance.onend = () => setSpeaking(false);
+      utterance.onend = () => {
+        setSpeaking(false);
+        opts?.onEnd?.();
+      };
       utterance.onerror = () => {
         opts?.onError?.();
         setSpeaking(false);

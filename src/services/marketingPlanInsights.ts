@@ -189,6 +189,41 @@ function canonTokens(value: unknown): string[] {
     .filter((t) => t.length > 0);
 }
 
+/**
+ * Δείκτης κατηγορίας ανά base/parent code από τα procurement signals: επιτρέπει σε SKU του πλήρους
+ * καταλόγου (που ΔΕΝ υπάρχουν στο custom report) να «κληρονομήσουν» κατηγορία από αδελφικά SKU του
+ * ίδιου μοντέλου (π.χ. ίδιο `023625-01-...` διαφορετικό μέγεθος). Index prefixes ≥2 tokens (model-specific).
+ */
+function buildSignalCategoryIndex(
+  signals: Record<string, SkuSignal>
+): Map<string, { category?: string; subcategory?: string; brand?: string }> {
+  const byPrefix = new Map<string, { category?: string; subcategory?: string; brand?: string }>();
+  for (const [sku, sig] of Object.entries(signals)) {
+    if (!sig.category) continue;
+    const toks = canonTokens(sku);
+    for (let i = 2; i <= toks.length; i++) {
+      const key = toks.slice(0, i).join('-');
+      if (!byPrefix.has(key)) {
+        byPrefix.set(key, { category: sig.category, subcategory: sig.flow_group, brand: sig.supplier });
+      }
+    }
+  }
+  return byPrefix;
+}
+
+function inheritCategoryForSku(
+  index: Map<string, { category?: string; subcategory?: string; brand?: string }>,
+  sku: string
+): { category?: string; subcategory?: string; brand?: string } | null {
+  if (index.size === 0) return null;
+  const toks = canonTokens(sku);
+  for (let i = toks.length; i >= 2; i--) {
+    const hit = index.get(toks.slice(0, i).join('-'));
+    if (hit) return hit;
+  }
+  return null;
+}
+
 /** Demand lookup για ένα ERP SKU: full canonical key και, ως fallback, μικρότερα prefixes (≥4 chars). */
 function lookupDemandForSku(
   demandByKey: Map<string, { units: number; revenue: number }>,
@@ -446,17 +481,46 @@ export function buildMarketingPlanInsight(input: {
   );
 
   const signals = input.procurementSignals ?? {};
-  // Canonical keys των ERP signals (για matchedLines + prefix join με variant-level order SKUs).
+  const inventoryProducts = input.inventoryProducts ?? [];
+  const hasErp = Object.keys(signals).length > 0;
+
+  // ── ERP universe ──────────────────────────────────────────────────────────
+  // Τα procurement signals (custom report) είναι συχνά ΥΠΟΣΥΝΟΛΟ του πλήρους ERP καταλόγου
+  // (π.χ. e-tennis: 724 signals έναντι ~6.266 ενεργών SKU στο `products`). Όταν ο κατάλογος είναι
+  // ουσιαστικά μεγαλύτερος, διευρύνουμε το «σύμπαν» SKU με τα προϊόντα του καταλόγου ώστε το coverage
+  // να αντικατοπτρίζει ΟΛΑ τα ενεργά SKU. Τα signals υπερισχύουν (κατηγορία/margin/ανατροφοδοσία)·
+  // για product-only SKU δοκιμάζουμε κληρονομιά κατηγορίας από αδελφικά (ίδιο base/parent code).
+  const expandUniverse = hasErp && inventoryProducts.length > Object.keys(signals).length;
+  const universeSignals: Record<string, SkuSignal> = { ...signals };
+  if (expandUniverse) {
+    const signalKeyNorm = new Set(Object.keys(signals).map((k) => k.trim().toLowerCase()));
+    const categoryIndex = buildSignalCategoryIndex(signals);
+    for (const p of inventoryProducts) {
+      const rawSku = String((p as any).sku ?? '').trim();
+      if (!rawSku || signalKeyNorm.has(rawSku.toLowerCase())) continue;
+      const inh = inheritCategoryForSku(categoryIndex, rawSku);
+      const price = productPrice(p);
+      universeSignals[rawSku] = {
+        available_stock: productStock(p),
+        avg_sale_price: price > 0 ? price : undefined,
+        description: (p as any).name?.trim() || rawSku,
+        category: inh?.category,
+        flow_group: inh?.subcategory,
+        supplier: inh?.brand,
+      };
+    }
+  }
+
+  // Canonical keys ΟΛΟΥ του universe (signals + κατάλογος) — για matchedLines + prefix join με
+  // variant-level order SKUs. Έτσι το «SKU MATCH» αντανακλά τον πλήρη κατάλογο, όχι μόνο το report.
   const signalCanonSet = new Set<string>();
-  for (const k of Object.keys(signals)) {
+  for (const k of Object.keys(universeSignals)) {
     const t = canonTokens(k);
     if (t.length) signalCanonSet.add(t.join('-'));
   }
-  const hasErp = signalCanonSet.size > 0;
 
   // Name-bridge index (μόνο όταν υπάρχει ERP + inventory catalog): γεφυρώνει order names → ERP sku
   // για brands όπου τα order SKU δεν μοιράζονται κωδικοποίηση με το ERP (π.χ. Magento ↔ Megaventory).
-  const inventoryProducts = input.inventoryProducts ?? [];
   const nameIndex = hasErp && inventoryProducts.length > 0 ? buildNameBridgeIndex(inventoryProducts) : null;
   const bridgedSkus = new Map<string, 'exact' | 'fuzzy'>();
 
@@ -525,7 +589,7 @@ export function buildMarketingPlanInsight(input: {
   let inventoryCoveragePct: number;
 
   if (hasErp) {
-    const built = buildErpDrivenReorder(signals, demandByKey, bridgedSkus);
+    const built = buildErpDrivenReorder(universeSignals, demandByKey, bridgedSkus);
     reorderPlan = built.reorderPlan;
     skuSuggestions = built.skuSuggestions;
     totalSkusCovered = built.totalSkus;

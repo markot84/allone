@@ -84,6 +84,13 @@ export type AssistantTenantPack = {
     hasImported: boolean;
     isLoading?: boolean;
     channels?: Array<{ channel: string; count: number; spend: number; revenue: number; roas: number }>;
+    /** Time-bounded απόδοση ανά κανάλι (π.χ. τελευταίες 7/30 ημέρες) — date-slice σε dailyMetrics. */
+    recent?: Array<{
+      label: string;
+      from: string;
+      to: string;
+      channels: Array<{ channel: string; spend: number; revenue: number; roas: number }>;
+    }>;
   };
   products: { count: number; hasImported: boolean };
   ga4: {
@@ -92,6 +99,22 @@ export type AssistantTenantPack = {
     sessions: number;
     users: number;
     conversions: number;
+  };
+  /**
+   * Ενιαία ημερήσια μήτρα metrics (bounded ορίζοντας) ώστε ο Mark να αθροίζει ΟΠΟΙΑΔΗΠΟΤΕ περίοδο
+   * για ΚΑΘΕ metric με ημερήσια δεδομένα (e-shop τζίρος/παραγγελίες, GA4 sessions/conversions, ad spend/revenue).
+   */
+  dailyMatrix?: {
+    horizonDays: number;
+    rows: Array<{
+      date: string;
+      eshopRevenue: number;
+      eshopOrders: number;
+      ga4Sessions: number;
+      ga4Conversions: number;
+      adSpend: number;
+      adRevenue: number;
+    }>;
   };
 };
 
@@ -102,6 +125,7 @@ const ASSISTANT_SYSTEM_PROMPT = buildAdvisorySystemPrompt(`Είσαι το εν�
 - Αν η ερώτηση αφορά νούμερα του λογαριασμού και λείπουν από τη σύνοψη, πες τι λείπει (π.χ. σύνδεση connector) αντί να μαντεύεις.
 - Αν το block «Campaigns» δείχνει imports ή κανάλια (π.χ. Google Ads, Meta), ΜΗΝ πεις ότι δεν υπάρχουν συνδεδεμένα δεδομένα διαφημιστικών πλατφορμών. Αν γράφει «φορτώνει», πες ότι τα campaign data φορτώνουν ακόμη.
 - ΕΠΙΤΡΕΠΕΤΑΙ να υπολογίζεις αθροίσματα/μέσους όρους για ΟΠΟΙΑΔΗΠΟΤΕ περίοδο ζητήσει ο χρήστης, χρησιμοποιώντας τις χρονοσειρές τζίρου (μηνιαία/ημερήσια/έτοιμα rollups). Αυτό ΔΕΝ θεωρείται επινόηση. Προτίμησε τα έτοιμα rollups όταν ταιριάζουν· αλλιώς άθροισε τους σχετικούς μήνες/ημέρες.
+- Η «Ημερήσια μήτρα metrics» (CSV) είναι time-bounded πηγή για ΚΑΘΕ metric της: e-shop τζίρος/παραγγελίες, GA4 sessions/conversions, ad spend/ad revenue. Για ερωτήσεις τύπου «πόσα X την περασμένη εβδομάδα/μήνα», άθροισε τη σωστή στήλη στις αντίστοιχες ημερομηνίες (AOV = eshopRevenue/eshopOrders, ROAS = adRevenue/adSpend). Ανέφερε ρητά το διάστημα που χρησιμοποίησες. Αν η ζητούμενη περίοδος είναι εκτός του ορίζοντα της μήτρας, πες το.
 - Αν η ζητούμενη περίοδος ξεπερνά την «κάλυψη δεδομένων», απάντησε για το διαθέσιμο διάστημα και ανέφερε ρητά τι καλύπτεις (π.χ. «έχω δεδομένα από …»).
 - ΖΗΤΑ ΔΙΕΥΚΡΙΝΙΣΗ (αντί να μαντέψεις ή να πεις «€0») όταν: (α) η περίοδος είναι ασαφής/διφορούμενη, (β) ζητείται συγκεκριμένη ημέρα αλλά δεν υπάρχει ημερήσια ανάλυση ή η ημέρα είναι εκτός του διαθέσιμου ημερήσιου εύρους, ή (γ) δεν είσαι βέβαιος σε ποια ημερομηνία αντιστοιχεί ένας σχετικός όρος. Διατύπωσε σύντομη, στοχευμένη ερώτηση (π.χ. «Εννοείς την Τρίτη 2/6; Έχω ημερήσια δεδομένα έως {τελευταία ημέρα}.») και πρότεινε εναλλακτική ανάλυση που μπορείς να δώσεις.
 - Διάκρινε πάντα «μηδενικός τζίρος εκείνη την ημέρα» (υπάρχει εγγραφή με 0) από «δεν υπάρχουν δεδομένα για εκείνη την ημέρα» — μην παρουσιάζεις απουσία δεδομένων ως €0.
@@ -268,7 +292,15 @@ export function formatTenantPackForPrompt(pack: AssistantTenantPack): string {
       const channelText = pack.campaigns.channels
         .map((c) => `${c.channel}: campaigns=${c.count}, spend≈€${Math.round(c.spend)}, revenue≈€${Math.round(c.revenue)}, ROAS≈${c.roas.toFixed(2)}x`)
         .join(' | ');
-      lines.push(`Συνδεδεμένα/imported ads κανάλια: ${channelText}`);
+      lines.push(`Συνδεδεμένα/imported ads κανάλια (lifetime/aggregate): ${channelText}`);
+    }
+    if (pack.campaigns.recent && pack.campaigns.recent.length > 0) {
+      for (const w of pack.campaigns.recent) {
+        const channelText = w.channels
+          .map((c) => `${c.channel}: spend≈€${c.spend}, revenue≈€${c.revenue}, ROAS≈${c.roas.toFixed(2)}x`)
+          .join(' | ');
+        lines.push(`Απόδοση καμπανιών ${w.label} (${w.from} → ${w.to}): ${channelText}`);
+      }
     }
   }
 
@@ -296,6 +328,16 @@ export function formatTenantPackForPrompt(pack: AssistantTenantPack): string {
     }
   } else {
     lines.push('Δεν υπάρχουν διαθέσιμα segments στη σύνοψη.');
+  }
+
+  if (pack.dailyMatrix && pack.dailyMatrix.rows.length > 0) {
+    const { horizonDays, rows } = pack.dailyMatrix;
+    lines.push(
+      `Ημερήσια μήτρα metrics (τελευταίες ~${horizonDays} ημ. — άθροισε/μέσο όρο ΟΠΟΙΑΔΗΠΟΤΕ υπο-περίοδο εδώ· κάθε στήλη είναι ξεχωριστό metric). CSV: date,eshopRevenue,eshopOrders,ga4Sessions,ga4Conversions,adSpend,adRevenue`
+    );
+    for (const r of rows) {
+      lines.push(`${r.date},${r.eshopRevenue},${r.eshopOrders},${r.ga4Sessions},${r.ga4Conversions},${r.adSpend},${r.adRevenue}`);
+    }
   }
 
   return lines.join('\n');

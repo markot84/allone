@@ -49,6 +49,7 @@ import { useGA4Data } from '../../hooks/useGA4Data';
 import { useProductSource } from '../../hooks/useProductSource';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { calculateCampaignMetrics } from '../../utils/roiUtils';
+import { applyCampaignDateRangeToMetrics } from '../../utils/campaignDateRangeMetrics';
 
 interface Message {
   id: string;
@@ -358,6 +359,105 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
       .sort((a, b) => b.spend - a.spend);
   }, [campaignsHook.campaigns]);
 
+  // Time-bounded campaign performance (ίδια date-slice λογική με τη σελίδα Campaigns) ώστε ο Mark
+  // να απαντά σε ερωτήσεις τύπου «τζίρος Google Ads την περασμένη εβδομάδα» — όχι μόνο lifetime totals.
+  const recentCampaignWindows = useMemo(() => {
+    if (!campaignsHook.hasImported || campaignsHook.campaigns.length === 0) return [];
+    const iso = (daysAgo: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() - daysAgo);
+      return d.toISOString().slice(0, 10);
+    };
+    const buildWindow = (label: string, from: string, to: string) => {
+      const sliced = applyCampaignDateRangeToMetrics(campaignsHook.campaigns, from, to);
+      const byChannel = new Map<string, { channel: string; spend: number; revenue: number }>();
+      for (const c of sliced) {
+        const channel = c.channel || 'Other';
+        const cur = byChannel.get(channel) ?? { channel, spend: 0, revenue: 0 };
+        cur.spend += c.amount_spent || 0;
+        cur.revenue += c.conversion_value || c.purchase_conversion_value || 0;
+        byChannel.set(channel, cur);
+      }
+      const channels = [...byChannel.values()]
+        .filter((r) => r.spend > 0 || r.revenue > 0)
+        .map((r) => ({
+          channel: r.channel,
+          spend: Math.round(r.spend),
+          revenue: Math.round(r.revenue),
+          roas: r.spend > 0 ? +(r.revenue / r.spend).toFixed(2) : 0,
+        }))
+        .sort((a, b) => b.spend - a.spend);
+      return { label, from, to, channels };
+    };
+    return [
+      buildWindow('Τελευταίες 7 ημέρες', iso(7), iso(0)),
+      buildWindow('Τελευταίες 30 ημέρες', iso(30), iso(0)),
+    ].filter((w) => w.channels.length > 0);
+  }, [campaignsHook.campaigns, campaignsHook.hasImported]);
+
+  // ── Ενιαία ημερήσια μήτρα metrics (time-bounded για ΚΑΘΕ metric με ημερήσια δεδομένα) ──
+  // Ο Mark αθροίζει μόνος του οποιαδήποτε περίοδο ζητηθεί (όπως ήδη κάνει για τον τζίρο). Κρατάμε
+  // bounded ορίζοντα (~180 ημ.) ώστε να μην φουσκώνει το prompt. Snapshot metrics (απόθεμα/segments)
+  // ΔΕΝ έχουν ιστορικό εδώ — θα καλυφθούν στη φάση B (tools) όταν αποθηκεύουμε ιστορικά.
+  const dailyMetricsMatrix = useMemo((): AssistantTenantPack['dailyMatrix'] => {
+    const HORIZON_DAYS = 180;
+    const cutoff = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - HORIZON_DAYS);
+      return d.toISOString().slice(0, 10);
+    })();
+
+    type Row = { eshopRevenue: number; eshopOrders: number; ga4Sessions: number; ga4Conversions: number; adSpend: number; adRevenue: number };
+    const byDate = new Map<string, Row>();
+    const ensure = (date: string): Row => {
+      let r = byDate.get(date);
+      if (!r) { r = { eshopRevenue: 0, eshopOrders: 0, ga4Sessions: 0, ga4Conversions: 0, adSpend: 0, adRevenue: 0 }; byDate.set(date, r); }
+      return r;
+    };
+
+    for (const d of ecomm.dailyRevenue) {
+      if (!d.date || d.date < cutoff) continue;
+      ensure(d.date).eshopRevenue += Number(d.revenue) || 0;
+    }
+    for (const d of ecomm.ordersByDay) {
+      if (!d.date || d.date < cutoff) continue;
+      ensure(d.date).eshopOrders += Number((d as { orders?: number }).orders) || 0;
+    }
+    for (const d of ga4.dailyEntries) {
+      const date = (d as { date?: string }).date;
+      if (!date || date < cutoff) continue;
+      const r = ensure(date);
+      r.ga4Sessions += Number((d as { sessions?: number }).sessions) || 0;
+      r.ga4Conversions += Number((d as { conversions?: number }).conversions) || 0;
+    }
+    for (const c of campaignsHook.campaigns) {
+      if (!c.dailyMetrics) continue;
+      for (const [date, m] of Object.entries(c.dailyMetrics)) {
+        if (!date || date < cutoff) continue;
+        const r = ensure(date);
+        const mm = m as Record<string, number>;
+        r.adSpend += Number(mm.amount_spent) || 0;
+        r.adRevenue += Number(mm.conversion_value ?? mm.purchase_conversion_value) || 0;
+      }
+    }
+
+    const rows = [...byDate.entries()]
+      .filter(([, r]) =>
+        r.eshopRevenue || r.eshopOrders || r.ga4Sessions || r.ga4Conversions || r.adSpend || r.adRevenue
+      )
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, r]) => ({
+        date,
+        eshopRevenue: Math.round(r.eshopRevenue),
+        eshopOrders: Math.round(r.eshopOrders),
+        ga4Sessions: Math.round(r.ga4Sessions),
+        ga4Conversions: Math.round(r.ga4Conversions),
+        adSpend: Math.round(r.adSpend),
+        adRevenue: Math.round(r.adRevenue),
+      }));
+    return rows.length > 0 ? { horizonDays: HORIZON_DAYS, rows } : undefined;
+  }, [ecomm.dailyRevenue, ecomm.ordersByDay, ga4.dailyEntries, campaignsHook.campaigns]);
+
   // Χρονοσειρές τζίρου (ERP + e-shop) ώστε ο Mark να απαντά για ΟΠΟΙΑΔΗΠΟΤΕ περίοδο με δεδομένα.
   // Κρατάμε πλήρη ημερήσια σειρά όπου υπάρχει, γιατί ερωτήσεις τύπου «πέρυσι την ίδια ημέρα»
   // χρειάζονται ακριβή daily lookup και όχι μόνο τα τελευταία 90 ημερήσια σημεία.
@@ -486,6 +586,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
         hasImported: campaignsHook.hasImported,
         isLoading: campaignsHook.isLoading,
         channels: campaignChannelSummary,
+        recent: recentCampaignWindows,
       },
       products: {
         count: productSrc.count,
@@ -498,6 +599,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
         users: ga4.totals.users,
         conversions: ga4.totals.conversions,
       },
+      dailyMatrix: dailyMetricsMatrix,
     };
   }, [
     currentBrand?.id,
@@ -517,6 +619,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     campaignSignals.topCampaign,
     campaignSignals.weakCampaign,
     campaignChannelSummary,
+    recentCampaignWindows,
     productIntelligence.aggregate,
     segmentsDataSource,
     totalCustomers,
@@ -533,6 +636,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     ga4.totals.sessions,
     ga4.totals.users,
     ga4.totals.conversions,
+    dailyMetricsMatrix,
   ]);
 
   const tenantSnapshotText = useMemo(() => formatTenantPackForPrompt(tenantPack), [tenantPack]);
@@ -546,6 +650,18 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   const [savingInfo, setSavingInfo] = useState(false);
   const [voiceRepliesEnabled, setVoiceRepliesEnabled] = useState(readVoiceRepliesPreference);
   const [voiceAutoSubmitArmed, setVoiceAutoSubmitArmed] = useState(false);
+  // Hands-free «conversation mode»: όταν ο χρήστης ξεκινά με φωνή, το μικρόφωνο ξανανοίγει
+  // αυτόματα μόλις τελειώσει η εκφώνηση της απάντησης του Mark (χωρίς να ξαναπατά το κουμπί).
+  const [conversationMode, setConversationMode] = useState(false);
+  const conversationModeRef = useRef(false);
+  useEffect(() => { conversationModeRef.current = conversationMode; }, [conversationMode]);
+  // Live refs ώστε το (καθυστερημένο) restart του μικροφώνου να διαβάζει φρέσκες τιμές, όχι stale closure.
+  const isTypingRef = useRef(false);
+  const savingInfoRef = useRef(false);
+  const isOpenRef = useRef(false);
+  useEffect(() => { isTypingRef.current = isTyping; }, [isTyping]);
+  useEffect(() => { savingInfoRef.current = savingInfo; }, [savingInfo]);
+  useEffect(() => { isOpenRef.current = isOpen; }, [isOpen]);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -890,6 +1006,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     tts.stop();
     tts.prime();
     setVoiceRepliesEnabled(true);
+    setConversationMode(true);
     clearVoiceAutoSubmit();
     stt.start();
   }, [clearVoiceAutoSubmit, isTyping, savingInfo, stt, tts]);
@@ -907,11 +1024,26 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
       onStart: () => {
         lastSpokenMessageIdRef.current = latest.id;
       },
+      onEnd: () => {
+        // Hands-free: μόλις τελειώσει η απάντηση, ξανάνοιξε το μικρόφωνο για συνέχεια του διαλόγου.
+        if (!conversationModeRef.current) return;
+        window.setTimeout(() => {
+          if (
+            conversationModeRef.current && isOpenRef.current && stt.supported &&
+            !isTypingRef.current && !savingInfoRef.current && !stt.listening
+          ) {
+            stt.start();
+          }
+        }, 350);
+      },
     });
-  }, [isOpen, messages, tts, voiceRepliesEnabled]);
+  }, [isOpen, messages, tts, voiceRepliesEnabled, stt]);
 
   useEffect(() => {
-    if (!isOpen) tts.stop();
+    if (!isOpen) {
+      tts.stop();
+      setConversationMode(false);
+    }
   }, [isOpen, tts]);
 
   useEffect(() => {
@@ -1098,8 +1230,10 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
                 />
                 <button
                   onClick={stt.supported ? () => {
-                    if (stt.listening) stt.stop();
-                    else startVoiceInput();
+                    if (stt.listening) {
+                      setConversationMode(false);
+                      stt.stop();
+                    } else startVoiceInput();
                   } : undefined}
                   disabled={!stt.supported}
                   title={
