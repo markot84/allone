@@ -99,23 +99,40 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       const fromMembers = await FirestoreService.getBrandIdsFromMembershipDocuments(user.uid);
       const brandIds = [...new Set([...fromProfile, ...fromMembers])];
 
-      if (!sameStringSet(fromProfile, brandIds) && brandIds.length > 0) {
-        FirestoreService.setDocument('users', user.uid, { brandIds } as Record<string, unknown>).catch((err) =>
-          console.warn('refreshBrands: could not sync brandIds on user profile', err)
-        );
-      }
-
       if (brandIds.length === 0) {
         setBrands([]);
         setCurrentBrandState(null);
         setLoading(false);
         return;
       }
+      // Resolve each brand independently. A single unreadable id (a brand the
+      // user was removed from, or an orphaned/deleted id still lingering in the
+      // profile's brandIds) must NOT throw and hide every other brand — that was
+      // the bug where the whole list collapsed to the cached last-selected brand.
       const brandList: Brand[] = [];
+      const resolvedIds: string[] = [];
       for (const bid of brandIds) {
-        const b = await FirestoreService.getDocument<Brand>('brands', bid);
-        if (b) brandList.push(b);
+        try {
+          const b = await FirestoreService.getDocument<Brand>('brands', bid);
+          if (b) {
+            brandList.push(b);
+            resolvedIds.push(bid);
+          }
+          // b === null => brand doc no longer exists; drop the orphan id.
+        } catch (err) {
+          // permission-denied / unreadable brand — skip it, don't abort the list.
+          console.warn('refreshBrands: skipping inaccessible brand', bid, err);
+        }
       }
+
+      // Self-heal the profile: persist only the ids that resolved to a readable
+      // brand, pruning orphans so they stop poisoning future loads.
+      if (resolvedIds.length > 0 && !sameStringSet(fromProfile, resolvedIds)) {
+        FirestoreService.setDocument('users', user.uid, { brandIds: resolvedIds } as Record<string, unknown>).catch((err) =>
+          console.warn('refreshBrands: could not sync brandIds on user profile', err)
+        );
+      }
+
       setBrands(brandList);
       const defaultId = profile?.defaultBrandId ?? brandIds[0];
       const defaultBrand = brandList.find((b) => b.id === defaultId) ?? brandList[0] ?? null;

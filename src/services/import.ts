@@ -625,6 +625,20 @@ function sanitizeDocId(value: string): string {
   return value.replace(/[/\\]/g, '_').trim() || `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+// Brand-scope a product document id. Products live at the GLOBAL path
+// `products/{docId}`, but a SKU is only unique WITHIN a brand — two tenants can
+// legitimately sell the same manufacturer SKU. Because firestore.rules pins
+// `brandId` immutable on update (brandIdUnchanged(), NOT bypassed by super-admin),
+// a bare-SKU id that already exists under another brand turns the import write
+// into a cross-brand `brandId` change → PERMISSION_DENIED ("Missing or insufficient
+// permissions"), silently breaking CSV import of shared SKUs. Prefixing the id with
+// the brand makes it unique per tenant so every import is a clean same-brand write.
+function brandScopedProductId(brandId: string | null | undefined, rawId: string): string {
+  if (!brandId) return rawId;
+  const prefix = `${brandId}__`;
+  return rawId.startsWith(prefix) ? rawId : `${prefix}${rawId}`;
+}
+
 // Helper: find first matching value from a list of possible column aliases (case-insensitive, handles normalized keys)
 function pick(row: Record<string, string>, ...keys: string[]): string {
   // First try exact match (case-sensitive)
@@ -1990,13 +2004,15 @@ export async function importFile(
               console.log(`[Import Batch] Full product object:`, JSON.stringify(p, null, 2));
             }
             
+            const docId = brandScopedProductId(brandId, p.id);
             return {
-              id: p.id,
-              data: { 
-                ...p, 
+              id: docId,
+              data: {
+                ...p,
+                id: docId,
                 stock_age_days: finalStockAgeDays,
                 margin_percentage: finalMarginPct,
-                createdAt: importTimestamp 
+                createdAt: importTimestamp
               } as Record<string, unknown>,
             };
           });
