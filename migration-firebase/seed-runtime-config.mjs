@@ -24,8 +24,34 @@ import { existsSync, readFileSync } from 'node:fs';
 import { initializeApp, cert, applicationDefault, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// Hardcoded so this script can NEVER write to production by accident.
-const TARGET_PROJECT_ID = 'performanceplus-staging';
+// ── Target project selection ────────────────────────────────────────────────
+// Defaults to staging so a prod write is ALWAYS a conscious, explicit choice:
+//   node seed-runtime-config.mjs                       → staging (default)
+//   node seed-runtime-config.mjs --project production  → production
+// Aliases mirror .firebaserc. The service-account guard below additionally
+// refuses to run if the credential's project_id doesn't match the target.
+const PROJECT_IDS = {
+  staging: 'performanceplus-staging',
+  production: 'performance-plus-4a5b2',
+};
+
+function resolveTargetProjectId(argv) {
+  let sel;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--project' || a === '-P') sel = argv[++i];
+    else if (a.startsWith('--project=')) sel = a.slice('--project='.length);
+    else if (!a.startsWith('-') && sel === undefined) sel = a;
+  }
+  if (sel === undefined) return PROJECT_IDS.staging; // safe default
+  const key = sel.toLowerCase();
+  if (key in PROJECT_IDS) return PROJECT_IDS[key];
+  if (Object.values(PROJECT_IDS).includes(sel)) return sel; // raw project id
+  console.error(`\n[ERROR] Unknown --project '${sel}'. Use one of: ${Object.keys(PROJECT_IDS).join(', ')}.`);
+  process.exit(1);
+}
+
+const TARGET_PROJECT_ID = resolveTargetProjectId(process.argv.slice(2));
 
 // ── Values to seed ──────────────────────────────────────────────────────────
 
@@ -68,7 +94,10 @@ if (getApps().length === 0) {
     initializeApp({ credential: applicationDefault(), projectId: TARGET_PROJECT_ID });
   }
 }
-console.log(`Target project: ${TARGET_PROJECT_ID}`);
+const TARGET_ENV = TARGET_PROJECT_ID === PROJECT_IDS.production ? 'PRODUCTION' : 'STAGING';
+console.log(`\n========================================`);
+console.log(`  Target: ${TARGET_ENV}  (${TARGET_PROJECT_ID})`);
+console.log(`========================================`);
 
 const db = getFirestore();
 
