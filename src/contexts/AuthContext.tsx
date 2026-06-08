@@ -31,6 +31,10 @@ interface AuthContextValue {
   user: User | null;
   loading: boolean;
   isSuperAdmin: boolean;
+  /** false until the async super-admin lookup for the current user has settled.
+   *  Consumers that branch on `isSuperAdmin` (e.g. the brand list) should wait
+   *  for this to avoid rendering the non-super-admin branch first, then re-rendering. */
+  isSuperAdminResolved: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   /** allowNewUsers: αν false, νέοι λογαριασμοί Google απορρίπτονται (sign out + error). */
@@ -49,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isSuperAdminResolved, setIsSuperAdminResolved] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -82,15 +87,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user?.uid) {
       setIsSuperAdmin(false);
+      setIsSuperAdminResolved(true); // nothing to resolve when signed out
       return;
     }
     let cancelled = false;
+    setIsSuperAdminResolved(false); // re-resolving for this user
     loadSuperAdmins()
       .then((sa) => {
-        if (!cancelled) setIsSuperAdmin(sa.uids.includes(user.uid));
+        if (!cancelled) {
+          setIsSuperAdmin(sa.uids.includes(user.uid));
+          setIsSuperAdminResolved(true);
+        }
       })
       .catch(() => {
-        if (!cancelled) setIsSuperAdmin(false);
+        if (!cancelled) {
+          setIsSuperAdmin(false);
+          setIsSuperAdminResolved(true);
+        }
       });
     return () => { cancelled = true; };
   }, [user?.uid]);
@@ -176,6 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     loading,
     isSuperAdmin,
+    isSuperAdminResolved,
     signIn,
     signUp,
     signInWithGoogle,

@@ -42,7 +42,7 @@ function getStoredBrandSnapshot(userId: string): Brand | null {
 }
 
 export function BrandProvider({ children }: { children: ReactNode }) {
-  const { user, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, isSuperAdminResolved } = useAuth();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [currentBrand, setCurrentBrandState] = useState<Brand | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,6 +61,12 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       setCurrentBrandState((prev) => prev ?? cachedBrand);
       setLoading(false);
     }
+    // Wait until the super-admin status is known before loading the authoritative list:
+    // branching on a not-yet-resolved `isSuperAdmin` would load the member-only set first
+    // and then re-load the all-brands set (or vice-versa), flickering the dropdown. The
+    // cached brand above keeps the UI responsive meanwhile; this effect re-runs once
+    // `isSuperAdminResolved` flips true.
+    if (!isSuperAdminResolved) return;
     try {
       if (isSuperAdmin) {
         const allBrands = await FirestoreService.getDocuments<Brand>('brands', [], null, { forceServer: true });
@@ -129,7 +135,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user?.uid, isSuperAdmin]);
+  }, [user?.uid, isSuperAdmin, isSuperAdminResolved]);
 
   const setCurrentBrand = useCallback((brand: Brand | null) => {
     setCurrentBrandState(brand);
