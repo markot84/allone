@@ -76,6 +76,7 @@ export type SegmentPeriodComparisonResult = {
 type CustomerAgg = {
   key: string;
   email?: string;
+  name?: string;
   lastOrder: string;
   firstOrder: string;
   orderCount: number;
@@ -483,6 +484,7 @@ function aggregateCustomersUntil(orders: EcommerceRawOrder[], asOf: Date): Custo
       byKey.set(key, {
         key,
         ...(o.customerEmail ? { email: o.customerEmail } : {}),
+        ...(o.customerName ? { name: o.customerName } : {}),
         lastOrder: o.createdAt,
         firstOrder: o.createdAt,
         orderCount: 1,
@@ -494,6 +496,7 @@ function aggregateCustomersUntil(orders: EcommerceRawOrder[], asOf: Date): Custo
       cur.revenue += revenue;
       cur.orders.push(o);
       if (!cur.email && o.customerEmail) cur.email = o.customerEmail;
+      if (!cur.name && o.customerName) cur.name = o.customerName;
       if (o.createdAt > cur.lastOrder) cur.lastOrder = o.createdAt;
       if (o.createdAt < cur.firstOrder) cur.firstOrder = o.createdAt;
     }
@@ -547,6 +550,7 @@ function aggregateCustomersInWindow(orders: EcommerceRawOrder[], from: Date, to:
       byKey.set(key, {
         key,
         ...(o.customerEmail ? { email: o.customerEmail } : {}),
+        ...(o.customerName ? { name: o.customerName } : {}),
         lastOrder: o.createdAt,
         firstOrder: o.createdAt,
         orderCount: 1,
@@ -558,6 +562,7 @@ function aggregateCustomersInWindow(orders: EcommerceRawOrder[], from: Date, to:
       cur.revenue += revenue;
       cur.orders.push(o);
       if (!cur.email && o.customerEmail) cur.email = o.customerEmail;
+      if (!cur.name && o.customerName) cur.name = o.customerName;
       if (o.createdAt > cur.lastOrder) cur.lastOrder = o.createdAt;
       if (o.createdAt < cur.firstOrder) cur.firstOrder = o.createdAt;
     }
@@ -792,6 +797,7 @@ export function computeRfmSegmentsFromEcommerceOrders(
       byKey.set(k, {
         key: k,
         ...(o.customerEmail ? { email: o.customerEmail } : {}),
+        ...(o.customerName ? { name: o.customerName } : {}),
         lastOrder: o.createdAt,
         firstOrder: o.createdAt,
         orderCount: 1,
@@ -803,6 +809,7 @@ export function computeRfmSegmentsFromEcommerceOrders(
       cur.revenue += revenue;
       cur.orders.push(o);
       if (!cur.email && o.customerEmail) cur.email = o.customerEmail;
+      if (!cur.name && o.customerName) cur.name = o.customerName;
       if (o.createdAt > cur.lastOrder) cur.lastOrder = o.createdAt;
       if (o.createdAt < cur.firstOrder) cur.firstOrder = o.createdAt;
     }
@@ -871,6 +878,7 @@ export function computeRfmSegmentsFromEcommerceOrders(
     g.customers.push({
       customerId: customers[i].key,
       ...(customers[i].email ? { email: customers[i].email } : {}),
+      ...(customers[i].name ? { name: customers[i].name } : {}),
       recency: recencyDays[i] ?? 0,
       frequency: customers[i].orderCount,
       monetary: Math.round(customers[i].revenue * 100) / 100,

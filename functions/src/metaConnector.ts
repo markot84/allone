@@ -83,6 +83,40 @@ function normalizeAdAccountId(accountId: string): string {
   return trimmed.startsWith('act_') ? trimmed : `act_${trimmed}`;
 }
 
+async function deleteStaleMetaCampaignDocsForAccounts(
+  brandId: string,
+  activeAccountIds: string[]
+): Promise<number> {
+  const prefixes = activeAccountIds.map((id) => `meta_${normalizeAdAccountId(id)}_`);
+  if (prefixes.length === 0) return 0;
+
+  const snap = await getDb()
+    .collection('campaigns')
+    .where('brandId', '==', brandId)
+    .where('channel', '==', 'Meta')
+    .get();
+
+  let batch = getDb().batch();
+  let ops = 0;
+  let deleted = 0;
+  for (const doc of snap.docs) {
+    if (prefixes.some((prefix) => doc.id.startsWith(prefix))) continue;
+    batch.delete(doc.ref);
+    ops += 1;
+    deleted += 1;
+    if (ops >= 450) {
+      await batch.commit();
+      batch = getDb().batch();
+      ops = 0;
+    }
+  }
+  if (ops > 0) await batch.commit();
+  if (deleted > 0) {
+    logger.info(`[Meta] Deleted ${deleted} stale campaign docs for ${brandId}`);
+  }
+  return deleted;
+}
+
 function toYmd(d: Date): string {
   return d.toISOString().split('T')[0];
 }
@@ -502,6 +536,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
   if (adAccountIds.length === 0) {
     return { success: false, imported: 0, error: 'No ad accounts found' };
   }
+
+  await deleteStaleMetaCampaignDocsForAccounts(brandId, adAccountIds);
 
   let totalImported = 0;
   const accessToken = decryptToken(connector.accessToken);

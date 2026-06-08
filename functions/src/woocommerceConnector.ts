@@ -188,6 +188,8 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
       for (const o of orders) {
         const wooCid = o.customer_id != null && Number(o.customer_id) > 0 ? String(o.customer_id) : '';
         const emailIdentity = getCustomerEmailIdentity(o.billing?.email || o.shipping?.email);
+        const wooName = [o.billing?.first_name, o.billing?.last_name].filter(Boolean).join(' ').trim()
+          || [o.shipping?.first_name, o.shipping?.last_name].filter(Boolean).join(' ').trim();
         orderItems.push({
           id: `woo_${o.id}`,
           data: {
@@ -195,6 +197,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
             orderNumber: o.number || '',
             ...(wooCid ? { customerId: wooCid } : {}),
             ...emailIdentity,
+            ...(wooName ? { customerName: wooName } : {}),
             createdAt: o.date_created || '',
             updatedAt: o.date_modified || '',
             status: o.status || '',

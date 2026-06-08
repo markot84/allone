@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Zap, Lock, Bell, BellOff, Save, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
+import { Zap, Lock, Bell, BellOff, Save, AlertTriangle, CheckCircle2, Info, X, Palette, Check } from 'lucide-react';
 import { Card, Button, Spinner, useToast, EnterpriseBadge, PageHeader } from '../common';
+import { ACCENT_PRESETS, readStoredAccent, setStoredAccent, type AccentId, type AccentPreset } from '../../theme/accentTheme';
 import { useAutomationSettings, useAutomationAlerts } from '../../hooks/useAutomation';
 import { usePlan } from '../../hooks/usePlan';
 import { useBrand } from '../../hooks/useBrand';
@@ -15,6 +16,25 @@ const SEVERITY_STYLE: Record<string, { icon: typeof AlertTriangle; color: string
   warning: { icon: AlertTriangle, color: '#F59E0B', bg: '#FFFBEB' },
   info: { icon: Info, color: '#3B82F6', bg: '#EFF6FF' },
 };
+
+/** Παράγει το background του swatch: 3-wedge conic για τριχρωμίες, διαγώνιο για διχρωμίες, solid αλλιώς. */
+function swatchBackground(preset: AccentPreset): string {
+  const cols =
+    preset.swatchColors && preset.swatchColors.length > 0
+      ? preset.swatchColors
+      : preset.swatch3
+        ? [preset.swatch, preset.swatch2 ?? preset.swatch, preset.swatch3]
+        : preset.swatch2
+          ? [preset.swatch, preset.swatch2]
+          : [preset.swatch];
+  if (cols.length >= 3) {
+    return `conic-gradient(from 0deg, ${cols[0]} 0 120deg, ${cols[1]} 120deg 240deg, ${cols[2]} 240deg 360deg)`;
+  }
+  if (cols.length === 2) {
+    return `linear-gradient(135deg, ${cols[0]} 0 50%, ${cols[1]} 50% 100%)`;
+  }
+  return cols[0];
+}
 
 export function AutomationSettingsPage() {
   const { currentBrand } = useBrand();
@@ -34,6 +54,12 @@ export function AutomationSettingsPage() {
   const [triggers, setTriggers] = useState<Record<string, TriggerConfig>>({});
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [accent, setAccent] = useState<AccentId>(() => readStoredAccent());
+
+  const handleAccentChange = (id: AccentId) => {
+    setStoredAccent(id);
+    setAccent(id);
+  };
 
   useEffect(() => {
     if (settings?.triggers) {
@@ -112,6 +138,47 @@ export function AutomationSettingsPage() {
           ) : null
         }
       />
+
+      {/* Appearance — per-user accent (localStorage) */}
+      <Card padding="none">
+        <div className="flex items-center gap-2 border-b border-[#F3F4F6] px-5 py-3.5">
+          <Palette size={16} className="shrink-0 text-[var(--nts-accent)]" />
+          <h2 className="text-sm font-semibold text-[#111827]">Εμφάνιση</h2>
+        </div>
+        <div className="px-5 py-4">
+          <p className="mb-3 text-xs text-[#6B7280]">
+            Χρώμα έμφασης της εφαρμογής. Αποθηκεύεται στον δικό σου browser.
+          </p>
+          <div className="flex flex-wrap gap-2.5">
+            {ACCENT_PRESETS.map((preset) => {
+              const selected = accent === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => handleAccentChange(preset.id)}
+                  aria-pressed={selected}
+                  title={preset.label}
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
+                    selected
+                      ? 'border-[#111827]/30 bg-[#F9FAFB] ring-2 ring-offset-1'
+                      : 'border-[#E5E7EB] hover:border-[#D1D5DB]'
+                  }`}
+                  style={selected ? ({ '--tw-ring-color': preset.swatch } as React.CSSProperties) : undefined}
+                >
+                  <span
+                    className="flex h-5 w-5 items-center justify-center rounded-full shadow-sm ring-1 ring-black/10"
+                    style={{ background: swatchBackground(preset) }}
+                  >
+                    {selected && <Check size={12} className="text-white drop-shadow-[0_0_1px_rgba(0,0,0,0.7)]" />}
+                  </span>
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
 
       {/* Active Alerts */}
       {newAlerts.length > 0 && (

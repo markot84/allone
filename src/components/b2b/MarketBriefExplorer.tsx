@@ -8,8 +8,16 @@ import { useProductSource } from '../../hooks/useProductSource';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useMarketBriefs } from '../../hooks/useMarketBriefs';
+import { coerceToDate } from '../../utils/coerceDate';
 import type { MarketBriefPromptContext } from '../../data/marketBriefPrompt';
 import type { MarketBrief, MarketBriefProductFit } from '../../services/aiMarketBrief';
+
+function safeFormatDate(raw: unknown): string {
+  if (!raw) return '—';
+  const d = coerceToDate(raw);
+  if (!d) return '—';
+  return d.toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
 
 countries.registerLocale(en as Parameters<typeof countries.registerLocale>[0]);
 
@@ -351,7 +359,7 @@ export function MarketBriefExplorer() {
                       <span className="text-[#9CA3AF]">({row.countryCode})</span>
                     </p>
                     <p className="text-xs text-[#6B7280] truncate">
-                      Ενημέρωση: {row.updatedAt || row.createdAt || '—'}
+                      Ενημέρωση: {safeFormatDate(row.updatedAt || row.createdAt)}
                       {row.verticalFocus ? ` · ${row.verticalFocus}` : ''}
                     </p>
                   </div>

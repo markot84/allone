@@ -7,7 +7,6 @@ import {
   collectBriefingData,
   generateMorningBriefing,
   getCachedBriefing,
-  checkAndAutoUpdate,
   getLocalDateKey,
   briefingResultFromCache,
   computeBriefingDataHash,
@@ -35,6 +34,12 @@ interface MorningBriefingProps {
     aov: number;
     connectedPlatforms: string[];
     platformBreakdown: { platform: string; revenue: number; orders: number }[];
+    dataFreshness?: {
+      latestPositiveRevenueDay: string | null;
+      daysSinceLatestRevenue: number | null;
+      aggregateSyncedHoursAgo?: number | null;
+      suspectedSyncGap: boolean;
+    };
   };
   onSectionChange?: (section: string, opts?: { hashQuery?: string }) => void;
   hasAnyData: boolean;
@@ -92,10 +97,10 @@ function guessRoute(action: string): GuessResult {
 
 const SIGNIFICANCE_CHECK_INTERVAL = 15 * 60 * 1000; // 15 minutes
 /** Μικρή καθυστέρηση μετά τα σταθερά KPI· το βαρύ work περιμένει `metricsReady`. */
-const INIT_DELAY_MS = 800;
+const INIT_DELAY_MS = 150;
 
 function briefingStorageKey(brandId: string, period = 'current_month') {
-  return `perf-plus-ai-briefing-v1:${brandId}:${getLocalDateKey()}:${period}`;
+  return `perf-plus-ai-briefing-v4:${brandId}:${getLocalDateKey()}:${period}`;
 }
 
 function loadBriefingFromStorage(brandId: string, period = 'current_month'): BriefingResult | null {
@@ -132,7 +137,8 @@ export function MorningBriefing(props: MorningBriefingProps) {
   const period = props.period ?? 'current_month';
   const periodLabel = props.periodLabel ?? 'Τρέχων Μήνας';
   const metricsReady = props.metricsReady ?? true;
-  const financeKey = props.financeKey ?? '';
+  // financeKey prop διατηρείται για backward compat αλλά δεν χρησιμοποιείται πλέον εσωτερικά
+  void props.financeKey;
 
   const [briefing, setBriefing] = useState<BriefingResult | null>(() =>
     brandId ? loadBriefingFromStorage(brandId, period) : null
@@ -140,6 +146,8 @@ export function MorningBriefing(props: MorningBriefingProps) {
   const [collapsed, setCollapsed] = useState(() => (brandId ? loadCollapsedPref(brandId) : false));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Ref: παρακολουθεί αν έγινε ήδη auto-regen για τη συγκεκριμένη metricsReady→true μετάβαση. */
+  const metricsReadyRegenRef = useRef(false);
   const initRef = useRef<string | null>(null);
   const checkInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const briefingLatestRef = useRef<BriefingResult | null>(null);
@@ -162,6 +170,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
           aov: props.ecommerce.aov,
           connectedPlatforms: props.ecommerce.connectedPlatforms,
           topPlatform: props.ecommerce.platformBreakdown?.[0]?.platform,
+          dataFreshness: props.ecommerce.dataFreshness,
         }
       : undefined,
   }), [props.products, props.campaigns, props.segments, props.totalOrganicRevenue, props.ga4, props.alerts, brandName, props.supplierTodMap, props.ecommerce]);
@@ -180,6 +189,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
     setBriefing(loadBriefingFromStorage(brandId, periodRef.current));
     setError(null);
     initRef.current = null;
+    metricsReadyRegenRef.current = false;
   }, [brandId]);
 
   // Reset + trigger new briefing when period changes.
@@ -188,6 +198,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
     setBriefing(loadBriefingFromStorage(brandId, period));
     setError(null);
     initRef.current = null;
+    metricsReadyRegenRef.current = false;
   }, [brandId, period]);
 
   // Firestore: sync με server — per brand + period
@@ -260,23 +271,28 @@ export function MorningBriefing(props: MorningBriefingProps) {
     return () => clearTimeout(timer);
   }, [brandId, hasAnyData, hasSubstantiveData, metricsReady, briefing, period]);
 
-  // Συγχρονισμός cached briefing όταν τα KPI («ειδικά e-shop μετά τα raw orders») αλλάζουν αλλά το κείμενο παραμένει παλαιό.
+  // Αυτόματη αναγέννηση όταν τα metrics σταθεροποιηθούν (metricsReady → true).
+  // Πυροδοτεί μία φορά ανά brand/period/metricsReady-transition, αφού σταθεροποιηθούν τα δεδομένα.
   useEffect(() => {
-    if (!brandId || !metricsReady) return;
+    if (!brandId || !metricsReady) {
+      metricsReadyRegenRef.current = false;
+      return;
+    }
+    if (metricsReadyRegenRef.current) return; // ήδη έγινε regen για αυτή τη μετάβαση
+    metricsReadyRegenRef.current = true;
+
     const live = briefingLatestRef.current;
-    if (!live) return;
-    const data = buildDataRef.current();
-    const expected = computeBriefingDataHash(data);
-    if (expected === live.dataHash) return;
+    if (!live) return; // δεν υπάρχει briefing — η αρχική γεννήτρια το χειρίζεται
 
     let cancelled = false;
+    // Μικρή αναμονή για να σταθεροποιηθούν οι τελευταίες αλλαγές στα KPI
     const t = window.setTimeout(() => {
       if (cancelled) return;
       const b = briefingLatestRef.current;
       if (!b) return;
       const d = buildDataRef.current();
-      const exp = computeBriefingDataHash(d);
-      if (exp === b.dataHash) return;
+      const expected = computeBriefingDataHash(d);
+      if (expected === b.dataHash) return; // δεδομένα αμετάβλητα — δεν χρειάζεται αναγέννηση
 
       void (async () => {
         setLoading(true);
@@ -284,22 +300,22 @@ export function MorningBriefing(props: MorningBriefingProps) {
           const result = await generateMorningBriefing(brandId, d, {
             period: periodRef.current,
             periodLabel: periodLabelRef.current,
-            updateReason: 'Συγχρονισμός με τα ενημερωμένα δεδομένα του πίνακα',
+            updateReason: 'Αυτόματη ενημέρωση μετά τη φόρτωση δεδομένων',
           });
           if (!cancelled) setBriefing(result);
         } catch (e) {
-          if (!cancelled) setError(e instanceof Error ? e.message : 'Η δημιουργία του briefing δεν ολοκληρώθηκε.');
+          if (!cancelled) setError(e instanceof Error ? e.message : 'Η δημιουργία δεν ολοκληρώθηκε.');
         } finally {
           if (!cancelled) setLoading(false);
         }
       })();
-    }, 650);
+    }, 500); // σύντομο debounce: το readiness gate έχει ήδη κρατήσει τα κρίσιμα inputs
 
     return () => {
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [brandId, metricsReady, financeKey, briefing?.dataHash]);
+  }, [brandId, metricsReady, period]);
 
   // Έλεγχος σημαντικής αλλαγής (κανόνες) — μόνο όταν το tab είναι ορατό
   useEffect(() => {
@@ -310,7 +326,13 @@ export function MorningBriefing(props: MorningBriefingProps) {
     checkInterval.current = setInterval(async () => {
       if (document.hidden) return;
       try {
-        const { updated, result } = await checkAndAutoUpdate(brandId, buildDataRef.current(), periodRef.current, periodLabelRef.current);
+        const { checkAndAutoUpdate } = await import('../../services/morningBriefing');
+        const { updated, result } = await checkAndAutoUpdate(
+          brandId,
+          buildDataRef.current(),
+          periodRef.current,
+          periodLabelRef.current,
+        );
         if (updated && result) setBriefing(result);
       } catch { /* silent */ }
     }, SIGNIFICANCE_CHECK_INTERVAL);
@@ -330,11 +352,28 @@ export function MorningBriefing(props: MorningBriefingProps) {
     });
   }, [brandId]);
 
-  if (!hasAnyData) return null;
+  /** Χρησιμοποιείται μόνο σε retry μετά από σφάλμα. */
+  const handleRetry = useCallback(async () => {
+    if (!brandId || loading) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const result = await generateMorningBriefing(
+        brandId,
+        buildDataRef.current(),
+        { period: periodRef.current, periodLabel: periodLabelRef.current },
+      );
+      setBriefing(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Η δημιουργία του briefing δεν ολοκληρώθηκε.');
+    }
+    setLoading(false);
+  }, [brandId, loading]);
 
   /** Φόρτωση πλήρους ιστορικού παραγγελιών — τα KPI ανεβαίνουν αλλά το κείμενο δεν πρέπει να προηγείται. */
   const awaitingEcommMetrics =
     !metricsReady && ((props.ecommerce?.connectedPlatforms?.length ?? 0) > 0);
+  const briefingPending = !briefing && !loading && !error;
 
   const timeLabel = briefing?.generatedAt
     ? new Date(briefing.generatedAt).toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' })
@@ -405,6 +444,11 @@ export function MorningBriefing(props: MorningBriefingProps) {
                     Συγχρονίζουμε τον τζίρο και τις παραγγελίες από το ηλεκτρονικό κατάστημα με τον πίνακα ελέγχου…
                   </p>
                 )}
+                {collapsed && briefingPending && !awaitingEcommMetrics && (
+                  <p className="text-[12px] text-[var(--nts-medium-gray)] mt-1 line-clamp-1">
+                    Το briefing θα εμφανιστεί αυτόματα μόλις είναι διαθέσιμα τα πρώτα αξιόπιστα δεδομένα.
+                  </p>
+                )}
                 {collapsed && !awaitingEcommMetrics && briefing && (
                   <p className="text-[12px] text-[var(--nts-medium-gray)] mt-1 line-clamp-1">
                     {toPlainProseText(briefing.narrative)}
@@ -461,10 +505,34 @@ export function MorningBriefing(props: MorningBriefingProps) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex items-start gap-3 p-3 bg-red-50 border border-red-100 rounded-xl"
+                className="flex items-start justify-between gap-3 p-3 bg-red-50 border border-red-100 rounded-xl"
               >
-                <AlertTriangle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-red-700">{error}</p>
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  className="shrink-0 flex items-center gap-1 text-xs font-semibold text-red-700 hover:text-red-900 bg-red-100 hover:bg-red-200 rounded-lg px-2 py-1 transition-colors"
+                >
+                  Δοκίμασε ξανά
+                </button>
+              </motion.div>
+            )}
+
+            {briefingPending && (
+              <motion.div
+                key="pending"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-4 text-[13px] leading-relaxed text-[var(--nts-medium-gray)]"
+              >
+                <p className="font-medium text-[var(--nts-charcoal)]">Προετοιμασία briefing…</p>
+                <p className="mt-1">
+                  Το Dashboard εμφανίζεται άμεσα και το AI Briefing θα δημιουργηθεί αυτόματα μόλις φορτωθούν τα πρώτα αξιόπιστα στοιχεία του brand.
+                </p>
               </motion.div>
             )}
 

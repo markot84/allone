@@ -13,6 +13,10 @@ const GEMINI_SECRET = defineSecret('GEMINI_API_KEY');
 const SMTP_EMAIL_SECRET = defineSecret('SMTP_EMAIL');
 /** SMTP: κωδικός ή App Password */
 const SMTP_PASSWORD_SECRET = defineSecret('SMTP_PASSWORD');
+const OPENCART_EGRESS_OPTIONS = {
+  vpcConnector: 'pp-opencart-connector',
+  vpcConnectorEgressSettings: 'ALL_TRAFFIC' as const,
+};
 import { sanitizeOAuthReturnOrigin } from './oauthRedirect';
 import { validateImportUrl, safeFetch } from './urlValidator';
 import { verifyState } from './oauthState';
@@ -63,6 +67,9 @@ import {
 import {
   saveOpenCartCredentials,
   fetchOpenCartData,
+  runOpenCartBackfillJob,
+  ensureOpenCartBackfillJobQueued,
+  isOpenCartInitialBackfillIncomplete,
   setDb as setOpenCartDb,
 } from './opencartConnector';
 import {
@@ -121,6 +128,7 @@ import {
   getGA4AuthUrl,
   handleGA4Callback,
   fetchGA4Data,
+  fetchGA4PeriodTotals,
   setDb as setGA4Db,
 } from './ga4Connector';
 import {
@@ -1181,6 +1189,11 @@ export const connectorDisconnect = onRequest(
         clearPayload.apiKey = '';
         clearPayload.apiUsername = '';
         clearPayload.apiToken = '';
+        clearPayload.authType = '';
+        clearPayload.clientId = '';
+        clearPayload.clientSecret = '';
+        clearPayload.username = '';
+        clearPayload.password = '';
       }
       if (provider === 'magento') {
         // Full wipe: αλλιώς μένουν stale shopName/storeUrl/storeWebUrl και μπορεί να εμφανιστεί
@@ -1364,7 +1377,7 @@ export const connectorSelectAccount = onRequest(
  * Body: { brandId, provider }
  */
 export const connectorSync = onRequest(
-  { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'] },
+  { region: 'europe-west1', cors: true, timeoutSeconds: 1200, memory: '4GiB', cpu: 2, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
   async (req, res) => {
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
@@ -1405,7 +1418,30 @@ export const connectorSync = onRequest(
       } else if (provider === 'woocommerce') {
         result = await fetchWooCommerceData(brandId);
       } else if (provider === 'opencart') {
-        result = await fetchOpenCartData(brandId);
+        const jobId = `opencart_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+        const jobRef = admin.firestore().collection('connector_sync_jobs').doc(jobId);
+        const existing = await jobRef.get();
+        const existingStatus = existing.data()?.status;
+        if (existingStatus === 'pending' || existingStatus === 'running') {
+          result = {
+            success: true,
+            queued: true,
+            jobId,
+            imported: 0,
+            message: 'OpenCart sync ήδη σε εξέλιξη στο background.',
+          };
+        } else {
+          const queued = await ensureOpenCartBackfillJobQueued(brandId, { mode: 'manual_backfill' });
+          result = {
+            success: true,
+            queued: true,
+            jobId,
+            imported: 0,
+            message: queued.queued
+              ? 'OpenCart sync ξεκίνησε στο background. Θα ολοκληρωθεί αυτόματα — δεν χρειάζεται να περιμένεις.'
+              : 'OpenCart backfill ήδη ολοκληρωμένο.',
+          };
+        }
       } else if (provider === 'magento') {
         if (forceFullSync) {
           const db = admin.firestore();
@@ -1470,11 +1506,263 @@ export const connectorSync = onRequest(
         }
       }
 
+      if (
+        ['shopify', 'woocommerce', 'opencart', 'magento', 'megaventory', 'softone'].includes(provider) &&
+        result.queued !== true
+      ) {
+        try {
+          await refreshProductIntelligenceAggregate(brandId);
+        } catch (e) {
+          logger.warn(`[connectorSync] product intelligence refresh failed for ${brandId}:`, e);
+        }
+      }
+
       res.status(200).json(result);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error(`[connectorSync] failed for brand=${brandId || 'unknown'} provider=${provider || 'unknown'}: ${msg}`);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * GA4-deduplicated σύνολα περιόδου (Χρήστες/Νέοι χρήστες κ.λπ.) για ΣΥΓΚΕΚΡΙΜΕΝΟ εύρος.
+ * Τα ημερήσια totalUsers/newUsers ΔΕΝ αθροίζονται σωστά (dedup ανά περίοδο στο GA4). Εδώ ζητάμε
+ * το ίδιο σύνολο που δείχνει το GA4 UI. Firestore cache (TTL 3h) ώστε να μη χτυπάμε το GA4 σε κάθε
+ * αλλαγή ημερομηνίας. Το cache γράφεται ΜΟΝΟ server-side (admin) → δεν χρειάζεται client rule.
+ */
+export const ga4PeriodTotals = onRequest(
+  // CONNECTOR_TOKEN_KEY: απαραίτητο — το decryptToken το χρειάζεται για να αποκρυπτογραφήσει το GA4
+  // refresh token. Χωρίς αυτό η αποκρυπτογράφηση αποτυγχάνει → «GA4 token unavailable» → fallback.
+  { region: 'europe-west1', cors: true, secrets: ['GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'CONNECTOR_TOKEN_KEY'] },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
+      const body = req.body as { brandId?: string; startDate?: string; endDate?: string };
+      const brandId = body.brandId || '';
+      const startDate = body.startDate || '';
+      const endDate = body.endDate || '';
+      if (!brandId || !startDate || !endDate) { res.status(400).json({ error: 'Missing params' }); return; }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'forbidden' });
+        return;
+      }
+
+      const docId = `${brandId}__${startDate}__${endDate}`.replace(/[^A-Za-z0-9_-]/g, '_');
+      const cacheRef = db.doc(`ga4_period_cache/${docId}`);
+      const TTL_MS = 3 * 60 * 60 * 1000;
+
+      const cached = await cacheRef.get();
+      if (cached.exists) {
+        const c = cached.data() as { totals?: unknown; computedAtMs?: number };
+        if (c.totals && typeof c.computedAtMs === 'number' && Date.now() - c.computedAtMs < TTL_MS) {
+          res.status(200).json({ success: true, totals: c.totals, cached: true });
+          return;
+        }
+      }
+
+      const r = await fetchGA4PeriodTotals(brandId, startDate, endDate);
+      if (!r.success || !r.totals) {
+        res.status(502).json({ success: false, error: r.error || 'GA4 period totals failed' });
+        return;
+      }
+
+      await cacheRef.set({
+        brandId,
+        startDate,
+        endDate,
+        totals: r.totals,
+        computedAtMs: Date.now(),
+        computedAt: FieldValue.serverTimestamp(),
+      });
+      res.status(200).json({ success: true, totals: r.totals, cached: false });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[ga4PeriodTotals] failed:', msg);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+async function resumeIncompleteOpenCartBackfills(db: FirebaseFirestore.Firestore): Promise<number> {
+  const connectorsSnap = await db
+    .collection('connectors')
+    .where('opencart.connected', '==', true)
+    .limit(50)
+    .get();
+  let queued = 0;
+  for (const cdoc of connectorsSnap.docs) {
+    const oc = cdoc.data().opencart as Record<string, unknown> | undefined;
+    if (!isOpenCartInitialBackfillIncomplete(oc)) continue;
+    const result = await ensureOpenCartBackfillJobQueued(cdoc.id, { mode: 'watchdog_resume' });
+    if (result.queued) {
+      logger.info(`[OpenCartJob] Watchdog re-queued ${cdoc.id}: ${result.reason}`);
+      queued += 1;
+    }
+  }
+  return queued;
+}
+
+/** Rebuild PI when OpenCart catalog is synced but aggregate stayed at 0 (e.g. stale SKU parsing). */
+async function repairEmptyOpenCartProductIntelligence(db: FirebaseFirestore.Firestore): Promise<void> {
+  const connectorsSnap = await db
+    .collection('connectors')
+    .where('opencart.connected', '==', true)
+    .limit(20)
+    .get();
+
+  for (const cdoc of connectorsSnap.docs) {
+    const oc = cdoc.data().opencart as Record<string, unknown> | undefined;
+    const lastSyncProducts = Number(oc?.lastSyncProducts ?? 0);
+    if (lastSyncProducts <= 0) continue;
+    if (isOpenCartInitialBackfillIncomplete(oc)) continue;
+
+    const brandId = cdoc.id;
+    const piRef = db.doc(`product_intelligence/${brandId}`);
+    const pi = await piRef.get();
+    const piData = pi.data();
+    if (piData?.status === 'running') continue;
+    if (Number(piData?.totalCount ?? 0) > 0) continue;
+
+    const repairAt = piData?.repairAttemptAt?.toDate?.() as Date | undefined;
+    if (repairAt && Date.now() - repairAt.getTime() < 5 * 60 * 1000) continue;
+
+    await piRef.set({ repairAttemptAt: FieldValue.serverTimestamp() }, { merge: true });
+    logger.info(`[PIWatchdog] Rebuilding product intelligence for ${brandId} (lastSyncProducts=${lastSyncProducts})`);
+    try {
+      const result = await refreshProductIntelligenceAggregate(brandId);
+      logger.info(`[PIWatchdog] ${brandId}: totalCount=${result.totalCount ?? 0}`);
+    } catch (error) {
+      logger.warn(`[PIWatchdog] failed for ${brandId}:`, error);
+    }
+    return;
+  }
+}
+
+export const processOpenCartSyncJobs = onSchedule(
+  {
+    schedule: 'every 1 minutes',
+    region: 'europe-west1',
+    timeoutSeconds: 1800,
+    memory: '2GiB',
+    secrets: ['CONNECTOR_TOKEN_KEY'],
+    ...OPENCART_EGRESS_OPTIONS,
+  },
+  async () => {
+    const db = admin.firestore();
+    const STALE_RUNNING_MS = 40 * 60 * 1000;
+
+    const staleRunning = await db
+      .collection('connector_sync_jobs')
+      .where('provider', '==', 'opencart')
+      .where('status', '==', 'running')
+      .limit(5)
+      .get();
+    for (const doc of staleRunning.docs) {
+      const updatedAt = doc.data().updatedAt?.toDate?.() as Date | undefined;
+      if (updatedAt && Date.now() - updatedAt.getTime() > STALE_RUNNING_MS) {
+        logger.warn(`[OpenCartJob] Recovering stale running job ${doc.id}`);
+        await doc.ref.update({
+          status: 'pending',
+          error: 'Recovered stale running job',
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    await resumeIncompleteOpenCartBackfills(db);
+    await repairEmptyOpenCartProductIntelligence(db);
+
+    const snap = await db
+      .collection('connector_sync_jobs')
+      .where('provider', '==', 'opencart')
+      .where('status', '==', 'pending')
+      .limit(1)
+      .get();
+
+    if (snap.empty) return;
+
+    const jobRef = snap.docs[0].ref;
+    const job = await db.runTransaction(async (tx) => {
+      const latest = await tx.get(jobRef);
+      const data = latest.data() as {
+        brandId?: string;
+        status?: string;
+        batchesRun?: number;
+        totalImported?: number;
+      } | undefined;
+      if (!latest.exists || data?.status !== 'pending' || !data.brandId) return null;
+      tx.update(jobRef, {
+        status: 'running',
+        startedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return {
+        brandId: data.brandId,
+        batchesRun: typeof data.batchesRun === 'number' ? data.batchesRun : 0,
+        totalImported: typeof data.totalImported === 'number' ? data.totalImported : 0,
+      };
+    });
+
+    if (!job) return;
+
+    try {
+      logger.info(`[OpenCartJob] Starting backfill for ${job.brandId} (prior batches: ${job.batchesRun})`);
+      const result = await runOpenCartBackfillJob(job.brandId, {
+        initialBatchesRun: job.batchesRun,
+        initialTotalImported: job.totalImported,
+      });
+
+      if (result.complete) {
+        try {
+          await computeEcommerceSummary(job.brandId);
+        } catch (e) {
+          logger.warn(`[OpenCartJob] ecommerce summary refresh failed for ${job.brandId}:`, e);
+        }
+        try {
+          await refreshStockMovement(job.brandId);
+        } catch (e) {
+          logger.warn(`[OpenCartJob] stock movement refresh failed for ${job.brandId}:`, e);
+        }
+        try {
+          const piResult = await refreshProductIntelligenceAggregate(job.brandId);
+          logger.info(
+            `[OpenCartJob] Product intelligence refreshed for ${job.brandId}: totalCount=${piResult.totalCount ?? 0}`
+          );
+        } catch (e) {
+          logger.warn(`[OpenCartJob] product intelligence refresh failed for ${job.brandId}:`, e);
+        }
+      }
+
+      await jobRef.update({
+        status: result.complete
+          ? (result.success ? 'completed' : 'failed')
+          : 'pending',
+        batchesRun: result.batchesRun,
+        totalImported: result.totalImported,
+        ...(result.message ? { lastBatchMessage: result.message } : { lastBatchMessage: FieldValue.delete() }),
+        result,
+        ...(result.complete
+          ? { completedAt: FieldValue.serverTimestamp() }
+          : { completedAt: FieldValue.delete() }),
+        updatedAt: FieldValue.serverTimestamp(),
+        ...(result.error ? { error: result.error } : { error: FieldValue.delete() }),
+      });
+      logger.info(`[OpenCartJob] Batch finished for ${job.brandId}: ${JSON.stringify(result)}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`[OpenCartJob] failed for ${job.brandId}: ${msg}`);
+      await jobRef.update({
+        status: 'pending',
+        error: msg,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     }
   }
 );
@@ -1489,6 +1777,28 @@ export const processMegaventorySyncJobs = onSchedule(
   },
   async () => {
     const db = admin.firestore();
+    const STALE_RUNNING_MS = 40 * 60 * 1000;
+
+    const staleRunning = await db
+      .collection('connector_sync_jobs')
+      .where('provider', '==', 'megaventory')
+      .where('status', '==', 'running')
+      .limit(5)
+      .get();
+    for (const doc of staleRunning.docs) {
+      const data = doc.data();
+      const updatedAt = data.updatedAt?.toDate?.() as Date | undefined;
+      if (!updatedAt || Date.now() - updatedAt.getTime() <= STALE_RUNNING_MS) continue;
+      const result = data.result as { success?: boolean; error?: string } | undefined;
+      logger.warn(`[MegaventoryJob] Recovering stale running job ${doc.id}`);
+      await doc.ref.update({
+        status: result?.success ? 'completed' : 'failed',
+        completedAt: data.completedAt || FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        error: result?.error || 'Megaventory sync timed out before job finalization',
+      });
+    }
+
     const snap = await db
       .collection('connector_sync_jobs')
       .where('provider', '==', 'megaventory')
@@ -1516,11 +1826,6 @@ export const processMegaventorySyncJobs = onSchedule(
     try {
       logger.info(`[MegaventoryJob] Starting Megaventory refresh for ${job.brandId}`);
       const result = await fetchMegaventoryData(job.brandId, { mode: 'manual' });
-      try {
-        await computeEcommerceSummary(job.brandId);
-      } catch (e) {
-        logger.warn(`[MegaventoryJob] ecommerce summary refresh failed for ${job.brandId}:`, e);
-      }
       await jobRef.update({
         status: result.success ? 'completed' : 'failed',
         result,
@@ -1529,6 +1834,26 @@ export const processMegaventorySyncJobs = onSchedule(
         ...(result.error ? { error: result.error } : { error: FieldValue.delete() }),
       });
       logger.info(`[MegaventoryJob] Completed catalog refresh for ${job.brandId}: ${JSON.stringify(result)}`);
+
+      try {
+        await computeEcommerceSummary(job.brandId);
+      } catch (e) {
+        logger.warn(`[MegaventoryJob] ecommerce summary refresh failed for ${job.brandId}:`, e);
+      }
+      if (result.success) {
+        try {
+          const piResult = await refreshProductIntelligenceAggregate(job.brandId);
+          logger.info(
+            `[MegaventoryJob] Product intelligence refreshed for ${job.brandId}: totalCount=${piResult.totalCount ?? 0}`
+          );
+        } catch (e) {
+          logger.warn(`[MegaventoryJob] product intelligence refresh failed for ${job.brandId}:`, e);
+        }
+      }
+      await jobRef.update({
+        postRefreshCompletedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error(`[MegaventoryJob] failed for ${job.brandId}: ${msg}`);
@@ -1549,7 +1874,7 @@ export const processMegaventorySyncJobs = onSchedule(
  * Body: { brandId, provider: "woocommerce", storeUrl, consumerKey, consumerSecret }
  */
 export const connectorSaveCredentials = onRequest(
-  { region: 'europe-west1', secrets: ['CONNECTOR_TOKEN_KEY'] },
+  { region: 'europe-west1', cors: true, secrets: ['CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
   async (req, res) => {
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
@@ -1583,12 +1908,45 @@ export const connectorSaveCredentials = onRequest(
         const result = await saveWooCredentials(brandId, storeUrl, consumerKey, consumerSecret);
         res.status(200).json(result);
       } else if (provider === 'opencart') {
-        const { apiUsername, apiKey: ocApiKey } = req.body as { apiUsername?: string; apiKey?: string };
-        if (!storeUrl || !apiUsername || !ocApiKey) {
-          res.status(400).json({ error: 'Missing storeUrl, apiUsername, or apiKey' });
+        const {
+          clientId,
+          clientSecret,
+          token,
+          username,
+          password,
+        } = req.body as {
+          clientId?: string;
+          clientSecret?: string;
+          token?: string;
+          username?: string;
+          password?: string;
+        };
+        const hasOAuthCredentials = Boolean(clientId && clientSecret && token && username && password);
+        if (!storeUrl || !hasOAuthCredentials) {
+          res.status(400).json({ error: 'Missing OpenCart credentials' });
           return;
         }
-        const result = await saveOpenCartCredentials(brandId, storeUrl, apiUsername, ocApiKey);
+        const result = await saveOpenCartCredentials(brandId, storeUrl, {
+          clientId,
+          clientSecret,
+          token,
+          username,
+          password,
+        });
+        if (result.success) {
+          const jobId = `opencart_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+          await admin.firestore().collection('connector_sync_jobs').doc(jobId).set({
+            brandId,
+            provider: 'opencart',
+            status: 'pending',
+            requestedBy: decoded.uid,
+            requestedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            mode: 'initial_backfill',
+            batchesRun: 0,
+            totalImported: 0,
+          }, { merge: true });
+        }
         res.status(200).json(result);
       } else if (provider === 'magento') {
         const {
@@ -1892,7 +2250,7 @@ async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Prom
 }
 
 /**
- * Cloud Functions Gen 2 onSchedule supports up to 3600s. Κάθε «κύμα» connectors έχει δικό του
+ * Cloud Functions Gen 2 onSchedule (Pub/Sub-triggered) έχει σκληρό όριο 1800s. Κάθε «κύμα» connectors έχει δικό του
  * invocation ώστε Magento/ERP να μην κόβουν GA4/GSC μέσα στο ίδιο timeout με τα Ads.
  */
 const SCHEDULED_SYNC_TIMEOUT_SECONDS = 1800;
@@ -1953,7 +2311,20 @@ async function executeBrandNightlyWave(
     case 'ecommerce':
       if (data.shopify?.connected) phase.wrap('Shopify', fetchShopifyData(brandId));
       if (data.woocommerce?.connected) phase.wrap('WooCommerce', fetchWooCommerceData(brandId));
-      if (data.opencart?.connected) phase.wrap('OpenCart', fetchOpenCartData(brandId));
+      if (data.opencart?.connected) {
+        const oc = data.opencart as Record<string, unknown>;
+        if (isOpenCartInitialBackfillIncomplete(oc)) {
+          ensureOpenCartBackfillJobQueued(brandId, { mode: 'nightly_backfill_resume' })
+            .then((r) => {
+              if (r.queued) {
+                logger.info(`[ScheduledSync/ecommerce] OpenCart backfill queued for ${brandId}: ${r.reason}`);
+              }
+            })
+            .catch((err) => logger.error(`[ScheduledSync/ecommerce] OpenCart queue failed for ${brandId}:`, err));
+        } else {
+          phase.wrap('OpenCart', fetchOpenCartData(brandId));
+        }
+      }
       if (data.magento?.connected) phase.wrap('Magento', fetchMagentoData(brandId));
       break;
     case 'analytics':
@@ -1980,6 +2351,13 @@ async function executeBrandNightlyWave(
     } catch (err) {
       logger.error(`[ScheduledSync/erp] ecommerce_summary refresh failed for ${brandId}:`, err);
     }
+    if (data.megaventory?.connected) {
+      try {
+        await refreshProductIntelligenceAggregate(brandId);
+      } catch (err) {
+        logger.warn(`[ScheduledSync/erp] product intelligence refresh failed for ${brandId}:`, err);
+      }
+    }
   }
 
   if (wave === 'ecommerce') {
@@ -1996,6 +2374,19 @@ async function executeBrandNightlyWave(
         logger.error(`[ScheduledSync/ecommerce] E-commerce summary failed for ${brandId}:`, err);
       }
     }
+    const oc = data.opencart as Record<string, unknown> | undefined;
+    if (data.opencart?.connected && oc && !isOpenCartInitialBackfillIncomplete(oc)) {
+      try {
+        await refreshStockMovement(brandId);
+      } catch (err) {
+        logger.warn(`[ScheduledSync/ecommerce] stock movement refresh failed for ${brandId}:`, err);
+      }
+      try {
+        await refreshProductIntelligenceAggregate(brandId);
+      } catch (err) {
+        logger.warn(`[ScheduledSync/ecommerce] product intelligence refresh failed for ${brandId}:`, err);
+      }
+    }
   }
 }
 
@@ -2008,7 +2399,8 @@ async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: Ni
     const connectorsSnap = await db.collection('connectors').get();
     let failedConnectorBrands = 0;
 
-    await runPool(connectorsSnap.docs, NIGHTLY_CONNECTOR_SYNC_CONCURRENCY, async (docSnap) => {
+    const concurrency = wave === 'ecommerce' ? 1 : NIGHTLY_CONNECTOR_SYNC_CONCURRENCY;
+    await runPool(connectorsSnap.docs, concurrency, async (docSnap) => {
       const brandId = docSnap.id;
       const data = docSnap.data();
       try {
@@ -2103,7 +2495,7 @@ export const scheduledSyncMarketing = onSchedule(
 
 /** E-shop imports + ecommerce_summary — 05:20 */
 export const scheduledSyncEcommerce = onSchedule(
-  { ...nightlyConnectorScheduleBase, schedule: 'every day 05:20' },
+  { ...nightlyConnectorScheduleBase, ...OPENCART_EGRESS_OPTIONS, schedule: 'every day 05:20', memory: '4GiB' as const, cpu: 2 },
   async () => runNightlyConnectorWaveJob('ecommerce', 'scheduledSyncEcommerce')
 );
 
@@ -2113,9 +2505,16 @@ export const scheduledSyncWebAnalytics = onSchedule(
   async () => runNightlyConnectorWaveJob('analytics', 'scheduledSyncWebAnalytics')
 );
 
-/** ERP connectors — 06:00 */
+/**
+ * ERP connectors — 06:00.
+ * Μεγάλα e-shops (π.χ. e-tennis: 87k products + 15k invoices) είναι αργά. Το scheduled timeout
+ * έχει σκληρό όριο 1800s (30′) από την πλατφόρμα — δεν αυξάνεται. Αντ' αυτού δίνουμε περισσότερη
+ * RAM/CPU για ταχύτερο import ώστε να προλαβαίνει τα completion markers, και επιπλέον γράφουμε
+ * early `megaventory.lastSyncAt` (στον connector) αμέσως μετά το core import (βλ. megaventoryConnector)
+ * ώστε το UI να δείχνει φρέσκο sync ακόμη κι αν τα αργά post-processing βήματα (gap-fill/RFM) δεν προλάβουν.
+ */
 export const scheduledSyncErp = onSchedule(
-  { ...nightlyConnectorScheduleBase, schedule: 'every day 06:00' },
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 06:00', memory: '2GiB' as const, cpu: 2 },
   async () => runNightlyConnectorWaveJob('erp', 'scheduledSyncErp')
 );
 
@@ -2129,7 +2528,7 @@ export const scheduledSyncFollowups = onSchedule(
 export const scheduledDataAnalysisRfm = onSchedule(
   { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: '20 7 1 * *' },
   async () => {
-    const snap = await db.collection('connectors').where('magento.connected', '==', true).limit(5).get();
+    const snap = await db.collection('connectors').get();
     for (const doc of snap.docs) {
       try {
         await refreshDataAnalysisRfmAggregate(doc.id);
@@ -2144,7 +2543,7 @@ export const scheduledDataAnalysisRfm = onSchedule(
 export const scheduledProductIntelligence = onSchedule(
   { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: 'every day 07:40' },
   async () => {
-    const snap = await db.collection('connectors').limit(20).get();
+    const snap = await db.collection('connectors').get();
     for (const doc of snap.docs) {
       try {
         await refreshProductIntelligenceAggregate(doc.id);
@@ -2389,11 +2788,15 @@ export const geminiProxy = onRequest(
     }
 
     const ALLOWED_GEMINI_MODELS = new Set(['gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash']);
-    const { systemPrompt: rawSystemPrompt, userPrompt: rawUserPrompt, model: rawModel = 'gemini-2.5-pro', temperature = 0 } = req.body as {
+    const { systemPrompt: rawSystemPrompt, userPrompt: rawUserPrompt, model: rawModel = 'gemini-2.5-pro', temperature = 0, history, brandId } = req.body as {
       systemPrompt?: string;
       userPrompt?: string;
       model?: string;
       temperature?: number;
+      /** Προαιρετικό ιστορικό συνομιλίας (multi-turn). Το API απαιτεί η αλληλουχία να ξεκινά από 'user'. */
+      history?: Array<{ role?: string; text?: string }>;
+      /** Για per-brand λογιστική κόστους (ai_usage). */
+      brandId?: string;
     };
 
     if (!rawUserPrompt) {
@@ -2414,8 +2817,49 @@ export const geminiProxy = onRequest(
         generationConfig: { temperature },
       });
 
-      const result = await geminiModel.generateContent(userPrompt);
+      // Multi-turn: χτίζουμε contents από το ιστορικό + το τρέχον μήνυμα.
+      const cleanedHistory = Array.isArray(history)
+        ? history
+            .filter(
+              (h): h is { role: 'user' | 'model'; text: string } =>
+                !!h &&
+                typeof h.text === 'string' &&
+                h.text.trim().length > 0 &&
+                (h.role === 'user' || h.role === 'model')
+            )
+            .map((h) => ({ role: h.role, parts: [{ text: h.text }] }))
+        : [];
+      // Το Gemini απαιτεί το πρώτο content να έχει role 'user' — αφαιρούμε leading 'model' turns
+      // (π.χ. proactive καλωσόρισμα του Mark).
+      while (cleanedHistory.length > 0 && cleanedHistory[0].role === 'model') cleanedHistory.shift();
+
+      const result =
+        cleanedHistory.length > 0
+          ? await geminiModel.generateContent({
+              contents: [...cleanedHistory, { role: 'user', parts: [{ text: userPrompt }] }],
+            })
+          : await geminiModel.generateContent(userPrompt);
       const text = result.response.text();
+
+      // Token/cost logging (per user + brand) — καλύπτει το κενό του AI_COST_MODEL.
+      try {
+        const usage = result.response.usageMetadata;
+        if (usage) {
+          await db.collection('ai_usage').add({
+            uid: decodedUid,
+            brandId: typeof brandId === 'string' && brandId ? brandId : null,
+            model: safeModel,
+            promptTokens: usage.promptTokenCount ?? null,
+            candidatesTokens: usage.candidatesTokenCount ?? null,
+            totalTokens: usage.totalTokenCount ?? null,
+            multiTurn: cleanedHistory.length > 0,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        }
+      } catch (logErr) {
+        logger.warn('[geminiProxy] usage log failed:', logErr);
+      }
+
       res.status(200).json({ text });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -2838,11 +3282,12 @@ export const refreshProductIntelligence = onRequest(
       const { brandId } = req.body as { brandId?: string };
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
-      if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να ανανεώσει το Product Intelligence aggregate' });
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
         return;
       }
 
+      logger.info(`[refreshProductIntelligence] brandId=${brandId} uid=${decoded.uid}`);
       const result = await refreshProductIntelligenceAggregate(brandId);
       res.status(200).json({ success: true, brandId, result });
     } catch (error) {

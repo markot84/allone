@@ -7,6 +7,7 @@ import type { ProvenanceContentContext } from '../data/contentSuggestionsPrompt'
 export interface UseAIContentSuggestionsOptions {
   aiEnabled: boolean;
   brandName?: string;
+  brandProfileText?: string;
   topCategories?: string[];
   segmentNames?: string[];
   /** Provenance snapshot από caller που έχει `useProductSignals.coverage`. */
@@ -16,6 +17,7 @@ export interface UseAIContentSuggestionsOptions {
 export function useAIContentSuggestions({
   aiEnabled,
   brandName,
+  brandProfileText,
   topCategories,
   segmentNames,
   provenance,
@@ -30,7 +32,7 @@ export function useAIContentSuggestions({
   const { data: result, isLoading: suggestionsLoading, refetch } = useQuery({
     queryKey: [
       'aiContentSuggestions', 'v3',
-      activeStrategy?.scenarioId, activeStrategy?.id, aiEnabled, brandName,
+      activeStrategy?.scenarioId, activeStrategy?.id, aiEnabled, brandName, brandProfileText,
       triagePromptCtx?.bucketLabel, triagePromptCtx?.skuCount,
       provenance?.connectorPct, provenance?.totalProducts,
     ],
@@ -41,6 +43,7 @@ export function useAIContentSuggestions({
         scenarioName: getStrategyName(activeStrategy.scenarioId),
         weights: activeStrategy.weights ?? null,
         brandName,
+        brandProfileText,
         topCategories,
         segmentNames,
         triage: triagePromptCtx,

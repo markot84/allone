@@ -40,7 +40,9 @@ import {
 import { Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
 import { useEcommerceSummary, type EcommerceTopProduct } from '../../hooks/useEcommerceSummary';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
-import { lineRevenueAndQtyForTopProducts, filterMagentoLineItemsForTopProducts } from '../../utils/productLineStats';
+import { aggregateOrderLinesForTopProducts } from '../../utils/productLineStats';
+import { resolveParentSku, hasDerivedParentSku } from '../../utils/parentSku';
+import { useMagentoProductEnrichment } from '../../hooks/useMagentoProductEnrichment';
 import { paymentChartLabelForEcommerceOrder } from '../../utils/magentoPaymentChart';
 import { getBrandHistoryStartISO } from '../../utils/brandHistoryStart';
 import type { KPICardData } from '../common/KPICard';
@@ -94,17 +96,6 @@ const TOOLTIP_STYLE: React.CSSProperties = {
 };
 
 const METHOD_CHART_COLORS = ['#F97316', '#FB923C', '#FDBA74', '#F59E0B', '#FACC15', '#A3A3A3', '#94A3B8', '#CBD5E1'];
-
-function deriveParentSku(sku: string | null | undefined): string {
-  const normalized = String(sku || '').trim();
-  return normalized;
-}
-
-function hasDerivedParentSku(sku: string | null | undefined): boolean {
-  const normalized = String(sku || '').trim();
-  if (!normalized) return false;
-  return deriveParentSku(normalized) !== normalized;
-}
 
 /** Το Recharts Area χρειάζεται ≥2 σημεία για ορατή γραμμή. */
 function padSparklineForChart(values: number[]): number[] {
@@ -253,6 +244,18 @@ export function EcommerceDashboard() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const ecomm = useEcommerceSummary();
+
+  // Catalog parent SKUs (Magento itemGroupId) — αξιόπιστη ομαδοποίηση όπου υπάρχει κατάλογος.
+  // Όπου λείπει (π.χ. e-tennis: catalog 401), ο resolver πέφτει σε conservative suffix-strip.
+  const productEnrichment = useMagentoProductEnrichment();
+  const parentSkuOf = useMemo(() => {
+    const bySku = productEnrichment.bySku;
+    return (sku: string | null | undefined) => resolveParentSku(sku, bySku.get(String(sku || '').trim())?.itemGroupId);
+  }, [productEnrichment.bySku]);
+  const hasParentOf = useMemo(() => {
+    const bySku = productEnrichment.bySku;
+    return (sku: string | null | undefined) => hasDerivedParentSku(sku, bySku.get(String(sku || '').trim())?.itemGroupId);
+  }, [productEnrichment.bySku]);
 
   // Ίδιο global date range με Dashboard/ROI — όχι session-local override (είχε προκαλέσει «άλλο Μάρτιο στο E-commerce, άλλο στο Dashboard»).
   const {
@@ -485,23 +488,21 @@ export function EcommerceDashboard() {
     if (!rawOrdersLoaded) {
       return ecomm.topProducts.map((product) => ({
         ...product,
-        parentSku: deriveParentSku(product.sku),
-        hasDerivedParent: hasDerivedParentSku(product.sku),
+        parentSku: parentSkuOf(product.sku),
+        hasDerivedParent: hasParentOf(product.sku),
       }));
     }
     const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
     for (const order of revenueOrdersForTables) {
-      const lines = filterMagentoLineItemsForTopProducts(order.platform, order.lineItems);
-      for (const lineItem of lines) {
-        if (isEcommerceDemoLineItem(lineItem)) continue;
-        const contrib = lineRevenueAndQtyForTopProducts(order.platform, lineItem);
-        if (!contrib) continue;
-        const key = String(lineItem.sku || lineItem.title || lineItem.name || 'unknown').trim();
+      const demoFiltered = (order.lineItems || []).filter((li) => !isEcommerceDemoLineItem(li));
+      const aggregated = aggregateOrderLinesForTopProducts(order.platform, demoFiltered);
+      for (const row of aggregated) {
+        const key = row.sku.trim();
         if (!key) continue;
-        const name = String(lineItem.title || lineItem.name || key);
-        const existing = productMap.get(key) || { name, revenue: 0, quantity: 0 };
-        existing.revenue += contrib.revenue;
-        existing.quantity += contrib.quantity;
+        const existing = productMap.get(key) || { name: row.name, revenue: 0, quantity: 0 };
+        existing.revenue += row.revenue;
+        existing.quantity += row.quantity;
+        if (!existing.name) existing.name = row.name;
         productMap.set(key, existing);
       }
     }
@@ -511,17 +512,20 @@ export function EcommerceDashboard() {
         name: data.name,
         revenue: data.revenue,
         quantity: data.quantity,
-        parentSku: deriveParentSku(sku),
-        hasDerivedParent: hasDerivedParentSku(sku),
+        parentSku: parentSkuOf(sku),
+        hasDerivedParent: hasParentOf(sku),
       }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, [rawOrdersLoaded, revenueOrdersForTables, ecomm.topProducts]);
+  }, [rawOrdersLoaded, revenueOrdersForTables, ecomm.topProducts, parentSkuOf, hasParentOf]);
 
-  /** Μόνο Parent SKU: δεν συμπεραίνουμε parent από παύλες, γιατί πολλά πραγματικά SKUs έχουν suffix μετά από `-`. */
+  /**
+   * Μόνο Parent SKU: ομαδοποίηση με προτεραιότητα στον κατάλογο (Magento itemGroupId)·
+   * όπου λείπει, conservative strip αναγνωρισμένου size/gauge suffix (βλ. resolveParentSku).
+   */
   const parentProductsForTables = useMemo<TopProductRow[]>(() => {
     const parentMap = new Map<string, { revenue: number; quantity: number; name: string }>();
     for (const product of topProductsForTables) {
-      const psku = deriveParentSku(product.sku) || product.sku;
+      const psku = parentSkuOf(product.sku) || product.sku;
       if (!psku) continue;
       const existing = parentMap.get(psku) || { revenue: 0, quantity: 0, name: '' };
       existing.revenue += product.revenue;
@@ -543,7 +547,7 @@ export function EcommerceDashboard() {
         hasDerivedParent: true,
       }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, [topProductsForTables]);
+  }, [topProductsForTables, parentSkuOf]);
 
   const sortedOrders = useMemo(() => {
     const arr = [...ordersForTables];
@@ -772,8 +776,8 @@ export function EcommerceDashboard() {
                 <AreaChart data={filteredDailyRevenue}>
                   <defs>
                     <linearGradient id="ecommRevGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#F97316" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+                      <stop offset="5%" stopColor="var(--nts-accent)" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="var(--nts-accent)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
@@ -795,7 +799,7 @@ export function EcommerceDashboard() {
                     labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                     formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Έσοδα']}
                   />
-                  <Area type="monotone" dataKey="revenue" stroke="#F97316" fill="url(#ecommRevGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
+                  <Area type="monotone" dataKey="revenue" stroke="var(--nts-accent)" fill="url(#ecommRevGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -1048,7 +1052,7 @@ export function EcommerceDashboard() {
                 <option value="100">100 / σελίδα</option>
                 <option value="all">Προβολή όλων</option>
               </select>
-              <Tooltip content="Όλα τα SKUs: κάθε γραμμή όπως στο κατάστημα. Μόνο Parent SKU: ομαδοποίηση μόνο όταν υπάρχει αξιόπιστο parent SKU από τα δεδομένα. Παύλες μέσα στο SKU δεν θεωρούνται παραλλαγές, γιατί στο e-tennis αποτελούν κανονικό μέρος του SKU.">
+              <Tooltip content="Όλα τα SKUs: κάθε προϊόν όπως πωλήθηκε (parent+child ενοποιημένα). Μόνο Parent SKUs: ομαδοποίηση παραλλαγών — πρώτα από τον κατάλογο (Magento item_group_id), αλλιώς κόβεται μόνο αναγνωρισμένο μέγεθος/gauge (π.χ. -1.30mm, -L3, -XL).">
                 <span className="text-[11px] text-[#9CA3AF]">Filters</span>
               </Tooltip>
             </div>

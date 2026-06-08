@@ -34,6 +34,9 @@ function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
 }
 
+const JSON_CHUNK_TARGET_BYTES = 850_000;
+const DELETE_BATCH_SIZE = 400;
+
 /** YYYY-MM-DD σε Europe/Athens (απλοποιημένο: UTC date — αρκεί για daily granularity). */
 function todayKey(date: Date = new Date()): string {
   return date.toISOString().slice(0, 10);
@@ -43,6 +46,74 @@ function dateKeyDaysAgo(days: number, from: Date = new Date()): string {
   const d = new Date(from);
   d.setUTCDate(d.getUTCDate() - days);
   return todayKey(d);
+}
+
+function chunkRecord<T>(record: Record<string, T>): Record<string, T>[] {
+  const chunks: Record<string, T>[] = [];
+  let bucket: Record<string, T> = {};
+  for (const [key, value] of Object.entries(record)) {
+    bucket[key] = value;
+    if (JSON.stringify(bucket).length > JSON_CHUNK_TARGET_BYTES) {
+      delete bucket[key];
+      if (Object.keys(bucket).length > 0) chunks.push(bucket);
+      bucket = { [key]: value };
+    }
+  }
+  if (Object.keys(bucket).length > 0) chunks.push(bucket);
+  return chunks.length ? chunks : [{}];
+}
+
+async function deleteChunkCollection(db: Firestore, collectionPath: string): Promise<void> {
+  for (;;) {
+    const snap = await db.collection(collectionPath).limit(DELETE_BATCH_SIZE).get();
+    if (snap.empty) break;
+    const batch = db.batch();
+    for (const doc of snap.docs) batch.delete(doc.ref);
+    await batch.commit();
+    if (snap.size < DELETE_BATCH_SIZE) break;
+  }
+}
+
+async function writeJsonChunks<T>(
+  db: Firestore,
+  collectionPath: string,
+  fieldName: string,
+  record: Record<string, T>
+): Promise<number> {
+  await deleteChunkCollection(db, collectionPath);
+  const chunks = chunkRecord(record);
+  for (let i = 0; i < chunks.length; i += 500) {
+    const batch = db.batch();
+    chunks.slice(i, i + 500).forEach((chunk, offset) => {
+      batch.set(db.collection(collectionPath).doc(String(i + offset)), {
+        [fieldName]: JSON.stringify(chunk),
+        keyCount: Object.keys(chunk).length,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    await batch.commit();
+  }
+  return chunks.length;
+}
+
+async function readJsonChunks<T>(
+  db: Firestore,
+  collectionPath: string,
+  fieldName: string
+): Promise<Record<string, T> | null> {
+  const snap = await db.collection(collectionPath).get();
+  if (snap.empty) return null;
+  const merged: Record<string, T> = {};
+  for (const doc of snap.docs.sort((a, b) => Number(a.id) - Number(b.id))) {
+    const raw = doc.data()[fieldName];
+    if (typeof raw !== 'string' || !raw) continue;
+    try {
+      Object.assign(merged, JSON.parse(raw) as Record<string, T>);
+    } catch {
+      logger.warn(`[StockMovement] Corrupt JSON chunk ${collectionPath}/${doc.id}`);
+    }
+  }
+  return Object.keys(merged).length ? merged : null;
 }
 
 /** Διαβάζει stock από το `products` collection (import-based brands). */
@@ -108,6 +179,12 @@ export async function captureStockSnapshot(brandId: string): Promise<{
     skuStock[sku] = Math.round(qty);
   }
   const skuStockJson = JSON.stringify(skuStock);
+  const stockSnapshotChunkCount = await writeJsonChunks(
+    db,
+    `stock_snapshots/${brandId}/days/${dateKey}/chunks`,
+    'skuStockJson',
+    skuStock
+  );
 
   const source: 'connector' | 'import' | 'mixed' =
     connectorMap.size > 0 && importMap.size > 0
@@ -118,12 +195,16 @@ export async function captureStockSnapshot(brandId: string): Promise<{
 
   await db
     .doc(`stock_snapshots/${brandId}/days/${dateKey}`)
-    .set({
-      skuStockJson,
-      skuCount: merged.size,
-      source,
-      capturedAt: FieldValue.serverTimestamp(),
-    });
+    .set(
+      {
+        skuStockJson: FieldValue.delete(),
+        stockSnapshotChunkCount,
+        skuCount: merged.size,
+        source,
+        capturedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
 
   logger.info(
     `[StockMovement] Snapshot captured for ${brandId} (${dateKey}): ${merged.size} SKUs, source=${source}, ${(skuStockJson.length / 1024).toFixed(1)}KB`
@@ -134,6 +215,7 @@ export async function captureStockSnapshot(brandId: string): Promise<{
 
 interface SnapshotDoc {
   skuStockJson?: string;
+  stockSnapshotChunkCount?: number;
   skuCount?: number;
   source?: string;
 }
@@ -142,12 +224,15 @@ async function readSnapshot(db: Firestore, brandId: string, dateKey: string): Pr
   const snap = await db.doc(`stock_snapshots/${brandId}/days/${dateKey}`).get();
   if (!snap.exists) return null;
   const data = snap.data() as SnapshotDoc;
-  if (!data.skuStockJson) return null;
-  try {
-    return JSON.parse(data.skuStockJson) as Record<string, number>;
-  } catch {
-    return null;
+  if (data.skuStockJson) {
+    try {
+      return JSON.parse(data.skuStockJson) as Record<string, number>;
+    } catch {
+      return null;
+    }
   }
+  if (!data.stockSnapshotChunkCount) return null;
+  return readJsonChunks<number>(db, `stock_snapshots/${brandId}/days/${dateKey}/chunks`, 'skuStockJson');
 }
 
 /**
@@ -250,14 +335,24 @@ export async function computeStockMovement(brandId: string): Promise<{
   }
 
   const skuMovementJson = JSON.stringify(movement);
+  const stockMovementChunkCount = await writeJsonChunks(
+    db,
+    `stock_movement/${brandId}/chunks`,
+    'skuMovementJson',
+    movement
+  );
 
   const stockMovementUpdatedAt = FieldValue.serverTimestamp();
-  await db.doc(`stock_movement/${brandId}`).set({
-    skuMovementJson,
-    skuMovementCount: allSkus.size,
-    stockMovementBaselineDate: baselineDate,
-    stockMovementUpdatedAt,
-  });
+  await db.doc(`stock_movement/${brandId}`).set(
+    {
+      skuMovementJson: FieldValue.delete(),
+      stockMovementChunkCount,
+      skuMovementCount: allSkus.size,
+      stockMovementBaselineDate: baselineDate,
+      stockMovementUpdatedAt,
+    },
+    { merge: true }
+  );
 
   await db.doc(`ecommerce_summary/${brandId}`).set(
     {

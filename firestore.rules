@@ -19,11 +19,15 @@ service cloud.firestore {
                 || get(/databases/$(database)/documents/brands/$(brandId)).data.createdBy == request.auth.uid));
     }
 
-    // Owner ή admin του brand (για αλλαγή ρόλων μελών)
+    // Owner ή admin του brand. Ο δημιουργός θεωρείται owner για legacy brands χωρίς members doc.
     function isBrandOwnerOrAdmin(brandId) {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid))
-        && get(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid)).data.role in ['owner', 'admin'];
+      return isSuperAdmin()
+        || (request.auth != null
+            && exists(/databases/$(database)/documents/brands/$(brandId))
+            && get(/databases/$(database)/documents/brands/$(brandId)).data.createdBy == request.auth.uid)
+        || (request.auth != null
+            && exists(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid))
+            && get(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid)).data.role in ['owner', 'admin']);
     }
 
     // Ιεραρχία ρόλων (owner > admin > member). Χρησιμοποιείται για να μπλοκάρει
@@ -103,7 +107,7 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120;
-      allow update, delete: if isBrandMember(brandId);
+      allow update, delete: if isBrandOwnerOrAdmin(brandId);
 
       // Brand members — προσοχή: collection group query `where userId == request.auth.uid` ΔΕΝ πρέπει
       // να βασίζεται μόνο σε isBrandMember(), γιατί το exists(.../members/$(uid)) είναι το ίδιο doc
@@ -153,6 +157,17 @@ service cloud.firestore {
 
       // Morning briefing cache (per-day documents)
       match /briefings/{briefingId} {
+        allow read, write: if isBrandMember(brandId);
+      }
+
+      // Mark agent conversation sessions (per-brand, multi-turn history).
+      // Brand isolation: τα sessions ζουν κάτω από το brand και απαιτούν membership.
+      match /mark_sessions/{sessionId} {
+        allow read, write: if isBrandMember(brandId);
+      }
+
+      // Legacy collection (πρώην Nilia) — διατηρείται μόνο για migration read.
+      match /nilia_sessions/{sessionId} {
         allow read, write: if isBrandMember(brandId);
       }
 
@@ -358,8 +373,18 @@ service cloud.firestore {
         && brandIdUnchanged();
       allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
+    match /commercial_info/{infoId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
     // Connectors: keyed by brandId directly
     match /connectors/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if canManageBrandConnectors(brandId);
+    }
+    // Connector rules: split from connectors doc to keep it lean
+    match /connector_rules/{brandId} {
       allow read: if isBrandMember(brandId);
       allow write: if canManageBrandConnectors(brandId);
     }
@@ -655,6 +680,82 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && resource.data.createdBy == request.auth.uid;
     }
 
+    // B2B Accounts — brand-scoped subcollection (Account Health Score)
+    match /b2b_accounts/{brandId}/accounts/{accountId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandMember(brandId);
+    }
+
+    // HR Employees — brand-scoped subcollection
+    match /hr_employees/{brandId}/employees/{employeeId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandOwnerOrAdmin(brandId);
+    }
+
+    // HR Leaves — brand-scoped subcollection
+    match /hr_leaves/{brandId}/leaves/{leaveId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandOwnerOrAdmin(brandId);
+    }
+
+    // Offers — brand-scoped
+    match /offers/{offerId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
+    // Territory reps — brand-scoped subcollection
+    match /territories/{brandId}/reps/{repId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandOwnerOrAdmin(brandId);
+    }
+
+    // Territory assignments — brand-scoped subcollection
+    match /territories/{brandId}/assignments/{assignmentId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandOwnerOrAdmin(brandId);
+    }
+
+    match /commercial_actions/{actionId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
+    match /commercial_decision_events/{eventId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
+    match /marketing_plans/{planId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
+    // «Εμπορικές Πληροφορίες» — γνώση/ένστικτο επιχειρηματία (brand-scoped, client-written).
+    // Τροφοδοτεί Mark, Marketing Plan, πρόβλεψη πωλήσεων, εμπορικές πολιτικές.
+    match /commercial_info/{infoId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
+    // Policy Impact precomputed result cache (client-written, brand-scoped). Μικρό doc με τα ήδη
+    // υπολογισμένα price/marketing decisions ώστε ο βαρύς υπολογισμός να γίνεται μία φορά ανά περίοδο.
+    match /commercial_scenario_cache/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
     // Marketing interest leads — εγγραφή μόνο μέσω Cloud Functions · ανάγνωση super admin
     match /interest_leads/{leadId} {
       allow read: if isSuperAdmin();
@@ -664,6 +765,12 @@ service cloud.firestore {
     // Nightly scheduler health/status — write μόνο από Cloud Functions (Admin SDK), read από authenticated users
     match /system_health/{docId} {
       allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // AI token/cost logging — write μόνο από Cloud Functions (Admin SDK), read super admin
+    match /ai_usage/{usageId} {
+      allow read: if isSuperAdmin();
       allow write: if false;
     }
 

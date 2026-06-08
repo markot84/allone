@@ -10,6 +10,7 @@ import {
 import { strategyContentMap } from '../data/mockContent';
 import { scenarios } from '../data/mockScenarios';
 import { parseJsonObject } from '../utils/aiJson';
+import { hashBrandProfilePromptText } from './brandProfile';
 
 const MODEL_NAME = 'gemini-2.5-pro';
 
@@ -71,6 +72,7 @@ export interface ContentSuggestionsResult {
   actions: OrganicAction[];
   directions: ContentDirection[];
   brief: string;
+  brandProfileContextSig?: string;
 }
 
 function parseAIResponse(text: string): ContentSuggestionsResult | null {
@@ -117,6 +119,7 @@ export interface GenerateContentSuggestionsParams {
   scenarioName: string;
   weights: Record<string, number> | null;
   brandName?: string;
+  brandProfileText?: string;
   topCategories?: string[];
   segmentNames?: string[];
   triage?: TriageContentContext;
@@ -127,12 +130,13 @@ export interface GenerateContentSuggestionsParams {
 export async function generateContentSuggestions(
   params: GenerateContentSuggestionsParams
 ): Promise<ContentSuggestionsResult | null> {
-  const { scenarioId, scenarioName, weights, brandName, topCategories, segmentNames, triage, provenance, audience } = params;
+  const { scenarioId, scenarioName, weights, brandName, brandProfileText, topCategories, segmentNames, triage, provenance, audience } = params;
 
   const mapEntry = scenarioId && scenarioId !== 'custom'
     ? strategyContentMap[scenarioId as keyof typeof strategyContentMap]
     : undefined;
   const scenario = scenarios.find((s) => s.id === scenarioId);
+  const brandProfileContextSig = hashBrandProfilePromptText(brandProfileText);
 
   const ctx: StrategyContext = {
     scenarioId,
@@ -145,6 +149,7 @@ export async function generateContentSuggestions(
     avoid: mapEntry?.avoid,
     sampleHeadlines: mapEntry?.sample_headlines,
     brandName,
+    brandProfileText,
     topCategories,
     segmentNames,
     triage,
@@ -163,13 +168,13 @@ export async function generateContentSuggestions(
     });
 
     if (!text) {
-      return { actions: getFallbackSuggestions(scenarioId, scenarioName, brandName, topCategories), directions: [], brief: '' };
+      return { actions: getFallbackSuggestions(scenarioId, scenarioName, brandName, topCategories), directions: [], brief: '', brandProfileContextSig };
     }
     const parsed = parseAIResponse(text);
-    if (parsed && (parsed.actions.length > 0 || parsed.directions.length > 0)) return parsed;
-    return { actions: getFallbackSuggestions(scenarioId, scenarioName, brandName, topCategories), directions: [], brief: '' };
+    if (parsed && (parsed.actions.length > 0 || parsed.directions.length > 0)) return { ...parsed, brandProfileContextSig };
+    return { actions: getFallbackSuggestions(scenarioId, scenarioName, brandName, topCategories), directions: [], brief: '', brandProfileContextSig };
   } catch (error) {
     console.error('[aiContentSuggestions]', error);
-    return { actions: getFallbackSuggestions(scenarioId, scenarioName, brandName, topCategories), directions: [], brief: '' };
+    return { actions: getFallbackSuggestions(scenarioId, scenarioName, brandName, topCategories), directions: [], brief: '', brandProfileContextSig };
   }
 }

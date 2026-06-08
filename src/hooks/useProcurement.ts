@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { ProcurementService, PROCUREMENT_COLLECTIONS } from '../services/firestore';
 import { useBrand } from './useBrand';
 
@@ -16,43 +16,56 @@ const SHEET_TO_COLLECTION: Record<SheetKey, (typeof PROCUREMENT_COLLECTIONS)[num
 
 const KEYS = Object.keys(SHEET_TO_COLLECTION) as SheetKey[];
 
-async function fetchSheets(brandId: string, keys: readonly SheetKey[]) {
-  const results = await Promise.all(
-    keys.map((key) => ProcurementService.getAll(SHEET_TO_COLLECTION[key], brandId))
-  );
-  return Object.fromEntries(keys.map((key, i) => [key, results[i]])) as Partial<Record<SheetKey, unknown[]>>;
-}
+const EMPTY: Record<SheetKey, unknown[]> = {
+  inventory: [], costing: [], item_evaluation: [], customer_evaluation: [],
+  pricing_policy: [], fiscal_year: [], statistics: [],
+};
 
 export function useProcurement(options?: { sheets?: readonly SheetKey[] }) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const queryClient = useQueryClient();
   const requestedSheets = options?.sheets?.length ? options.sheets : KEYS;
-  const sheetsKey = requestedSheets.join('|');
 
-  const { data, isPending, isFetching } = useQuery({
-    queryKey: ['procurement', brandId, sheetsKey],
-    queryFn: () => (brandId ? fetchSheets(brandId, requestedSheets) : Promise.resolve(null)),
-    staleTime: 10 * 60 * 1000,
-    gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    enabled: !!brandId,
-    placeholderData: (previousData) => previousData,
+  // Per-sheet queries: κάθε sheet έχει ΔΙΚΟ του cache key → (α) όταν άλλη σελίδα ζητά ένα μόνο
+  // sheet (π.χ. Dashboard → 'costing') δεν ξανακατεβαίνει στο Procurement page, (β) τα μεγάλα
+  // sheets (inventory/costing για safeblock ~12k SKU) φορτώνονται ανεξάρτητα/παράλληλα και δεν
+  // μπλοκάρουν το ένα το άλλο. `cacheFirst` → instant επαναφόρτωση από το persistent IndexedDB
+  // cache σε κάθε επόμενη επίσκεψη (ο χρήστης μπαινοβγαίνει συχνά στη σελίδα).
+  const results = useQueries({
+    queries: requestedSheets.map((key) => ({
+      queryKey: ['procurement-sheet', brandId, key],
+      queryFn: () =>
+        brandId
+          ? ProcurementService.getAll(SHEET_TO_COLLECTION[key], brandId, { cacheFirst: true })
+          : Promise.resolve([] as unknown[]),
+      staleTime: 10 * 60 * 1000,
+      gcTime: 24 * 60 * 60 * 1000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      enabled: !!brandId,
+      placeholderData: (previousData: unknown[] | undefined) => previousData,
+    })),
   });
 
-  const empty: Record<SheetKey, unknown[]> = {
-    inventory: [], costing: [], item_evaluation: [], customer_evaluation: [],
-    pricing_policy: [], fiscal_year: [], statistics: [],
-  };
-
-  const allData = { ...empty, ...(data ?? {}) };
+  const data: Record<SheetKey, unknown[]> = { ...EMPTY };
+  const loadingSheets = new Set<SheetKey>();
+  let anyPending = false;
+  let anyFetching = false;
+  requestedSheets.forEach((key, i) => {
+    const r = results[i];
+    data[key] = (r?.data as unknown[]) ?? [];
+    if (r?.isPending) { anyPending = true; loadingSheets.add(key); }
+    if (r?.isFetching) anyFetching = true;
+  });
 
   return {
-    data: allData,
-    isLoading: isPending,
-    isRefreshing: !isPending && isFetching,
-    hasData: Object.values(allData).some((arr) => (arr?.length ?? 0) > 0),
-    invalidate: () => queryClient.invalidateQueries({ queryKey: ['procurement'] }),
+    data,
+    isLoading: anyPending,
+    isRefreshing: !anyPending && anyFetching,
+    hasData: Object.values(data).some((arr) => (arr?.length ?? 0) > 0),
+    /** Επιστρέφει true όσο το συγκεκριμένο sheet δεν έχει φορτώσει ακόμη (per-tab loading). */
+    isSheetLoading: (key: SheetKey) => loadingSheets.has(key),
+    invalidate: () => queryClient.invalidateQueries({ queryKey: ['procurement-sheet'] }),
   };
 }

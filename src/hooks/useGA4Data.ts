@@ -162,7 +162,10 @@ export function useGA4Data() {
     queryFn: () => (brandId ? fetchGA4Data(brandId) : Promise.resolve(null)),
     staleTime: 10 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
+    // Ανανέωση όταν ανοίγει η σελίδα: μετά το νυχτερινό GA4 sync (05:40) ο χρήστης πρέπει να βλέπει
+    // φρέσκα δεδομένα, όχι το persisted cache προηγούμενης session (π.χ. έδειχνε δεδομένα έως 22/05
+    // ενώ ο server είχε συγχρονιστεί). `true` κάνει refetch μόνο αν είναι stale (>staleTime).
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData,
     enabled: !!brandId,
@@ -173,7 +176,7 @@ export function useGA4Data() {
     enabled: !!brandId && Boolean(data?.ga4),
     staleTime: 10 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData,
   });

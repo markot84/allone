@@ -232,7 +232,10 @@ const COL_ALIASES: Record<string, string[]> = {
   'ΚΕΡΔΟΣ':              ['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ', 'ΚΕΡΔΟΣ', 'PROFIT', 'ΚΕΡΔΗ'],
   'ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ': ['ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ', 'ΑΞΙΑ ΑΝΑΤΡΟΦ'],
   'ΠΕΡΙΓΡΑΦΗ':           ['ΠΕΡΙΓΡΑΦΗ', 'ΟΝΟΜΑ', 'DESCRIPTION', 'NAME'],
-  'ΚΩΔΙΚΟΣ':             ['ΚΩΔΙΚΟΣ', 'SKU', 'CODE', 'BARCODE'],
+  // «ΚΩΔΙΚΟΣ MASTER»/«MASTER»: στο συγκεντρωτικό φύλλο «ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ MASTER» ο κωδικός
+  // είναι ο parent (master) κωδικός. Μπαίνουν ΜΕΤΑ το «ΚΩΔΙΚΟΣ» ώστε στα αναλυτικά φύλλα (που έχουν
+  // και τα δύο) να κερδίζει πάντα το exact «ΚΩΔΙΚΟΣ» (variant) — pass-1 exact προηγείται.
+  'ΚΩΔΙΚΟΣ':             ['ΚΩΔΙΚΟΣ', 'ΚΩΔΙΚΟΣ MASTER', 'MASTER', 'SKU', 'CODE', 'BARCODE'],
 };
 
 /** Returns the first non-numeric column key whose name contains the keyword (case-insensitive).
@@ -799,7 +802,11 @@ interface ProcurementPageProps {
 export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) {
   const toast = useToast();
   const { currentBrand } = useBrand();
-  const { data, isLoading, isRefreshing, hasData, invalidate } = useProcurement();
+  const { data, isRefreshing, hasData, invalidate, isSheetLoading } = useProcurement();
+  // Full-page spinner ΜΟΝΟ για τα sheets που τροφοδοτούν την επισκόπηση/KPIs. Τα υπόλοιπα
+  // (pricing_policy/customer_evaluation/fiscal_year/statistics) φορτώνουν στο παρασκήνιο και
+  // εμφανίζονται όταν ανοίξει το αντίστοιχο tab → η σελίδα εμφανίζεται πολύ νωρίτερα.
+  const criticalLoading = isSheetLoading('inventory') || isSheetLoading('costing') || isSheetLoading('item_evaluation');
   const { refresh: refreshProcurementSignals } = useRefreshProcurementSignals();
   const { monthlyRevenue, totalRevenue, hasData: hasEcommerce } = useEcommerceSummary();
   const [viewMode, setViewMode] = useState<'overview' | 'detail'>('overview');
@@ -974,7 +981,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
   }, [activeData, headers]);
 
 
-  if (isLoading) {
+  if (criticalLoading) {
     return <div className="flex items-center justify-center py-16"><Spinner size="lg" /></div>;
   }
 
@@ -1214,7 +1221,14 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
             )}
             <div className="overflow-x-auto">
               {activeData.length === 0 ? (
-                <div className="p-8 text-center text-[var(--nts-medium-gray)]">Καμία εγγραφή σε αυτή την καρτέλα.</div>
+                isSheetLoading(activeTab) ? (
+                  <div className="flex items-center justify-center gap-3 p-8 text-[var(--nts-medium-gray)]">
+                    <Spinner size="md" />
+                    <span>Φόρτωση δεδομένων…</span>
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-[var(--nts-medium-gray)]">Καμία εγγραφή σε αυτή την καρτέλα.</div>
+                )
               ) : (
                 <table className="text-sm">
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>

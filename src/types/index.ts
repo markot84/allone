@@ -21,12 +21,19 @@ export type ModuleId =
   | 'automation'
   | 'sales'
   | 'accounts'
-  | 'markets';
+  | 'markets'
+  | 'hr'
+  | 'offers'
+  | 'territories';
 export type BrandModuleOverrides = Partial<Record<ModuleId, boolean>>;
 export type AppSectionId =
   | 'brands'
+  | 'brand-profile'
   | 'dashboard'
   | 'strategy'
+  | 'policy-impact'
+  | 'marketing-plan'
+  | 'commercial-info'
   | 'calendar'
   | 'rfm'
   | 'products'
@@ -46,6 +53,9 @@ export type AppSectionId =
   | 'sales'
   | 'accounts'
   | 'markets'
+  | 'hr'
+  | 'offers'
+  | 'territories'
   | 'data'
   | 'data-products'
   | 'data-segments'
@@ -63,6 +73,7 @@ export interface Brand {
   type: 'B2B' | 'B2C';
   plan?: BrandPlan;
   enabledModules?: BrandModuleOverrides;
+  brandProfile?: BrandProfile;
   createdAt: string;
   createdBy: string;
   logoUrl?: string;
@@ -93,6 +104,43 @@ export interface Brand {
    * Όταν κενό, θεωρείται `eshop_classified` (default).
    */
   revenueSourceMode?: 'eshop_classified' | 'eshop_all' | 'erp';
+}
+
+export type BrandArchetype =
+  | 'ruler'
+  | 'hero'
+  | 'sage'
+  | 'explorer'
+  | 'creator'
+  | 'caregiver'
+  | 'everyman'
+  | 'lover'
+  | 'magician'
+  | 'outlaw'
+  | 'jester'
+  | 'innocent';
+
+export type BrandIcpPriceSensitivity = 'low' | 'medium' | 'high';
+
+export interface BrandICP {
+  id: string;
+  name: string;
+  description: string;
+  needs: string;
+  objections: string;
+  preferredMessages: string;
+  priceSensitivity: BrandIcpPriceSensitivity;
+}
+
+export interface BrandProfile {
+  description: string;
+  /** Primary archetype. Kept as `archetype` for backwards compatibility with existing saved profiles. */
+  archetype: BrandArchetype | '';
+  /** Optional complementary archetype used as a secondary tone/positioning influence. */
+  secondaryArchetype?: BrandArchetype | '';
+  toneOfVoice: string;
+  icps: BrandICP[];
+  updatedAt?: string;
 }
 
 export interface UserProfile {
@@ -461,6 +509,8 @@ export interface ChannelRecommendation {
   targetSegments?: RecommendedSegment[];
   /** Per (segment, channel) campaign brief / marketing brief — από AI. */
   channelPlaybook?: ChannelPlaybookEntry[];
+  /** Signature of Brand Profile prompt context used to generate customer-facing copy. */
+  brandProfileContextSig?: string;
 }
 
 /** Επιπλέον κόστη marketing (agency, εργαλεία, one-off) — αποθηκεύονται στην ενεργή στρατηγική, χρησιμοποιούνται στο ROI. */
@@ -919,6 +969,90 @@ export interface EcomCustomer {
   tags?: string[];
   platform: 'shopify' | 'woocommerce';
   brandId: string;
+}
+
+// ── HR Module Types ──────────────────────────────────────────────────────────
+
+export type EmployeeStatus = 'active' | 'inactive' | 'on_leave';
+export type LeaveType = 'annual' | 'sick' | 'other';
+export type LeaveStatus = 'pending' | 'approved' | 'rejected';
+
+export interface HREmployee {
+  id: string;
+  brandId: string;
+  name: string;
+  role: string;
+  department: string;
+  monthlyCost: number;
+  startDate: string;
+  status: EmployeeStatus;
+  email?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HRLeave {
+  id: string;
+  brandId: string;
+  employeeId: string;
+  employeeName: string;
+  type: LeaveType;
+  startDate: string;
+  endDate: string;
+  status: LeaveStatus;
+  notes?: string;
+  createdAt: string;
+}
+
+// ── Offer Builder Types ──────────────────────────────────────────────────────
+
+export type OfferStatus = 'draft' | 'sent' | 'accepted' | 'rejected';
+
+export interface OfferLineItem {
+  productId?: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  costPrice?: number;
+}
+
+export interface Offer {
+  id: string;
+  brandId: string;
+  accountName: string;
+  accountId?: string;
+  date: string;
+  validUntil?: string;
+  status: OfferStatus;
+  lines: OfferLineItem[];
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Territory / Rep Types ────────────────────────────────────────────────────
+
+export interface TerritoryRep {
+  id: string;
+  brandId: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  region: string;
+  targetAccounts: number;
+  createdAt: string;
+}
+
+export interface TerritoryAssignment {
+  accountId: string;
+  accountName: string;
+  repId: string;
+  repName: string;
+  region: string;
+  assignedAt: string;
 }
 
 export * from './budgetSuggestions';

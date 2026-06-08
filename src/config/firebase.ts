@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken, type AppCheck } from 'firebase/app-check';
@@ -64,12 +64,17 @@ export async function getAppCheckHeader(): Promise<Record<string, string>> {
   }
 }
 
-// Initialize Firestore with IndexedDB persistence so cached data survives page refreshes.
-// On reload, queries are served from local disk in <100ms without a network round-trip.
+// Firestore cache: MEMORY (όχι IndexedDB persistence).
+//
+// ΓΙΑΤΙ: το IndexedDB persistence (persistentLocalCache) μπλόκαρε την αρχικοποίηση της Firestore
+// layer — όταν το IndexedDB κλείδωνε/στόλαρε (stale tab lease, locked DB), ΟΛΑ τα reads έμπαιναν
+// σε ουρά πίσω από την persistence init → οι σελίδες «κρέμονταν» κι έσβηνε ακόμα και η λίστα brands,
+// απαιτώντας πολλαπλά hard refresh. Με memory cache τα reads πάνε κατευθείαν στο δίκτυο, χωρίς
+// dependency σε IndexedDB. Το fast first-paint καλύπτεται ήδη από το React Query localStorage persist.
+// Auto long-polling: αποφεύγει WebChannel streaming που μπλοκάρεται από proxies/extensions.
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-  }),
+  localCache: memoryLocalCache(),
+  experimentalAutoDetectLongPolling: true,
 });
 
 // Initialize Auth

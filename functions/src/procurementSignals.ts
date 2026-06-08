@@ -153,6 +153,35 @@ interface EvaluationRow {
   [k: string]: unknown;
 }
 
+/**
+ * Κανονικοποίηση κλειδιού στήλης: κενά/τελείες → underscore (π.χ. "ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ" →
+ * "ΔΙΑΘΕΣΙΜΟ_ΥΠΟΛΟΙΠΟ", "ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ Μ.Μ." → "ΠΡΩΤΟΓΕΝΕΣ_ΚΟΣΤΟΣ_Μ_Μ"). Idempotent για
+ * ήδη κανονικά (underscore) headers όπως τα Megaventory custom reports.
+ */
+function normalizeProcKey(k: string): string {
+  return k.trim().replace(/[.\s]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+/**
+ * Ορισμένα procurement templates (χειροκίνητο XLSX) χρησιμοποιούν headers με κενά και «MASTER»
+ * αντί για «ΚΩΔΙΚΟΣ» στο inventory sheet. Κανονικοποιούμε στο read ώστε ο aggregator να δουλεύει
+ * ανεξάρτητα από το template, χωρίς να απαιτείται re-upload για ήδη αποθηκευμένα δεδομένα.
+ */
+function normalizeProcurementRow(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const nk = normalizeProcKey(k);
+    const existing = out[nk];
+    if (existing === undefined || existing === null || existing === '') out[nk] = v;
+  }
+  const code = out['ΚΩΔΙΚΟΣ'];
+  if ((code === undefined || code === null || String(code).trim() === '') &&
+      out['MASTER'] != null && String(out['MASTER']).trim() !== '') {
+    out['ΚΩΔΙΚΟΣ'] = out['MASTER'];
+  }
+  return out;
+}
+
 async function readCollection<T>(
   db: Firestore,
   collectionKey: string,
@@ -162,7 +191,7 @@ async function readCollection<T>(
     .collection(collectionKey)
     .where('brandId', '==', brandId)
     .get();
-  return snap.docs.map((d) => d.data() as T);
+  return snap.docs.map((d) => normalizeProcurementRow(d.data() as Record<string, unknown>) as T);
 }
 
 /**

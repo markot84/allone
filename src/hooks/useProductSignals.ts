@@ -217,9 +217,13 @@ export interface UseProductSignalsResult {
  * Build resolved signals για όλα τα SKUs που εμφανίζονται σε οποιαδήποτε πηγή.
  * Δέχεται προαιρετικά μια λίστα Products για να πιάσει και τα import-only SKUs.
  */
-export function useProductSignals(products?: Product[]): UseProductSignalsResult {
+export function useProductSignals(
+  products?: Product[],
+  options?: { preferProcurementStock?: boolean }
+): UseProductSignalsResult {
   const ec = useEcommerceSummary();
   const ps = useProcurementSignals();
+  const preferProcurementStock = !!options?.preferProcurementStock;
 
   const result = useMemo(() => {
     const skuStats = aggregateSkuStatsByNorm(ec.skuStats as Record<string, SkuStatRow>);
@@ -252,6 +256,14 @@ export function useProductSignals(products?: Product[]): UseProductSignalsResult
     for (const sku of allSkus) {
       const resolved: ResolvedSignal = { sku };
       const prov: Provenance = { ...EMPTY_PROVENANCE };
+
+      // 0) PROCUREMENT-FIRST stock: για Enterprise+Procurement brands το απόθεμα είναι αυθεντικό
+      // από το procurement αρχείο και πρέπει να υπερισχύει του connector. Το ορίζουμε πρώτο ώστε
+      // η προτεραιότητα του setField (first-wins) να κρατήσει την τιμή procurement.
+      if (preferProcurementStock) {
+        const psStock = procSignals[sku];
+        if (psStock) setField(resolved, prov, 'stock', psStock.available_stock, 'procurement');
+      }
 
       // 1) CONNECTOR — orders ground truth
       const stat = skuStats[sku];
@@ -335,7 +347,7 @@ export function useProductSignals(products?: Product[]): UseProductSignalsResult
     }
 
     return { map, coverage };
-  }, [ec.skuStats, ec.skuMovement, ps.signalsBySku, products]);
+  }, [ec.skuStats, ec.skuMovement, ps.signalsBySku, products, preferProcurementStock]);
 
   const enrichProduct = useMemo(() => {
     return (p: Product): Product => {

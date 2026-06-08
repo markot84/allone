@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useBrand } from './useBrand';
+import { useBrandSyncVersion } from './useBrandSyncVersion';
 import { monthlyRevenueFromDailyRecord } from '../utils/roiUtils';
 
 export type BusinessRevenueSource = 'none' | 'megaventory_invoices' | 'softone_sales_documents';
@@ -28,9 +29,11 @@ export async function fetchBusinessRevenueSummary(brandId: string): Promise<Busi
 export function useBusinessRevenueSummary() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
+  const syncVersionQuery = useBrandSyncVersion(brandId);
+  const syncVersion = syncVersionQuery.data?.version ?? 'pending';
 
   const { data, isPending } = useQuery({
-    queryKey: ['business_revenue_summary', brandId],
+    queryKey: ['business_revenue_summary', brandId, syncVersion],
     queryFn: () => (brandId ? fetchBusinessRevenueSummary(brandId) : Promise.resolve(null)),
     staleTime: 10 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,

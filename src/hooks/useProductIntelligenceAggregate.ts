@@ -13,13 +13,13 @@ export function useProductIntelligenceAggregate(bucket: ProductIntelligenceBucke
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const syncVersionQuery = useBrandSyncVersion(brandId);
-  const syncVersion = syncVersionQuery.data?.version ?? null;
+  const syncVersion = syncVersionQuery.data?.version ?? 'pending';
   const queryKey = JSON.stringify(query);
 
   const aggregateQuery = useQuery({
     queryKey: ['productIntelligenceAggregate', brandId, syncVersion],
     queryFn: () => (brandId ? fetchProductIntelligenceAggregate(brandId, syncVersion) : Promise.resolve(null)),
-    enabled: !!brandId && !!syncVersion,
+    enabled: !!brandId,
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -41,6 +41,8 @@ export function useProductIntelligenceAggregate(bucket: ProductIntelligenceBucke
     aggregate,
     page: pageQuery.data,
     safePage: pageQuery.data?.page ?? safePage,
+    isAggregateLoading: aggregateQuery.isPending,
+    isPageLoading: !!aggregate && pageQuery.isPending,
     isLoading: aggregateQuery.isPending || (!!aggregate && pageQuery.isPending),
     isBuilding: aggregateQuery.data?.status === 'running',
     error: aggregateQuery.error ?? pageQuery.error,

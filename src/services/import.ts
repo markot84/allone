@@ -1729,14 +1729,46 @@ async function importProcurementFile(
     const parsedSheets: { sheetType: ProcurementSheetType; coll: string; headers: string[]; objects: Record<string, string>[] }[] = [];
     let grandTotalRows = 0;
 
+    // Ανεκτική αντιστοίχιση ονόματος φύλλου: αγνοεί τόνους, διπλά κενά και πεζά/κεφαλαία ώστε
+    // μικρές αποκλίσεις (π.χ. «ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ » με κενό) να ΜΗΝ ρίχνουν σιωπηλά ένα φύλλο.
+    const normalizeSheetName = (s: string) =>
+      String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+    // Κανόνες αντιστοίχισης ανά sheet για νεότερα templates. Π.χ. το «ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ» έχει
+    // σπάσει σε «… MASTER» (συγκεντρωτικό με στήλες ανατροφοδοσίας — αυτό περιμένει η εφαρμογή) +
+    // «… ΑΝΑΛΥΤΙΚΟ» (ανά variant). Χρησιμοποιούμε prefix-match στο ΚΑΘΑΡΑ ελληνικό «ΔΙΑΧΕΙΡΙΣΗ
+    // ΑΠΟΘΕΜΑΤΟΣ» γιατί το suffix «MASTER» σε ελληνικά Excel γράφεται συχνά με μεικτούς λατινο-
+    // ελληνικούς χαρακτήρες (Μ/Α/Ε lookalikes) → exact string match αποτυγχάνει. Με `deprefer`
+    // αποκλείουμε το «ΑΝΑΛΥΤΙΚΟ» ώστε να επιλεγεί το MASTER.
+    const SHEET_MATCH: Partial<Record<ProcurementSheetType, { prefix?: string; deprefer?: string[] }>> = {
+      inventory: { prefix: 'ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ', deprefer: ['ΑΝΑΛΥΤΙΚΟ'] },
+    };
+    const resolveSheet = (expected: string, rule: { prefix?: string; deprefer?: string[] }) => {
+      if (wb.Sheets[expected]) return wb.Sheets[expected]; // exact
+      const normNames = wb.SheetNames.map((n) => [n, normalizeSheetName(n)] as const);
+      const target = normalizeSheetName(expected);
+      const exactNorm = normNames.find(([, nn]) => nn === target);
+      if (exactNorm) return wb.Sheets[exactNorm[0]];
+      // Prefix fallback: ανθεκτικό σε suffix («MASTER»/«ΑΝΑΛΥΤΙΚΟ») ακόμη και με μεικτούς χαρακτήρες.
+      if (rule.prefix) {
+        const p = normalizeSheetName(rule.prefix);
+        const matches = normNames.filter(([, nn]) => nn.startsWith(p));
+        if (matches.length) {
+          const deprefer = (rule.deprefer ?? []).map(normalizeSheetName);
+          const preferred = matches.find(([, nn]) => !deprefer.some((d) => nn.includes(d)));
+          return wb.Sheets[(preferred ?? matches[0])[0]];
+        }
+      }
+      return undefined;
+    };
+
     for (let i = 0; i < PROCUREMENT_SHEET_ORDER.length; i++) {
       const sheetType = PROCUREMENT_SHEET_ORDER[i];
       const sheetName = PROCUREMENT_SHEET_NAMES[sheetType];
       const coll = PROCUREMENT_COLLECTIONS[i];
-      const sheet = wb.Sheets[sheetName];
+      const sheet = resolveSheet(sheetName, SHEET_MATCH[sheetType] ?? {});
 
       if (!sheet) {
-        result.warnings.push(`Φύλλο "${sheetName}" δεν βρέθηκε· παράλειψη.`);
+        result.warnings.push(`Φύλλο "${sheetName}" δεν βρέθηκε· παράλειψη. Διαθέσιμα φύλλα: ${wb.SheetNames.join(', ')}`);
         parsedSheets.push({ sheetType, coll, headers: [], objects: [] });
         continue;
       }
@@ -1754,12 +1786,20 @@ async function importProcurementFile(
       const headers = cleaned[headerRowIdx].map(h => String(h || '').trim());
       const dataRows = cleaned.slice(headerRowIdx + 1).filter(r => r.some(c => c !== ''));
 
+      // Κανονικοποίηση headers: κενά/τελείες → underscore ώστε όλα τα downstream (signals,
+      // useProductSource) να βλέπουν σταθερά κλειδιά (π.χ. «ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ» →
+      // «ΔΙΑΘΕΣΙΜΟ_ΥΠΟΛΟΙΠΟ»). Idempotent για ήδη κανονικά headers.
+      const normalizeKey = (h: string) => h.trim().replace(/[.\s]+/g, '_').replace(/^_+|_+$/g, '');
       const objects: Record<string, string>[] = dataRows.map(row => {
         const obj: Record<string, string> = {};
         headers.forEach((h, idx) => {
           if (!h) return;
-          obj[h] = row[idx] != null ? String(row[idx]).trim() : '';
+          obj[normalizeKey(h)] = row[idx] != null ? String(row[idx]).trim() : '';
         });
+        // Το inventory sheet κάποιων templates έχει κωδικό στη στήλη «MASTER» αντί «ΚΩΔΙΚΟΣ».
+        if ((!obj['ΚΩΔΙΚΟΣ'] || obj['ΚΩΔΙΚΟΣ'].trim() === '') && obj['MASTER'] && obj['MASTER'].trim() !== '') {
+          obj['ΚΩΔΙΚΟΣ'] = obj['MASTER'];
+        }
         return obj;
       });
 
@@ -2319,8 +2359,17 @@ export async function getImportJobs(brandId?: string | null): Promise<ImportJob[
 const IMPORT_JOBS_LOOKBACK_FOR_LAST_DATES = 300;
 const IMPORT_JOBS_LOOKBACK_FOR_SYNC_VERSION = 50;
 
-// Get last successful import date per type (for UI display)
-export async function getLastImportDates(brandId: string | null | undefined): Promise<Record<string, Date>> {
+export type LastImportMeta = {
+  date: Date;
+  status?: string;
+  imported?: number;
+  orders?: number;
+  products?: number;
+  errors?: string[];
+};
+
+/** Latest import job per source (date + status for connector UI). */
+export async function getLastImportMeta(brandId: string | null | undefined): Promise<Record<string, LastImportMeta>> {
   if (!brandId) return {};
   const jobs = await FirestoreService.getDocuments<ImportJob>(
     'import_jobs',
@@ -2330,26 +2379,39 @@ export async function getLastImportDates(brandId: string | null | undefined): Pr
   );
   const normalized = jobs.map((job) => ({
     ...job,
-    createdAt:
-      coerceToDate(job.createdAt as unknown) ??
-      new Date(0),
+    createdAt: coerceToDate(job.createdAt as unknown) ?? new Date(0),
   }));
-  const result: Record<string, Date> = {};
+  const result: Record<string, LastImportMeta> = {};
   for (const job of normalized) {
     const status = (job as { status?: string }).status;
     const imported =
       Number((job as { imported?: number }).imported ?? job.result?.imported ?? 0) || 0;
-    // Connector jobs can be `partial` when some secondary step fails after data was imported.
-    // For "last sync" UI, imported partial jobs should still advance the displayed date.
-    const countsAsImported = status === undefined || status === 'completed' || (status === 'partial' && imported > 0);
+    const countsAsImported =
+      status === undefined || status === 'completed' || (status === 'partial' && imported > 0);
     if (!countsAsImported) continue;
+    const meta: LastImportMeta = {
+      date: job.createdAt,
+      status,
+      imported,
+      orders: Number((job as { orders?: number }).orders ?? 0) || undefined,
+      products: Number((job as { products?: number }).products ?? 0) || undefined,
+      errors: Array.isArray((job as { errors?: unknown }).errors)
+        ? (job as { errors?: string[] }).errors?.filter(Boolean)
+        : undefined,
+    };
     const key = (job as { source?: string }).source || job.type;
     const existing = result[key];
-    if (!existing || job.createdAt > existing) result[key] = job.createdAt;
+    if (!existing || job.createdAt > existing.date) result[key] = meta;
     const existing2 = result[job.type];
-    if (!existing2 || job.createdAt > existing2) result[job.type] = job.createdAt;
+    if (!existing2 || job.createdAt > existing2.date) result[job.type] = meta;
   }
   return result;
+}
+
+// Get last import date per type (for UI display)
+export async function getLastImportDates(brandId: string | null | undefined): Promise<Record<string, Date>> {
+  const meta = await getLastImportMeta(brandId);
+  return Object.fromEntries(Object.entries(meta).map(([k, v]) => [k, v.date]));
 }
 
 export async function getLatestImportDate(brandId: string | null | undefined): Promise<Date | null> {

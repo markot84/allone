@@ -110,11 +110,7 @@ function calculateAvgRFMScore(rfmScore: string | undefined | null, segmentName?:
   return sum / numbers.length;
 }
 
-interface RFMAnalysisProps {
-  onSectionChange?: (section: string) => void;
-}
-
-export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
+export function RFMAnalysis() {
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AnalysisTab>('rfm');
   const {
@@ -139,7 +135,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     analysisSnapshotIsStale,
     analysisLastAnalyzedAt,
   } = useSegments({ variant: 'data_analysis' });
-  const ecomm = useEcommerceSummary();
+  const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const { currentBrand } = useBrand();
   const { user, isSuperAdmin } = useAuth();
   const { members } = useBrandMembers();
@@ -250,9 +246,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error('Not authenticated');
       clearAnalysisSnapshots(currentBrand.id);
-      queryClient.removeQueries({ queryKey: ['dataAnalysisOrdersRaw', currentBrand.id] });
-      queryClient.removeQueries({ queryKey: ['catalogAlignmentDataAnalysis', currentBrand.id] });
-      queryClient.removeQueries({ queryKey: ['dataAnalysisRfmAggregate', currentBrand.id] });
       const res = await fetch(REFRESH_DATA_ANALYSIS_RFM_URL, {
         method: 'POST',
         headers: {
@@ -308,6 +301,19 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       <div className="space-y-6">
         <PageHeader
           title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Data Analysis</h2>}
+          actions={
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<RefreshCw size={14} className={`shrink-0 ${isRefreshingAnalysis ? 'animate-spin' : ''}`} />}
+              onClick={handleRefreshAnalysis}
+              disabled={isRefreshingAnalysis || !currentBrand?.id}
+              className="min-h-[36px] w-full sm:w-auto"
+              title="Η ανάλυση τρέχει αυτόματα κάθε πρώτη ημέρα του μήνα. Μπορείτε να την ανανεώσετε χειροκίνητα όποτε χρειάζεται."
+            >
+              {isRefreshingAnalysis ? 'Ανανέωση…' : 'Ανανέωση ανάλυσης'}
+            </Button>
+          }
           description={
             <p className="text-sm text-[#4A4A4A] sm:text-base leading-snug">
               Ανάλυση τμημάτων πελατών (RFM, behavioral, firmographic) από e-shop orders ή ERP/other data
@@ -334,19 +340,11 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             <div className="text-center py-12">
               <p className="text-[#4A4A4A] mb-4">
                 {hasEcomm && !canComputeFromOrders
-                  ? 'Συνδέσατε e-shop, αλλά δεν βρέθηκαν αρκετές έγκυρες παραγγελίες για RFM.'
-                  : 'Δεν υπάρχουν ακόμα δεδομένα προς ανάλυση.'}
+                  ? 'Δεν υπάρχει ακόμη αποθηκευμένη Data Analysis για αυτό το brand.'
+                  : 'Δεν υπάρχει ακόμη αποθηκευμένη Data Analysis.'}
               </p>
               <p className="text-sm text-[#4A4A4A]">
-                Εναλλακτικά, ανεβάστε aggregate segments από την{' '}
-                <button
-                  type="button"
-                  onClick={() => onSectionChange?.('data-segments')}
-                  className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
-                >
-                  καρτέλα εισαγωγής segments
-                </button>
-                .
+                Πατήστε <span className="font-semibold text-[#1A1A1A]">Ανανέωση ανάλυσης</span> για να δημιουργηθεί snapshot που θα μείνει ορατό έως την επόμενη μηνιαία ή χειροκίνητη ανάλυση.
               </p>
             </div>
           )}
@@ -1509,7 +1507,7 @@ function SegmentDetail({
 
           <div className="space-y-2">
             <Button variant="primary" className="w-full" icon={<Users size={16} />} onClick={() => onExportCustomers?.('csv')}>
-              Εξαγωγή ID πελατών (.csv)
+              Λίστα πελατών + email (.csv)
             </Button>
             <div className="flex gap-2">
               <Button variant="secondary" className="flex-1" icon={<FileSpreadsheet size={14} />} onClick={() => onExportActionPack?.('xlsx')}>

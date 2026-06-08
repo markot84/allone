@@ -1,6 +1,7 @@
 import type { Firestore, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import { computeProcurementSignals } from './procurementSignals';
 
 let db: Firestore;
 
@@ -125,6 +126,7 @@ const INVENTORY_LOOKUP_CHUNK_BYTES = 850_000;
 const BUCKETS: PageBucket[] = ['all', 'healthy', 'excess', 'dead', 'low', 'no_stock'];
 const SALES_PERIOD_DAYS = 30;
 const MEGAVENTORY_NORMALIZED_SOURCE = 'megaventory_custom_report';
+const MEGAVENTORY_API_CATALOG_SOURCE = 'megaventory_api_catalog';
 
 type SkuStatsRow = {
   stock?: number;
@@ -247,7 +249,10 @@ function marginTier(marginPercentage: number): CompactProduct['margin_tier'] {
 }
 
 function productFromRow(docId: string, row: Record<string, unknown>, sourceKind: ProductSourceKind): CompactProduct | null {
-  const sku = text(row.sku ?? row.SKU ?? row.productSku ?? row.ProductSKU);
+  let sku = text(row.sku ?? row.SKU ?? row.productSku ?? row.ProductSKU ?? row.model ?? row.Model);
+  if (!sku) sku = text(row.productId ?? row.ProductID ?? row.ProductId);
+  if (!sku && docId.startsWith('oc_')) sku = docId.slice(3);
+  if (!sku && docId.startsWith('mv_p_')) sku = docId.slice(5);
   if (!sku) return null;
   const path = categoryPathFromRow(row);
   const category = text(row.category ?? row.category_name ?? path[0]) || 'Uncategorized';
@@ -255,7 +260,15 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     firstPositive(row.price, row.sell_price, row.sellingPrice, row.specialPrice, row.list_price, row.compare_at_price, row.regularPrice);
   const cost = firstPositive(row.cost_price, row.costPrice, row.purchasePrice, row.cost);
   const stock =
-    firstPositive(row.stock_level, row.available_stock, row.stock_on_hand, row.stockOnHand, row.qty, row.quantity);
+    firstPositive(
+      row.stock_level,
+      row.available_stock,
+      row.stock_on_hand,
+      row.stockOnHand,
+      row.stock_on_hand_total,
+      row.qty,
+      row.quantity
+    );
   const qtySold =
     firstPositive(row.qty_sold_period, row.qtySoldPeriod, row.qty_sold_last_30d, row.qtySold, row.qty_sold_lifetime);
   const margin = num(row.margin_percentage) || (price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0);
@@ -264,7 +277,7 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     id: docId,
     ...(text(row.productId ?? row.ProductID ?? row.ProductId) ? { productId: text(row.productId ?? row.ProductID ?? row.ProductId) } : {}),
     sku,
-    name: text(row.name ?? row.title ?? row.productName ?? row.ProductDescription) || sku,
+    name: text(row.name ?? row.title ?? row.productName ?? row.ProductDescription ?? row.longDescription) || sku,
     category,
     ...(path[1] ? { subcategory: path[1] } : {}),
     margin_tier: marginTier(margin),
@@ -379,6 +392,88 @@ async function hasConnectorCatalog(brandId: string): Promise<{ connected: boolea
   return { connected: erp || ecommerce, sourceLabel: erp ? 'ERP' : 'E-shop catalog', hasErp: erp };
 }
 
+/**
+ * Procurement-first gating: για brands στο Enterprise plan με ενεργό module Procurement, το
+ * απόθεμα είναι ΑΥΘΕΝΤΙΚΟ από το ανεβασμένο procurement αρχείο (όχι από connectors). Επιστρέφει
+ * true ώστε το Product Intelligence aggregate να χτιστεί από procurement_signals.
+ */
+async function shouldUseProcurementCatalog(brandId: string): Promise<boolean> {
+  const firestore = assertDb();
+  try {
+    const snap = await firestore.doc(`brands/${brandId}`).get();
+    if (!snap.exists) return false;
+    const data = snap.data() || {};
+    const isEnterprise = String(data.plan || '').toLowerCase() === 'enterprise';
+    if (!isEnterprise) return false;
+    const modules = (data.enabledModules || {}) as Record<string, unknown>;
+    // Default ON για enterprise — απενεργοποιείται μόνο με ρητό false.
+    return modules.procurement !== false;
+  } catch {
+    return false;
+  }
+}
+
+function procurementStockBucket(avail: number, daysOfCover: number | null, lifetimeQty: number | null): StockBucket {
+  if (avail <= 0) return 'no_stock';
+  if (daysOfCover != null && Number.isFinite(daysOfCover)) {
+    if (daysOfCover <= 30) return 'low';
+    if (daysOfCover > 120) return 'excess';
+    return 'healthy';
+  }
+  // Χωρίς ημέρες επάρκειας: ό,τι δεν πούλησε ποτέ θεωρείται νεκρό απόθεμα.
+  if (lifetimeQty != null && lifetimeQty <= 0) return 'dead';
+  return 'healthy';
+}
+
+/**
+ * Χτίζει κατάλογο CompactProduct από procurement δεδομένα. Καλεί ΑΠΕΥΘΕΙΑΣ το
+ * computeProcurementSignals (live read + κανονικοποίηση headers) αντί να διαβάζει το αποθηκευμένο
+ * procurement_signals doc — ώστε το PI να είναι αυτάρκες και να μην εξαρτάται από stale/σπασμένο
+ * signals doc (π.χ. όταν είχε υπολογιστεί με παλιό logic χωρίς inventory stock).
+ */
+async function loadProcurementCatalog(brandId: string): Promise<CompactProduct[]> {
+  const { signals } = await computeProcurementSignals(brandId);
+  if (!signals || Object.keys(signals).length === 0) return [];
+
+  const products: CompactProduct[] = [];
+  for (const [sku, sig] of Object.entries(signals)) {
+    if (!sku || !sig) continue;
+    const avail = num(sig.available_stock);
+    const cost = num(sig.cost_unit);
+    const price = firstPositive(sig.avg_sale_price, sig.list_price);
+    const margin =
+      num(sig.margin_pct) || (price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0);
+    const daysOfCover = sig.days_of_cover != null ? num(sig.days_of_cover) : null;
+    const lifetime = sig.lifetime_qty != null ? num(sig.lifetime_qty) : null;
+    const bucket = procurementStockBucket(avail, daysOfCover, lifetime);
+
+    const product: CompactProduct = {
+      id: `proc_${sku}`,
+      sku,
+      name: text(sig.description) || sku,
+      category: text(sig.category) || 'Uncategorized',
+      margin_tier: marginTier(margin),
+      margin_percentage: Math.round(margin * 10) / 10,
+      stock_level: Math.round(avail * 100) / 100,
+      stock_capacity: Math.max(Math.round(avail * 2 * 100) / 100, Math.round(avail * 100) / 100, 1),
+      available_stock: Math.round(avail * 100) / 100,
+      priority_tag: bucket,
+      price: Math.round(price * 100) / 100,
+      ...(cost > 0 ? { cost_price: Math.round(cost * 100) / 100 } : {}),
+      ...(num(sig.list_price) > 0 ? { list_price: Math.round(num(sig.list_price) * 100) / 100 } : {}),
+      ...(lifetime != null ? { qty_sold_lifetime: Math.round(lifetime * 100) / 100 } : {}),
+      ...(text(sig.supplier) ? { supplier: text(sig.supplier) } : {}),
+      ...(text(sig.status) ? { procurement_status: text(sig.status) } : {}),
+      ...(text(sig.flow_group) ? { flow_group: text(sig.flow_group) } : {}),
+      ...(num(sig.replenishment_qty) > 0 ? { reorder_qty: Math.round(num(sig.replenishment_qty) * 100) / 100 } : {}),
+      source: 'erp',
+    };
+    if (isDemoProduct(product) || isNonMerchandiseProduct(product)) continue;
+    products.push(product);
+  }
+  return products;
+}
+
 async function computeBrandSyncVersion(brandId: string): Promise<{ version: string; latestSyncAt: string | null }> {
   const firestore = assertDb();
   const dates: number[] = [];
@@ -413,22 +508,30 @@ async function loadCatalogCollection(
   collection: string,
   sourceKind: ProductSourceKind,
   bySku: Map<string, CompactProduct>,
-  options: { filterByBrandInQuery?: boolean } = { filterByBrandInQuery: true }
+  options: { filterByBrandInQuery?: boolean; allowMissingBrandId?: boolean } = { filterByBrandInQuery: true }
 ): Promise<number> {
   const firestore = assertDb();
   let cursor: QueryDocumentSnapshot | null = null;
   let read = 0;
   for (;;) {
-    let query = firestore.collection(collection).orderBy(FieldPath.documentId()).limit(READ_PAGE_SIZE);
-    if (options.filterByBrandInQuery !== false) {
-      query = query.where('brandId', '==', brandId);
-    }
+    let query =
+      options.filterByBrandInQuery === false
+        ? firestore.collection(collection).orderBy(FieldPath.documentId()).limit(READ_PAGE_SIZE)
+        : firestore
+            .collection(collection)
+            .where('brandId', '==', brandId)
+            .orderBy(FieldPath.documentId())
+            .limit(READ_PAGE_SIZE);
     if (cursor) query = query.startAfter(cursor);
     const snap = await query.get();
     read += snap.size;
     for (const doc of snap.docs) {
       const row = doc.data();
-      if (options.filterByBrandInQuery === false && text(row.brandId) !== brandId) continue;
+      const rowBrandId = text(row.brandId);
+      if (options.filterByBrandInQuery === false) {
+        if (rowBrandId && rowBrandId !== brandId) continue;
+        if (!rowBrandId && !options.allowMissingBrandId) continue;
+      }
       const product = productFromRow(doc.id, row, sourceKind);
       if (!product) continue;
       const key = normalizeSku(product.sku);
@@ -439,6 +542,103 @@ async function loadCatalogCollection(
     cursor = snap.docs[snap.docs.length - 1] ?? null;
     if (!cursor) break;
   }
+  return read;
+}
+
+async function appendProductsBySource(
+  brandId: string,
+  source: string,
+  bySku: Map<string, CompactProduct>
+): Promise<number> {
+  const firestore = assertDb();
+  let cursor: QueryDocumentSnapshot | null = null;
+  let read = 0;
+  for (;;) {
+    let query = firestore
+      .collection('products')
+      .where('brandId', '==', brandId)
+      .where('source', '==', source)
+      .limit(READ_PAGE_SIZE);
+    if (cursor) query = query.startAfter(cursor);
+    const snap = await query.get();
+    read += snap.size;
+    for (const doc of snap.docs) {
+      const product = productFromRow(doc.id, doc.data(), 'erp');
+      if (!product) continue;
+      const key = normalizeSku(product.sku);
+      if (!key || bySku.has(key)) continue;
+      bySku.set(key, product);
+    }
+    if (snap.size < READ_PAGE_SIZE) break;
+    cursor = snap.docs[snap.docs.length - 1] ?? null;
+    if (!cursor) break;
+  }
+  return read;
+}
+
+async function loadMegaventoryErpCatalog(
+  brandId: string,
+  bySku: Map<string, CompactProduct>
+): Promise<{ apiProductsRead: number; apiCatalogGapRead: number }> {
+  const firestore = assertDb();
+  let apiProductsRead = await loadCatalogCollection(brandId, 'megaventory_products', 'erp', bySku, {
+    filterByBrandInQuery: true,
+  });
+  let apiCatalogGapRead = await appendProductsBySource(brandId, MEGAVENTORY_API_CATALOG_SOURCE, bySku);
+
+  const connector = await firestore.doc(`connectors/${brandId}`).get();
+  const expectedProducts = Number(connector.data()?.megaventory?.lastSyncProducts ?? 0);
+  const needsFallback =
+    expectedProducts > 0
+      ? bySku.size + 100 < expectedProducts
+      : apiProductsRead > 0 && bySku.size === 0;
+
+  if (needsFallback) {
+    logger.warn(
+      `[ProductIntelligence] megaventory catalog parsed ${bySku.size} SKUs from ${apiProductsRead} rows (lastSyncProducts=${expectedProducts}) — fallback scan`
+    );
+    apiProductsRead += await loadCatalogCollection(brandId, 'megaventory_products', 'erp', bySku, {
+      filterByBrandInQuery: false,
+      allowMissingBrandId: true,
+    });
+    if (bySku.size === 0) {
+      apiCatalogGapRead += await appendProductsBySource(brandId, MEGAVENTORY_NORMALIZED_SOURCE, bySku);
+    }
+  }
+
+  logger.info(
+    `[ProductIntelligence] megaventory catalog for ${brandId}: ${bySku.size} SKUs (apiRows=${apiProductsRead}, gapFill=${apiCatalogGapRead}, lastSyncProducts=${expectedProducts})`
+  );
+
+  return { apiProductsRead, apiCatalogGapRead };
+}
+
+async function loadEcommerceCatalogCollection(
+  brandId: string,
+  collection: string,
+  bySku: Map<string, CompactProduct>
+): Promise<number> {
+  let read = await loadCatalogCollection(brandId, collection, 'connector_catalog', bySku);
+  if (bySku.size > 0) return read;
+
+  const firestore = assertDb();
+  const connector = await firestore.doc(`connectors/${brandId}`).get();
+  const lastSyncProducts = Number(connector.data()?.opencart?.lastSyncProducts ?? 0);
+  if (collection !== 'opencart_products' || lastSyncProducts <= 0) return read;
+
+  if (read > 0) {
+    logger.warn(
+      `[ProductIntelligence] opencart_products read=${read} rows but parsed 0 SKUs for ${brandId} — fallback scan`
+    );
+  } else {
+    logger.warn(
+      `[ProductIntelligence] opencart_products brandId query returned 0 rows but lastSyncProducts=${lastSyncProducts} for ${brandId} — fallback scan`
+    );
+  }
+  read += await loadCatalogCollection(brandId, collection, 'connector_catalog', bySku, {
+    filterByBrandInQuery: false,
+    allowMissingBrandId: true,
+  });
   return read;
 }
 
@@ -583,7 +783,6 @@ async function loadMegaventoryProductOverlay(
       .collection('products')
       .where('brandId', '==', brandId)
       .where('source', '==', MEGAVENTORY_NORMALIZED_SOURCE)
-      .orderBy(FieldPath.documentId())
       .limit(READ_PAGE_SIZE);
     if (cursor) query = query.startAfter(cursor);
     const snap = await query.get();
@@ -626,10 +825,21 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
   erpOnlyProducts: number;
 }> {
   const bySku = new Map<string, CompactProduct>();
-  const megaventoryApiRowsRead = hasErp
-    ? await loadCatalogCollection(brandId, 'megaventory_products', 'erp', bySku, { filterByBrandInQuery: false })
-    : 0;
-  const magentoRowsRead = hasErp ? 0 : await loadCatalogCollection(brandId, 'magento_products', 'connector_catalog', bySku);
+  let megaventoryApiRowsRead = 0;
+  let megaventoryApiCatalogGapRead = 0;
+  if (hasErp) {
+    const catalog = await loadMegaventoryErpCatalog(brandId, bySku);
+    megaventoryApiRowsRead = catalog.apiProductsRead;
+    megaventoryApiCatalogGapRead = catalog.apiCatalogGapRead;
+  }
+  const ecommerceCatalogRowsRead = hasErp
+    ? 0
+    : (await Promise.all([
+        loadCatalogCollection(brandId, 'magento_products', 'connector_catalog', bySku),
+        loadCatalogCollection(brandId, 'shopify_products', 'connector_catalog', bySku),
+        loadCatalogCollection(brandId, 'woo_products', 'connector_catalog', bySku),
+        loadEcommerceCatalogCollection(brandId, 'opencart_products', bySku),
+      ])).reduce((sum, rowsRead) => sum + rowsRead, 0);
   const magentoDetailRowsRead = hasErp ? await overlayMagentoCatalogDetails(brandId, bySku) : 0;
   const stockResult = hasErp
     ? await loadMegaventoryStockByProductId(brandId)
@@ -642,8 +852,15 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
     : { rowsRead: 0, overlaysApplied: 0, erpOnlyProducts: 0 };
   return {
     products: [...bySku.values()].filter((product) => !isDemoProduct(product) && !isNonMerchandiseProduct(product)),
-    sourceRowsRead: megaventoryApiRowsRead + magentoRowsRead + magentoDetailRowsRead + stockResult.rowsRead + skuStats.rowsRead + overlay.rowsRead,
-    megaventoryApiRowsRead,
+    sourceRowsRead:
+      megaventoryApiRowsRead +
+      megaventoryApiCatalogGapRead +
+      ecommerceCatalogRowsRead +
+      magentoDetailRowsRead +
+      stockResult.rowsRead +
+      skuStats.rowsRead +
+      overlay.rowsRead,
+    megaventoryApiRowsRead: megaventoryApiRowsRead + megaventoryApiCatalogGapRead,
     megaventoryStockRowsRead: stockResult.rowsRead,
     megaventoryRowsRead: overlay.rowsRead,
     magentoDetailRowsRead,
@@ -1043,6 +1260,61 @@ async function writeCompetitiveInventoryLookup(brandId: string, products: Compac
 export async function refreshProductIntelligenceAggregate(brandId: string): Promise<Record<string, unknown>> {
   const firestore = assertDb();
   const ref = firestore.doc(`product_intelligence/${brandId}`);
+
+  // Procurement-first: για Enterprise+Procurement brands το απόθεμα είναι αυθεντικό από το
+  // ανεβασμένο procurement αρχείο και ΥΠΕΡΙΣΧΥΕΙ τυχόν connector καταλόγου.
+  if (await shouldUseProcurementCatalog(brandId)) {
+    const procProducts = await loadProcurementCatalog(brandId);
+    if (procProducts.length > 0) {
+      await ref.set(
+        { brandId, status: 'running', sourceLabel: 'Procurement', updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+      try {
+        const syncVersion = await computeBrandSyncVersion(brandId);
+        const summary = summaryForProducts(procProducts);
+        const pagesByBucket = await writePageDocs(brandId, procProducts);
+        const competitiveInventory = await writeCompetitiveInventoryLookup(brandId, procProducts);
+        const charts = chartDataForProducts(procProducts);
+        await ref.set(
+          {
+            brandId,
+            status: 'ready',
+            sourceLabel: 'Procurement',
+            sourceKind: 'procurement',
+            stockSource: 'procurement',
+            totalCount: procProducts.length,
+            syncVersion: syncVersion.version,
+            latestSyncAt: syncVersion.latestSyncAt,
+            sourceRowsRead: procProducts.length,
+            competitiveInventoryKeys: competitiveInventory.keys,
+            competitiveInventoryChunks: competitiveInventory.chunks,
+            pageSize: TABLE_PAGE_SIZE,
+            pagesByBucket,
+            categories: categoryCounts(procProducts),
+            charts,
+            summary,
+            computedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            error: FieldValue.delete(),
+          },
+          { merge: true }
+        );
+        logger.info(`[ProductIntelligence] ${brandId}: procurement catalog totalCount=${procProducts.length}`);
+        return { success: true, brandId, totalCount: procProducts.length, source: 'procurement', pagesByBucket };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error(`[ProductIntelligence] procurement failed brand=${brandId}: ${message}`);
+        await ref.set(
+          { brandId, status: 'failed', error: message, updatedAt: FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+        return { success: false, brandId, error: message };
+      }
+    }
+    // Enterprise+Procurement αλλά χωρίς δεδομένα procurement ακόμη → πέφτουμε σε connector (αν υπάρχει).
+  }
+
   const connector = await hasConnectorCatalog(brandId);
   if (!connector.connected) {
     await ref.set({
@@ -1087,7 +1359,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       brandId,
       status: 'ready',
       sourceLabel: connector.sourceLabel,
-      sourceKind: 'erp',
+      sourceKind: connector.hasErp ? 'erp' : 'connector_catalog',
       totalCount: products.length,
       syncVersion: syncVersion.version,
       latestSyncAt: syncVersion.latestSyncAt,
@@ -1114,6 +1386,9 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       error: FieldValue.delete(),
     };
     await ref.set(payload, { merge: true });
+    logger.info(
+      `[ProductIntelligence] ${brandId}: totalCount=${products.length} sourceRowsRead=${sourceRowsRead} sourceLabel=${connector.sourceLabel}`
+    );
     return {
       success: true,
       brandId,

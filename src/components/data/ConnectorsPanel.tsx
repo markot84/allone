@@ -5,10 +5,11 @@ import { useAuth } from '../../hooks/useAuth';
 import { useBrandMembers } from '../../hooks/useCoordination';
 import { useModules } from '../../hooks/useModules';
 import { auth, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../../config/firebase';
-import { getLastImportDates } from '../../services/import';
+import { getLastImportMeta, type LastImportMeta } from '../../services/import';
 import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
 import { FirestoreService } from '../../services/firestore';
+import { refreshProductIntelligenceOnServer } from '../../services/productIntelligenceAggregate';
 import { Card, Button, Spinner, useToast, PageHeader } from '../common';
 import type { ModuleId } from '../../types';
 import {
@@ -65,6 +66,14 @@ interface ConnectorState {
   lastSyncAt?: any;
   lastOrdersSyncAt?: any;
   lastProductsSyncAt?: any;
+  lastSyncAttemptAt?: any;
+  lastSyncStatus?: string;
+  lastSyncError?: string;
+  productsSyncPageCursor?: string;
+  ordersSyncPageCursor?: string;
+  lastSyncImported?: number;
+  lastSyncOrders?: number;
+  lastSyncProducts?: number;
 }
 
 type ConnectorId = 'google_ads' | 'meta' | 'tiktok' | 'merchant' | 'ga4' | 'search_console' | 'shopify' | 'woocommerce' | 'opencart' | 'magento' | 'megaventory' | 'softone' | 'epsilon_net' | 'entersoft';
@@ -81,6 +90,50 @@ function newestDate(...values: unknown[]): Date | null {
     if (d && (!newest || d > newest)) newest = d;
   }
   return newest;
+}
+
+const ECOMMERCE_CONNECTOR_IDS = new Set<ConnectorId>(['shopify', 'woocommerce', 'opencart', 'magento']);
+
+function ecommerceSyncHealth(
+  state: {
+    lastOrdersSyncAt?: unknown;
+    lastProductsSyncAt?: unknown;
+    productsSyncPageCursor?: unknown;
+    ordersSyncPageCursor?: unknown;
+    lastSyncStatus?: unknown;
+  },
+  importMeta?: LastImportMeta | null
+): 'full' | 'partial' | 'none' {
+  if (state.productsSyncPageCursor || state.ordersSyncPageCursor) return 'partial';
+  const ordersAt = coerceToDate(state.lastOrdersSyncAt);
+  const productsAt = coerceToDate(state.lastProductsSyncAt);
+  if (ordersAt && productsAt) return 'full';
+  if (ordersAt || productsAt) return 'partial';
+  if (state.lastSyncStatus === 'partial') return 'partial';
+  if (importMeta?.status === 'partial') return 'partial';
+  if (importMeta?.date) return 'partial';
+  return 'none';
+}
+
+/** Normalize React Query cache (v1 flat dates vs v2 { dates, meta }). */
+function normalizeLastSyncQuery(data: unknown): {
+  dates: Record<string, Date>;
+  meta: Record<string, LastImportMeta>;
+} {
+  if (!data || typeof data !== 'object') return { dates: {}, meta: {} };
+  const record = data as Record<string, unknown>;
+  if (record.dates && typeof record.dates === 'object') {
+    return {
+      dates: record.dates as Record<string, Date>,
+      meta: (record.meta as Record<string, LastImportMeta>) || {},
+    };
+  }
+  const dates: Record<string, Date> = {};
+  for (const [key, value] of Object.entries(record)) {
+    const d = coerceToDate(value);
+    if (d) dates[key] = d;
+  }
+  return { dates, meta: {} };
 }
 
 /** Όλες οι ομάδες: ίδια διακριτική πράσινη παλέτα (χωρίς μπλε/πορτοκαλί ανά section). */
@@ -434,15 +487,15 @@ function connectorSyncJobId(provider: string, brandId: string): string {
 function syncJobLabel(job?: ConnectorSyncJobDoc | null): { label: string; className: string } | null {
   if (!job?.status) return null;
   if (job.status === 'pending') {
-    return { label: 'Sync queued', className: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' };
+    return { label: 'Sync σε αναμονή', className: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' };
   }
   if (job.status === 'running') {
-    return { label: 'Sync running', className: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' };
+    return { label: 'Sync σε εξέλιξη', className: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' };
   }
   if (job.status === 'failed') {
-    return { label: 'Sync failed', className: 'bg-red-50 text-red-700 ring-1 ring-red-200' };
+    return { label: 'Αποτυχία sync', className: 'bg-red-50 text-red-700 ring-1 ring-red-200' };
   }
-  return { label: 'Sync completed', className: 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200' };
+  return { label: 'Sync ολοκληρώθηκε', className: 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200' };
 }
 
 // ─── Account Picker Modal ────────────────────────────────────────
@@ -693,12 +746,12 @@ function WooCredentialsModal({
     setError('');
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error('Not authenticated');
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Not authenticated');
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
         method: 'POST',
-        headers: await connectorRequestHeaders(token),
+        headers: await connectorRequestHeaders(idToken),
         body: JSON.stringify({
           brandId,
           provider: 'woocommerce',
@@ -920,6 +973,7 @@ function MagentoCredentialsModal({
       const result = await res.json();
       if (result.success) {
         toast.success(`Magento συνδέθηκε: ${result.shopName || storeUrl}`);
+        if (result.warning) toast.info(result.warning);
         onSuccess();
       } else {
         setError(result.error || 'Connection failed');
@@ -1749,31 +1803,37 @@ function OpenCartCredentialsModal({
   onCancel: () => void;
 }) {
   const [storeUrl, setStoreUrl] = useState('');
-  const [apiUsername, setApiUsername] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [token, setToken] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showSecrets, setShowSecrets] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const toast = useToast();
 
   const handleConnect = async () => {
-    if (!storeUrl.trim() || !apiUsername.trim() || !apiKey.trim()) return;
+    if (!storeUrl.trim() || !clientId.trim() || !clientSecret.trim() || !token.trim() || !username.trim() || !password.trim()) return;
     setLoading(true);
     setError('');
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error('Not authenticated');
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Not authenticated');
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
         method: 'POST',
-        headers: await connectorRequestHeaders(token),
+        headers: await connectorRequestHeaders(idToken),
         body: JSON.stringify({
           brandId,
           provider: 'opencart',
           storeUrl: storeUrl.trim(),
-          apiUsername: apiUsername.trim(),
-          apiKey: apiKey.trim(),
+          clientId: clientId.trim(),
+          clientSecret: clientSecret.trim(),
+          token: token.trim(),
+          username: username.trim(),
+          password: password.trim(),
         }),
       });
 
@@ -1792,17 +1852,17 @@ function OpenCartCredentialsModal({
   };
 
   const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
-  const isValid = storeUrl.trim() && apiUsername.trim() && apiKey.trim();
+  const isValid = storeUrl.trim() && clientId.trim() && clientSecret.trim() && token.trim() && username.trim() && password.trim();
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
-      <div style={{ maxWidth: '460px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+      <div style={{ maxWidth: '520px', width: '100%', maxHeight: 'calc(100vh - 32px)', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '24px' }}>🛍️</span>
             <div>
               <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση OpenCart</p>
-              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>API credentials από το OpenCart Admin</p>
+              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>OAuth credentials από το OpenCart REST Admin API</p>
             </div>
           </div>
           <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
@@ -1816,32 +1876,59 @@ function OpenCartCredentialsModal({
             <input type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://myopencartstore.com" style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>API Username</label>
-            <input type="text" value={apiUsername} onChange={(e) => setApiUsername(e.target.value)} placeholder="π.χ. Default" style={inputStyle} />
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Client ID</label>
+            <input type="text" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="OAuth client_id" style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>API Key</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Client Secret</label>
             <div style={{ position: 'relative' }}>
               <input
-                type={showKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Το API key από System → Users → API"
+                type={showSecrets ? 'text' : 'password'}
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
+                placeholder="OAuth client_secret"
                 style={{ ...inputStyle, paddingRight: '40px' }}
                 onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
               />
               <button
                 type="button"
-                onClick={() => setShowKey(!showKey)}
+                onClick={() => setShowSecrets(!showSecrets)}
                 style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '2px' }}
               >
-                {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showSecrets ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Token</label>
+            <input
+              type={showSecrets ? 'text' : 'password'}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="Bearer/access token από το REST API extension"
+              style={inputStyle}
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Username</label>
+              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Admin/API username" style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Password</label>
+              <input
+                type={showSecrets ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                style={inputStyle}
+                onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+              />
             </div>
           </div>
 
           <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
-            OpenCart Admin → System → Users → API → Add New ή χρησιμοποίησε υπάρχον API user. Βεβαιωθείτε ότι είναι ενεργοποιημένο (Status: Enabled).
+            Χρησιμοποίησε τα OAuth στοιχεία από το OpenCart REST Admin API extension. Το token αποθηκεύεται κρυπτογραφημένο και στέλνεται ως Bearer token στα REST endpoints.
           </p>
 
           {error && (
@@ -1903,6 +1990,10 @@ export function ConnectorsPanel() {
     myRole === 'admin';
 
   const [syncingProviders, setSyncingProviders] = useState<Set<ConnectorConfig['id']>>(new Set());
+  /** Τελευταία χειροκίνητη προσπάθεια sync ανά connector (ξεχωριστά από import_jobs). */
+  const [syncAttempts, setSyncAttempts] = useState<
+    Partial<Record<ConnectorId, { at: Date; success: boolean; error?: string }>>
+  >({});
   const [connecting, setConnecting] = useState<string | null>(null);
   const [accountPickerFor, setAccountPickerFor] = useState<string | null>(null);
   /** Prevents auto-reopen while Firestore still has pendingAccountSelection (user closed modal). */
@@ -1917,6 +2008,11 @@ export function ConnectorsPanel() {
   const [epsilonNetModal, setEpsilonNetModal] = useState(false);
   const [entersoftModal, setEntersoftModal] = useState(false);
   const [expandedConnectorDetails, setExpandedConnectorDetails] = useState<Partial<Record<ConnectorId, boolean>>>({});
+  const handledMegaventoryJobRef = useRef<string | null>(null);
+  const previousMegaventoryJobStatusRef = useRef<ConnectorSyncJobStatus | null>(null);
+  const handledOpenCartJobRef = useRef<string | null>(null);
+  const previousOpenCartJobStatusRef = useRef<ConnectorSyncJobStatus | null>(null);
+  const opencartAutoResumeRef = useRef<string | null>(null);
 
   const emptyStates: Record<string, ConnectorState> = {
     google_ads: { connected: false },
@@ -1936,12 +2032,12 @@ export function ConnectorsPanel() {
   };
 
   // Connectors doc — cached, refetch only after sync/connect/disconnect
-  const { data: connectorsData, isPending: loading, refetch: refetchConnectors } = useQuery({
+  const { data: connectorsData, isPending: loading, isError: connectorsLoadError, refetch: refetchConnectors } = useQuery({
     // Include Firebase uid so switching app users never shows another user's cached connector doc (same brand).
     queryKey: ['connectorsPanel', brandId, user?.uid ?? ''],
     queryFn: async () => {
       if (!brandId) return null;
-      const doc = await FirestoreService.getDocumentWithTimeout<Record<string, any>>('connectors', brandId, 10000);
+      const doc = await FirestoreService.getDocumentWithTimeout<Record<string, any>>('connectors', brandId, 25000);
       return doc;
     },
     enabled: !!brandId && !!user?.uid,
@@ -1950,7 +2046,8 @@ export function ConnectorsPanel() {
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    retry: 1,
+    retry: 2,
+    retryDelay: 3000,
   });
 
   const states: Record<string, ConnectorState> = connectorsData
@@ -1972,37 +2069,71 @@ export function ConnectorsPanel() {
       }
     : emptyStates;
 
+  const opencartState = states.opencart || { connected: false };
+  const opencartBackfillNeedsResume =
+    opencartState.connected &&
+    (Boolean(opencartState.productsSyncPageCursor || opencartState.ordersSyncPageCursor) ||
+      opencartState.lastSyncStatus === 'partial' ||
+      (typeof opencartState.lastSyncError === 'string' &&
+        (opencartState.lastSyncError.includes('page cap') ||
+          opencartState.lastSyncError.includes('sync incomplete'))));
+
   // Last sync dates — secondary, loaded once, cached
-  const { data: lastSyncDates = {} as Record<string, Date> } = useQuery({
-    queryKey: ['lastSyncDates', brandId],
+  const { data: lastSyncQueryRaw } = useQuery({
+    queryKey: ['lastSyncDates', brandId, 'v2'],
     queryFn: async () => {
-      if (!brandId) return {} as Record<string, Date>;
-      const dates = await getLastImportDates(brandId);
-      return {
-        google_ads: dates['google_ads_api'] || dates['campaigns'],
-        meta: dates['meta_api'] || dates['campaigns'],
-        tiktok: dates['tiktok_api'] || dates['campaigns'],
-        merchant: dates['merchant_center_api'] || dates['price_benchmarks'],
-        ga4: dates['ga4_api'] || dates['ga4'],
-        search_console: dates['search_console_api'],
-        shopify: dates['shopify_api'],
-        woocommerce: dates['woocommerce_api'],
-        opencart: dates['opencart_api'],
-        magento: dates['magento_api'],
-        megaventory: dates['megaventory_api'],
-        softone: dates['softone_api'],
-        epsilon_net: dates['epsilon_net_eshop_api'],
-        entersoft: dates['entersoft_web_api'],
-      } as Record<string, Date>;
+      if (!brandId) return { dates: {} as Record<string, Date>, meta: {} as Record<string, LastImportMeta> };
+      const metaBySource = await getLastImportMeta(brandId);
+      const pick = (sourceKey: string, connectorKey: ConnectorId) => {
+        const m = metaBySource[sourceKey];
+        return {
+          date: m?.date,
+          meta: m,
+          connectorKey,
+        };
+      };
+      const rows = [
+        pick('google_ads_api', 'google_ads'),
+        pick('meta_api', 'meta'),
+        pick('tiktok_api', 'tiktok'),
+        pick('merchant_center_api', 'merchant'),
+        pick('price_benchmarks', 'merchant'),
+        pick('ga4_api', 'ga4'),
+        pick('ga4', 'ga4'),
+        pick('search_console_api', 'search_console'),
+        pick('shopify_api', 'shopify'),
+        pick('woocommerce_api', 'woocommerce'),
+        pick('opencart_api', 'opencart'),
+        pick('magento_api', 'magento'),
+        pick('megaventory_api', 'megaventory'),
+        pick('softone_api', 'softone'),
+        pick('epsilon_net_eshop_api', 'epsilon_net'),
+        pick('entersoft_web_api', 'entersoft'),
+      ];
+      const dates: Record<string, Date> = {};
+      const meta: Record<string, LastImportMeta> = {};
+      for (const row of rows) {
+        if (!row.date) continue;
+        const prev = dates[row.connectorKey];
+        if (!prev || row.date > prev) dates[row.connectorKey] = row.date;
+        const prevMeta = meta[row.connectorKey];
+        if (!prevMeta || row.date > prevMeta.date) {
+          if (row.meta) meta[row.connectorKey] = row.meta;
+        }
+      }
+      return { dates, meta };
     },
     enabled: !!brandId,
     staleTime: 5 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
-    refetchOnMount: false,
+    // Ανανέωση όταν ανοίγει η σελίδα: μετά από βραδινό auto-sync ο χρήστης πρέπει να βλέπει το
+    // φρέσκο timestamp, όχι το persisted cache της προηγούμενης μέρας.
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     retry: 0,
   });
+  const { dates: lastSyncDates, meta: lastImportMeta } = normalizeLastSyncQuery(lastSyncQueryRaw);
 
   const { data: megaventorySyncJob } = useQuery({
     queryKey: ['connectorSyncJob', brandId, 'megaventory'],
@@ -2026,11 +2157,111 @@ export function ConnectorsPanel() {
     retry: 1,
   });
 
+  const { data: opencartSyncJob } = useQuery({
+    queryKey: ['connectorSyncJob', brandId, 'opencart'],
+    queryFn: async () => {
+      if (!brandId) return null;
+      return FirestoreService.getDocument<ConnectorSyncJobDoc>(
+        'connector_sync_jobs',
+        connectorSyncJobId('opencart', brandId),
+      );
+    },
+    enabled: !!brandId && !!user?.uid,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
+    retry: 1,
+  });
+
+  useEffect(() => {
+    handledMegaventoryJobRef.current = null;
+    previousMegaventoryJobStatusRef.current = null;
+    handledOpenCartJobRef.current = null;
+    previousOpenCartJobStatusRef.current = null;
+  }, [brandId]);
+
+  const refreshCommerceRfmProductCaches = useCallback(() => {
+    if (!brandId) return;
+    queryClient.removeQueries({ queryKey: ['brandSyncVersion', brandId] });
+    queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
+    queryClient.removeQueries({ queryKey: ['business_revenue_summary', brandId] });
+    queryClient.removeQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
+    queryClient.removeQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
+    queryClient.removeQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
+    queryClient.removeQueries({ queryKey: ['products', brandId] });
+    queryClient.removeQueries({ queryKey: ['products_paginated', brandId] });
+    queryClient.removeQueries({ queryKey: ['productIntelligenceAggregate', brandId] });
+    queryClient.removeQueries({ queryKey: ['productIntelligencePage', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['products', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['products_paginated', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['productIntelligenceAggregate', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['productIntelligencePage', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId, 'v2'] });
+  }, [brandId, queryClient]);
+
   // Keep fetchStates for OAuth callback compatibility (force refetch after OAuth redirect)
   const fetchStates = useCallback(async () => {
     await refetchConnectors();
-    queryClient.removeQueries({ queryKey: ['lastSyncDates', brandId] });
+    queryClient.removeQueries({ queryKey: ['lastSyncDates', brandId, 'v2'] });
   }, [brandId, refetchConnectors, queryClient]);
+
+  useEffect(() => {
+    if (!brandId || !megaventorySyncJob || megaventorySyncJob.provider !== 'megaventory') return;
+    const status = megaventorySyncJob.status ?? null;
+    const previousStatus = previousMegaventoryJobStatusRef.current;
+    previousMegaventoryJobStatusRef.current = status;
+    if (status !== 'completed' && status !== 'failed') return;
+    if (previousStatus !== 'pending' && previousStatus !== 'running') return;
+    setSyncingProviders((prev) => {
+      const next = new Set(prev);
+      next.delete('megaventory');
+      return next;
+    });
+    const completedAt = coerceToDate(megaventorySyncJob.completedAt)?.toISOString() || '';
+    const handledKey = `${brandId}:${status}:${completedAt}`;
+    if (handledMegaventoryJobRef.current === handledKey) return;
+    handledMegaventoryJobRef.current = handledKey;
+    if (status === 'completed') {
+      toast.success('Megaventory sync ολοκληρώθηκε.');
+    } else {
+      toast.error(megaventorySyncJob.error || 'Megaventory sync απέτυχε.');
+    }
+    refreshCommerceRfmProductCaches();
+    void fetchStates();
+  }, [brandId, fetchStates, megaventorySyncJob, refreshCommerceRfmProductCaches, toast]);
+
+  useEffect(() => {
+    if (!brandId || !opencartSyncJob || opencartSyncJob.provider !== 'opencart') return;
+    const status = opencartSyncJob.status ?? null;
+    const previousStatus = previousOpenCartJobStatusRef.current;
+    previousOpenCartJobStatusRef.current = status;
+    if (status !== 'completed' && status !== 'failed') return;
+    if (previousStatus !== 'pending' && previousStatus !== 'running') return;
+    setSyncingProviders((prev) => {
+      const next = new Set(prev);
+      next.delete('opencart');
+      return next;
+    });
+    const completedAt = coerceToDate(opencartSyncJob.completedAt)?.toISOString() || '';
+    const handledKey = `${brandId}:${status}:${completedAt}`;
+    if (handledOpenCartJobRef.current === handledKey) return;
+    handledOpenCartJobRef.current = handledKey;
+    if (status === 'completed') {
+      toast.success('OpenCart sync ολοκληρώθηκε.');
+      void refreshProductIntelligenceOnServer(brandId)
+        .then(() => refreshCommerceRfmProductCaches())
+        .catch((err: unknown) => console.warn('[ConnectorsPanel] PI refresh after OpenCart job:', err));
+    } else {
+      toast.error(opencartSyncJob.error || 'OpenCart sync απέτυχε.');
+    }
+    refreshCommerceRfmProductCaches();
+    void fetchStates();
+  }, [brandId, fetchStates, opencartSyncJob, refreshCommerceRfmProductCaches, toast]);
 
   const refreshMagentoEcommerceCaches = useCallback(() => {
     if (!brandId) return;
@@ -2157,6 +2388,22 @@ export function ConnectorsPanel() {
     });
   }, []);
 
+  const recordSyncAttempt = useCallback(
+    (provider: ConnectorId, success: boolean, error?: string) => {
+      setSyncAttempts((prev) => ({
+        ...prev,
+        [provider]: { at: new Date(), success, error: error?.slice(0, 280) },
+      }));
+    },
+    []
+  );
+
+  const refreshAfterSyncAttempt = useCallback(async () => {
+    if (!brandId) return;
+    queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId, 'v2'] });
+    await refetchConnectors();
+  }, [brandId, queryClient, refetchConnectors]);
+
   const handleConnect = async (provider: ConnectorConfig['id'], shopDomain?: string) => {
     if (!brandId || !user) return;
     if (!canManageConnectors) {
@@ -2278,6 +2525,7 @@ export function ConnectorsPanel() {
 
     const syncAbort = new AbortController();
     const syncTimer = window.setTimeout(() => syncAbort.abort(), 1_260_000);
+    let keepSyncingUntilBackgroundJobFinishes = false;
 
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -2295,13 +2543,27 @@ export function ConnectorsPanel() {
         const syncedConnector = CONNECTORS.find((c) => c.id === provider);
         const label = syncedConnector?.syncLabel || 'campaigns';
         // Optimistic last-sync UI update (prevents stale date display while background queries refresh)
-        queryClient.setQueryData<Record<string, Date> | undefined>(
-          ['lastSyncDates', brandId],
-          (prev) => ({ ...(prev || {}), [provider]: new Date() })
+        queryClient.setQueryData<{ dates: Record<string, Date>; meta: Record<string, LastImportMeta> }>(
+          ['lastSyncDates', brandId, 'v2'],
+          (prev) => ({
+            dates: { ...(prev?.dates || {}), [provider]: new Date() },
+            meta: {
+              ...(prev?.meta || {}),
+              [provider]: { date: new Date(), status: 'completed' },
+            },
+          })
         );
         if (provider === 'megaventory' && result.queued) {
+          keepSyncingUntilBackgroundJobFinishes = true;
           toast.success('Megaventory sync ξεκίνησε στο background. Μπορείς να συνεχίσεις κανονικά.');
           queryClient.invalidateQueries({ queryKey: ['connectorSyncJob', brandId, 'megaventory'] });
+        } else if (provider === 'opencart' && result.queued) {
+          keepSyncingUntilBackgroundJobFinishes = true;
+          toast.success(
+            result.message ||
+              'OpenCart sync ξεκίνησε στο background. Θα ολοκληρωθεί αυτόματα — δεν χρειάζεται να περιμένεις.'
+          );
+          queryClient.invalidateQueries({ queryKey: ['connectorSyncJob', brandId, 'opencart'] });
         } else if (provider === 'merchant') {
           const imp = result.imported ?? 0;
           const wm = typeof result.withMarketBenchmark === 'number' ? result.withMarketBenchmark : undefined;
@@ -2355,12 +2617,20 @@ export function ConnectorsPanel() {
               ? `Entersoft: ${t} εγγραφές (PQ ${result.publicQueryRows})`
               : `Entersoft: ${t} εγγραφές`
           );
+        } else if (provider === 'opencart' && (result.backfillContinuing || result.partial)) {
+          toast.info(
+            result.message ||
+              `OpenCart: εισήχθησαν ${result.imported ?? 0} εγγραφές — συνεχίζει στο background.`
+          );
+        } else if (result.warning) {
+          // Degraded αλλά επιτυχές (π.χ. orders OK, product-catalog ACL denied) — info, όχι error.
+          toast.info(result.warning);
         } else {
           toast.success(`Εισήχθησαν ${result.imported} ${label}`);
         }
         queryClient.invalidateQueries({ queryKey: ['campaigns', brandId] });
         queryClient.invalidateQueries({ queryKey: ['connectorsSummary', brandId] });
-        queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId, 'v2'] });
         queryClient.removeQueries({ queryKey: ['brandSyncVersion', brandId] });
         queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', brandId] });
         if (provider === 'google_ads') {
@@ -2402,26 +2672,46 @@ export function ConnectorsPanel() {
           queryClient.invalidateQueries({ queryKey: ['segmentCustomerSummaries', brandId] });
           queryClient.invalidateQueries({ queryKey: ['aggregates'] });
         }
+        if (
+          ['shopify', 'woocommerce', 'opencart', 'magento', 'megaventory', 'softone', 'epsilon_net', 'entersoft'].includes(provider) &&
+          result.queued !== true
+        ) {
+          refreshCommerceRfmProductCaches();
+        }
         if (provider === 'magento') {
           queryClient.invalidateQueries({ queryKey: ['magento_popular_searches', brandId] });
         }
+        recordSyncAttempt(provider, true);
         fetchStates();
       } else {
-        toast.error(result.error || 'Sync failed');
+        const errMsg = String(result.error || 'Sync failed');
+        recordSyncAttempt(provider, false, errMsg);
+        await refreshAfterSyncAttempt();
+        toast.error(errMsg);
       }
     } catch (err) {
       let msg = err instanceof Error ? err.message : 'Σφάλμα sync';
       if (err instanceof Error && err.name === 'AbortError') {
-        msg = 'Το sync δεν ολοκληρώθηκε εντός του διαθέσιμου χρόνου. Δοκιμάστε ξανά ή ελέγξτε τα logs της function.';
+        msg =
+          provider === 'opencart'
+            ? 'Το sync OpenCart ξεπέρασε το χρονικό όριο του browser — μπορεί να συνεχίζει στο server. Ανανέωσε τη σελίδα σε 1–2 λεπτά και πάτα Sync ξανά αν χρειάζεται.'
+            : 'Το sync δεν ολοκληρώθηκε εντός του διαθέσιμου χρόνου. Δοκιμάστε ξανά ή ελέγξτε τα logs της function.';
+        if (provider === 'opencart') {
+          void refreshAfterSyncAttempt();
+        }
       } else if (msg === 'Failed to fetch') {
         msg =
           'Αποτυχία δικτύου. Δοκίμασε ξανά σε 1 λεπτό ή από άλλο δίκτυο. Το σύστημα δοκίμασε αυτόματα και την εναλλακτική σύνδεση server.';
       }
+      recordSyncAttempt(provider, false, msg);
+      void refreshAfterSyncAttempt();
       toast.error(msg);
       console.error('[ConnectorsPanel] connectorSync failed:', err);
     } finally {
       window.clearTimeout(syncTimer);
-      markSyncEnd(provider);
+      if (!keepSyncingUntilBackgroundJobFinishes) {
+        markSyncEnd(provider);
+      }
     }
   };
 
@@ -2475,6 +2765,24 @@ export function ConnectorsPanel() {
       setConfirmingAccount(false);
     }
   };
+
+  useEffect(() => {
+    if (!brandId || !canManageConnectors || !opencartBackfillNeedsResume) return;
+    const jobStatus = opencartSyncJob?.status;
+    if (jobStatus === 'pending' || jobStatus === 'running') return;
+    const resumeKey = `${brandId}:${jobStatus ?? 'none'}:${String(opencartState.productsSyncPageCursor ?? '')}:${String(opencartState.ordersSyncPageCursor ?? '')}`;
+    if (opencartAutoResumeRef.current === resumeKey) return;
+    opencartAutoResumeRef.current = resumeKey;
+    void handleSync('opencart');
+  }, [
+    brandId,
+    canManageConnectors,
+    handleSync,
+    opencartBackfillNeedsResume,
+    opencartState.ordersSyncPageCursor,
+    opencartState.productsSyncPageCursor,
+    opencartSyncJob?.status,
+  ]);
 
   useEffect(() => {
     if (!accountPickerFor || !user?.uid) return;
@@ -2535,6 +2843,8 @@ export function ConnectorsPanel() {
           onSuccess={() => {
             setOpencartModal(false);
             fetchStates();
+            queryClient.invalidateQueries({ queryKey: ['connectorSyncJob', brandId, 'opencart'] });
+            toast.info('Το αρχικό sync ξεκίνησε στο background.');
           }}
           onCancel={() => setOpencartModal(false)}
         />
@@ -2624,6 +2934,18 @@ export function ConnectorsPanel() {
             }
           />
 
+          {connectorsLoadError && (
+            <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              <span>Δεν ήταν δυνατή η φόρτωση των connector. Έλεγξε τη σύνδεσή σου και δοκίμασε ξανά.</span>
+              <button
+                onClick={() => refetchConnectors()}
+                className="shrink-0 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-200 transition-colors"
+              >
+                Ανανέωση
+              </button>
+            </div>
+          )}
+
           {canManageConnectors && !loading && (
             <div className="mb-6 space-y-6">
               <RevenueSourceSettings />
@@ -2696,19 +3018,66 @@ export function ConnectorsPanel() {
                   isPending &&
                   Boolean(uid) &&
                   (pickerOwnerUid === undefined || pickerOwnerUid !== uid);
-                const isSyncing = syncingProviders.has(conn.id);
+                const opencartJobActive =
+                  conn.id === 'opencart' &&
+                  (opencartSyncJob?.status === 'pending' ||
+                    opencartSyncJob?.status === 'running' ||
+                    (opencartBackfillNeedsResume && opencartSyncJob?.status === 'completed'));
+                const megaventoryJobActive =
+                  conn.id === 'megaventory' &&
+                  (megaventorySyncJob?.status === 'pending' || megaventorySyncJob?.status === 'running');
+                const isSyncing =
+                  syncingProviders.has(conn.id) || opencartJobActive || megaventoryJobActive;
                 const isConnecting = connecting === conn.id;
-                const lastSyncAt = newestDate(
-                  lastSyncDates[conn.id] as unknown,
-                  state.lastSyncAt,
-                  state.lastOrdersSyncAt,
-                  state.lastProductsSyncAt
-                );
+                const importMeta = lastImportMeta[conn.id];
+                const connectorAttemptAt = coerceToDate(state.lastSyncAttemptAt);
+                const connectorSyncError =
+                  typeof state.lastSyncError === 'string' ? state.lastSyncError.trim() : '';
+                const ordersSyncAt = coerceToDate(state.lastOrdersSyncAt);
+                const productsSyncAt = coerceToDate(state.lastProductsSyncAt);
+                const ecommerceHealth = ECOMMERCE_CONNECTOR_IDS.has(conn.id)
+                  ? ecommerceSyncHealth(state, importMeta)
+                  : null;
+                const lastSyncAt =
+                  ecommerceHealth === 'full'
+                    ? newestDate(ordersSyncAt, productsSyncAt)
+                    : newestDate(
+                        connectorAttemptAt,
+                        lastSyncDates[conn.id],
+                        state.lastSyncAt,
+                        state.lastOrdersSyncAt,
+                        state.lastProductsSyncAt,
+                        importMeta?.date
+                      );
+                const connectorStatusPartial =
+                  state.lastSyncStatus === 'partial' || (connectorSyncError.length > 0 && !ordersSyncAt && !productsSyncAt);
+                const syncChipPartial =
+                  connectorStatusPartial ||
+                  ecommerceHealth === 'partial' ||
+                  (ECOMMERCE_CONNECTOR_IDS.has(conn.id) &&
+                    Boolean(lastSyncAt) &&
+                    (!ordersSyncAt || !productsSyncAt));
+                const lastAttempt = syncAttempts[conn.id];
+                const opencartBackfillContinuing =
+                  conn.id === 'opencart' &&
+                  Boolean(state.productsSyncPageCursor || state.ordersSyncPageCursor);
+                const recentFailedAttempt =
+                  Boolean(lastAttempt) &&
+                  !lastAttempt!.success &&
+                  !opencartBackfillContinuing &&
+                  opencartJobActive !== true &&
+                  megaventoryJobActive !== true &&
+                  (!lastSyncAt || lastAttempt!.at.getTime() > lastSyncAt.getTime() - 2000);
                 const connectedAt = coerceToDate(state.connectedAt as unknown);
                 const identityLines = getConnectorIdentityLines(conn.id, state);
                 const usesCompactDetails = conn.id === 'magento' || conn.group === 'operations';
                 const detailsExpanded = !usesCompactDetails || expandedConnectorDetails[conn.id] === true;
-                const syncJob = conn.id === 'megaventory' ? megaventorySyncJob : null;
+                const syncJob =
+                  conn.id === 'megaventory'
+                    ? megaventorySyncJob
+                    : conn.id === 'opencart'
+                      ? opencartSyncJob
+                      : null;
                 const syncJobBadge = syncJobLabel(syncJob);
 
                 return (
@@ -2743,7 +3112,16 @@ export function ConnectorsPanel() {
                         </div>
                       </div>
                       {isConnected && (
-                        <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
+                        isSyncing ? (
+                          <span
+                            className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 ring-1 ring-sky-200"
+                            title="Sync σε εξέλιξη"
+                          >
+                            <RefreshCw size={15} className="animate-spin" />
+                          </span>
+                        ) : (
+                          <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
+                        )
                       )}
                       {isPending && (
                         <AlertTriangle size={20} className="text-amber-500 flex-shrink-0" />
@@ -2769,15 +3147,40 @@ export function ConnectorsPanel() {
                             <CheckCircle2 size={12} />
                             Συνδεδεμένο
                           </span>
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                              lastSyncAt
-                                ? 'bg-white text-[#6B7280] ring-1 ring-emerald-200'
-                                : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
-                            }`}
-                          >
-                            {lastSyncAt ? `Sync: ${formatConnectorDate(lastSyncAt)}` : 'Δεν έχει γίνει sync'}
-                          </span>
+                          {isSyncing ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+                              <RefreshCw size={11} className="animate-spin" />
+                              Sync σε εξέλιξη…
+                            </span>
+                          ) : recentFailedAttempt ? (
+                            <span
+                              className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-800 ring-1 ring-red-200"
+                              title={lastAttempt?.error}
+                            >
+                              Αποτυχία: {formatConnectorDate(lastAttempt!.at)}
+                            </span>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                !lastSyncAt
+                                  ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+                                  : syncChipPartial
+                                    ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-300'
+                                    : 'bg-white text-[#6B7280] ring-1 ring-emerald-200'
+                              }`}
+                              title={
+                                syncChipPartial
+                                  ? 'Τελευταία αποθηκευμένη εισαγωγή — όχι πλήρες sync. Κάντε ξανά sync.'
+                                  : undefined
+                              }
+                            >
+                              {lastSyncAt
+                                ? syncChipPartial
+                                  ? `Εισαγωγή: ${formatConnectorDate(lastSyncAt)} (μερικό)`
+                                  : `Sync: ${formatConnectorDate(lastSyncAt)}`
+                                : 'Δεν έχει γίνει sync'}
+                            </span>
+                          )}
                           {syncJobBadge && (
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${syncJobBadge.className}`}
@@ -2811,10 +3214,47 @@ export function ConnectorsPanel() {
                               <p key={line}>{line}</p>
                             ))}
                             {connectedAt && <p className="text-[#9CA3AF]">Συνδέθηκε: {formatConnectorDate(connectedAt)}</p>}
-                            {lastSyncAt && <p className="text-[#9CA3AF]">Τελευταίο sync: {formatConnectorDate(lastSyncAt)}</p>}
+                            {recentFailedAttempt && (
+                              <p className="text-red-700/90">
+                                Τελευταία προσπάθεια: {formatConnectorDate(lastAttempt!.at)} — αποτυχία
+                                {lastAttempt?.error ? ` (${lastAttempt.error})` : ''}
+                              </p>
+                            )}
+                            {lastSyncAt && (
+                              <p className="text-[#9CA3AF]">
+                                {syncChipPartial ? 'Τελευταία εισαγωγή (μερικό)' : 'Τελευταίο sync'}:{' '}
+                                {formatConnectorDate(lastSyncAt)}
+                                {recentFailedAttempt ? ' (παλαιότερη από την αποτυχημένη προσπάθεια)' : ''}
+                              </p>
+                            )}
+                            {ECOMMERCE_CONNECTOR_IDS.has(conn.id) && isConnected && (
+                              <>
+                                <p className="text-[#9CA3AF]">
+                                  Παραγγελίες: {ordersSyncAt ? formatConnectorDate(ordersSyncAt) : '—'} · Προϊόντα:{' '}
+                                  {productsSyncAt ? formatConnectorDate(productsSyncAt) : '—'}
+                                </p>
+                                {(connectorSyncError || importMeta?.errors?.length) && (
+                                  <p className="text-amber-800/90 break-words">
+                                    {connectorSyncError ||
+                                      importMeta?.errors?.join(' · ') ||
+                                      'Μερική εισαγωγή — δοκιμάστε ξανά sync.'}
+                                  </p>
+                                )}
+                                {typeof state.lastSyncImported === 'number' && state.lastSyncImported > 0 && (
+                                  <p className="text-[#9CA3AF]">
+                                    Τελευταία προσπάθεια: {state.lastSyncOrders ?? 0} παραγγελίες ·{' '}
+                                    {state.lastSyncProducts ?? 0} προϊόντα
+                                    {connectorAttemptAt ? ` (${formatConnectorDate(connectorAttemptAt)})` : ''}
+                                  </p>
+                                )}
+                              </>
+                            )}
                             {syncJob?.status && (
                               <p className="text-[#9CA3AF]">
-                                Background job: {syncJob.status}
+                                Background job:{' '}
+                                {opencartBackfillContinuing && syncJob.status === 'completed'
+                                  ? 'backfill continuing (auto-resume)'
+                                  : syncJob.status}
                                 {coerceToDate(syncJob.updatedAt) ? ` · ${formatConnectorDate(coerceToDate(syncJob.updatedAt)!)} ` : ''}
                                 {syncJob.error ? ` · ${syncJob.error}` : ''}
                               </p>
@@ -2913,7 +3353,7 @@ export function ConnectorsPanel() {
                               variant="secondary"
                               size="sm"
                               onClick={() => {
-                                if (window.confirm('Full Re-sync: θα ξανακατεβάσει ΟΛΟ το ιστορικό παραγγελιών. Συνέχεια;')) {
+                                if (window.confirm('Full Re-sync: θα ξανακατεβάσει όλο το ιστορικό παραγγελιών. Συνέχεια;')) {
                                   handleSync(conn.id, { forceFullSync: true });
                                 }
                               }}

@@ -24,6 +24,7 @@ import { useBrand } from '../../hooks/useBrand';
 import { useProductSource } from '../../hooks/useProductSource';
 import { useSegments } from '../../hooks/useSegments';
 import { generateContentSuggestions } from '../../services/aiContentSuggestions';
+import { formatBrandProfileForPrompt, hashBrandProfilePromptText } from '../../services/brandProfile';
 
 const channelIcons: Record<string, React.ReactNode> = {
   Email: <Mail size={16} className="text-amber-700" />,
@@ -57,7 +58,16 @@ export function ContentStrategy() {
   const suggestions = saved?.actions ?? [];
   const directions = saved?.directions ?? [];
   const brief = saved?.brief ?? '';
-  const hasSavedContent = suggestions.length > 0 || directions.length > 0 || Boolean(brief);
+  const brandProfileText = useMemo(
+    () => formatBrandProfileForPrompt(currentBrand?.brandProfile),
+    [currentBrand?.brandProfile]
+  );
+  const brandProfileContextSig = useMemo(
+    () => hashBrandProfilePromptText(brandProfileText),
+    [brandProfileText]
+  );
+  const hasContentPayload = suggestions.length > 0 || directions.length > 0 || Boolean(brief);
+  const hasSavedContent = hasContentPayload && saved?.brandProfileContextSig === brandProfileContextSig;
   const suggestionsLoading = strategyLoading || contentGenerating;
   const hasStrategy = !!activeStrategy && !activeStrategy.id.startsWith('default_');
 
@@ -73,7 +83,7 @@ export function ContentStrategy() {
 
   useEffect(() => {
     if (!hasStrategy || !activeStrategy || hasSavedContent || contentGenerating) return;
-    const generationKey = `${activeStrategy.id}:${activeStrategy.updatedAt}`;
+    const generationKey = `${activeStrategy.id}:${activeStrategy.updatedAt}:${brandProfileText}`;
     if (autoGenerateKeyRef.current === generationKey) return;
     autoGenerateKeyRef.current = generationKey;
 
@@ -84,12 +94,13 @@ export function ContentStrategy() {
       ? rfmSegments.map((segment) => segment.name || segment.id).slice(0, 6)
       : ['All Customers'];
 
-    setContentGenerating(true);
+    queueMicrotask(() => setContentGenerating(true));
     generateContentSuggestions({
       scenarioId,
       scenarioName,
       weights: activeStrategy.weights,
       brandName: currentBrand?.name,
+      brandProfileText,
       topCategories,
       segmentNames,
       audience: dataCoverage,
@@ -107,6 +118,8 @@ export function ContentStrategy() {
     activeStrategy,
     contentGenerating,
     currentBrand?.name,
+    brandProfileText,
+    brandProfileContextSig,
     dataCoverage,
     getStrategyName,
     hasStrategy,

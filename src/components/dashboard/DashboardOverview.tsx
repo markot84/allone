@@ -36,8 +36,10 @@ import { useCampaigns } from '../../hooks/useCampaigns';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { useBrand } from '../../hooks/useBrand';
-import { useProductAggregates } from '../../hooks/useAggregates';
+import { useProductAggregates, useSegmentAggregates } from '../../hooks/useAggregates';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
+import { useProcurementSignals } from '../../hooks/useProcurementSignals';
+import { usePlan } from '../../hooks/usePlan';
 import { usePeriodScopedCampaigns } from '../../hooks/usePeriodScopedCampaigns';
 import { useTasks } from '../../hooks/useCoordination';
 import { useDashPeriod } from '../../hooks/useDashPeriod';
@@ -48,6 +50,7 @@ import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useEcommerceFullHistoryMetrics } from '../../hooks/useEcommerceFullHistoryMetrics';
 import { useBusinessRevenueSummary } from '../../hooks/useBusinessRevenueSummary';
 import { useProcurement } from '../../hooks/useProcurement';
+import { useHREmployees } from '../../hooks/useHRData';
 import { useModules } from '../../hooks/useModules';
 import {
   calculateCampaignMetrics,
@@ -69,26 +72,34 @@ import {
 } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
-import { generateInsightsFromData } from '../../services/insights';
+import { useAiInsightsData } from '../insights/useAiInsightsData';
 import { useAutomationRunner } from '../../hooks/useAutomationRunner';
 import { useAutomationAlerts } from '../../hooks/useAutomation';
 import { MorningBriefing } from './MorningBriefing';
 import { StrategyBriefingQuickStrip } from '../coordination/StrategyBriefingQuickStrip';
 import { eachDateInclusiveLocal, computeMarketingOverheadForPeriod } from '../../utils/marketingCostPeriod';
 import { getCostingReal12mTurnover } from '../../utils/procurement12mTurnover';
+import { coerceToDate } from '../../utils/coerceDate';
+import { INSIGHT_NAV } from '../insights/aiInsightsConfig';
+import type { AIInsight } from '../../types';
 
 /** Ημερήσια σημεία στο chart· πάνω από αυτό → μηνιαία σύνοψη (αναγνώσιμο άξονα). */
 const REVENUE_CHART_MAX_DAILY_POINTS = 90;
 
-/** Revenue Performance — κύριο chart τζίρου */
-const REV_CHART_ESHOP = '#F97316';
+/** Revenue Performance — κύριο chart τζίρου. Ακολουθεί το accent theme ώστε όλες οι τάσεις
+ *  (e-commerce spark, GA4 spark, revenue chart) να έχουν ΕΝΙΑΙΟ χρώμα με το επιλεγμένο theme. */
+const REV_CHART_ESHOP = 'var(--nts-accent)';
 
 const REV_PERF_LABEL_ESHOP = 'Τζίρος e-shop (παραγγελίες)';
 const REV_PERF_LABEL_ESHOP_BLEND = 'Organic + καμπάνιες (εκτίμηση)';
-const DASHBOARD_LOADING_TIMEOUT_MS = 8000;
+const DASHBOARD_LOADING_TIMEOUT_MS = 1800;
+const FINANCIAL_GATE_TIMEOUT_MS = 1800;
+const BRIEFING_CONTEXT_TIMEOUT_MS = 6000;
 /** Διαφήμιση — standalone efficiency chart (όχι σύγκριση με τζίρο). */
 const ADS_SPEND_COLOR = '#FDBA74';
-const ADS_CONV_COLOR = REV_CHART_ESHOP;
+// Σταθερό (όχι accent): το ads efficiency chart είναι multi-series — αν ακολουθούσε το accent
+// θα συγκρουόταν με το ADS_SPEND_COLOR.
+const ADS_CONV_COLOR = '#F97316';
 const ADS_ROAS_COLOR = '#64748B';
 
 /** Chart series values are full EUR; axis shows K when ≥ €1.000 (tooltip uses formatCurrencyCompact on same basis). */
@@ -131,6 +142,24 @@ function latestPositiveRevenueDayInPeriod(
   return latest;
 }
 
+function daysBetweenDateKeys(fromDate: string | null, toDate: string): number | null {
+  if (!fromDate || !/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
+    return null;
+  }
+  const from = new Date(`${fromDate}T00:00:00Z`).getTime();
+  const to = new Date(`${toDate}T00:00:00Z`).getTime();
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+  return Math.max(0, Math.round((to - from) / 86_400_000));
+}
+
+function hoursSince(value: unknown): number | null {
+  const d = coerceToDate(value);
+  if (!d) return null;
+  const diff = Date.now() - d.getTime();
+  if (!Number.isFinite(diff)) return null;
+  return Math.max(0, diff / 3_600_000);
+}
+
 /** Το Recharts Area χρειάζεται ≥2 σημεία· αν υπάρχει 1 μήνας μόνο, διπλασιάζουμε για ορατή γραμμή. */
 function padSparklineForChart(values: number[]): number[] {
   if (values.length === 0) return [];
@@ -169,17 +198,25 @@ interface DashboardOverviewProps {
 export function DashboardOverview({ onSectionChange, onOpenInsights }: DashboardOverviewProps = {}) {
   const { currentBrand } = useBrand();
   const { isB2B, enabledModules } = useModules();
-  const { segments: rfmSegments, hasImported: hasSegments, isLoading: segmentsLoading } = useSegments();
+  const { segments: rfmSegments, hasImported: hasSegments, isLoading: segmentsLoading } = useSegments({
+    skipOrderHydration: true,
+    // Τροφοδότηση από το έτοιμο server RFM aggregate (1 doc read) → πραγματικά segments γρήγορα,
+    // χωρίς client-side υπολογισμό από 400ήμερες παραγγελίες.
+    useServerAggregate: true,
+  });
+  const { segmentStats } = useSegmentAggregates();
   const lastGoodRfmSegmentsRef = useRef<{ brandId: string | null; segments: typeof rfmSegments }>({
     brandId: null,
     segments: [],
   });
   const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 });
   const products = productIntelligence.page?.products ?? [];
-  const productsLoading = productIntelligence.isLoading;
+  const { isEnterprise } = usePlan();
+  const { signalsBySku: procurementSignals } = useProcurementSignals();
   const { productStats } = useProductAggregates();
   const { suppliers } = useSuppliers();
   const { tasks } = useTasks();
+  const { activeEmployees, totalMonthlyCost } = useHREmployees();
   const { totalOrganicRevenue, byMonth: organicByMonth, hasOrganicRevenue: hasOrganic, isLoading: organicLoading } = useOrganic();
   const { count: campaignsCount, campaigns, hasImported: hasCampaigns, isLoading: campaignsLoading } = useCampaigns();
   const { activeStrategy, getStrategyName } = useActiveStrategy();
@@ -208,7 +245,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     return lastGoodRfmSegmentsRef.current.segments;
   }, [currentBrand?.id, rfmSegments, segmentsLoading]);
 
-  const dashboardHasSegments = hasSegments || dashboardRfmSegments.length > 0;
+  const dashboardHasSegments =
+    hasSegments ||
+    dashboardRfmSegments.length > 0 ||
+    (segmentStats?.totalCustomers ?? 0) > 0;
 
   const supplierTodMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -258,9 +298,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     hasOrganic ||
     (enabledModules.procurement && procurementSheets.hasData);
   const releasedFinancialGateBrandsRef = useRef(new Set<string>());
+  const [financialGateTimedOut, setFinancialGateTimedOut] = useState(false);
   const financialGateReleased = currentBrand ? releasedFinancialGateBrandsRef.current.has(currentBrand.id) : false;
   const financialSourcesLoading =
-    rawFinancialSourcesLoading && !financialGateReleased && !hasUsableFinancialData;
+    rawFinancialSourcesLoading && !financialGateReleased && !hasUsableFinancialData && !financialGateTimedOut;
 
   useEffect(() => {
     if (!currentBrand) return;
@@ -269,20 +310,52 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     }
   }, [currentBrand, rawFinancialSourcesLoading, hasUsableFinancialData]);
 
-  /** Το AI Briefing περιμένει τα ίδια σταθερά financial δεδομένα με τα KPI. */
-  const briefingMetricsReady = !financialSourcesLoading && !ecommHist.rawLoading;
+  useEffect(() => {
+    setFinancialGateTimedOut(false);
+    if (!currentBrand || !rawFinancialSourcesLoading || hasUsableFinancialData || financialGateReleased) return;
+    const t = window.setTimeout(() => setFinancialGateTimedOut(true), FINANCIAL_GATE_TIMEOUT_MS);
+    return () => window.clearTimeout(t);
+  }, [currentBrand?.id, rawFinancialSourcesLoading, hasUsableFinancialData, financialGateReleased]);
+
+  /**
+   * Το Dashboard κάνει progressive render γρήγορα, αλλά το AI Briefing ΔΕΝ πρέπει να γράφεται
+   * πριν φορτώσουν τα κρίσιμα inputs. Αλλιώς μπορεί να δει προσωρινά campaigns=[] και να πει
+   * λάθος ότι δεν υπάρχει διαφημιστική δαπάνη.
+   */
+  const briefingMetricsReady =
+    !rawFinancialSourcesLoading &&
+    !ecommHist.rawLoading;
+  const [briefingContextTimedOut, setBriefingContextTimedOut] = useState(false);
+  const briefingSecondaryContextLoading = ga4AnalyticsLoading || segmentsLoading;
+  const briefingReady =
+    briefingMetricsReady &&
+    (!briefingSecondaryContextLoading || briefingContextTimedOut);
+
+  useEffect(() => {
+    setBriefingContextTimedOut(false);
+    if (!currentBrand?.id || !briefingMetricsReady || !briefingSecondaryContextLoading) return;
+    const t = window.setTimeout(() => setBriefingContextTimedOut(true), BRIEFING_CONTEXT_TIMEOUT_MS);
+    return () => window.clearTimeout(t);
+  }, [currentBrand?.id, briefingMetricsReady, briefingSecondaryContextLoading]);
 
   const [dashboardLoadingTimedOut, setDashboardLoadingTimedOut] = useState(false);
   const dashboardOverviewBusy =
     Boolean(currentBrand) &&
     !hasAnyData &&
+    !hasUsableFinancialData &&
     (segmentsLoading ||
       campaignsLoading ||
       organicLoading ||
-      productsLoading ||
+      (enabledModules.ecommerce && ecomm.isLoading) ||
       ecommerceRawBusy ||
       ga4AnalyticsLoading);
   const dashboardOverviewLoading = financialSourcesLoading || (dashboardOverviewBusy && !dashboardLoadingTimedOut);
+  /** Μην δείχνουμε «κάντε import» όσο ακόμα φορτώνουν e-shop / καμπάνιες / GA4. */
+  const dashboardStillHydrating =
+    Boolean(currentBrand) &&
+    !hasAnyData &&
+    !hasUsableFinancialData &&
+    (ecomm.isLoading || campaignsLoading || organicLoading || ga4AnalyticsLoading);
 
   useEffect(() => {
     setDashboardLoadingTimedOut(false);
@@ -499,39 +572,31 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     campaignMetrics.totalRevenue,
   ]);
 
-  const dashboardRevenueSourceLabel = hasProcurementTurnoverEstimate
-    ? 'Κοστολόγηση · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
-    : hasErpRevenueForPeriod
-      ? 'ERP'
-      : hasEcommerceRevenue
-        ? 'E-shop connectors'
-        : 'Organic + καμπάνιες (εκτίμηση)';
-
   const revenueTotalKpiTooltip = useMemo(() => {
     if (isB2B) {
       return 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.';
     }
-    const tail = ' Λεπτομέρειες e-shop / ROAS στη σελίδα ROI · οικονομική εικόνα στα Οικονομικά.';
+    const tail = ' Ανάλυση e-shop & ROAS: σελίδα «ROI & Απόδοση». Πλήρης οικονομική εικόνα: «Οικονομικά».';
     if (hasProcurementTurnoverEstimate) {
       return (
-        `Πηγή: ${dashboardRevenueSourceLabel}. Procurement έχει προτεραιότητα (Enterprise): άθροισμα «Πραγματικός τζίρος 12μ.» κατανεμημένο ανά ημέρα περιόδου (÷365). Ακόμα κι αν υπάρχει ERP, εμφανίζεται ο τζίρος procurement.` +
+        'Εκτιμώμενος συνολικός τζίρος της επιχείρησης για την επιλεγμένη περίοδο. Προκύπτει από τον πραγματικό ετήσιο τζίρο (τελευταίοι 12 μήνες, από την Κοστολόγηση) μοιρασμένο ομοιόμορφα στις ημέρες της περιόδου. Είναι εκτίμηση — όχι άθροισμα μεμονωμένων παραστατικών.' +
         tail
       );
     }
     if (hasErpRevenueForPeriod) {
-      return `Πηγή: ${dashboardRevenueSourceLabel}. Συνολικά παραστατικά ERP — περιλαμβάνει φυσικά καταστήματα, B2B και online πωλήσεις όπως καταγράφονται στο ERP.` + tail;
+      return 'Πραγματικός τζίρος από τα παραστατικά του ERP για την περίοδο. Περιλαμβάνει φυσικά καταστήματα, B2B και online πωλήσεις, όπως καταγράφονται στο ERP.' + tail;
     }
     if (enabledModules.procurement) {
       return (
-        `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: Κοστολόγηση 12μ. (Enterprise) · αλλιώς παραστατικά ERP · αλλιώς τζίρος e-shop · αλλιώς organic και καμπάνιες.` +
+        'Συνολικά έσοδα της επιχείρησης για την περίοδο. Χρησιμοποιείται η καλύτερη διαθέσιμη πηγή με σειρά: ετήσιος τζίρος Κοστολόγησης → παραστατικά ERP → τζίρος e-shop → εκτίμηση από organic & καμπάνιες.' +
         tail
       );
     }
     return (
-      `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: παραστατικά ERP · αλλιώς τζίρος e-shop · αλλιώς εκτίμηση organic και καμπάνιες.` +
+      'Συνολικά έσοδα της επιχείρησης για την περίοδο. Χρησιμοποιείται η καλύτερη διαθέσιμη πηγή με σειρά: παραστατικά ERP → τζίρος e-shop → εκτίμηση από organic & καμπάνιες.' +
       tail
     );
-  }, [isB2B, hasProcurementTurnoverEstimate, hasErpRevenueForPeriod, enabledModules.procurement, dashboardRevenueSourceLabel]);
+  }, [isB2B, hasProcurementTurnoverEstimate, hasErpRevenueForPeriod, enabledModules.procurement]);
 
   const revenuePerformanceChartLabel = hasProcurementTurnoverEstimate
     ? 'Τζίρος επιχείρησης (Procurement · εκτίμηση 12μ.)'
@@ -571,7 +636,49 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       periodDates.toDate,
     ]
   );
-  const inventoryValueEstimate = productStats?.totalInventoryValue ?? 0;
+
+  const ecommLatestPositiveRevenueDay = useMemo(
+    () => latestPositiveRevenueDayInPeriod(ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate),
+    [ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
+  );
+
+  const ecommDaysSinceLatestRevenue = useMemo(
+    () => daysBetweenDateKeys(ecommLatestPositiveRevenueDay, periodDates.toDate),
+    [ecommLatestPositiveRevenueDay, periodDates.toDate]
+  );
+
+  const ecommAggregateSyncedHoursAgo = useMemo(() => hoursSince(ecomm.syncedAt), [ecomm.syncedAt]);
+  const ecommAggregateFresh = ecommAggregateSyncedHoursAgo !== null && ecommAggregateSyncedHoursAgo <= 36;
+
+  const hasSuspectedEcommSyncGap =
+    enabledModules.ecommerce &&
+    ecomm.connectedPlatforms.length > 0 &&
+    storeRevenueInPeriod > 0 &&
+    !ecommAggregateFresh &&
+    (ecommDaysSinceLatestRevenue ?? 0) >= 2;
+  // Αξία αποθέματος:
+  //  - Enterprise: από τα procurement_signals (Σ tied_capital = απόθεμα × κόστος). Το Product
+  //    Intelligence είναι κρυφό σε Enterprise, οπότε δεν εξαρτιόμαστε πλέον από το PI aggregate.
+  //  - Growth: από το PI aggregate (procurement-sourced) ή το products aggregate (ERP/import).
+  const procurementInventoryValue = useMemo(() => {
+    if (!isEnterprise) return 0;
+    let total = 0;
+    for (const sig of Object.values(procurementSignals)) {
+      const tied = sig.tied_capital ?? (sig.available_stock ?? 0) * (sig.cost_unit ?? 0);
+      if (tied > 0) total += tied;
+    }
+    return total;
+  }, [isEnterprise, procurementSignals]);
+  const piSummaryValue =
+    productIntelligence.aggregate?.sourceKind === 'procurement'
+      ? productIntelligence.aggregate?.summary?.total_value ?? 0
+      : 0;
+  const inventoryValueEstimate =
+    procurementInventoryValue > 0
+      ? procurementInventoryValue
+      : piSummaryValue > 0
+        ? piSummaryValue
+        : productStats?.totalInventoryValue ?? 0;
   const openCommercialTasks = useMemo(
     () => tasks.filter((task) => task.status === 'pending' || task.status === 'in_progress').length,
     [tasks]
@@ -755,18 +862,16 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       console.debug('[Dashboard] Organic revenue:', totalOrganicRevenue, 'hasOrganic:', hasOrganic);
     }
   }, [totalOrganicRevenue, hasOrganic]);
-  const aiInsights = useMemo(() => {
-    return generateInsightsFromData(products, dashboardRfmSegments, supplierTodMap, {
-      hasData: enabledModules.ecommerce && ecomm.hasData,
-      totalRevenue: ecomm.totalRevenue,
-      orderCount: ecomm.orderCount,
-      aov: ecomm.aov,
-      platformBreakdown: ecomm.platformBreakdown,
-    });
-  }, [products, dashboardRfmSegments, supplierTodMap, enabledModules.ecommerce, ecomm.hasData, ecomm.totalRevenue, ecomm.orderCount, ecomm.aov, ecomm.platformBreakdown]);
+  const { aiInsights } = useAiInsightsData({ skipOrderHydration: true, useServerAggregate: true });
 
   // Handle insight action clicks
-  const handleInsightAction = (insight: { action: string; title: string }) => {
+  const handleInsightAction = (insight: AIInsight) => {
+    const nav = insight.insightKey ? INSIGHT_NAV[insight.insightKey] : null;
+    if (nav) {
+      onSectionChange?.(nav.section, nav.hashQuery ? { hashQuery: nav.hashQuery } : undefined);
+      return;
+    }
+
     const action = insight.action.toLowerCase();
     
     // Map actions to navigation
@@ -929,7 +1034,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           }}
           alerts={automationAlerts}
           supplierTodMap={supplierTodMap}
-          metricsReady={briefingMetricsReady}
+          metricsReady={briefingReady}
           financeKey={briefingFinanceKey}
           ecommerce={{
             hasData: enabledModules.ecommerce && !!ecomm.hasData,
@@ -938,6 +1043,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             aov: ordersInPeriod > 0 ? storeRevenueInPeriod / ordersInPeriod : ecomm.aov,
             connectedPlatforms: ecomm.connectedPlatforms,
             platformBreakdown: ecomm.platformBreakdown,
+            dataFreshness: {
+              latestPositiveRevenueDay: ecommLatestPositiveRevenueDay,
+              daysSinceLatestRevenue: ecommDaysSinceLatestRevenue,
+              aggregateSyncedHoursAgo: ecommAggregateSyncedHoursAgo,
+              suspectedSyncGap: hasSuspectedEcommSyncGap,
+            },
           }}
           onSectionChange={onSectionChange}
           hasAnyData={hasAnyData}
@@ -947,13 +1058,16 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       )}
 
       {currentBrand && !dashboardOverviewLoading && !hasAnyData && (
-        dashboardOverviewLoading ? (
+        dashboardStillHydrating ? (
           <Card padding="lg" className="border border-[#E8EAED] bg-white">
             <div className="flex gap-4 items-start">
               <Spinner size="md" className="shrink-0" />
-              <div className="min-w-0">
+              <motion.div className="min-w-0">
                 <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Φόρτωση δεδομένων πίνακα ελέγχου…</p>
-              </div>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--nts-medium-gray)]">
+                  Συγχρονισμένα δεδομένα — φορτώνουμε e-shop, καμπάνιες και analytics…
+                </p>
+              </motion.div>
             </div>
           </Card>
         ) : (
@@ -1034,7 +1148,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       )}
 
       {isB2B && !dashboardOverviewLoading && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
           <KPICard
             index={0}
             kpi={{
@@ -1074,6 +1188,16 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               tooltip: 'Συνδυαστική ένδειξη που αποτυπώνει assortment, προμηθευτές, οικονομική βάση, καμπάνιες και οργανωτική ετοιμότητα.',
             }}
             onClick={() => onSectionChange?.('markets')}
+          />
+          <KPICard
+            index={4}
+            kpi={{
+              label: 'People & HR',
+              value: activeEmployees.length > 0 ? `${activeEmployees.length}` : '—',
+              changeLabel: activeEmployees.length > 0 ? `€${totalMonthlyCost.toLocaleString('el-GR')}/μήνα` : 'προσθήκη εργαζομένων',
+              tooltip: 'Ενεργοί εργαζόμενοι και συνολικό μηνιαίο κόστος μισθοδοσίας. Λεπτομέρειες στη σελίδα HR & People.',
+            }}
+            onClick={() => onSectionChange?.('hr')}
           />
         </div>
       )}
@@ -1313,7 +1437,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               />
             </div>
             <p className="text-[12px] text-[#6B7280] leading-relaxed">
-              {isB2B ? 'Για αναλυτικότερη οικονομική εικόνα, baseline revenue και πρόσθετα B2B data feeds, άνοιξε ' : <>Για <strong className="text-[#4B5563] font-medium">Campaign ROI</strong>,{' '}
+              {isB2B ? 'Για αναλυτικότερη οικονομική εικόνα, baseline revenue και πρόσθετα B2B data feeds, άνοιξε ' : <>Για <strong className="text-[#4B5563] font-medium">Campaign ROI incl. costs</strong>,{' '}
               <strong className="text-[#4B5563] font-medium">e-shop ROI</strong>, Platform ROAS και σύγκριση εσόδων με το e-shop, ανοίξτε </>}
               <button
                 type="button"
@@ -1469,8 +1593,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   <AreaChart data={ga4SessionsTrend}>
                     <defs>
                       <linearGradient id="ga4SessionsDashSparkGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#F97316" stopOpacity={0.18} />
-                        <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+                        <stop offset="5%" stopColor="var(--nts-accent)" stopOpacity={0.18} />
+                        <stop offset="95%" stopColor="var(--nts-accent)" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <RechartsTooltip
@@ -1490,7 +1614,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     <Area
                       type="monotone"
                       dataKey="sessions"
-                      stroke="#F97316"
+                      stroke="var(--nts-accent)"
                       strokeWidth={1.5}
                       fill="url(#ga4SessionsDashSparkGrad)"
                       dot={false}
@@ -1760,7 +1884,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         >
           <CardHeader
             title="Campaigns"
-            subtitle="Τάση conversion value, δαπάνης και ROAS πλατφόρμας για την επιλεγμένη περίοδο."
+            subtitle="Συνολική διαφημιστική απόδοση Google Ads + Meta Ads — conversion value, δαπάνη και Platform ROAS για την επιλεγμένη περίοδο."
             icon={<Megaphone size={18} className="text-[var(--nts-accent)]" />}
           />
 
@@ -1774,7 +1898,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <strong className="font-mono text-[#1A1A1A]">{formatCurrencyCompact(campaignMetrics.totalRevenue)}</strong>
             </span>
             <span>
-              ROAS{' '}
+              Platform ROAS{' '}
               <strong className="font-mono text-[#1A1A1A]">
                 {campaignMetrics.totalSpend > 0 ? `${formatNumber(campaignMetrics.roas, 2)}×` : '—'}
               </strong>
@@ -1830,7 +1954,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   formatter={(value: unknown, name?: string) => {
                     const numericValue = Number(value);
                     if (name === 'roas') {
-                      return [Number.isFinite(numericValue) ? `${formatNumber(numericValue, 2)}×` : '—', 'ROAS πλατφόρμας'];
+                      return [Number.isFinite(numericValue) ? `${formatNumber(numericValue, 2)}×` : '—', 'Platform ROAS'];
                     }
                     return [
                       formatCurrencyCompact(Number.isFinite(numericValue) ? numericValue : 0),
@@ -1886,7 +2010,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             </span>
             <span className="inline-flex items-center gap-2">
               <span className="h-0.5 w-5 rounded-full" style={{ backgroundColor: ADS_ROAS_COLOR }} />
-              ROAS
+              Platform ROAS
             </span>
           </div>
         </Card>

@@ -4,6 +4,7 @@ import { Building2 } from 'lucide-react';
 import { Button } from '../common';
 import { useAuth } from '../../hooks';
 import { FirestoreService } from '../../services/firestore';
+import { MembersService } from '../../services/coordination';
 import { BrandAssetUpload } from '../brands/BrandAssetUpload';
 import { uploadBrandAsset } from '../../services/storage';
 import type { Brand } from '../../types';
@@ -52,7 +53,19 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
       };
       await FirestoreService.setDocument('brands', brandId, brand);
 
-      // 2. Upload the logo (now that storage.rules can see the brand doc).
+      // 2. Register the creator as owner-member before any asset upload, so
+      //    storage.rules' membership check passes.
+      await MembersService.set(brandId, {
+        userId: user.uid,
+        email: user.email ?? '',
+        displayName: user.displayName || user.email || 'Owner',
+        role: 'owner',
+        department: 'management',
+        departmentLabel: 'Διοίκηση',
+        joinedAt: new Date().toISOString(),
+      });
+
+      // 3. Upload the logo (now that storage.rules can see the brand doc).
       //    A failed logo upload doesn't roll back the brand — surface the
       //    error and let the user retry from the brand-edit screen.
       let logoUrl = '';

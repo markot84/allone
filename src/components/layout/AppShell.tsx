@@ -11,6 +11,7 @@ import { useModules } from '../../hooks/useModules';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { AppSectionId, Brand } from '../../types';
 import { getModuleIdForSection } from '../../config/modules';
+import { ACCENT_PRESETS, readStoredAccent, setStoredAccent, type AccentId } from '../../theme/accentTheme';
 import {
   GearIcon,
   GraphIcon,
@@ -27,7 +28,7 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2 } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2, HeartHandshake, MapPin, ClipboardList, Palette, Lightbulb } from 'lucide-react';
 import { NotificationBell } from '../coordination/NotificationBell';
 
 const SIDEBAR_PIN_KEY = 'perf-plus-sidebar-pinned';
@@ -38,8 +39,92 @@ export interface AppShellProps {
   children: React.ReactNode;
 }
 
-type NavGroup = 'overview' | 'intelligence' | 'strategy' | 'execution' | 'coordination' | 'utility';
-type NavItem = { id: AppSectionId; label: string; icon: any; badge?: string; badgeColor?: string; group: NavGroup };
+type NavGroup = 'business' | 'commerce' | 'commercial' | 'marketing' | 'procurement' | 'finance' | 'operations' | 'admin';
+type NavIcon = React.ComponentType<{ size?: number }>;
+type NavItem = { id: AppSectionId; label: string; icon: NavIcon; badge?: string; badgeColor?: string; group: NavGroup };
+type TimestampLike = { toMillis?: () => number; seconds?: number };
+
+const NAV_GROUP_LABELS: Record<NavGroup, string> = {
+  business: 'Business',
+  commerce: 'Market & Data',
+  commercial: 'Commercial Strategy & Sales',
+  marketing: 'Marketing',
+  procurement: 'Procurement',
+  finance: 'Finance',
+  operations: 'Operations',
+  admin: 'Admin',
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error || '');
+}
+
+function SidebarNav({
+  navItems,
+  activeSection,
+  onSelect,
+}: {
+  navItems: NavItem[];
+  activeSection: string;
+  onSelect: (id: AppSectionId) => void;
+}) {
+  return (
+    <NavList aria-label="Primary">
+      {navItems.map((item, index) => {
+        const previousGroup = navItems[index - 1]?.group;
+        const isFirstGroup = index === 0;
+        const showGroupLabel = item.group !== previousGroup;
+        return (
+          <React.Fragment key={item.id}>
+            {showGroupLabel && (
+              <li
+                style={{
+                  listStyle: 'none',
+                  margin: isFirstGroup ? '2px 12px 4px' : '10px 12px 4px',
+                  paddingTop: isFirstGroup ? 0 : 8,
+                  borderTop: isFirstGroup ? 'none' : '1px solid rgba(255,255,255,0.08)'
+                }}
+              >
+                <span
+                  className="text-[10px] font-semibold uppercase tracking-[0.16em]"
+                  style={{ color: 'rgba(255,255,255,0.34)' }}
+                >
+                  {NAV_GROUP_LABELS[item.group]}
+                </span>
+              </li>
+            )}
+            <NavList.Item
+              as="button"
+              type="button"
+              onClick={(e) => { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                onSelect(item.id); 
+              }}
+              aria-current={(activeSection === item.id || (item.id === 'data' && activeSection.startsWith('data-'))) ? 'page' : undefined}
+              style={{ width: '100%', textAlign: 'left' }}
+            >
+              <NavList.LeadingVisual>
+                {<item.icon size={16} />}
+              </NavList.LeadingVisual>
+              <span className="flex items-center gap-2">
+                {item.label}
+                {item.badge && (
+                  <span
+                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none"
+                    style={{ backgroundColor: `${item.badgeColor}20`, color: item.badgeColor }}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </span>
+            </NavList.Item>
+          </React.Fragment>
+        );
+      })}
+    </NavList>
+  );
+}
 
 function BrandMenu({
   currentBrand,
@@ -182,6 +267,7 @@ function AccountMenu({
   const [showSetPassword, setShowSetPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [linkMsg, setLinkMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [accent, setAccent] = useState<AccentId>(() => readStoredAccent());
 
   useEffect(() => {
     if (isOpen && btnRef.current) {
@@ -270,6 +356,47 @@ function AccountMenu({
               </div>
             </div>
 
+            {/* Accent color (per-user, localStorage) */}
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
+              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 8 }}>
+                Χρώμα έμφασης
+              </Text>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {ACCENT_PRESETS.map((preset) => {
+                  const selected = accent === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      title={preset.label}
+                      aria-label={preset.label}
+                      aria-pressed={selected}
+                      onClick={() => { setStoredAccent(preset.id); setAccent(preset.id); }}
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: '50%',
+                        background: preset.swatch2
+                          ? `linear-gradient(135deg, ${preset.swatch} 0 50%, ${preset.swatch2} 50% 100%)`
+                          : preset.swatch,
+                        border: selected ? '2px solid var(--fgColor-default, #24292f)' : '2px solid transparent',
+                        boxShadow: selected ? `0 0 0 2px ${preset.swatch}` : 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 0,
+                      }}
+                    >
+                      {selected && (
+                        <span style={{ color: '#fff', fontSize: 13, fontWeight: 700, lineHeight: 1 }}>✓</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Link providers */}
             {!hasPasswordProvider && (
               <div style={{ borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
@@ -305,8 +432,9 @@ function AccountMenu({
                             setLinkMsg({ type: 'ok', text: 'Κωδικός ορίστηκε!' });
                             setShowSetPassword(false);
                             setNewPassword('');
-                          } catch (e: any) {
-                            setLinkMsg({ type: 'err', text: e.message?.includes('auth/') ? 'Αποτυχία σύνδεσης' : (e.message || 'Σφάλμα') });
+                          } catch (e) {
+                            const msg = errorMessage(e);
+                            setLinkMsg({ type: 'err', text: msg.includes('auth/') ? 'Αποτυχία σύνδεσης' : (msg || 'Σφάλμα') });
                           }
                         }}
                         style={{
@@ -338,8 +466,9 @@ function AccountMenu({
                     try {
                       await onLinkGoogle();
                       setLinkMsg({ type: 'ok', text: 'Google συνδέθηκε!' });
-                    } catch (e: any) {
-                      setLinkMsg({ type: 'err', text: e.message?.includes('auth/credential-already-in-use') ? 'Αυτό το Google account χρησιμοποιείται ήδη' : (e.message || 'Σφάλμα') });
+                    } catch (e) {
+                      const msg = errorMessage(e);
+                      setLinkMsg({ type: 'err', text: msg.includes('auth/credential-already-in-use') ? 'Αυτό το Google account χρησιμοποιείται ήδη' : (msg || 'Σφάλμα') });
                     }
                   }}
                   style={{
@@ -386,6 +515,102 @@ function AccountMenu({
   );
 }
 
+/** Πάντα ορατό κουμπί παλέτας στην πάνω μπάρα → popover με τα accent χρώματα (per-user). */
+function AccentMenu() {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const [accent, setAccent] = useState<AccentId>(() => readStoredAccent());
+
+  useEffect(() => {
+    if (open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      const gutter = 8;
+      const width = Math.min(220, window.innerWidth - gutter * 2);
+      const left = Math.min(Math.max(gutter, rect.right - width), window.innerWidth - width - gutter);
+      setMenuStyle({ position: 'fixed', top: rect.bottom + 4, left, width, zIndex: 1000 });
+    }
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Χρώμα έμφασης"
+        title="Χρώμα έμφασης"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 36,
+          height: 36,
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 6,
+          background: 'rgba(255,255,255,0.06)',
+          color: 'rgba(255,255,255,0.85)',
+          cursor: 'pointer',
+        }}
+      >
+        <Palette size={18} />
+      </button>
+      {open && createPortal(
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 999 }} aria-hidden />
+          <div
+            style={{
+              ...menuStyle,
+              background: 'var(--bgColor-default, #ffffff)',
+              border: '1px solid var(--borderColor-default, #d0d7de)',
+              borderRadius: 8,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+              padding: 12,
+            }}
+          >
+            <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 8 }}>
+              Χρώμα έμφασης
+            </Text>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {ACCENT_PRESETS.map((preset) => {
+                const selected = accent === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    title={preset.label}
+                    aria-label={preset.label}
+                    aria-pressed={selected}
+                    onClick={() => { setStoredAccent(preset.id); setAccent(preset.id); }}
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: '50%',
+                      background: preset.swatch2
+                        ? `linear-gradient(135deg, ${preset.swatch} 0 50%, ${preset.swatch2} 50% 100%)`
+                        : preset.swatch,
+                      border: selected ? '2px solid var(--fgColor-default, #24292f)' : '2px solid transparent',
+                      boxShadow: selected ? `0 0 0 2px ${preset.swatch}` : 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 0,
+                    }}
+                  >
+                    {selected && <span style={{ color: '#fff', fontSize: 14, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+    </>
+  );
+}
+
 const LAYOUT_WIDE_MQ = '(min-width: 1024px)';
 
 export function AppShell({ activeSection, onSectionChange, children }: AppShellProps) {
@@ -420,6 +645,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
   /** Το κύριο scroll είναι εδώ (όχι το window) — ώστε νέα σελίδα από το μενού να ξεκινά από πάνω. */
   const mainContentScrollRef = useRef<HTMLDivElement>(null);
+  const [nowMs] = useState(() => Date.now());
   useEffect(() => {
     const el = mainContentScrollRef.current;
     if (el) el.scrollTop = 0;
@@ -430,20 +656,21 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
     const dur = typeof activeStrategy.duration === 'string' ? parseInt(activeStrategy.duration as string, 10) : activeStrategy.duration;
     if (!dur || isNaN(dur)) return null;
     const raw = activeStrategy.updatedAt || activeStrategy.createdAt;
+    const timestamp = raw as TimestampLike | undefined;
     const startMs = typeof raw === 'string' ? new Date(raw).getTime()
-      : typeof (raw as any)?.toMillis === 'function' ? (raw as any).toMillis()
-      : typeof (raw as any)?.seconds === 'number' ? (raw as any).seconds * 1000
+      : typeof timestamp?.toMillis === 'function' ? timestamp.toMillis()
+      : typeof timestamp?.seconds === 'number' ? timestamp.seconds * 1000
       : NaN;
     if (isNaN(startMs)) {
       return { text: `${dur}ημ`, color: '#F97316' };
     }
-    const elapsedDays = Math.floor((Date.now() - startMs) / 86400000);
+    const elapsedDays = Math.floor((nowMs - startMs) / 86400000);
     if (elapsedDays < 1) return { text: `${dur}ημ`, color: '#F97316' };
     const remaining = dur - elapsedDays;
     if (remaining <= 0) return { text: 'Έληξε', color: '#EF4444' };
     if (remaining <= 3) return { text: `${remaining}ημ`, color: '#F59E0B' };
     return { text: `${remaining}ημ`, color: '#F97316' };
-  }, [activeStrategy]);
+  }, [activeStrategy, nowMs]);
 
   const togglePin = () => {
     const next = !sidebarPinned;
@@ -457,41 +684,48 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
   const navItems = useMemo<NavItem[]>(
     () => {
       const commonItems: NavItem[] = [
-        { id: 'brands', label: 'My Brands', icon: Building2, group: 'overview' },
-        { id: 'dashboard', label: moduleConfig.dashboard.label, icon: HomeIcon, group: 'overview' },
-        { id: 'roi', label: moduleConfig.roi.label, icon: GraphIcon, group: 'overview' },
-        { id: 'ecommerce', label: moduleConfig.ecommerce.label, icon: ShoppingBag, group: 'intelligence' },
-        { id: 'rfm', label: moduleConfig.rfm.label, icon: OrganizationIcon, group: 'intelligence' },
-        { id: 'accounts', label: moduleConfig.accounts.label, icon: Users, group: 'intelligence' },
-        { id: 'products', label: moduleConfig.products.label, icon: PackageIcon, group: 'intelligence' },
-        { id: 'competitive', label: moduleConfig.competitive.label, icon: SearchIcon, group: 'intelligence' },
-        { id: 'analytics', label: moduleConfig.analytics.label, icon: BarChart3, group: 'intelligence' },
-        { id: 'insights', label: moduleConfig.insights.label, icon: LightBulbIcon, group: 'intelligence' },
-        { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'strategy', ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
-        { id: 'markets', label: moduleConfig.markets.label, icon: Globe2, group: 'strategy' },
-        { id: 'channels', label: moduleConfig.channels.label, icon: MegaphoneIcon, group: 'strategy' },
-        { id: 'sales', label: moduleConfig.sales.label, icon: Handshake, group: 'strategy' },
-        { id: 'campaigns', label: moduleConfig.campaigns.label, icon: Target, group: 'strategy' },
-        { id: 'calendar', label: moduleConfig.calendar.label, icon: PencilIcon, group: 'strategy' },
-        { id: 'finances', label: moduleConfig.finances.label, icon: Euro, group: 'execution' },
-        { id: 'suppliers', label: moduleConfig.suppliers.label, icon: Truck, group: 'execution' },
-        { id: 'procurement', label: moduleConfig.procurement.label, icon: FileSpreadsheet, group: 'execution' },
-        { id: 'coordination', label: moduleConfig.coordination.label, icon: GitPullRequestArrow, group: 'coordination' },
-        { id: 'automation', label: moduleConfig.automation.label, icon: Zap, group: 'coordination' },
-        { id: 'reports', label: moduleConfig.reports.label, icon: ReportIcon, group: 'coordination' },
-        { id: 'data', label: moduleConfig.data.label, icon: Upload, group: 'utility' },
-        { id: 'invite', label: 'Invite users', icon: UserPlus, group: 'utility' },
-        { id: 'help', label: 'Help', icon: GearIcon, group: 'utility' },
+        { id: 'brands', label: 'My Brands', icon: Building2, group: 'business' },
+        { id: 'dashboard', label: moduleConfig.dashboard.label, icon: HomeIcon, group: 'business' },
+        { id: 'roi', label: moduleConfig.roi.label, icon: GraphIcon, group: 'business' },
+        { id: 'insights', label: moduleConfig.insights.label, icon: LightBulbIcon, group: 'business' },
+        { id: 'reports', label: moduleConfig.reports.label, icon: ReportIcon, group: 'business' },
+        { id: 'ecommerce', label: moduleConfig.ecommerce.label, icon: ShoppingBag, group: 'commerce' },
+        { id: 'rfm', label: moduleConfig.rfm.label, icon: OrganizationIcon, group: 'commerce' },
+        { id: 'accounts', label: moduleConfig.accounts.label, icon: Users, group: 'commerce' },
+        { id: 'competitive', label: moduleConfig.competitive.label, icon: SearchIcon, group: 'commerce' },
+        { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'commercial', ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
+        { id: 'policy-impact', label: 'Policy Impact', icon: BarChart3, group: 'commercial' },
+        { id: 'markets', label: moduleConfig.markets.label, icon: Globe2, group: 'commercial' },
+        { id: 'sales', label: moduleConfig.sales.label, icon: Handshake, group: 'commercial' },
+        { id: 'offers', label: moduleConfig.offers.label, icon: ClipboardList, group: 'commercial' },
+        { id: 'marketing-plan', label: 'Marketing Plan', icon: ClipboardList, group: 'marketing' },
+        { id: 'brand-profile', label: 'Brand Profile', icon: Palette, group: 'marketing' },
+        { id: 'commercial-info', label: 'Εμπορικές Πληροφορίες', icon: Lightbulb, group: 'marketing' },
+        { id: 'channels', label: moduleConfig.channels.label, icon: MegaphoneIcon, group: 'marketing' },
+        { id: 'campaigns', label: moduleConfig.campaigns.label, icon: Target, group: 'marketing' },
+        { id: 'analytics', label: moduleConfig.analytics.label, icon: BarChart3, group: 'marketing' },
+        { id: 'calendar', label: moduleConfig.calendar.label, icon: PencilIcon, group: 'marketing' },
+        { id: 'products', label: moduleConfig.products.label, icon: PackageIcon, group: 'procurement' },
+        { id: 'suppliers', label: moduleConfig.suppliers.label, icon: Truck, group: 'procurement' },
+        { id: 'procurement', label: moduleConfig.procurement.label, icon: FileSpreadsheet, group: 'procurement' },
+        { id: 'finances', label: moduleConfig.finances.label, icon: Euro, group: 'finance' },
+        { id: 'hr', label: moduleConfig.hr.label, icon: HeartHandshake, group: 'operations' },
+        { id: 'territories', label: moduleConfig.territories.label, icon: MapPin, group: 'operations' },
+        { id: 'coordination', label: moduleConfig.coordination.label, icon: GitPullRequestArrow, group: 'operations' },
+        { id: 'automation', label: moduleConfig.automation.label, icon: Zap, group: 'operations' },
+        { id: 'data', label: moduleConfig.data.label, icon: Upload, group: 'admin' },
+        { id: 'invite', label: 'Invite users', icon: UserPlus, group: 'admin' },
+        { id: 'help', label: 'Help', icon: GearIcon, group: 'admin' },
       ];
 
       const ordered = isB2B
         ? [
-            'brands', 'dashboard', 'accounts', 'products', 'suppliers', 'procurement', 'strategy', 'markets', 'channels', 'sales', 'campaigns',
-            'competitive', 'analytics', 'roi', 'finances', 'calendar', 'insights', 'coordination', 'automation', 'reports', 'data', 'invite', 'help',
+            'brands', 'dashboard', 'roi', 'insights', 'reports', 'accounts', 'competitive', 'strategy', 'policy-impact', 'markets', 'sales', 'offers',
+            'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'hr', 'territories', 'coordination', 'automation', 'data', 'invite', 'help',
           ]
         : [
-            'brands', 'dashboard', 'roi', 'ecommerce', 'rfm', 'products', 'competitive', 'analytics', 'insights', 'strategy', 'channels',
-            'campaigns', 'calendar', 'finances', 'suppliers', 'procurement', 'coordination', 'automation', 'reports', 'data', 'invite', 'help',
+            'brands', 'dashboard', 'roi', 'insights', 'reports', 'ecommerce', 'rfm', 'competitive', 'strategy', 'policy-impact',
+            'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'coordination', 'automation', 'data', 'invite', 'help',
           ];
 
       const itemMap = new Map(commonItems.map((item) => [item.id, item]));
@@ -504,61 +738,16 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         });
 
       if (isSuperAdmin) {
-        items.push({ id: 'admin', label: 'Super Admin', icon: ShieldIcon, group: 'utility' });
+        items.push({ id: 'admin', label: 'Super Admin', icon: ShieldIcon, group: 'admin' });
       }
       return items;
     },
     [enabledModules, isB2B, isSuperAdmin, moduleConfig, strategyBadge]
   );
 
-  const Nav = ({ onSelect }: { onSelect: (id: AppSectionId) => void }) => {
-    let lastGroup: NavGroup | null = null;
-    return (
-      <NavList aria-label="Primary">
-        {navItems.map((item) => {
-          const showSeparator = lastGroup !== null && item.group !== lastGroup;
-          lastGroup = item.group;
-          return (
-            <React.Fragment key={item.id}>
-              {showSeparator && (
-                <li aria-hidden="true" style={{ listStyle: 'none', margin: '6px 12px', borderTop: '1px solid rgba(255,255,255,0.08)' }} />
-              )}
-              <NavList.Item
-                as="button"
-                type="button"
-                onClick={(e) => { 
-                  e.preventDefault(); 
-                  e.stopPropagation();
-                  onSelect(item.id); 
-                }}
-                aria-current={(activeSection === item.id || (item.id === 'data' && activeSection.startsWith('data-'))) ? 'page' : undefined}
-                style={{ width: '100%', textAlign: 'left' }}
-              >
-                <NavList.LeadingVisual>
-                  {typeof item.icon === 'function' ? <item.icon size={16} /> : <item.icon />}
-                </NavList.LeadingVisual>
-                <span className="flex items-center gap-2">
-                  {item.label}
-                  {item.badge && (
-                    <span
-                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none"
-                      style={{ backgroundColor: `${item.badgeColor}20`, color: item.badgeColor }}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </span>
-              </NavList.Item>
-            </React.Fragment>
-          );
-        })}
-      </NavList>
-    );
-  };
-
   return (
     <>
-      <PrimerHeader style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', backgroundColor: '#111111' }} className="min-w-0">
+      <PrimerHeader style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', backgroundColor: 'var(--app-chrome-bg, #111111)' }} className="min-w-0">
         <PrimerHeader.Item className="min-w-0 shrink-0">
           <Button
             variant="ghost"
@@ -582,7 +771,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
           <PrimerHeader.Link
             as="button"
             type="button"
-            onClick={(e) => e.preventDefault()}
+            onClick={(e) => { e.preventDefault(); onSectionChange('dashboard'); }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -591,7 +780,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               background: 'transparent',
               padding: 0,
               font: 'inherit',
-              cursor: 'default',
+              cursor: 'pointer',
             }}
           >
             <PerformancePlusLogo height={30} className="max-w-[6.5rem] min-[420px]:max-w-[9rem] sm:max-w-none" variant="onDark" />
@@ -610,6 +799,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                 onSelect={setCurrentBrand}
               />
             )}
+            <AccentMenu />
             <div style={{ position: 'relative', overflow: 'visible' }}>
               <NotificationBell onNavigate={(s) => onSectionChange(s)} />
             </div>
@@ -650,7 +840,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               borderRight: '1px solid rgba(255,255,255,0.08)',
               overflowY: 'auto',
               overflowX: 'hidden',
-              backgroundColor: '#111111',
+              backgroundColor: 'var(--app-chrome-bg, #111111)',
               display: 'flex',
               flexDirection: 'column'
             }}
@@ -682,7 +872,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               </button>
             </div>
             <div style={{ padding: 12, flex: 1, overflowY: 'auto' }}>
-              <Nav onSelect={(id) => onSectionChange(id)} />
+              <SidebarNav navItems={navItems} activeSection={activeSection} onSelect={(id) => onSectionChange(id)} />
             </div>
           </div>
         )}
@@ -698,10 +888,10 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             overflowX: 'hidden',
             width: '100%',
             maxWidth: '100%',
-            backgroundColor: 'var(--nts-bg-pure)'
+            backgroundColor: 'var(--app-canvas-bg, var(--nts-bg-pure))'
           }}
         >
-          <div className="mx-auto w-full max-w-[1400px] px-3 py-4 sm:px-4 sm:py-5 md:px-6 md:py-6">
+          <div className="mx-auto w-full max-w-[1400px] px-3 pb-28 pt-4 sm:px-4 sm:pb-28 sm:pt-5 md:px-6 md:py-6">
             {children}
           </div>
         </div>
@@ -729,7 +919,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               bottom: 0,
               width: 280,
               maxWidth: '80vw',
-              backgroundColor: '#111111',
+              backgroundColor: 'var(--app-chrome-bg, #111111)',
               borderRight: '1px solid rgba(255,255,255,0.08)',
               zIndex: 1000,
               display: 'flex',
@@ -749,9 +939,14 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               justifyContent: 'space-between',
               flexShrink: 0
             }}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => onSectionChange('dashboard')}
+                style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                title="Dashboard"
+              >
                 <PerformancePlusLogo height={40} variant="onDark" />
-              </div>
+              </button>
               <div style={{ display: 'flex', gap: 4 }}>
                 <button
                   onClick={togglePin}
@@ -795,7 +990,9 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             </div>
             {/* Navigation */}
             <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
-              <Nav
+              <SidebarNav
+                navItems={navItems}
+                activeSection={activeSection}
                 onSelect={(id) => {
                   setSidebarOpen(false);
                   onSectionChange(id);

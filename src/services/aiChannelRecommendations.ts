@@ -19,6 +19,7 @@ import type {
 import type { Scenario } from '../types';
 import type { RFMSegment } from '../types';
 import { deriveBehavioralProfile, derivePredictiveMetrics } from './behavioralEngine';
+import { hashBrandProfilePromptText } from './brandProfile';
 
 const MODEL_NAME = 'gemini-2.5-pro';
 
@@ -106,6 +107,7 @@ export interface BrandContext {
   brandName: string;
   brandType: 'B2B' | 'B2C';
   topCategories: string[];
+  brandProfileText?: string;
 }
 
 export interface SegmentFitInfo {
@@ -131,6 +133,7 @@ export async function generateChannelRecommendations(
   params: GenerateRecommendationsParams
 ): Promise<ChannelRecommendation | null> {
   const { scenario, segment, fitLevel, brandContext, segmentFitList, totalBudget, campaignPerformance, context, triage, provenance, audience } = params;
+  const brandProfileContextSig = hashBrandProfilePromptText(brandContext?.brandProfileText);
 
   const behavioral = deriveBehavioralProfile(segment);
   const predictive = derivePredictiveMetrics(segment);
@@ -164,6 +167,7 @@ PREDICTIVE METRICS (${segment.name}):
     brandName: brandContext?.brandName,
     brandType: brandContext?.brandType,
     topCategories: brandContext?.topCategories,
+    brandProfileText: brandContext?.brandProfileText,
     segmentFitList,
     totalBudget,
     campaignPerformance,
@@ -190,5 +194,5 @@ PREDICTIVE METRICS (${segment.name}):
     throw new Error('AI response could not be parsed');
   }
 
-  return result;
+  return { ...result, brandProfileContextSig };
 }

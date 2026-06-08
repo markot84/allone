@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -14,14 +14,30 @@ import {
   Download,
   FileText,
   FileSpreadsheet,
-  Filter,
   TrendingUp,
   TrendingDown,
   Trash2,
-  Loader2
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
-import { Card, Badge, Button, ProgressBar, Tooltip, useToast, AlertsBanner, PageHeader, DataSourcePill } from '../common';
+import {
+  Card,
+  Badge,
+  Button,
+  ProgressBar,
+  Tooltip,
+  useToast,
+  AlertsBanner,
+  PageHeader,
+  DataSourcePill,
+  ProductThumbnail,
+  ColumnExcelFilter,
+} from '../common';
+import type { ExcelFilterOption } from '../common';
+import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import { useBrand } from '../../hooks/useBrand';
+import { usePlan } from '../../hooks/usePlan';
+import { useProcurementSignals } from '../../hooks/useProcurementSignals';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
@@ -38,6 +54,7 @@ import { ProductCharts } from './ProductCharts';
 import { downloadProductIntelligenceCsv, downloadProductIntelligenceXlsx } from '../../utils/productIntelligenceExport';
 import type { Product, InventorySummary, InventoryAlert } from '../../types';
 import type { ProductIntelligenceBucket, ProductIntelligenceQuery } from '../../services/productIntelligenceAggregate';
+import { refreshProductIntelligenceOnServer } from '../../services/productIntelligenceAggregate';
 
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
 type SortDirection = 'asc' | 'desc';
@@ -47,7 +64,6 @@ const PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT = 5000;
 const EMPTY_CATEGORY_ID = '__EMPTY_CAT__';
 /** Σταθερές τιμές priority_tag (inventory intelligence) — εμφανίζονται πάντα στο φίλτρο ακόμη κι αν το client catalog δεν φέρει το πεδίο. */
 const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead', 'no_stock'] as const;
-const DEFAULT_VISIBLE_STOCK_TAG_IDS = ['healthy', 'low', 'excess', 'dead'];
 const productStockLevel = (product: Product): number =>
   Number(product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0) || 0;
 const productDisplayTag = (product: Product): string =>
@@ -60,213 +76,6 @@ const EMPTY_INVENTORY_SUMMARY: InventorySummary = {
   dead_stock: { count: 0, percentage: 0, value: 0 },
   low_stock: { count: 0, percentage: 0 },
 };
-
-type ExcelFilterOption = { id: string; label: string };
-
-interface ColumnExcelFilterProps {
-  label: string;
-  options: ExcelFilterOption[];
-  value: string[] | null;
-  onChange: (next: string[] | null) => void;
-  /** excel: null = όλα τσεκαρισμένα. additive: null/[] = κανένα τσέκ = χωρίς φίλτρο (όλες οι γραμμές). */
-  selectionMode?: 'excel' | 'additive';
-}
-
-function ColumnExcelFilter({
-  label,
-  options,
-  value,
-  onChange,
-  selectionMode = 'excel',
-}: ColumnExcelFilterProps) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState('');
-  const [draftValue, setDraftValue] = useState<string[] | null>(value);
-  const ref = React.useRef<HTMLDivElement>(null);
-  const allIds = useMemo(() => options.map((o) => o.id), [options]);
-  const selected = useMemo(() => {
-    if (selectionMode === 'additive') {
-      if (value == null || value.length === 0) return new Set<string>();
-      const allow = new Set(allIds);
-      return new Set(value.filter((id) => allow.has(id)));
-    }
-    if (value == null) return new Set(allIds);
-    if (value.length === 0) return new Set<string>();
-    const allow = new Set(allIds);
-    return new Set(value.filter((id) => allow.has(id)));
-  }, [value, allIds, selectionMode]);
-  const draftSelected = useMemo(() => {
-    if (selectionMode === 'additive') {
-      if (draftValue == null || draftValue.length === 0) return new Set<string>();
-      const allow = new Set(allIds);
-      return new Set(draftValue.filter((id) => allow.has(id)));
-    }
-    if (draftValue == null) return new Set(allIds);
-    if (draftValue.length === 0) return new Set<string>();
-    const allow = new Set(allIds);
-    return new Set(draftValue.filter((id) => allow.has(id)));
-  }, [draftValue, allIds, selectionMode]);
-
-  useEffect(() => {
-    if (!open) {
-      setQ('');
-      return;
-    }
-    setDraftValue(value);
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open, value]);
-
-  const filteredOpts = useMemo(
-    () =>
-      options.filter(
-        (o) =>
-          o.label.toLowerCase().includes(q.toLowerCase()) ||
-          o.id.toLowerCase().includes(q.toLowerCase()),
-      ),
-    [options, q],
-  );
-
-  const toggle = (id: string) => {
-    if (selectionMode === 'additive') {
-      const startSelected =
-        draftValue != null && draftValue.length > 0 ? new Set(draftValue.filter((x) => allIds.includes(x))) : new Set<string>();
-      const next = new Set(startSelected);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      if (next.size === 0 || next.size === allIds.length) setDraftValue(null);
-      else setDraftValue([...next]);
-      return;
-    }
-    const startSelected =
-      draftValue == null || draftValue.length === 0
-        ? new Set(allIds)
-        : new Set(draftValue.filter((x) => allIds.includes(x)));
-    const next = new Set(startSelected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    if (next.size === 0) {
-      setDraftValue([]);
-      return;
-    }
-    if (next.size === allIds.length) setDraftValue(null);
-    else setDraftValue([...next]);
-  };
-
-  const applyDraft = () => {
-    if (selectionMode === 'additive') {
-      if (draftSelected.size === 0 || draftSelected.size === allIds.length) onChange(null);
-      else onChange([...draftSelected]);
-      setOpen(false);
-      return;
-    }
-    if (draftSelected.size === allIds.length) onChange(null);
-    else if (draftSelected.size === 0) onChange([]);
-    else onChange([...draftSelected]);
-    setOpen(false);
-  };
-
-  const selectedCount = value == null || value.length === 0 ? allIds.length : selected.size;
-  const selectedLabels = useMemo(
-    () => options.filter((o) => selected.has(o.id)).map((o) => o.label),
-    [options, selected],
-  );
-  const summary =
-    selectionMode === 'additive'
-      ? value == null || value.length === 0
-        ? 'Όλα'
-        : selectedLabels.length === 1
-          ? selectedLabels[0]
-          : selectedLabels.length <= 2
-            ? selectedLabels.join(', ')
-            : `${selectedLabels.length} επιλογές`
-      : value === null
-        ? 'Όλα'
-        : value.length === 0
-          ? 'Καμία'
-          : selectedLabels.length === 1
-            ? selectedLabels[0]
-            : `${selectedCount}/${allIds.length}`;
-
-  if (options.length === 0) {
-    return (
-      <div className="flex flex-col gap-1 min-w-[140px] opacity-60">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">{label}</span>
-        <span className="text-xs text-[#9CA3AF] py-2">—</span>
-      </div>
-    );
-  }
-
-  return (
-    <div ref={ref} className="relative flex flex-col gap-1 min-w-[160px]">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">{label}</span>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center justify-between gap-2 px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm hover:border-[var(--nts-accent)] transition-all text-left w-full"
-        aria-expanded={open}
-        aria-haspopup="listbox"
-      >
-        <span className="truncate flex items-center gap-1.5 min-w-0">
-          <Filter size={14} className="text-[#9CA3AF] shrink-0" aria-hidden />
-          <span className="text-[#374151]">{summary}</span>
-        </span>
-        <ChevronDown size={14} className="text-[#9CA3AF] shrink-0" />
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-[#E5E5E5] rounded-lg shadow-lg max-h-72 flex flex-col min-w-[260px] w-max max-w-[min(100vw-2rem,320px)]">
-          <div className="p-2 border-b border-[#E5E5E5]">
-            <input
-              type="search"
-              placeholder="Αναζήτηση στη λίστα…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              className="w-full px-2 py-1.5 text-xs border border-[#E5E7EB] rounded-md focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
-            />
-          </div>
-          <div className="overflow-y-auto max-h-52 p-1">
-            {filteredOpts.map((o) => (
-              <label
-                key={o.id}
-                className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#F9FAFB] cursor-pointer text-sm text-[#374151]"
-              >
-                <input
-                  type="checkbox"
-                  checked={draftSelected.has(o.id)}
-                  onChange={() => toggle(o.id)}
-                  className="rounded border-[#D1D5DB] text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]/30"
-                />
-                <span className="truncate">{o.label}</span>
-              </label>
-            ))}
-          </div>
-          <div className="flex items-center justify-between gap-2 p-2.5 border-t border-[#E5E5E5] bg-[#FAFAFA]/90">
-            <button
-              type="button"
-              className="text-xs font-medium text-[#6B7280] hover:underline whitespace-nowrap px-2 py-1 rounded-md hover:bg-white"
-              onClick={() => {
-                setDraftValue(null);
-                setQ('');
-              }}
-            >
-              Επαναφορά
-            </button>
-            <button
-              type="button"
-              className="text-xs font-semibold text-white bg-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/90 whitespace-nowrap px-3 py-1.5 rounded-md"
-              onClick={applyDraft}
-            >
-              Εφαρμογή
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /** Skeleton: ίδια δομή με τη σελίδα (κάρτες + πίνακας) — όχι κενή οθόνη κατά τη φόρτωση. */
 function ProductIntelligenceSkeleton() {
@@ -400,6 +209,21 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, []);
 
   const { currentBrand } = useBrand();
+  const brandId = currentBrand?.id ?? null;
+  const { isEnterprise } = usePlan();
+  const procurementModuleEnabled = currentBrand?.enabledModules?.procurement !== false;
+  const { signalsBySku: piProcurementSignals } = useProcurementSignals();
+  // Brand σε Enterprise+Procurement με ανεβασμένα procurement signals → το PI απόθεμα
+  // πρέπει να προέρχεται από procurement (procurement-first).
+  const expectsProcurementCatalog =
+    isEnterprise && procurementModuleEnabled && Object.keys(piProcurementSignals || {}).length > 0;
+  const {
+    getThumbnailUrl,
+    magentoConnected,
+    magentoProductCatalogAccess,
+    magentoProductCount,
+    magentoLastSyncError,
+  } = useProductThumbnails();
   const { suppliers } = useSuppliers();
   const { benchmarks, count: benchmarkCount } = usePriceBenchmarks({ maxDocs: PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT });
   const tagStockBucket = useMemo((): ProductIntelligenceBucket | null => {
@@ -413,7 +237,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       : tagStockBucket ?? 'all';
   const effectiveTagFilter = useMemo(() => {
     if (tagInclude) return includeNoStock ? tagInclude : tagInclude.filter((tag) => tag !== 'no_stock');
-    return includeNoStock ? undefined : DEFAULT_VISIBLE_STOCK_TAG_IDS;
+    return undefined;
   }, [includeNoStock, tagInclude]);
   const serverQuery = useMemo<Omit<ProductIntelligenceQuery, 'bucket' | 'page'>>(() => ({
     pageSize: PAGE_SIZE,
@@ -463,7 +287,56 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const hasImported = hasServerAggregate;
   const productDataSourceLabel = serverIntelligence.aggregate?.sourceLabel ?? 'ERP';
   const totalCatalogCount = serverIntelligence.aggregate?.totalCount ?? 0;
-  const effectiveSourceLoading = serverIntelligence.isLoading && !serverIntelligence.page;
+  const effectiveSourceLoading =
+    serverIntelligence.isAggregateLoading || (serverIntelligence.isPageLoading && !serverIntelligence.page);
+  const piRefreshAttemptRef = useRef<string | null>(null);
+  const [piRebuilding, setPiRebuilding] = useState(false);
+
+  const triggerProductIntelligenceRebuild = React.useCallback(() => {
+    if (!brandId || piRebuilding) return;
+    setPiRebuilding(true);
+    void refreshProductIntelligenceOnServer(brandId)
+      .then((result) => {
+        queryClient.invalidateQueries({ queryKey: ['productIntelligenceAggregate', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['productIntelligencePage', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', brandId] });
+        if ((result.totalCount ?? 0) === 0) {
+          toast.info('Ο κατάλογος ανανεώθηκε αλλά δεν βρέθηκαν προϊόντα — ελέγξτε το OpenCart sync.');
+        } else {
+          toast.success(`Κατάλογος ανανεώθηκε · ${formatNumber(result.totalCount ?? 0)} SKUs`);
+        }
+      })
+      .catch((err: unknown) => {
+        piRefreshAttemptRef.current = null;
+        const msg = err instanceof Error ? err.message : 'Product Intelligence refresh failed';
+        toast.error(`Αποτυχία ανανέωσης καταλόγου: ${msg}`);
+        console.warn('[ProductIntelligence] refresh failed:', err);
+      })
+      .finally(() => setPiRebuilding(false));
+  }, [brandId, piRebuilding, queryClient, toast]);
+
+  useEffect(() => {
+    if (!brandId || piRebuilding || serverIntelligence.isAggregateLoading) return;
+    const aggregate = serverIntelligence.aggregate;
+    const needsRebuild =
+      !aggregate ||
+      (aggregate.status === 'ready' && aggregate.totalCount === 0 && aggregate.sourceLabel === 'E-shop catalog') ||
+      // Enterprise+Procurement αλλά το aggregate δεν έχει χτιστεί ακόμη από procurement (π.χ. παλιό
+      // connector-based ή skipped) → κάνε ένα rebuild ώστε να περάσει στην procurement πηγή.
+      (expectsProcurementCatalog && aggregate.sourceKind !== 'procurement');
+    if (!needsRebuild) return;
+    const key = `${brandId}:${aggregate?.syncVersion ?? 'none'}:${aggregate?.totalCount ?? 'missing'}:${aggregate?.sourceKind ?? 'none'}`;
+    if (piRefreshAttemptRef.current === key) return;
+    piRefreshAttemptRef.current = key;
+    triggerProductIntelligenceRebuild();
+  }, [
+    brandId,
+    piRebuilding,
+    serverIntelligence.isAggregateLoading,
+    serverIntelligence.aggregate,
+    triggerProductIntelligenceRebuild,
+    expectsProcurementCatalog,
+  ]);
 
   useEffect(() => {
     if (serverIntelligence.safePage !== currentPage) {
@@ -494,6 +367,18 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const serverFilteredTotal = serverIntelligence.page?.totalRows ?? 0;
   const totalPages = serverIntelligence.page?.totalPages ?? 1;
   const paginatedProducts = filteredProducts;
+  const activeInventoryTotal = useMemo(() => {
+    const s = serverIntelligence.aggregate?.summary;
+    if (!s) return serverFilteredTotal || totalCatalogCount;
+    return s.healthy_stock.count + s.low_stock.count + s.excess_stock.count + s.dead_stock.count;
+  }, [serverIntelligence.aggregate?.summary, serverFilteredTotal, totalCatalogCount]);
+  const displayTotalSkus = includeNoStock ? totalCatalogCount : activeInventoryTotal;
+  const showMagentoImageAccessNotice =
+    hasServerAggregate &&
+    productDataSourceLabel === 'ERP' &&
+    magentoConnected &&
+    magentoProductCatalogAccess === false &&
+    magentoProductCount === 0;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -582,7 +467,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     }
   };
 
-  if (!effectiveSourceLoading && !hasImported && !serverIntelligence.isBuilding) {
+  if (!effectiveSourceLoading && !hasImported && !serverIntelligence.isBuilding && !serverIntelligence.isAggregateLoading) {
     return (
       <div className="space-y-6">
         <PageHeader
@@ -622,15 +507,15 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           </p>
         }
         meta={
-          effectiveSourceLoading ? (
+          effectiveSourceLoading || piRebuilding ? (
             <p className="text-xs font-medium text-[var(--nts-accent)] sm:text-sm flex items-center gap-2">
               <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" aria-hidden />
-              Φόρτωση inventory…
+              {piRebuilding ? 'Ανανέωση καταλόγου από e-shop…' : 'Φόρτωση inventory…'}
             </p>
           ) : hasServerAggregate ? (
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[#22C55E] sm:text-sm">
               <span>
-                Showing {formatNumber(paginatedProducts.length)} of {formatNumber(serverFilteredTotal || totalCatalogCount)} {serverIntelligence.aggregate?.sourceLabel === 'ERP' ? 'ERP' : 'catalog'} product(s)
+                Showing {formatNumber(paginatedProducts.length)} of {formatNumber(serverFilteredTotal || displayTotalSkus)} active {serverIntelligence.aggregate?.sourceLabel === 'ERP' ? 'ERP' : 'catalog'} product(s)
               </span>
               <DataSourcePill
                 label="Source"
@@ -642,6 +527,21 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         }
         actions={
           <>
+            {hasServerAggregate && totalCatalogCount === 0 && productDataSourceLabel === 'E-shop catalog' ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={piRebuilding ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                onClick={() => {
+                  piRefreshAttemptRef.current = null;
+                  triggerProductIntelligenceRebuild();
+                }}
+                disabled={piRebuilding || !brandId}
+                className="min-h-[36px] flex-1 basis-full sm:flex-initial sm:basis-auto"
+              >
+                {piRebuilding ? 'Ανανέωση…' : 'Ανανέωση καταλόγου'}
+              </Button>
+            ) : null}
             <Button
               variant="secondary"
               size="sm"
@@ -674,21 +574,53 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         }
       />
 
-      {effectiveSourceLoading ? (
+      {effectiveSourceLoading || piRebuilding ? (
         <ProductIntelligenceSkeleton />
       ) : (
         <>
       {/* Inventory Alerts */}
       <AlertsBanner filterGroup="inventory" maxAlerts={2} compact onNavigate={onSectionChange} />
 
+      {showMagentoImageAccessNotice ? (
+        <Card padding="md" className="border border-amber-200 bg-amber-50/80">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" aria-hidden />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-amber-950">
+                  Δεν υπάρχουν διαθέσιμες φωτογραφίες προϊόντων από Magento.
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-amber-900 sm:text-sm">
+                  Το απόθεμα έρχεται από ERP, αλλά το Magento Products API δεν δίνει πρόσβαση στον κατάλογο
+                  (401). Χρειάζεται Magento integration token με read δικαίωμα στο catalog/products και μετά νέο sync.
+                </p>
+                {magentoLastSyncError ? (
+                  <p className="mt-1 text-[11px] text-amber-800">
+                    Τελευταίο σφάλμα: {magentoLastSyncError}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onSectionChange?.('data')}
+              className="shrink-0 border-amber-300 bg-white/80 text-amber-900 hover:bg-white"
+            >
+              Έλεγχος σύνδεσης
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
       {/* Summary Cards — uses procurement data when available */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <SummaryCard
-          label="Total SKUs"
-          value={formatNumber(displaySummary.total_skus)}
+          label={includeNoStock ? 'Total SKUs' : 'Active SKUs'}
+          value={formatNumber(displayTotalSkus)}
           icon={<Package size={20} />}
           color="#78716C"
-          tooltip="Συνολικός αριθμός προϊόντων (SKU) στο inventory, από server aggregate."
+          tooltip={includeNoStock ? 'Συνολικός αριθμός SKU στο ERP catalog.' : 'Ενεργά SKU με διαθέσιμο απόθεμα/stock signal, η βάση για συμπεράσματα και προτάσεις.'}
           active={stockCardFilter === 'all'}
           onClick={() => selectStockCardFilter('all')}
         />
@@ -996,6 +928,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     supplierTodMap={supplierTodMap}
                     benchmarkMap={benchmarkCount > 0 ? benchmarkMap : undefined}
                     useProcurementRowModel={hasServerAggregate}
+                    getThumbnailUrl={getThumbnailUrl}
                   />
                 ))}
               </AnimatePresence>
@@ -1111,9 +1044,11 @@ interface ProductRowProps {
   benchmarkMap?: Map<string, { priceDiff: number; benchmarkPrice: number }>;
   index: number;
   useProcurementRowModel?: boolean;
+  getThumbnailUrl: (sku: string, product?: unknown) => { url: string };
 }
 
-function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcurementRowModel }: ProductRowProps) {
+function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcurementRowModel, getThumbnailUrl }: ProductRowProps) {
+  const thumbUrl = getThumbnailUrl(product.sku || '', product).url;
   const health = resolveStockHealth(product, supplierTodMap, useProcurementRowModel);
   const effectiveStock = getEffectiveStockLevel(product);
   const onHandStock = product.stock_on_hand;
@@ -1136,12 +1071,13 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
       className="border-b border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
     >
       <td className="px-3 py-2">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-[#1A1A1A] truncate">
-            {product.name}
-          </p>
-          <p className="text-[10px] text-[#9CA3AF] truncate">{product.sku}</p>
-        </div>
+        <motion.div className="flex min-w-0 items-center gap-2.5">
+          <ProductThumbnail src={thumbUrl || undefined} alt={product.name} size="sm" />
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-[#1A1A1A] truncate">{product.name}</p>
+            <p className="text-[10px] text-[#9CA3AF] truncate">{product.sku}</p>
+          </div>
+        </motion.div>
       </td>
       <td className="px-3 py-2 hidden lg:table-cell">
         <span className="text-xs text-[#4A4A4A] truncate block max-w-[120px]">{product.category}</span>

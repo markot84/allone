@@ -71,6 +71,7 @@ interface EcommerceSummaryRaw {
 
 interface StockMovementRaw {
   skuMovementJson?: string;
+  stockMovementChunkCount?: number;
   skuMovementCount?: number;
   stockMovementBaselineDate?: string | null;
   stockMovementUpdatedAt?: any;
@@ -128,6 +129,28 @@ async function fetchSkuStatsFromChunks(brandId: string): Promise<SkuStatsMap> {
   }
 }
 
+async function fetchSkuMovementFromChunks(brandId: string): Promise<SkuMovementMap> {
+  try {
+    const chunksSnap = await getDocs(collection(db, 'stock_movement', brandId, 'chunks'));
+    if (chunksSnap.empty) return {};
+    const merged: SkuMovementMap = {};
+    chunksSnap.docs
+      .sort((a, b) => Number(a.id) - Number(b.id))
+      .forEach((snap) => {
+        const data = snap.data() as { skuMovementJson?: string };
+        if (!data.skuMovementJson) return;
+        try {
+          Object.assign(merged, JSON.parse(data.skuMovementJson) as SkuMovementMap);
+        } catch {
+          // ignore corrupt chunk
+        }
+      });
+    return merged;
+  } catch {
+    return {};
+  }
+}
+
 function parseSkuMovement(raw: EcommerceSummaryRaw | null | undefined): SkuMovementMap {
   if (!raw?.skuMovementJson) return {};
   try {
@@ -143,10 +166,11 @@ export async function fetchEcommerceSummary(
 ): Promise<EcommerceSummaryRaw | null> {
   const includeSkuDetails = options?.includeSkuDetails !== false;
   const includeStockMovement = options?.includeStockMovement !== false;
-  const [summarySnap, movementSnap, chunkedSkuStats] = await Promise.all([
+  const [summarySnap, movementSnap, chunkedSkuStats, chunkedSkuMovement] = await Promise.all([
     getDoc(doc(db, 'ecommerce_summary', brandId)),
     includeStockMovement ? getDoc(doc(db, 'stock_movement', brandId)) : Promise.resolve(null),
     includeSkuDetails ? fetchSkuStatsFromChunks(brandId) : Promise.resolve({} as SkuStatsMap),
+    includeStockMovement ? fetchSkuMovementFromChunks(brandId) : Promise.resolve({} as SkuMovementMap),
   ]);
   if (!summarySnap.exists()) return null;
   const summary = summarySnap.data() as EcommerceSummaryRaw;
@@ -167,7 +191,10 @@ export async function fetchEcommerceSummary(
   const movement = movementSnap.data() as StockMovementRaw;
   return {
     ...merged,
-    skuMovementJson: movement.skuMovementJson ?? merged.skuMovementJson,
+    skuMovementJson:
+      Object.keys(chunkedSkuMovement).length > 0
+        ? JSON.stringify(chunkedSkuMovement)
+        : movement.skuMovementJson ?? merged.skuMovementJson,
     skuMovementCount: movement.skuMovementCount ?? merged.skuMovementCount,
     stockMovementBaselineDate: movement.stockMovementBaselineDate ?? merged.stockMovementBaselineDate,
     stockMovementUpdatedAt: movement.stockMovementUpdatedAt ?? merged.stockMovementUpdatedAt,
@@ -179,7 +206,6 @@ export function useEcommerceSummary(options?: { includeSkuDetails?: boolean; inc
   const brandId = currentBrand?.id ?? null;
   const includeSkuDetails = options?.includeSkuDetails !== false;
   const includeStockMovement = options?.includeStockMovement !== false;
-
   const { data, isPending } = useQuery({
     queryKey: ['ecommerce_summary', brandId, includeSkuDetails ? 'sku' : 'summary', includeStockMovement ? 'movement' : 'no_movement'],
     queryFn: () => (brandId ? fetchEcommerceSummary(brandId, { includeSkuDetails, includeStockMovement }) : Promise.resolve(null)),

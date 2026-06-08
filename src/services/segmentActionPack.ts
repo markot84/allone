@@ -420,17 +420,23 @@ export async function exportSegmentCustomerList(
   format: ExportFormat = 'csv',
 ): Promise<{ count: number }> {
   const importedCustomers = await SegmentCustomersService.getForSegment(brandId, segment.id);
-  const customers = importedCustomers.length > 0 ? importedCustomers : segment.customers ?? [];
+  const inMemoryCustomers = segment.customers ?? [];
+  // Prefer the larger dataset: in-memory order-computed customers (with emails) take priority
+  // over a smaller/stale set from Firestore (e.g. Cloud Function that caps at 200/segment).
+  const customers = importedCustomers.length > inMemoryCustomers.length
+    ? importedCustomers
+    : (inMemoryCustomers.length > 0 ? inMemoryCustomers : importedCustomers);
   if (customers.length === 0) throw new Error('Δεν υπάρχουν customer-level δεδομένα με email/customer id για αυτό το segment.');
 
   const date = new Date().toISOString().split('T')[0];
   const brand = safeBrandName(brandName);
   const segName = segment.name.replace(/[\s/\\]+/g, '_');
 
-  const headers = ['Customer ID', 'Email', 'Segment', 'Recency', 'Frequency', 'Monetary', 'RFM Score'];
+  const headers = ['Customer ID', 'Email', 'Όνομα', 'Segment', 'Recency', 'Frequency', 'Monetary', 'RFM Score'];
   const rows: (string | number)[][] = customers.map(c => [
     c.customerId,
     c.email || '',
+    (c as { name?: string }).name || '',
     segment.name,
     c.recency ?? '',
     c.frequency ?? '',
@@ -445,14 +451,14 @@ export async function exportSegmentCustomerList(
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([
-      [`CUSTOMER LIST — ${segment.name}`, '', '', '', '', '', ''],
-      ['Brand', brandName || '—', '', 'Total', customers.length, '', ''],
-      ['Generated', date, '', '', '', '', ''],
+      [`CUSTOMER LIST — ${segment.name}`, '', '', '', '', '', '', ''],
+      ['Brand', brandName || '—', '', 'Total', customers.length, '', '', ''],
+      ['Generated', date, '', '', '', '', '', ''],
       [''],
       headers,
       ...rows,
     ]);
-    ws['!cols'] = [{ wch: 20 }, { wch: 25 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
+    ws['!cols'] = [{ wch: 22 }, { wch: 28 }, { wch: 20 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
     XLSX.utils.book_append_sheet(wb, ws, segment.name.substring(0, 28));
     XLSX.writeFile(wb, `${brand}_Customers_${segName}_${date}.xlsx`);
   }
@@ -476,16 +482,19 @@ export async function exportAllSegmentCustomerLists(
   const brand = safeBrandName(brandName);
   let totalCount = 0;
 
-  const headers = ['Customer ID', 'Email', 'Segment', 'Recency', 'Frequency', 'Monetary', 'RFM Score'];
+  const headers = ['Customer ID', 'Email', 'Όνομα', 'Segment', 'Recency', 'Frequency', 'Monetary', 'RFM Score'];
 
   if (format === 'csv') {
     const allRows: (string | number)[][] = [headers];
     for (const seg of segments) {
       const importedCustomers = allCustomers.get(seg.id) || [];
-      const customers = importedCustomers.length > 0 ? importedCustomers : seg.customers ?? [];
+      const inMemoryCustomers = seg.customers ?? [];
+      const customers = importedCustomers.length > inMemoryCustomers.length
+        ? importedCustomers
+        : (inMemoryCustomers.length > 0 ? inMemoryCustomers : importedCustomers);
       totalCount += customers.length;
       for (const c of customers) {
-        allRows.push([c.customerId, c.email || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);
+        allRows.push([c.customerId, c.email || '', (c as { name?: string }).name || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);
       }
     }
     downloadCsv(rowsToCsv(allRows), `${brand}_AllCustomers_BySegment_${date}.csv`);
@@ -494,12 +503,15 @@ export async function exportAllSegmentCustomerLists(
     const wb = XLSX.utils.book_new();
     for (const seg of segments) {
       const importedCustomers = allCustomers.get(seg.id) || [];
-      const customers = importedCustomers.length > 0 ? importedCustomers : seg.customers ?? [];
+      const inMemoryCustomers = seg.customers ?? [];
+      const customers = importedCustomers.length > inMemoryCustomers.length
+        ? importedCustomers
+        : (inMemoryCustomers.length > 0 ? inMemoryCustomers : importedCustomers);
       if (customers.length === 0) continue;
       totalCount += customers.length;
-      const rows = customers.map(c => [c.customerId, c.email || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);
+      const rows = customers.map(c => [c.customerId, c.email || '', (c as { name?: string }).name || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws['!cols'] = [{ wch: 20 }, { wch: 25 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
+      ws['!cols'] = [{ wch: 22 }, { wch: 28 }, { wch: 20 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
       XLSX.utils.book_append_sheet(wb, ws, seg.name.substring(0, 28).replace(/[[\]:*?/\\]/g, ''));
     }
     XLSX.writeFile(wb, `${brand}_AllCustomers_BySegment_${date}.xlsx`);

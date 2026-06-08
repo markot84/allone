@@ -3,7 +3,7 @@
  * αθροίσεις ίδιες με το ecommerceAggregator (demo + cancelled) ώστε οι περίοδοι >90d
  * να εμφανίζονται σωστά στο UI (το server summary κρατά rolling ~90 ημέρες).
  */
-import { limit, orderBy, where, Timestamp, type QueryConstraint } from 'firebase/firestore';
+import { limit, orderBy, where, Timestamp, type QueryConstraint, type QueryDocumentSnapshot, type DocumentData } from 'firebase/firestore';
 import { FirestoreService } from './firestore';
 import {
   classifyEcommerceOrder,
@@ -56,6 +56,8 @@ export type EcommerceRawOrder = {
   customerKey?: string;
   customerEmailHash?: string;
   customerEmail?: string;
+  /** Πλήρες όνομα πελάτη — για εξαγωγή λιστών audience. */
+  customerName?: string;
   /** Numeric Magento `store_id` (όταν sync όλων των store views) για εξαιρέσεις analytics. */
   magentoStoreId?: number;
   /** Hostname του public storefront (Magento)· για κανόνες «domain / eshop». */
@@ -329,6 +331,7 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     ...(customerKey ? { customerKey } : {}),
     ...(emailHash ? { customerEmailHash: emailHash } : {}),
     ...(customerEmail ? { customerEmail } : {}),
+    ...(row.customerName ? { customerName: String(row.customerName) } : {}),
     ...(magentoStoreId != null ? { magentoStoreId } : {}),
     ...(orderStoreDomain ? { orderStoreDomain } : {}),
   };
@@ -339,6 +342,12 @@ async function fetchSalesChannelRulesForOrders(
   revenueSourceMode: 'eshop_classified' | 'eshop_all' | 'erp'
 ): Promise<EcommerceSalesChannelRule[]> {
   try {
+    // Try dedicated connector_rules doc first (post-migration)
+    const rulesDoc = await FirestoreService.getDocument<{ rules?: unknown }>('connector_rules', brandId);
+    if (rulesDoc?.rules && Array.isArray(rulesDoc.rules)) {
+      return mergeSalesChannelRulesForBrand([rulesDoc.rules], revenueSourceMode);
+    }
+    // Fallback: read legacy fields from connectors doc
     const connector = await FirestoreService.getDocument<Record<string, unknown>>('connectors', brandId);
     if (!connector) {
       return mergeSalesChannelRulesForBrand([], revenueSourceMode);
@@ -627,8 +636,25 @@ async function fetchEcommercePlatformOrdersOnly(
     untilDate?: string;
     cacheFirst?: boolean;
     revenueMode?: 'brand' | 'classified' | 'all';
+    /** Διάβασε ΟΛΟ το εύρος (paginated) αντί μόνο τα `DATA_ANALYSIS_ORDER_LIMIT` πιο πρόσφατα.
+     *  Απαραίτητο για Policy Impact: αλλιώς desc+limit κόβει σιωπηλά τους παλιότερους μήνες. */
+    fetchAll?: boolean;
+    /** Callback προόδου κατά το paginated fetch (loaded/total παραγγελίες όλων των platforms). */
+    onProgress?: (info: { loaded: number; total: number }) => void;
   } = {}
 ): Promise<EcommerceRawOrder[]> {
+  // Κοινός μετρητής προόδου ανά platform (τρέχουν concurrently στο Promise.all).
+  const loadedByPlatform = new Map<string, number>();
+  const totalByPlatform = new Map<string, number>();
+  const emitProgress = () => {
+    if (!options.onProgress) return;
+    let loaded = 0;
+    let total = 0;
+    for (const v of loadedByPlatform.values()) loaded += v;
+    for (const v of totalByPlatform.values()) total += v;
+    options.onProgress({ loaded, total });
+  };
+
   const [allRules, results] = await Promise.all([
     fetchSalesChannelRulesForOrders(brandId, mode),
     Promise.all(
@@ -655,6 +681,47 @@ async function fetchEcommercePlatformOrdersOnly(
             if (options.untilDate && day > options.untilDate) return false;
             return true;
           });
+
+        // Full-range pagination: για high-volume brands (π.χ. e-tennis ~3.5k/μήνα) ένα single
+        // limit(5000) desc επιστρέφει μόνο τους 1-2 τελευταίους μήνες → χάνονται οι παλιότεροι.
+        if (hasRange && options.fetchAll) {
+          const rangeConstraints: QueryConstraint[] = [];
+          if (options.sinceDate) rangeConstraints.push(where('createdAt', '>=', options.sinceDate));
+          if (options.untilDate) rangeConstraints.push(where('createdAt', '<=', `${options.untilDate}T23:59:59.999Z`));
+          rangeConstraints.push(orderBy('createdAt', 'desc'));
+
+          const PAGE = 5000;
+          const HARD_CAP = 40000;
+          const collected: Record<string, unknown>[] = [];
+          let cursor: QueryDocumentSnapshot<DocumentData> | null = null;
+          let knownTotal = 0;
+          try {
+            do {
+              // Count μόνο στην πρώτη σελίδα (cursor==null)· οι επόμενες παραλείπουν το server round-trip.
+              const isFirstPage = cursor === null;
+              const page: {
+                items: Record<string, unknown>[];
+                lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+                totalCount: number;
+              } = await FirestoreService.getDocumentsPaginated<Record<string, unknown>>(collectionName, {
+                brandId,
+                pageSize: PAGE,
+                cursor,
+                constraints: rangeConstraints,
+                skipCount: !isFirstPage,
+              });
+              if (isFirstPage) knownTotal = Math.min(page.totalCount, HARD_CAP);
+              collected.push(...page.items);
+              cursor = page.items.length === PAGE ? page.lastDoc : null;
+              totalByPlatform.set(platform, knownTotal);
+              loadedByPlatform.set(platform, collected.length);
+              emitProgress();
+            } while (cursor && collected.length < HARD_CAP);
+            return collected.map((row) => normalizeRawOrder(platform, row));
+          } catch {
+            // Πέσε πίσω στο μη-paginated μονοπάτι παρακάτω (π.χ. λείπει index).
+          }
+        }
 
         let rows: Record<string, unknown>[] = [];
         try {
@@ -740,6 +807,28 @@ export async function fetchAllEcommerceOrders(
     const erp = await loadAndClassifyErpConnectorOrders(brandId, mode, options);
     if (erp.length > 0) return erp;
   }
+  return fetchEcommercePlatformOrdersOnly(brandId, platforms, mode, options);
+}
+
+/**
+ * E-shop platform orders ΜΟΝΟ (Magento/Shopify/Woo/OpenCart) με line items — χωρίς το ERP-invoice
+ * μονοπάτι. Για features που χρειάζονται αποκλειστικά γραμμές προϊόντων (SKU/τιμή/τεμάχια), π.χ.
+ * Policy Impact, ώστε να αποφεύγουμε το ακριβό διπλό fetch (MV invoices + platform) για ERP-backed brands.
+ */
+export async function fetchEcommercePlatformOrders(
+  brandId: string,
+  platforms: string[],
+  options: {
+    sinceDate?: string;
+    untilDate?: string;
+    cacheFirst?: boolean;
+    revenueMode?: 'brand' | 'classified' | 'all';
+    fetchAll?: boolean;
+    onProgress?: (info: { loaded: number; total: number }) => void;
+  } = {}
+): Promise<EcommerceRawOrder[]> {
+  if (platforms.length === 0) return [];
+  const mode = await fetchBrandRevenueSourceMode(brandId);
   return fetchEcommercePlatformOrdersOnly(brandId, platforms, mode, options);
 }
 

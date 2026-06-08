@@ -230,6 +230,9 @@ export async function fetchShopifyData(brandId: string): Promise<{
       for (const o of orders) {
         const shopifyCid = o.customer_id != null && o.customer_id !== '' ? String(o.customer_id) : '';
         const emailIdentity = getCustomerEmailIdentity(o.email || o.contact_email);
+        const shopifyName = [o.billing_address?.first_name, o.billing_address?.last_name].filter(Boolean).join(' ').trim()
+          || [o.shipping_address?.first_name, o.shipping_address?.last_name].filter(Boolean).join(' ').trim()
+          || o.customer?.first_name && o.customer?.last_name ? `${o.customer.first_name} ${o.customer.last_name}`.trim() : '';
         batchItems.push({
           id: `shopify_${o.id}`,
           data: {
@@ -237,6 +240,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
             orderName: o.name || '',
             ...(shopifyCid ? { customerId: shopifyCid } : {}),
             ...emailIdentity,
+            ...(shopifyName ? { customerName: shopifyName } : {}),
             createdAt: o.created_at || '',
             updatedAt: o.updated_at || '',
             financialStatus: o.financial_status || '',

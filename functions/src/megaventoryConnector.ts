@@ -936,6 +936,13 @@ export async function fetchMegaventoryData(
   }
   const sinceStr = toYmd(docsWindow.windowStart);
   const todayStr = toYmd(docsWindow.windowEnd);
+  /** Custom report (Performance κ.λπ.) χρειάζεται πλήρες ιστορικό· όχι το 48h overlap των documents. */
+  const customReportHistoryYear =
+    Number(conn.historyLoadedUntilYear) > 0
+      ? Number(conn.historyLoadedUntilYear)
+      : docsWindow.historyStartYear;
+  const customReportDate1 = toYmd(new Date(Date.UTC(customReportHistoryYear, 0, 1)));
+  const customReportDate2 = todayStr;
   const sinceFilterDate = toMvFilterDateTime(docsWindow.windowStart);
   let docsOk = true;
   let referenceOk = true;
@@ -945,7 +952,7 @@ export async function fetchMegaventoryData(
       ? 'pending/deferred_for_scheduled_sync'
       : 'complete/incremental';
   logger.info(
-    `[Megaventory] Sync window for ${brandId}: mode=${mode} docs=${docsWindow.mode}:${sinceStr}->${todayStr} reference=snapshot customReport=snapshot invoiceBackfill=${invoiceBackfillLabel}`
+    `[Megaventory] Sync window for ${brandId}: mode=${mode} docs=${docsWindow.mode}:${sinceStr}->${todayStr} customReport=${customReportDate1}->${customReportDate2} reference=snapshot invoiceBackfill=${invoiceBackfillLabel}`
   );
 
   let totalImported = 0;
@@ -970,6 +977,7 @@ export async function fetchMegaventoryData(
   let megaventoryApiProductRows: Record<string, unknown>[] = [];
   let customReportRowsSnapshot: Record<string, unknown>[] = [];
   let apiCatalogGapFillCount = 0;
+  let productGetExhausted = false;
 
   try {
     if (!shouldRefreshDocuments) {
@@ -1109,7 +1117,12 @@ export async function fetchMegaventoryData(
       logger.info(`[Megaventory] Invoices: ${items.length}/${rawDocs.length} imported for brand ${brandId}`);
     }
 
-    if (docsOk && shouldStageInvoiceBackfill && invoiceBackfillProgress && invoiceBackfillProgress.exhausted !== true) {
+    if (docsOk && shouldStageInvoiceBackfill && invoiceBackfillProgress) {
+      // EARLY write (πριν τα αργά gap-fill/RFM που κάνουν το function timeout). Γράφουμε ΕΔΩ:
+      //  • αν ΔΕΝ έχει τελειώσει → το νέο cursor (συνεχίζει την επόμενη νύχτα)
+      //  • αν τελείωσε (exhausted) → το flag Complete ΩΣΤΕ να μην ξανατρέξει το 3ετές staged backfill.
+      // Πριν, το Complete μαρκαριζόταν μόνο στο τελικό patch → το function τερμάτιζε πρώτα και το
+      // backfill κολλούσε «μισοτελειωμένο» επ' άπειρον, ξανα-σκανάροντας 3 χρόνια κάθε νύχτα.
       const patch: Record<string, unknown> = {
         'megaventory.lastDocsSyncAt': FieldValue.serverTimestamp(),
         'megaventory.historyLoadedUntilYear': docsWindow.historyStartYear,
@@ -1119,7 +1132,10 @@ export async function fetchMegaventoryData(
         'megaventory.invoiceDocumentBackfillMatchedRowsLastRun': Number(invoiceBackfillProgress.matchedRows ?? 0),
         'megaventory.invoiceDocumentBackfillCount': FieldValue.increment(counts.invoices),
       };
-      if (invoiceBackfillProgress.nextCursor) {
+      if (invoiceBackfillProgress.exhausted === true) {
+        patch['megaventory.invoiceDocumentBackfillComplete'] = true;
+        patch['megaventory.invoiceDocumentBackfillCompletedAt'] = FieldValue.serverTimestamp();
+      } else if (invoiceBackfillProgress.nextCursor) {
         patch['megaventory.invoiceDocumentBackfillCursor'] = invoiceBackfillProgress.nextCursor;
       }
       await db.doc(`connectors/${brandId}`).update(patch);
@@ -1247,7 +1263,11 @@ export async function fetchMegaventoryData(
     }
 
     // ── Products ─────────────────────────────────────────────────────
-    const { rows: prRows, error: prFetchErr } = await fetchAllMvPages('ProductGet', apiKey, [], {
+    const {
+      rows: prRows,
+      error: prFetchErr,
+      exhausted: productGetExhausted,
+    } = await fetchAllMvPages('ProductGet', apiKey, [], {
       responseArrayKey: 'mvProducts',
       cursorField: 'ProductID',
       idKeys: ['ProductID', 'ProductId'],
@@ -1364,7 +1384,7 @@ export async function fetchMegaventoryData(
       try {
         const removed = await deleteMegaventoryCustomReportRows(db, brandId);
         logger.info(`[Megaventory] Custom report purge: removed ${removed} rows for brand ${brandId}`);
-        const crRows = await fetchAllCustomReportPages(apiKey, reportId, sinceStr, todayStr);
+        const crRows = await fetchAllCustomReportPages(apiKey, reportId, customReportDate1, customReportDate2);
         customReportRowsSnapshot = crRows;
         const rid = sanitizeFirestoreDocId(reportId);
         const bid = sanitizeFirestoreDocId(brandId);
@@ -1392,6 +1412,19 @@ export async function fetchMegaventoryData(
         errors.push(`CustomReport (${reportId}): ${msg}`);
         logger.warn(`[Megaventory] Custom report sync failed brand ${brandId}: ${msg}`);
       }
+    }
+
+    // ── Early completion marker ──────────────────────────────────────
+    // Τα core δεδομένα (invoices/orders/products/stock/suppliers/custom report) έχουν ήδη γραφτεί.
+    // Γράφουμε ΕΔΩ το ορατό `lastSyncAt` ώστε το UI να δείχνει φρέσκο sync ΑΚΟΜΗ κι αν τα επόμενα
+    // βαριά/ασταθή βήματα (gap-fill, RFM, procurement refresh) αργήσουν ή «φάνε» το function timeout
+    // σε μεγάλα e-shops. Το πλήρες import_jobs record παραμένει στο τέλος (best-effort).
+    try {
+      await db.doc(`connectors/${brandId}`).update({
+        'megaventory.lastSyncAt': FieldValue.serverTimestamp(),
+      });
+    } catch (markErr) {
+      logger.warn(`[Megaventory] early lastSyncAt mark failed for ${brandId}: ${markErr instanceof Error ? markErr.message : String(markErr)}`);
     }
 
     if (megaventoryApiProductRows.length > 0) {
@@ -1433,6 +1466,16 @@ export async function fetchMegaventoryData(
     const patch: Record<string, unknown> = {};
     if (referenceOk) {
       patch['megaventory.lastReferenceSyncAt'] = FieldValue.serverTimestamp();
+    }
+    if (counts.products > 0) {
+      patch['megaventory.lastSyncProducts'] = counts.products;
+    }
+    if (counts.customReportRows > 0) {
+      patch['megaventory.lastSyncCustomReportRows'] = counts.customReportRows;
+    }
+    patch['megaventory.lastProductGetExhausted'] = productGetExhausted !== false;
+    if (apiCatalogGapFillCount > 0) {
+      patch['megaventory.lastApiCatalogGapFill'] = apiCatalogGapFillCount;
     }
     if (shouldRefreshDocuments && docsOk) {
       patch['megaventory.lastDocsSyncAt'] = FieldValue.serverTimestamp();
@@ -1525,6 +1568,8 @@ export async function fetchMegaventoryData(
       docsMode: docsWindow.mode,
       referenceMode: 'snapshot',
       customReportMode: reportId && reportEnabled ? 'snapshot' : 'disabled',
+      ...(reportId && reportEnabled ? { customReportDate1, customReportDate2 } : {}),
+      productGetExhausted,
       windowStart: docsWindow.windowStart.toISOString(),
       windowEnd: docsWindow.windowEnd.toISOString(),
       manualImportCleanupRan: manualCleanupCounts != null,

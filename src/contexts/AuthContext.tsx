@@ -116,6 +116,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const allowNew = options?.allowNewUsers === true;
     const extra = getAdditionalUserInfo(result);
     if (extra?.isNewUser && !allowNew) {
+      // Super-admins (allowlist now in Firestore appConfig/superAdmins) skip the
+      // new-user signup block, mirroring the previous isSuperAdminEmail() check.
+      const superAdminEmail = result.user.email?.toLowerCase();
+      if (superAdminEmail) {
+        const { emails } = await loadSuperAdmins();
+        if (emails.includes(superAdminEmail)) return;
+      }
+
       const uid = result.user.uid;
       let hasProfile = false;
       try {

@@ -4,10 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/generate-build-info.mjs",
     "dev": "vite",
     "prebuild": "node scripts/generate-build-info.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "pretest": "node scripts/generate-build-info.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

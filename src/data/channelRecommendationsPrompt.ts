@@ -284,6 +284,7 @@ export function buildChannelRecommendationsUserPrompt(params: {
   fitLevel?: FitLevel;
   brandName?: string;
   brandType?: 'B2B' | 'B2C';
+  brandProfileText?: string;
   topCategories?: string[];
   segmentFitList?: SegmentFitInfo[];
   totalBudget?: number;
@@ -303,6 +304,7 @@ export function buildChannelRecommendationsUserPrompt(params: {
     fitLevel = 'good',
     brandName,
     brandType,
+    brandProfileText,
     topCategories,
     segmentFitList,
     totalBudget,
@@ -348,7 +350,15 @@ ${audience.marketingPolicy}
   const fitContext = FIT_CONTEXT[fitLevel];
 
   const brandSection = brandName
-    ? `Επιχείρηση: ${brandName}${brandType ? ` (${brandType === 'B2C' ? 'πωλήσεις προς καταναλωτές' : 'πωλήσεις προς επιχειρήσεις'})` : ''}${topCategories && topCategories.length > 0 ? `\nΚύριες κατηγορίες προϊόντων: ${topCategories.slice(0, 5).join(', ')}` : ''}\n\n`
+    ? `Brand (επωνυμία): "${brandName}"${brandType ? ` (${brandType === 'B2C' ? 'πωλήσεις προς καταναλωτές' : 'πωλήσεις προς επιχειρήσεις'})` : ''}
+ΣΗΜΑΝΤΙΚΟ: Όταν γράφεις για αυτό το brand, χρησιμοποίησε ΠΑΝΤΑ "το brand ${brandName}" ή "για το brand ${brandName}" — ποτέ άρθρο γένους (ο/η) πριν το brand name.${topCategories && topCategories.length > 0 ? `\nΚύριες κατηγορίες προϊόντων: ${topCategories.slice(0, 5).join(', ')}` : ''}\n\n`
+    : '';
+
+  const brandProfileSection = brandProfileText?.trim()
+    ? `\n\nBRAND PROFILE CONTEXT:
+${brandProfileText.trim()}
+
+Κανόνας Brand Profile: καθοδηγεί customer-facing message, marketingBrief, CTA, offer framing, tone of voice, positioning, archetype και ICPs. Δεν υπερισχύει των performance δεδομένων, segment facts, stock constraints ή των απαγορεύσεων για customer-copy.`
     : '';
 
   const formatSegmentDetail = (s: SegmentFitInfo) => {
@@ -375,9 +385,9 @@ Segment πελατών: ${segmentName}
 
 Βαθμός ταιριάσματος segment-στρατηγικής: ${fitLevel === 'ideal' ? 'Ιδανικό' : fitLevel === 'good' ? 'Καλό' : 'Μερικό'}
 ${fitContext}
-${segmentMapSection}${triageSection}${provenanceSection}${audienceSection}
+${segmentMapSection}${triageSection}${provenanceSection}${audienceSection}${brandProfileSection}
 Πρότεινε τα κατάλληλα κανάλια μάρκετινγκ (primary, secondary, budget_allocation, rationale) σε JSON.
-Η αιτιολόγηση πρέπει να είναι πλήρως στα Ελληνικά.${brandName ? ` Ανέφερε το brand «${brandName}» ονομαστικά μέσα στο rationale, αντί για γενικόλογο "η επιχείρηση" ή "το brand σας".${topCategories && topCategories.length > 0 ? ` Συνέδεσε τις προτάσεις με τα πραγματικά προϊόντα/κατηγορίες (${topCategories.slice(0, 3).join(', ')}).` : ''}` : ''}
+Η αιτιολόγηση πρέπει να είναι πλήρως στα Ελληνικά.${brandName ? ` Ανέφερε το brand «${brandName}» ονομαστικά μέσα στο rationale, ΠΑΝΤΑ ως "το brand ${brandName}" ή "για το brand ${brandName}" — ΠΟΤΕ με άρθρο γένους (ο/η) πριν από το brand name.${topCategories && topCategories.length > 0 ? ` Συνέδεσε τις προτάσεις με τα πραγματικά προϊόντα/κατηγορίες (${topCategories.slice(0, 3).join(', ')}).` : ''}` : ''}
 Στο "Πελάτες:" section:
 1. Πρώτα αναλύεις το ΤΡΕΧΟΝ segment (αυτό που ζητήθηκε) με πλήρη ανάλυση
 2. Μετά αφιερώνεις 1 bullet ΓΙΑ ΚΑΘΕ ένα από τα υπόλοιπα ιδανικά και καλά segments. Κάθε bullet πρέπει να εξηγεί ΠΟΙΟΙ είναι αυτοί οι πελάτες και ΓΙΑΤΙ ταιριάζουν σε αυτή τη στρατηγική. ΟΧΙ απλή αναφορά ονόματος.

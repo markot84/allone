@@ -4,6 +4,7 @@ import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { Card } from './Card';
 import { Tooltip } from './Tooltip';
+import { useAccentColor } from '../../hooks/useAccentColor';
 
 export interface KPICardData {
   label: string;
@@ -27,11 +28,11 @@ interface KPICardProps {
   className?: string;
 }
 
-/** Matches --nts-accent; use literal hex in SVG so fill/stroke resolve reliably (var() in url(#id) breaks if id contains ')'). */
-const ACCENT_ORANGE = '#F97316';
-
 export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
   const sparkGradientId = `kpi-spark-${useId().replace(/:/g, '')}`;
+  // Literal hex (όχι var()) από το ενεργό profile — το var(--nts-accent) δεν resolve-άρει αξιόπιστα
+  // μέσα σε SVG gradient stops / url(#id). Ακολουθεί το χρώμα του επιλεγμένου χρωματικού προφίλ.
+  const { accent: accentColor } = useAccentColor();
 
   const isPlainLabel =
     kpi.changeLabel === 'active' ||
@@ -93,14 +94,14 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
               <AreaChart data={kpi.sparklineData.map((v, i) => ({ v, i }))} margin={{ top: 2, right: 4, left: 4, bottom: 2 }}>
                 <defs>
                   <linearGradient id={sparkGradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={ACCENT_ORANGE} stopOpacity={0.2} />
-                    <stop offset="95%" stopColor={ACCENT_ORANGE} stopOpacity={0} />
+                    <stop offset="5%" stopColor={accentColor} stopOpacity={0.2} />
+                    <stop offset="95%" stopColor={accentColor} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <Area
                   type="monotone"
                   dataKey="v"
-                  stroke={ACCENT_ORANGE}
+                  stroke={accentColor}
                   fill={`url(#${sparkGradientId})`}
                   strokeWidth={1.5}
                   dot={false}

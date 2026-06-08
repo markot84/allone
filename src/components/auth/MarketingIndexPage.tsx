@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { ArrowLeft, ArrowRight, BarChart3, Boxes, Brain, CheckCircle2, ClipboardCheck, Database, ExternalLink, Gauge, HelpCircle, Layers3, Mail, Megaphone, PackageCheck, Phone, ShieldCheck, ShoppingBag, Store, TrendingUp, Upload } from 'lucide-react';
 import { InterestForm } from './InterestForm';
 import { PerformancePlusLogo } from '../common';
+import { useGoogleTagManager } from '../../hooks/useGoogleTagManager';
 
 type LandingVariant = 'ceo' | 'ops';
 
@@ -355,11 +356,11 @@ function PreviewBlock(props: {
       {hasImage ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.15fr)] lg:items-center xl:gap-10">
           <div className="space-y-4">{body}</div>
-          <div className="relative flex min-h-[220px] items-center justify-center overflow-hidden rounded-[24px] border border-[#1f2328]/10 bg-[#f3f4f6] p-3 shadow-inner">
+          <div className="relative flex min-h-0 items-center justify-center overflow-hidden rounded-[20px] border border-[#1f2328]/10 bg-[#f3f4f6] p-2 shadow-inner sm:min-h-[220px] sm:rounded-[24px] sm:p-3">
             <img
               src={point.imageSrc}
               alt={`${point.title} screenshot`}
-              className="h-auto max-h-[min(500px,54vh)] w-full rounded-[18px] object-contain shadow-[0_18px_44px_rgba(16,24,40,0.14)]"
+              className="h-auto max-h-[min(500px,54vh)] w-full rounded-[14px] object-contain shadow-[0_18px_44px_rgba(16,24,40,0.14)] sm:rounded-[18px]"
             />
           </div>
         </div>
@@ -381,6 +382,9 @@ export function MarketingIndexPage({
   const copy = variantCopy[variant];
   void _onVariantChange;
 
+  // GTM φορτώνει ΜΟΝΟ στη marketing/landing σελίδα — όχι στις σελίδες της εφαρμογής.
+  useGoogleTagManager();
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -392,8 +396,9 @@ export function MarketingIndexPage({
           <div className="rounded-[24px] border border-[#1f2328]/10 bg-white/88 px-4 py-3 shadow-[0_14px_34px_rgba(16,24,40,0.1)] backdrop-blur md:px-5">
             <div className={`flex items-center gap-3 sm:gap-4 ${onReturnToApp || onOpenAuth ? 'justify-between' : ''}`}>
               <div className="flex min-w-0 flex-row items-center gap-3 sm:gap-4">
-                <PerformancePlusLogo height={52} className="shrink-0 max-w-[min(100%,85vw)] sm:h-auto" />
-                <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-[var(--nts-charcoal)] sm:text-base">{MARKETING_TAGLINE_HEADER}</p>
+                <PerformancePlusLogo height={52} className="shrink-0 max-w-[60vw] sm:max-w-none sm:h-auto" />
+                {/* Tagline: κρυφό στο mobile (επαναλαμβάνεται στο hero) ώστε να μη στριμώχνεται με το CTA */}
+                <p className="hidden min-w-0 flex-1 text-sm font-semibold leading-snug text-[var(--nts-charcoal)] sm:block sm:text-base">{MARKETING_TAGLINE_HEADER}</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {onOpenAuth && (

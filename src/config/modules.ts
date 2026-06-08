@@ -14,13 +14,24 @@ export interface ModuleDefinition {
   b2bLabel?: string;
   b2bStatus: ModuleEditionStatus;
   b2cStatus: ModuleEditionStatus;
+  /** Plan feature που ΑΠΑΙΤΕΙΤΑΙ για να εμφανιστεί το module (π.χ. 'procurement' → Enterprise only). */
   planFeature?: string;
+  /**
+   * Plan feature που, όταν είναι διαθέσιμο, ΚΡΥΒΕΙ το module (αντίστροφο του planFeature).
+   * π.χ. το Product Intelligence χρειάζεται μόνο στο Growth (απόθεμα από ERP)· στο Enterprise τα
+   * αποθέματα έρχονται από το Procurement, οπότε κρύβεται με `hideWhenFeature: 'procurement'`.
+   */
+  hideWhenFeature?: string;
 }
 
 export const APP_SECTIONS: AppSectionId[] = [
   'brands',
   'dashboard',
   'strategy',
+  'policy-impact',
+  'marketing-plan',
+  'brand-profile',
+  'commercial-info',
   'rfm',
   'products',
   'suppliers',
@@ -50,6 +61,9 @@ export const APP_SECTIONS: AppSectionId[] = [
   'sales',
   'accounts',
   'markets',
+  'hr',
+  'offers',
+  'territories',
 ];
 
 export const MODULE_DEFINITIONS: ModuleDefinition[] = [
@@ -58,7 +72,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'ecommerce', label: 'E-commerce', b2bStatus: 'hidden', b2cStatus: 'core' },
   /** RFM + Behavioral + Predictive — ίδια in-app λογική (behavioralEngine) για B2B/B2C. */
   { id: 'rfm', label: 'Data Analysis', b2bStatus: 'core', b2cStatus: 'core' },
-  { id: 'products', label: 'Product Intelligence', b2bLabel: 'Product Intelligence', b2bStatus: 'core', b2cStatus: 'core' },
+  { id: 'products', label: 'Product Intelligence', b2bLabel: 'Product Intelligence', b2bStatus: 'core', b2cStatus: 'core', hideWhenFeature: 'procurement' },
   { id: 'suppliers', label: 'Suppliers', b2bLabel: 'Supplier Management', b2bStatus: 'core', b2cStatus: 'optional' },
   { id: 'procurement', label: 'Procurement', b2bLabel: 'Procurement', b2bStatus: 'core', b2cStatus: 'optional', planFeature: 'procurement' },
   { id: 'channels', label: 'Channel Activation', b2bLabel: 'Sales Activation', b2bStatus: 'core', b2cStatus: 'core' },
@@ -75,6 +89,9 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'sales', label: 'Sales Pipeline', b2bLabel: 'Sales Pipeline', b2bStatus: 'core', b2cStatus: 'hidden' },
   { id: 'accounts', label: 'Account Intelligence', b2bLabel: 'Account Intelligence', b2bStatus: 'core', b2cStatus: 'hidden' },
   { id: 'markets', label: 'Market Exploration', b2bLabel: 'Market Exploration', b2bStatus: 'core', b2cStatus: 'hidden' },
+  { id: 'hr', label: 'People & HR', b2bLabel: 'People & HR', b2bStatus: 'core', b2cStatus: 'hidden' },
+  { id: 'offers', label: 'Commercial Offers', b2bLabel: 'Commercial Offers', b2bStatus: 'core', b2cStatus: 'hidden' },
+  { id: 'territories', label: 'Sales Territory', b2bLabel: 'Sales Territory', b2bStatus: 'core', b2cStatus: 'hidden' },
 ];
 
 export const MODULE_DEFINITION_MAP = Object.fromEntries(
@@ -108,10 +125,26 @@ const SECTION_TO_MODULE: Partial<Record<AppSectionId, ModuleId>> = {
   sales: 'sales',
   accounts: 'accounts',
   markets: 'markets',
+  hr: 'hr',
+  offers: 'offers',
+  territories: 'territories',
 };
 
 export function getModuleIdForSection(section: string): ModuleId | null {
   return SECTION_TO_MODULE[section as AppSectionId] ?? null;
+}
+
+/**
+ * Εναλλακτικό section όταν το ζητούμενο είναι κρυφό/απενεργοποιημένο, ώστε τα deep links να μην
+ * πέφτουν σε γενικό fallback. π.χ. στο Enterprise το Product Intelligence (`products`) είναι κρυφό →
+ * η πλοήγηση ανακατευθύνεται στο `procurement` (η αντίστοιχη οθόνη αποθέματος για enterprise).
+ */
+const SECTION_FALLBACK_ALIAS: Partial<Record<AppSectionId, AppSectionId>> = {
+  products: 'procurement',
+};
+
+export function getSectionFallbackAlias(section: string): AppSectionId | null {
+  return SECTION_FALLBACK_ALIAS[section as AppSectionId] ?? null;
 }
 
 export function getEditionStatus(moduleId: ModuleId, brandType: 'B2B' | 'B2C'): ModuleEditionStatus {
@@ -145,6 +178,12 @@ export function resolveEnabledModules(
     const editionStatus = getEditionStatus(def.id, brandType);
     // Κρυφά modules για την έκδοση (π.χ. B2B-only σε B2C) ποτέ ενεργά, ακόμη κι αν υπάρχει παλιό override στη Firestore
     if (editionStatus === 'hidden') {
+      acc[def.id] = false;
+      return acc;
+    }
+    // Κρύψιμο όταν είναι διαθέσιμο συγκεκριμένο plan feature (π.χ. Product Intelligence κρύβεται στο
+    // Enterprise όπου το απόθεμα προέρχεται από το Procurement).
+    if (def.hideWhenFeature && (options?.canAccess?.(def.hideWhenFeature) ?? false)) {
       acc[def.id] = false;
       return acc;
     }

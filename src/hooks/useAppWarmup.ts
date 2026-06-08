@@ -77,6 +77,13 @@ export function useAppWarmup() {
       );
       prefetch(() =>
         queryClient.prefetchQuery({
+          queryKey: ['ecommerce_summary', brandId, 'summary', 'no_movement'],
+          queryFn: () => fetchEcommerceSummary(brandId, { includeSkuDetails: false, includeStockMovement: false }),
+          staleTime: 10 * 60 * 1000,
+        })
+      );
+      prefetch(() =>
+        queryClient.prefetchQuery({
           queryKey: ['aggregates', 'products', brandId],
           queryFn: () => fetchAggregate(brandId, 'products'),
           staleTime: 10 * 60 * 1000,
@@ -113,13 +120,6 @@ export function useAppWarmup() {
     }, 0);
 
     const phaseTwo = scheduleIdle(() => {
-      prefetch(() =>
-        queryClient.prefetchQuery({
-          queryKey: ['ecommerce_summary', brandId],
-          queryFn: () => fetchEcommerceSummary(brandId),
-          staleTime: 10 * 60 * 1000,
-        })
-      );
       prefetch(() =>
         queryClient.prefetchQuery({
           queryKey: ['suppliers', brandId],

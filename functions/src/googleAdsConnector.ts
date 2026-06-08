@@ -57,8 +57,142 @@ const GOOGLE_ADS_BASE_URL = `https://googleads.googleapis.com/${GOOGLE_ADS_API_V
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_ADS_HISTORY_YEARS = 3;
+const MAX_DAILY_KEYS_PERSIST = 420;
+const YMD_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 const SCOPES = ['https://www.googleapis.com/auth/adwords'];
+
+function isRetriableFirestoreWriteError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /DEADLINE_EXCEEDED|Transaction too big|Request payload size exceeds|exceeds the maximum allowed size|document too large|4 DEADLINE_EXCEEDED|Resource exhausted/i.test(
+    msg
+  );
+}
+
+function finiteNumber(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function trimCampaignForFirestore(campaign: Record<string, unknown>): void {
+  const dailyMetrics = campaign.dailyMetrics as Record<string, unknown> | undefined;
+  if (!dailyMetrics || typeof dailyMetrics !== 'object') return;
+
+  for (const key of Object.keys(dailyMetrics)) {
+    if (!YMD_KEY.test(key)) delete dailyMetrics[key];
+  }
+
+  const keys = Object.keys(dailyMetrics).sort();
+  if (keys.length > MAX_DAILY_KEYS_PERSIST) {
+    const dropCount = keys.length - MAX_DAILY_KEYS_PERSIST;
+    for (let i = 0; i < dropCount; i += 1) delete dailyMetrics[keys[i]];
+  }
+
+  for (const value of Object.values(dailyMetrics)) {
+    const row = value as Record<string, unknown> | undefined;
+    if (row && typeof row === 'object') delete row.conversionActions;
+  }
+}
+
+function sanitizeCampaignForFirestore(campaign: Record<string, any>): void {
+  for (const field of [
+    'impressions',
+    'clicks',
+    'conversions',
+    'amount_spent',
+    'conversion_value',
+    'purchase_conversions',
+    'purchase_conversion_value',
+    'ctr',
+    'roas',
+  ]) {
+    campaign[field] = finiteNumber(campaign[field]);
+  }
+
+  const actions = campaign.conversionActions;
+  if (actions && typeof actions === 'object') {
+    for (const action of Object.values(actions) as Record<string, unknown>[]) {
+      if (!action || typeof action !== 'object') continue;
+      (action as any).conversions = finiteNumber((action as any).conversions);
+      (action as any).value = finiteNumber((action as any).value);
+    }
+  }
+
+  const dailyMetrics = campaign.dailyMetrics;
+  if (dailyMetrics && typeof dailyMetrics === 'object') {
+    for (const row of Object.values(dailyMetrics) as Record<string, unknown>[]) {
+      if (!row || typeof row !== 'object') continue;
+      (row as any).impressions = finiteNumber((row as any).impressions);
+      (row as any).clicks = finiteNumber((row as any).clicks);
+      (row as any).conversions = finiteNumber((row as any).conversions);
+      (row as any).amount_spent = finiteNumber((row as any).amount_spent);
+      (row as any).conversion_value = finiteNumber((row as any).conversion_value);
+      (row as any).purchase_conversions = finiteNumber((row as any).purchase_conversions);
+      (row as any).purchase_conversion_value = finiteNumber((row as any).purchase_conversion_value);
+    }
+  }
+}
+
+async function commitCampaignSliceAdaptive(campaigns: any[]): Promise<void> {
+  if (campaigns.length === 0) return;
+  const batch = getDb().batch();
+  for (const campaign of campaigns) {
+    const ref = getDb().collection('campaigns').doc(campaign.id);
+    batch.set(ref, campaign, { merge: true });
+  }
+
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (campaigns.length > 1 && isRetriableFirestoreWriteError(err)) {
+      const mid = Math.floor(campaigns.length / 2);
+      logger.warn(`[GoogleAds] Batch write retry via split (${campaigns.length} -> ${mid}+${campaigns.length - mid})`);
+      await commitCampaignSliceAdaptive(campaigns.slice(0, mid));
+      await commitCampaignSliceAdaptive(campaigns.slice(mid));
+      return;
+    }
+    throw err;
+  }
+}
+
+async function commitCampaignsOneByOne(campaigns: any[]): Promise<void> {
+  for (const campaign of campaigns) {
+    const ref = getDb().collection('campaigns').doc(campaign.id);
+    await ref.set(campaign, { merge: true });
+  }
+}
+
+async function deleteStaleGoogleAdsCampaignDocsForCustomer(
+  brandId: string,
+  customerId: string
+): Promise<number> {
+  const prefix = `gads_${String(customerId).replace(/-/g, '')}_`;
+  const snap = await getDb()
+    .collection('campaigns')
+    .where('brandId', '==', brandId)
+    .where('channel', '==', 'Google Ads')
+    .get();
+
+  let batch = getDb().batch();
+  let ops = 0;
+  let deleted = 0;
+  for (const doc of snap.docs) {
+    if (doc.id.startsWith(prefix)) continue;
+    batch.delete(doc.ref);
+    ops += 1;
+    deleted += 1;
+    if (ops >= 450) {
+      await batch.commit();
+      batch = getDb().batch();
+      ops = 0;
+    }
+  }
+  if (ops > 0) await batch.commit();
+  if (deleted > 0) {
+    logger.info(`[GoogleAds] Deleted ${deleted} stale campaign docs for ${brandId}`);
+  }
+  return deleted;
+}
 
 /**
  * REST JSON uses camelCase. Use **only** metrics.conversions / metrics.conversions_value
@@ -492,6 +626,8 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   if (loginCustomerId && customerId === loginCustomerId) {
     return { success: false, imported: 0, error: 'Ο Customer ID ταυτίζεται με τον MCC — χρησιμοποιήστε το ID του sub-account.' };
   }
+
+  await deleteStaleGoogleAdsCampaignDocsForCustomer(brandId, customerId);
 
   // Date window policy:
   // - First historical load: 3-year history -> today
@@ -1127,18 +1263,27 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       }
     }
 
-    const WRITE_CHUNK = 25;
-    for (let i = 0; i < prepared.length; i += WRITE_CHUNK) {
-      const slice = prepared.slice(i, i + WRITE_CHUNK);
-      const batch = getDb().batch();
-      for (const campaign of slice) {
-        const ref = getDb().collection('campaigns').doc(campaign.id);
-        batch.set(ref, campaign, { merge: true });
+    for (const campaign of prepared) {
+      trimCampaignForFirestore(campaign);
+      sanitizeCampaignForFirestore(campaign);
+    }
+
+    const WRITE_CHUNK = 4;
+    try {
+      for (let i = 0; i < prepared.length; i += WRITE_CHUNK) {
+        const slice = prepared.slice(i, i + WRITE_CHUNK);
+        await commitCampaignSliceAdaptive(slice);
+        logger.info(
+          `[GoogleAds] Batch ${Math.floor(i / WRITE_CHUNK) + 1}: wrote ${slice.length} campaigns (customer ${customerId})`
+        );
+        await new Promise((resolve) => setTimeout(resolve, 80));
       }
-      await batch.commit();
-      logger.info(
-        `[GoogleAds] Batch ${Math.floor(i / WRITE_CHUNK) + 1}: wrote ${slice.length} campaigns (customer ${customerId})`
+    } catch (writeErr) {
+      logger.warn(
+        `[GoogleAds] Batched writes failed for ${customerId}, falling back to sequential single-doc writes:`,
+        writeErr
       );
+      await commitCampaignsOneByOne(prepared);
     }
     if (prepared.length > 0) {
       totalImported = prepared.length;

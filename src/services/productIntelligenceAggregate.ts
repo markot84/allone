@@ -9,7 +9,8 @@ export type ProductIntelligenceAggregate = {
   brandId: string;
   status: ProductIntelligenceStatus;
   sourceLabel: string;
-  sourceKind: 'erp' | 'connector_catalog';
+  sourceKind: 'erp' | 'connector_catalog' | 'procurement';
+  stockSource?: string;
   totalCount: number;
   syncVersion?: string;
   latestSyncAt?: string | null;
@@ -60,7 +61,7 @@ export type ProductIntelligenceQueryResult = {
   brandId: string;
   status: 'ready';
   sourceLabel: string;
-  sourceKind: 'erp' | 'connector_catalog';
+  sourceKind: 'erp' | 'connector_catalog' | 'procurement';
   totalCount: number;
   totalRows: number;
   page: number;
@@ -114,5 +115,22 @@ export async function queryProductIntelligencePage(
   const json = await res.json().catch(() => null) as { result?: ProductIntelligenceQueryResult; error?: string } | null;
   if (!res.ok) throw new Error(json?.error || `Product Intelligence query failed (${res.status})`);
   return json?.result ?? null;
+}
+
+export async function refreshProductIntelligenceOnServer(brandId: string): Promise<{ totalCount?: number }> {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error('Not authenticated');
+  const res = await fetch(`${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/refreshProductIntelligence`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(await getAppCheckHeader()),
+    },
+    body: JSON.stringify({ brandId }),
+  });
+  const json = await res.json().catch(() => null) as { result?: { totalCount?: number }; error?: string } | null;
+  if (!res.ok) throw new Error(json?.error || `Product Intelligence refresh failed (${res.status})`);
+  return json?.result ?? {};
 }
 

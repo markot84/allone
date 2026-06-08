@@ -37,6 +37,10 @@ export interface MagentoConnectorConfig {
   mediaBaseUrl: string;
   storeUrl: string;
   connected: boolean;
+  productCatalogAccess?: boolean;
+  lastSyncProducts?: number;
+  lastSyncError?: string;
+  lastSyncStatus?: string;
 }
 
 interface RawMagentoProductDoc {
@@ -61,11 +65,12 @@ interface RawMagentoProductDoc {
 const CATALOG_PRODUCT_PATH = 'catalog/product';
 
 function buildImageLink(mediaBaseUrl: string, imageRelative: string): string {
-  if (!imageRelative) return '';
-  if (/^https?:\/\//i.test(imageRelative)) return imageRelative;
+  const cleanedImage = imageRelative.trim();
+  if (!cleanedImage || cleanedImage === 'no_selection') return '';
+  if (/^https?:\/\//i.test(cleanedImage)) return cleanedImage;
   if (!mediaBaseUrl) return '';
   const cleanedBase = mediaBaseUrl.replace(/\/+$/, '');
-  const cleanedRel = imageRelative.replace(/^\/+/, '');
+  const cleanedRel = cleanedImage.replace(/^\/+/, '');
   // Magento media gallery file paths are relative to /pub/media/catalog/product
   return `${cleanedBase}/${CATALOG_PRODUCT_PATH}/${cleanedRel}`.replace(/([^:]\/)\/+/g, '$1');
 }
@@ -76,6 +81,12 @@ function buildProductLink(storeWebUrl: string, urlKey: string, sku: string): str
   if (urlKey) return `${base}/${urlKey.replace(/^\/+/, '')}.html`;
   if (sku) return `${base}/catalog/product/view/sku/${encodeURIComponent(sku)}`;
   return base;
+}
+
+function inferMagentoMediaBaseUrl(configuredMediaBaseUrl: string, storeUrl: string): string {
+  if (configuredMediaBaseUrl) return configuredMediaBaseUrl;
+  if (!storeUrl) return '';
+  return `${storeUrl.replace(/\/+$/, '')}/media`;
 }
 
 export function useMagentoProductEnrichment() {
@@ -90,11 +101,17 @@ export function useMagentoProductEnrichment() {
       const data = snap.data() || {};
       const m = (data as Record<string, unknown>).magento as Record<string, unknown> | undefined;
       if (!m) return { storeWebUrl: '', mediaBaseUrl: '', storeUrl: '', connected: false };
+      const storeWebUrl = String(m.storeWebUrl || m.storeUrl || '');
+      const storeUrl = String(m.storeUrl || '');
       return {
-        storeWebUrl: String(m.storeWebUrl || m.storeUrl || ''),
-        mediaBaseUrl: String(m.mediaBaseUrl || ''),
-        storeUrl: String(m.storeUrl || ''),
+        storeWebUrl,
+        mediaBaseUrl: inferMagentoMediaBaseUrl(String(m.mediaBaseUrl || ''), storeWebUrl || storeUrl),
+        storeUrl,
         connected: Boolean(m.connected),
+        productCatalogAccess: typeof m.productCatalogAccess === 'boolean' ? m.productCatalogAccess : undefined,
+        lastSyncProducts: Number(m.lastSyncProducts ?? 0) || 0,
+        lastSyncError: String(m.lastSyncError || ''),
+        lastSyncStatus: String(m.lastSyncStatus || ''),
       };
     },
     enabled: !!brandId,
@@ -108,7 +125,7 @@ export function useMagentoProductEnrichment() {
       if (!brandId) return [];
       return FirestoreService.getDocuments<RawMagentoProductDoc>('magento_products', [], brandId);
     },
-    enabled: !!brandId && (connectorQuery.data?.connected ?? false),
+    enabled: !!brandId && (connectorQuery.data?.connected ?? false) && connectorQuery.data?.productCatalogAccess !== false,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
@@ -118,6 +135,8 @@ export function useMagentoProductEnrichment() {
 
   const bySku = new Map<string, MagentoProductEnrichment>();
   const bySkuLower = new Map<string, MagentoProductEnrichment>();
+  const byItemGroupId = new Map<string, MagentoProductEnrichment>();
+  const byItemGroupIdLower = new Map<string, MagentoProductEnrichment>();
 
   for (const p of rawProducts) {
     const sku = String(p.sku || '').trim();
@@ -141,14 +160,25 @@ export function useMagentoProductEnrichment() {
     };
     bySku.set(sku, enrichment);
     bySkuLower.set(sku.toLowerCase(), enrichment);
+    if (enrichment.itemGroupId && enrichment.imageLink) {
+      if (!byItemGroupId.has(enrichment.itemGroupId)) byItemGroupId.set(enrichment.itemGroupId, enrichment);
+      const lower = enrichment.itemGroupId.toLowerCase();
+      if (!byItemGroupIdLower.has(lower)) byItemGroupIdLower.set(lower, enrichment);
+    }
   }
 
   return {
     config,
     bySku,
     bySkuLower,
+    byItemGroupId,
+    byItemGroupIdLower,
     isLoading: connectorQuery.isPending || productsQuery.isPending,
     isConnected: config.connected,
+    productCatalogAccess: config.productCatalogAccess,
+    lastSyncProducts: config.lastSyncProducts ?? 0,
+    lastSyncError: config.lastSyncError ?? '',
+    lastSyncStatus: config.lastSyncStatus ?? '',
     count: bySku.size,
   };
 }
@@ -157,4 +187,5 @@ export function useMagentoProductEnrichment() {
 export const __test = {
   buildImageLink,
   buildProductLink,
+  inferMagentoMediaBaseUrl,
 };

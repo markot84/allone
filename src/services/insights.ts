@@ -1,5 +1,6 @@
 import type { Product, RFMSegment, AIInsight } from '../types';
 import { classifyStockHealth, getProductTod } from '../utils/productUtils';
+import { groupProductsForDecisionExport, isActionableStockProduct } from '../utils/actionableProducts';
 
 /** Generate dynamic AI insights from real products and segments data */
 export function generateInsightsFromData(
@@ -14,7 +15,15 @@ export function generateInsightsFromData(
     orderCount: number;
     aov: number;
     platformBreakdown: { platform: string; revenue: number; orders: number }[];
-  }
+  },
+  /**
+   * Αν υπάρχει ενεργή στρατηγική με AI-επιλεγμένα segments, τα περνάμε εδώ
+   * ώστε τα segment insights να ευθυγραμμιστούν με τη στρατηγική.
+   */
+  activeStrategy?: {
+    name?: string;
+    targetSegmentNames?: string[]; // π.χ. ['Potential Loyalists', 'At Risk', 'Promising']
+  } | null
 ): AIInsight[] {
   const insights: AIInsight[] = [];
 
@@ -31,24 +40,30 @@ export function generateInsightsFromData(
     });
   }
 
-  const classify = (p: Product) => classifyStockHealth(p, getProductTod(p, supplierTodMap));
-  const deadStock = products.filter((p) => classify(p) === 'dead');
-  const lowStock = products.filter((p) => classify(p) === 'low');
-  const excessStock = products.filter((p) => classify(p) === 'excess');
-  const highMarginProducts = products.filter(
+  const actionableProducts = products.filter(isActionableStockProduct);
+  const classify = (p: Product) => {
+    const tag = String(p.priority_tag || '').toLowerCase();
+    if (tag === 'dead' || tag === 'low' || tag === 'healthy' || tag === 'excess') return tag;
+    return classifyStockHealth(p, getProductTod(p, supplierTodMap));
+  };
+  const deadStock = actionableProducts.filter((p) => classify(p) === 'dead');
+  const deadStockModels = groupProductsForDecisionExport(deadStock);
+  const lowStock = actionableProducts.filter((p) => classify(p) === 'low');
+  const excessStock = actionableProducts.filter((p) => classify(p) === 'excess');
+  const highMarginProducts = actionableProducts.filter(
     (p) => p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25
   );
   const highMarginLowStock = highMarginProducts.filter(
     (p) => classify(p) === 'low'
   );
 
-  if (deadStock.length > 0) {
+  if (deadStockModels.length > 0) {
     insights.push({
       insightKey: 'dead_stock',
       type: 'warning',
       icon: '',
       title: 'Dead stock — χωρίς πωλήσεις',
-      insight: `${deadStock.length} κωδικοί δεν εμφάνισαν πωλήσεις στην τελευταία περίοδο. Απαιτείται σχέδιο εκκαθάρισης ή επανατοποθέτησης.`,
+      insight: `${deadStockModels.length} ενεργά προϊόντα/model groups με απόθεμα δεν εμφάνισαν πωλήσεις στην τελευταία περίοδο. Απαιτείται σχέδιο εκκαθάρισης ή επανατοποθέτησης.`,
       action: 'Δημιουργία Campaign',
       impact: 'high',
     });
@@ -78,58 +93,79 @@ export function generateInsightsFromData(
     });
   }
 
-  if (lowStock.length > 5 && products.length > 0) {
+  if (lowStock.length > 5 && actionableProducts.length > 0) {
     insights.push({
       insightKey: 'low_stock',
       type: 'recommendation',
       icon: '',
       title: 'Χαμηλά αποθέματα',
-      insight: `${lowStock.length} προϊόντα (${Math.round((lowStock.length / products.length) * 100)}%) κινούνται προς εξάντληση εντός περίπου ${Math.round(60 / 2)} ημερών.`,
+      insight: `${lowStock.length} ενεργά προϊόντα (${Math.round((lowStock.length / actionableProducts.length) * 100)}%) κινούνται προς εξάντληση εντός περίπου ${Math.round(60 / 2)} ημερών.`,
       action: 'Ελέγξτε Inventory',
       impact: 'medium',
     });
   }
 
   // Segments-based insights
-  const atRisk = segments.find((s) => s.id === 'at_risk' || s.name?.toLowerCase().includes('at risk'));
-  const champions = segments.find((s) => s.id === 'champions' || s.name?.toLowerCase().includes('champion'));
   const totalCustomers = segments.reduce((sum, s) => sum + (s.count ?? 0), 0);
+  const strategySegments = activeStrategy?.targetSegmentNames ?? [];
+  const hasActiveStrategy = strategySegments.length > 0;
 
-  if (atRisk && (atRisk.percentage ?? 0) > 15) {
+  if (hasActiveStrategy) {
+    // Ενεργή στρατηγική: ένα ενοποιημένο insight που ευθυγραμμίζεται με το Channel Activation.
+    // Αντικαθιστά τα ανεξάρτητα champions/at_risk/top_segment insights ώστε ο χρήστης
+    // να βλέπει παντού τα ίδια segments με προτεραιότητα.
+    const segmentList = strategySegments.join(', ');
+    const strategyName = activeStrategy?.name ? `«${activeStrategy.name}»` : 'την ενεργή στρατηγική';
     insights.push({
-      insightKey: 'at_risk_segment',
-      type: 'warning',
-      icon: '',
-      title: 'At Risk segment σε αύξηση',
-      insight: `Το segment "${atRisk.name}" αντιστοιχεί στο ${atRisk.percentage}% της πελατειακής βάσης. Απαιτείται στοχευμένη ενέργεια επανενεργοποίησης.`,
-      action: 'Launch Win-back',
-      impact: 'high',
-    });
-  }
-
-  if (champions && (champions.revenue_share ?? 0) > 30) {
-    insights.push({
-      insightKey: 'champions_segment',
-      type: 'opportunity',
-      icon: '',
-      title: 'Champions segment opportunity',
-      insight: `Τα Champions συνεισφέρουν ${champions.revenue_share}% των εσόδων. Αξίζει ελεγχόμενη αξιοποίηση για διατήρηση και επιλεκτικό upsell.`,
-      action: 'Δημιουργία Campaign',
-      impact: 'high',
-    });
-  }
-
-  if (segments.length > 0 && totalCustomers > 0) {
-    const topSegment = segments.reduce((a, b) => ((a.revenue_share ?? 0) > (b.revenue_share ?? 0) ? a : b));
-    insights.push({
-      insightKey: 'top_segment',
+      insightKey: 'strategy_segments',
       type: 'recommendation',
       icon: '',
-      title: 'Κορυφαίο segment',
-      insight: `Το "${topSegment.name}" εμφανίζει τη μεγαλύτερη συμμετοχή στα έσοδα (${topSegment.revenue_share}%). Αποτελεί βασική προτεραιότητα στόχευσης.`,
-      action: 'Στόχευση Campaign',
-      impact: 'medium',
+      title: `AI Στόχευση — ${strategyName}`,
+      insight: `Το AI επέλεξε ${strategySegments.length} segments για ${strategyName}: ${segmentList}. Αυτά αποτελούν την κύρια προτεραιότητα ενεργοποίησης.`,
+      action: 'Channel Activation',
+      impact: 'high',
     });
+  } else {
+    // Χωρίς ενεργή στρατηγική: data-driven segment insights
+    const atRisk = segments.find((s) => s.id === 'at_risk' || s.name?.toLowerCase().includes('at risk'));
+    const champions = segments.find((s) => s.id === 'champions' || s.name?.toLowerCase().includes('champion'));
+
+    if (atRisk && (atRisk.percentage ?? 0) > 15) {
+      insights.push({
+        insightKey: 'at_risk_segment',
+        type: 'warning',
+        icon: '',
+        title: 'At Risk segment σε αύξηση',
+        insight: `Το segment "${atRisk.name}" αντιστοιχεί στο ${atRisk.percentage}% της πελατειακής βάσης. Απαιτείται στοχευμένη ενέργεια επανενεργοποίησης.`,
+        action: 'Launch Win-back',
+        impact: 'high',
+      });
+    }
+
+    if (champions && (champions.revenue_share ?? 0) > 30) {
+      insights.push({
+        insightKey: 'champions_segment',
+        type: 'opportunity',
+        icon: '',
+        title: 'Champions segment opportunity',
+        insight: `Τα Champions συνεισφέρουν ${champions.revenue_share}% των εσόδων. Αξίζει ελεγχόμενη αξιοποίηση για διατήρηση και επιλεκτικό upsell.`,
+        action: 'Δημιουργία Campaign',
+        impact: 'high',
+      });
+    }
+
+    if (segments.length > 0 && totalCustomers > 0) {
+      const topSegment = segments.reduce((a, b) => ((a.revenue_share ?? 0) > (b.revenue_share ?? 0) ? a : b));
+      insights.push({
+        insightKey: 'top_segment',
+        type: 'recommendation',
+        icon: '',
+        title: 'Κορυφαίο segment',
+        insight: `Το "${topSegment.name}" εμφανίζει τη μεγαλύτερη συμμετοχή στα έσοδα (${topSegment.revenue_share}%). Αποτελεί βασική προτεραιότητα στόχευσης.`,
+        action: 'Στόχευση Campaign',
+        impact: 'medium',
+      });
+    }
   }
 
   // Cross-sell when we have both

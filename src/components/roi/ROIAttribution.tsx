@@ -413,13 +413,13 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     return {
       campaignEfficiency: {
         icon: <TrendingUp size={22} strokeWidth={2} />,
-        label: 'Campaign ROI',
+        label: 'Campaign ROI incl. costs',
         value: formatMultiplierValue(performanceSummary.campaignEfficiency),
-        subtitle: 'Έσοδα καμπανιών / συνολικό κόστος marketing',
+        subtitle: 'Έσοδα καμπανιών / ad spend + λοιπά marketing costs',
         color: getEfficiencyColor(performanceSummary.campaignEfficiency),
         iconWrapClass: 'bg-emerald-50 text-emerald-600',
         tooltip:
-          'Revenue-based efficiency metric: attributed campaign revenue προς συνολικό marketing cost. Περιλαμβάνει ad spend και extra marketing expenses.',
+          'Revenue-based efficiency metric: attributed campaign revenue προς συνολικό marketing cost. Διαφέρει από Platform ROAS γιατί περιλαμβάνει ad spend και extra marketing expenses.',
       },
       storeEfficiency: {
         icon: <ShoppingBag size={22} strokeWidth={2} />,
@@ -754,10 +754,10 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           {(() => {
             const ownerRows: RoasAnalysisMetricRow[] = [
               {
-                k: 'Campaign ROI',
+                k: 'Campaign ROI incl. costs',
                 v: formatMultiplierValue(performanceSummary.campaignEfficiency),
                 note:
-                  'Attributed έσοδα καμπανιών ÷ συνολικό κόστος marketing. Είναι το βασικό KPI για το paid κομμάτι, γιατί περιλαμβάνει και media spend και λοιπά έξοδα marketing.',
+                  'Attributed έσοδα καμπανιών ÷ συνολικό κόστος marketing. Περιλαμβάνει media spend και λοιπά έξοδα marketing, γι’ αυτό διαφέρει από το Platform ROAS.',
               },
               {
                 k: 'e-shop ROI',
