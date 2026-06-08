@@ -20,7 +20,11 @@ const TIKTOK_REPORT_URL = `${TIKTOK_API_BASE}/open_api/${TIKTOK_API_VERSION}/rep
 const TIKTOK_HISTORY_YEARS = 3;
 
 const BASE_REPORT_METRICS = ['spend', 'impressions', 'clicks', 'ctr', 'conversion'];
-const VALUE_REPORT_METRICS = ['conversion_value', 'total_purchase_value', 'purchase_value'];
+// TikTok's BASIC report rejects `conversion_value`/`purchase_value` as invalid metric names
+// (verified via API error); `total_purchase_value` is the accepted revenue field and is what
+// the row parser reads first. Unverified end-to-end until a real account with purchase data
+// syncs — but it's the name TikTok's own validation accepted.
+const VALUE_REPORT_METRICS = ['total_purchase_value'];
 
 type TikTokApiEnvelope<T> = {
   code?: number;
@@ -237,16 +241,45 @@ export async function handleTikTokCallback(
     return { success: false, error: tokenResult.error || 'TikTok token exchange failed' };
   }
 
+  // The granted advertisers come back in the token-exchange response as `advertiser_ids`;
+  // oauth2/advertiser/get only enriches those IDs with display names. Read them here so we
+  // can both diagnose and fall back to them if the enrichment call returns nothing.
+  const rawAdvertiserIds = (tokenResult.data as Record<string, unknown>).advertiser_ids;
+  const grantedAdvertiserIds = Array.isArray(rawAdvertiserIds)
+    ? rawAdvertiserIds.map((x) => String(x).trim()).filter(Boolean)
+    : [];
+
+  // Safe diagnostic: log the SHAPE of TikTok's token response (keys + presence/counts only,
+  // never token material) so the Marketing API flow's real fields are verifiable in logs.
+  logger.info(
+    `[TikTok] token response keys=${JSON.stringify(Object.keys(tokenResult.data))} ` +
+      `hasAccess=${Boolean(tokenResult.data.access_token)} hasRefresh=${Boolean(tokenResult.data.refresh_token)} ` +
+      `advertiserIds=${grantedAdvertiserIds.length}`
+  );
+
   const accessToken = String(tokenResult.data.access_token || '').trim();
   const refreshToken = String(tokenResult.data.refresh_token || '').trim();
   const expiresIn = parseInteger(tokenResult.data.expires_in) || 86400;
   const refreshExpiresIn = parseInteger(tokenResult.data.refresh_token_expires_in) || 31536000;
 
-  if (!accessToken || !refreshToken) {
-    return { success: false, error: 'TikTok returned incomplete OAuth tokens' };
+  // TikTok's Marketing API advertiser-auth flow returns a long-lived access_token and,
+  // unlike Google, NO refresh_token — the same model Meta uses in this codebase. Require
+  // only the access token; keep the refresh_token (when present) as an optional renewal path.
+  if (!accessToken) {
+    return { success: false, error: 'TikTok returned no access token' };
   }
 
-  const availableAccounts = await listAdvertisers(accessToken);
+  // Prefer named advertisers from advertiser/get; fall back to the IDs the token response
+  // already granted if that enrichment call yields nothing (permission/shape differences on
+  // that endpoint shouldn't block a connection we were genuinely authorized for).
+  let availableAccounts = await listAdvertisers(accessToken);
+  if (availableAccounts.length === 0 && grantedAdvertiserIds.length > 0) {
+    logger.warn(
+      `[TikTok] advertiser/get returned no rows; falling back to ${grantedAdvertiserIds.length} advertiser_ids from token response`
+    );
+    availableAccounts = grantedAdvertiserIds.map((id) => ({ id, name: id }));
+  }
+
   if (availableAccounts.length === 0) {
     return {
       success: false,
@@ -328,12 +361,17 @@ async function fetchReportPage(
   metrics: string[],
   page: number
 ): Promise<{ ok: boolean; rows: Array<Record<string, unknown>>; totalPages: number; error?: string }> {
+  // TikTok's integrated report treats campaign_name as a metric/attribute, NOT a dimension —
+  // requesting it as a dimension errors with "campaign_name is not supported". Dimensions group
+  // the rows (campaign_id × day); the name rides along in the metrics payload.
+  const metricsWithName = metrics.includes('campaign_name') ? metrics : ['campaign_name', ...metrics];
+
   const params = new URLSearchParams({
     advertiser_id: advertiserId,
     report_type: 'BASIC',
     data_level: 'AUCTION_CAMPAIGN',
-    dimensions: JSON.stringify(['campaign_id', 'campaign_name', 'stat_time_day']),
-    metrics: JSON.stringify(metrics),
+    dimensions: JSON.stringify(['campaign_id', 'stat_time_day']),
+    metrics: JSON.stringify(metricsWithName),
     start_date: since,
     end_date: until,
     page: String(page),
@@ -342,7 +380,8 @@ async function fetchReportPage(
 
   const res = await fetch(`${TIKTOK_REPORT_URL}?${params.toString()}`, {
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      // TikTok Marketing API authenticates via the `Access-Token` header, not OAuth Bearer.
+      'Access-Token': accessToken,
     },
   });
 
@@ -433,7 +472,7 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
   const connectorDoc = await getDb().doc(`connectors/${brandId}`).get();
   const connector = connectorDoc.data()?.tiktok;
 
-  if (!connector?.connected || !connector?.refreshToken) {
+  if (!connector?.connected) {
     return { success: false, imported: 0, error: 'TikTok not connected' };
   }
 
@@ -442,13 +481,24 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'No TikTok advertiser selected' };
   }
 
-  const refreshTokenPlain = decryptToken(String(connector.refreshToken));
-  if (!refreshTokenPlain) {
-    return { success: false, imported: 0, error: 'TikTok token unavailable — reconnect required' };
+  // TikTok Marketing API tokens are long-lived and the auth flow returns no refresh_token
+  // (same as Meta). Use the stored access token directly; only fall back to a refresh when
+  // a refresh token exists AND the access token is missing or past its expiry.
+  let accessToken = decryptToken(String(connector.accessToken || ''));
+  const refreshTokenPlain = decryptToken(String(connector.refreshToken || ''));
+  const accessExpired =
+    typeof connector.expiresAt === 'number' && connector.expiresAt <= Date.now() + 60_000;
+
+  let refreshed:
+    | { accessToken: string; refreshToken: string; expiresIn: number; refreshExpiresIn: number }
+    | null = null;
+  if (refreshTokenPlain && (!accessToken || accessExpired)) {
+    refreshed = await refreshTikTokAccessToken(refreshTokenPlain);
+    if (refreshed) accessToken = refreshed.accessToken;
   }
-  const refreshed = await refreshTikTokAccessToken(refreshTokenPlain);
-  if (!refreshed) {
-    return { success: false, imported: 0, error: 'Failed to refresh TikTok access token' };
+
+  if (!accessToken) {
+    return { success: false, imported: 0, error: 'TikTok token unavailable — reconnect required' };
   }
 
   const now = new Date();
@@ -464,6 +514,9 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
 
   let totalImported = 0;
   let usingValueMetrics = true;
+  // Distinguishes a genuine fetch failure from a legitimately empty result (no spend / no
+  // campaigns in the window) so the latter isn't surfaced to the UI as a red error.
+  let anyReportError = false;
 
   for (const advertiserId of adAccountIds) {
     try {
@@ -476,18 +529,19 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
 
         do {
           const metrics = usingValueMetrics ? [...BASE_REPORT_METRICS, ...VALUE_REPORT_METRICS] : BASE_REPORT_METRICS;
-          let pageResult = await fetchReportPage(advertiserId, refreshed.accessToken, mr.since, mr.until, metrics, page);
+          let pageResult = await fetchReportPage(advertiserId, accessToken, mr.since, mr.until, metrics, page);
 
           if (!pageResult.ok && usingValueMetrics) {
             logger.warn(
               `[TikTok] Report metrics fallback for advertiser ${advertiserId} (${mr.since}): ${pageResult.error}`
             );
             usingValueMetrics = false;
-            pageResult = await fetchReportPage(advertiserId, refreshed.accessToken, mr.since, mr.until, BASE_REPORT_METRICS, page);
+            pageResult = await fetchReportPage(advertiserId, accessToken, mr.since, mr.until, BASE_REPORT_METRICS, page);
           }
 
           if (!pageResult.ok) {
             logger.warn(`[TikTok] Report fetch failed for advertiser ${advertiserId} (${mr.since}): ${pageResult.error}`);
+            anyReportError = true;
             break;
           }
 
@@ -497,7 +551,9 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
             const mets = (row.metrics || row.metric || row) as Record<string, unknown>;
 
             const campaignId = String(dims.campaign_id ?? row.campaign_id ?? '').trim();
-            const campaignName = String(dims.campaign_name ?? row.campaign_name ?? `Campaign ${campaignId}`).trim();
+            const campaignName = String(
+              mets.campaign_name ?? dims.campaign_name ?? row.campaign_name ?? `Campaign ${campaignId}`
+            ).trim();
             const statDay = String(dims.stat_time_day ?? row.stat_time_day ?? '').trim();
             if (!campaignId || !statDay) continue;
 
@@ -598,51 +654,62 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
       totalImported += campaigns.length;
       logger.info(`[TikTok] Imported ${campaigns.length} campaigns for advertiser ${advertiserId}`);
     } catch (err) {
+      anyReportError = true;
       logger.error(`[TikTok] Error for advertiser ${advertiserId}:`, err);
     }
   }
 
-  const importStatus = totalImported > 0 ? 'completed' : 'failed';
+  // A sync that fetched cleanly but found nothing (empty account / no spend in the window) is
+  // NOT a failure — only a genuine report-fetch error with zero imports counts as one.
+  const syncFailed = totalImported === 0 && anyReportError;
   await getDb().collection('import_jobs').add({
     brandId,
     type: 'campaigns',
     source: 'tiktok_api',
-    status: importStatus,
+    status: syncFailed ? 'failed' : 'completed',
     imported: totalImported,
-    failed: totalImported > 0 ? 0 : 1,
-    errors: totalImported > 0 ? [] : ['TikTok sync produced no campaign writes (check logs / permissions / advertiser access)'],
+    failed: syncFailed ? 1 : 0,
+    errors: syncFailed
+      ? ['TikTok sync failed to fetch report data (check logs / permissions / advertiser access)']
+      : [],
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  if (totalImported > 0) {
-    await getDb().doc(`connectors/${brandId}`).set(
-      {
-        tiktok: {
-          accessToken: encryptToken(refreshed.accessToken),
-          refreshToken: encryptToken(refreshed.refreshToken),
-          expiresAt: Date.now() + refreshed.expiresIn * 1000,
-          refreshExpiresAt: Date.now() + refreshed.refreshExpiresIn * 1000,
-          lastDataSyncAt: Date.now(),
-          historyLoadedUntilYear: historyLoaded
-            ? Number(connector.historyLoadedUntilYear) || historyStartYear
-            : historyStartYear,
-          lastImportError: FieldValue.delete(),
-          lastImportErrorAt: FieldValue.delete(),
-        },
-      },
-      { merge: true }
-    );
+  if (!syncFailed) {
+    const tiktokPatch: Record<string, unknown> = {
+      lastDataSyncAt: Date.now(),
+      lastImportError: FieldValue.delete(),
+      lastImportErrorAt: FieldValue.delete(),
+    };
+    // Advance the history watermark only when data actually landed.
+    if (totalImported > 0) {
+      tiktokPatch.historyLoadedUntilYear = historyLoaded
+        ? Number(connector.historyLoadedUntilYear) || historyStartYear
+        : historyStartYear;
+    }
+    // Persist rotated tokens only when a refresh actually happened (long-lived tokens won't refresh).
+    if (refreshed) {
+      tiktokPatch.accessToken = encryptToken(refreshed.accessToken);
+      tiktokPatch.refreshToken = encryptToken(refreshed.refreshToken);
+      tiktokPatch.expiresAt = Date.now() + refreshed.expiresIn * 1000;
+      tiktokPatch.refreshExpiresAt = Date.now() + refreshed.refreshExpiresIn * 1000;
+    }
+    await getDb().doc(`connectors/${brandId}`).set({ tiktok: tiktokPatch }, { merge: true });
     return { success: true, imported: totalImported };
   }
 
   await getDb().doc(`connectors/${brandId}`).set(
     {
       tiktok: {
-        lastImportError: 'TikTok: 0 campaigns written — see import_jobs and Cloud Logs',
+        lastImportError: 'TikTok: αποτυχία λήψης δεδομένων από το report API — δες τα Cloud Logs',
         lastImportErrorAt: Date.now(),
       },
     },
     { merge: true }
   );
-  return { success: false, imported: 0, error: 'TikTok sync completed with 0 campaigns imported' };
+  return {
+    success: false,
+    imported: 0,
+    error: 'TikTok: αποτυχία λήψης δεδομένων από το report API — δες τα logs.',
+  };
 }
