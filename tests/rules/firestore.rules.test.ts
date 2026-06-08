@@ -49,6 +49,18 @@ const MEMBER_B = 'memberB'; // plain member of BRAND_B
 const OUTSIDER = 'outsider'; // belongs to no brand
 const SUPER_ADMIN = 'superUid'; // listed in appConfig/superAdmins.uids
 
+// PP-NEW-1: field-keyed (brandId in body) collections added with the merge that
+// originally shipped a collapsed `allow update, delete` WITHOUT brandIdUnchanged()
+// — i.e. cross-tenant re-homing (PP-04 class). [coll, seededDocId].
+const PP_NEW1_COLLECTIONS: ReadonlyArray<readonly [string, string]> = [
+  ['offers', 'offerA'],
+  ['commercial_actions', 'caA'],
+  ['commercial_decision_events', 'cdeA'],
+  ['marketing_plans', 'mpA'],
+  ['commercial_info', 'ciA'],
+  ['commercial_scenario_cache', 'cscA'],
+];
+
 // ---- Fixture seeding (admin context, rules disabled) --------------------------------------
 
 /** Seed a brands/{brandId}/members/{uid} doc with the given role. */
@@ -87,6 +99,11 @@ async function seedBaseWorld(db: Firestore): Promise<void> {
   await setDoc(doc(db, 'segments/segA'), { brandId: BRAND_A, name: 'A segment' });
   await setDoc(doc(db, `connectors/${BRAND_A}`), { brandId: BRAND_A, shopify: { token: 'x' } });
   await setDoc(doc(db, `connectors/${BRAND_B}`), { brandId: BRAND_B, shopify: { token: 'y' } });
+
+  // PP-NEW-1 collections (field-keyed by brandId) — one existing doc each in BRAND_A.
+  for (const [coll, id] of PP_NEW1_COLLECTIONS) {
+    await setDoc(doc(db, `${coll}/${id}`), { brandId: BRAND_A, payload: 'A' });
+  }
 
   // Super-admin allowlist.
   await setDoc(doc(db, 'appConfig/superAdmins'), { uids: [SUPER_ADMIN] });
@@ -343,6 +360,29 @@ describe('G. PP-04 brandId immutability on update', () => {
       updateDoc(doc(db, 'products/prodA'), { brandId: BRAND_B }),
     );
   });
+});
+
+// ===========================================================================================
+// G2. PP-NEW-1 — brandId immutability on the merge-added commercial_*/offers/marketing_plans
+// collections (regression: they shipped a collapsed `update, delete` without brandIdUnchanged).
+// ===========================================================================================
+
+describe('G2. PP-NEW-1 brandId immutability on merge-added collections', () => {
+  for (const [coll, id] of PP_NEW1_COLLECTIONS) {
+    it(`${coll}: denies a member re-homing a doc to another brand`, async () => {
+      const db = authed(MEMBER_A);
+      await assertFails(
+        updateDoc(doc(db, `${coll}/${id}`), { brandId: BRAND_B }),
+      );
+    });
+
+    it(`${coll}: allows a member updating other fields while keeping brandId`, async () => {
+      const db = authed(MEMBER_A);
+      await assertSucceeds(
+        updateDoc(doc(db, `${coll}/${id}`), { payload: 'A-renamed', brandId: BRAND_A }),
+      );
+    });
+  }
 });
 
 // ===========================================================================================

@@ -373,11 +373,6 @@ service cloud.firestore {
         && brandIdUnchanged();
       allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
-    match /commercial_info/{infoId} {
-      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
-      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
-      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
-    }
     // Connectors: keyed by brandId directly
     match /connectors/{brandId} {
       allow read: if isBrandMember(brandId);
@@ -705,7 +700,9 @@ service cloud.firestore {
     match /offers/{offerId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
-      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
 
     // Territory reps — brand-scoped subcollection
@@ -725,19 +722,25 @@ service cloud.firestore {
     match /commercial_actions/{actionId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
-      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
 
     match /commercial_decision_events/{eventId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
-      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
 
     match /marketing_plans/{planId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
-      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
 
     // «Εμπορικές Πληροφορίες» — γνώση/ένστικτο επιχειρηματία (brand-scoped, client-written).
@@ -745,7 +748,9 @@ service cloud.firestore {
     match /commercial_info/{infoId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
-      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
 
     // Policy Impact precomputed result cache (client-written, brand-scoped). Μικρό doc με τα ήδη
@@ -753,7 +758,9 @@ service cloud.firestore {
     match /commercial_scenario_cache/{docId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
-      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
 
     // Marketing interest leads — εγγραφή μόνο μέσω Cloud Functions · ανάγνωση super admin
