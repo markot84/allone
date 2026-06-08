@@ -105,6 +105,11 @@ async function seedBaseWorld(db: Firestore): Promise<void> {
     await setDoc(doc(db, `${coll}/${id}`), { brandId: BRAND_A, payload: 'A' });
   }
 
+  // User profile docs (for the users read / enumeration tests).
+  await setDoc(doc(db, 'users', OWNER_A), { email: 'owner@a.test', brandIds: [BRAND_A] });
+  await setDoc(doc(db, 'users', MEMBER_A), { email: 'member@a.test', brandIds: [BRAND_A] });
+  await setDoc(doc(db, 'users', MEMBER_B), { email: 'member@b.test', brandIds: [BRAND_B] });
+
   // Super-admin allowlist.
   await setDoc(doc(db, 'appConfig/superAdmins'), { uids: [SUPER_ADMIN] });
 }
@@ -277,6 +282,66 @@ describe('E. PP-09 appConfig/superAdmins read lock', () => {
   it('allows a super-admin to read appConfig/superAdmins', async () => {
     const db = authed(SUPER_ADMIN);
     await assertSucceeds(getDoc(doc(db, 'appConfig/superAdmins')));
+  });
+});
+
+// ===========================================================================================
+// E2. appConfig/superAdmins WRITE lock — only a super-admin may grant/revoke super-admin.
+// Locks the privilege-escalation gate behind the "make a user superadmin in UI" feature
+// (e0755a9): the UI writes this doc directly, so the rule is the only thing stopping a
+// normal user from self-granting. Verified live (non-super write -> 403); pinned here.
+// ===========================================================================================
+
+describe('E2. appConfig/superAdmins write lock (privilege-escalation gate)', () => {
+  it('denies a non-super-admin writing appConfig/superAdmins (self-grant blocked)', async () => {
+    const db = authed(OWNER_A); // a brand owner is still a normal user at the platform level
+    await assertFails(
+      updateDoc(doc(db, 'appConfig/superAdmins'), { uids: [SUPER_ADMIN, OWNER_A] }),
+    );
+  });
+
+  it('denies an unauthenticated write to appConfig/superAdmins', async () => {
+    const db = unauth();
+    await assertFails(
+      setDoc(doc(db, 'appConfig/superAdmins'), { uids: [OUTSIDER] }),
+    );
+  });
+
+  it('allows a super-admin to grant a new super-admin', async () => {
+    const db = authed(SUPER_ADMIN);
+    await assertSucceeds(
+      updateDoc(doc(db, 'appConfig/superAdmins'), { uids: [SUPER_ADMIN, MEMBER_A] }),
+    );
+  });
+});
+
+// ===========================================================================================
+// E3. users read + enumeration lock — own profile only; cross-user read and full-collection
+// enumeration are super-admin-only. Locks the user-listing gate behind the new admin panel
+// (e0755a9): a normal user must not be able to harvest the user directory. Verified live
+// (non-super list -> 403); pinned here.
+// ===========================================================================================
+
+describe('E3. users read + enumeration lock', () => {
+  it('allows a user to read their OWN users/{uid} doc', async () => {
+    const db = authed(MEMBER_A);
+    await assertSucceeds(getDoc(doc(db, 'users', MEMBER_A)));
+  });
+
+  it('denies a user reading ANOTHER user doc', async () => {
+    const db = authed(MEMBER_A);
+    await assertFails(getDoc(doc(db, 'users', MEMBER_B)));
+  });
+
+  it('denies a non-super-admin enumerating the whole users collection', async () => {
+    const db = authed(OWNER_A);
+    await assertFails(getDocs(collection(db, 'users')));
+  });
+
+  it('allows a super-admin to read another user doc and enumerate users', async () => {
+    const db = authed(SUPER_ADMIN);
+    await assertSucceeds(getDoc(doc(db, 'users', MEMBER_B)));
+    await assertSucceeds(getDocs(collection(db, 'users')));
   });
 });
 
