@@ -13,20 +13,23 @@ import {
   CopyIcon,
   PlusIcon,
   TrashIcon,
-  PencilIcon
+  PencilIcon,
+  PeopleIcon
 } from '@primer/octicons-react';
 import { FirestoreService } from '../../services/firestore';
+import { MembersService } from '../../services/coordination';
 import { db, auth, storage, PROJECT_ID } from '../../config/firebase';
 import { collection, getDocs, doc, getDoc, limit, orderBy, query } from 'firebase/firestore';
 import { SUPPORT_EMAIL, APP_NAME } from '../../config/superAdmins';
-import { loadSuperAdmins } from '../../services/appConfig';
+import { loadSuperAdmins, type SuperAdminsConfig } from '../../services/appConfig';
 import { getDefaultModuleEnabled, getEditionStatus, getModuleLabel } from '../../config/modules';
-import type { Brand, ChangelogEntry, ModuleId } from '../../types';
+import type { Brand, ChangelogEntry, ModuleId, BrandMemberRole, BrandDepartment } from '../../types';
+import { ROLE_LABELS, DEPARTMENT_LABELS, normalizeBrandMemberRole } from '../../types';
 import { useAuth } from '../../hooks';
 import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import buildInfo from '../../generated/buildInfo.json';
 
-type AdminTab = 'brands' | 'leads' | 'api' | 'changelog' | 'system';
+type AdminTab = 'brands' | 'users' | 'leads' | 'api' | 'changelog' | 'system';
 
 interface ServiceStatus {
   name: string;
@@ -41,6 +44,7 @@ export function SuperAdminDashboard() {
 
   const tabs: { id: AdminTab; label: string; icon: typeof ShieldIcon }[] = [
     { id: 'brands', label: 'Brands', icon: OrganizationIcon },
+    { id: 'users', label: 'Χρήστες', icon: PeopleIcon },
     { id: 'leads', label: 'Leads', icon: InfoIcon },
     { id: 'api', label: 'API & Services', icon: PulseIcon },
     { id: 'changelog', label: 'Versions & Changelog', icon: TagIcon },
@@ -97,6 +101,7 @@ export function SuperAdminDashboard() {
 
       {/* Tab Content */}
       {activeTab === 'brands' && <BrandsTab />}
+      {activeTab === 'users' && <UsersTab />}
       {activeTab === 'leads' && <LeadsTab />}
       {activeTab === 'api' && <ApiStatusTab />}
       {activeTab === 'changelog' && <ChangelogTab userEmail={user?.email ?? ''} />}
@@ -448,6 +453,477 @@ function BrandsTab() {
           </Text>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ─── Users Tab ─── */
+
+interface AdminUserRow {
+  id: string;
+  email?: string;
+  displayName?: string | null;
+  createdAt?: unknown;
+}
+
+interface UserMembership {
+  brandId: string;
+  brandName: string;
+  role: BrandMemberRole;
+  department?: BrandDepartment;
+}
+
+function formatUserDate(value: unknown): string {
+  if (!value) return '—';
+  const maybeTimestamp = value as { toDate?: () => Date };
+  const date = typeof maybeTimestamp?.toDate === 'function'
+    ? maybeTimestamp.toDate()
+    : new Date(value as string);
+  if (!date || Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+const MEMBERSHIP_ROLES: BrandMemberRole[] = ['owner', 'admin', 'member'];
+
+function UsersTab() {
+  const { user: currentUser } = useAuth();
+  const [users, setUsers] = useState<AdminUserRow[]>([]);
+  const [memberships, setMemberships] = useState<Record<string, UserMembership[]>>({});
+  const [superAdmins, setSuperAdmins] = useState<SuperAdminsConfig>({ uids: [], emails: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 25;
+
+  const isSuperAdmin = useCallback(
+    (u: AdminUserRow) =>
+      superAdmins.uids.includes(u.id) ||
+      (!!u.email && superAdmins.emails.includes(u.email.toLowerCase())),
+    [superAdmins]
+  );
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [usersList, brandsList, sa] = await Promise.all([
+        FirestoreService.getDocuments<AdminUserRow>('users'),
+        FirestoreService.getDocuments<Brand>('brands'),
+        loadSuperAdmins(),
+      ]);
+      setSuperAdmins(sa);
+
+      // Map each user → the brands they belong to by reading every brand's
+      // `members` subcollection via direct path. The collection-group rule for
+      // `members` only authorizes a user's OWN memberships, but the nested
+      // brands/{id}/members rule grants super admins read on each doc — so we
+      // walk the brands (same batched pattern as BrandsTab) instead of one CG query.
+      const byUser: Record<string, UserMembership[]> = {};
+      const BATCH = 5;
+      for (let i = 0; i < brandsList.length; i += BATCH) {
+        const batch = brandsList.slice(i, i + BATCH);
+        await Promise.all(
+          batch.map(async (brand) => {
+            try {
+              const memSnap = await getDocs(collection(db, 'brands', brand.id, 'members'));
+              for (const d of memSnap.docs) {
+                const data = d.data() as { userId?: string; role?: unknown; department?: BrandDepartment };
+                const userId = data.userId || d.id;
+                if (!userId) continue;
+                (byUser[userId] ??= []).push({
+                  brandId: brand.id,
+                  brandName: brand.name || brand.id,
+                  role: normalizeBrandMemberRole(data.role),
+                  department: data.department,
+                });
+              }
+            } catch (memErr) {
+              console.error('Failed to load members for brand', brand.id, memErr);
+            }
+          })
+        );
+      }
+      for (const list of Object.values(byUser)) {
+        list.sort((a, b) => a.brandName.localeCompare(b.brandName));
+      }
+      setMemberships(byUser);
+
+      usersList.sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+      setUsers(usersList);
+    } catch (err) {
+      console.error('Failed to load users:', err);
+      setError(err instanceof Error ? err.message : 'Could not load users');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleToggleSuperAdmin = async (u: AdminUserRow) => {
+    if (u.id === currentUser?.uid) {
+      alert('Δεν μπορείς να αφαιρέσεις τα δικά σου δικαιώματα super admin.');
+      return;
+    }
+    const currentlySA = isSuperAdmin(u);
+    const verb = currentlySA ? 'αφαίρεση' : 'παραχώρηση';
+    if (!confirm(`Επιβεβαίωση ${verb} δικαιωμάτων super admin για ${u.email || u.id};`)) return;
+
+    const email = (u.email || '').toLowerCase();
+    const next: SuperAdminsConfig = currentlySA
+      ? {
+          uids: superAdmins.uids.filter((x) => x !== u.id),
+          emails: superAdmins.emails.filter((x) => x !== email),
+        }
+      : {
+          uids: [...new Set([...superAdmins.uids, u.id])],
+          emails: email ? [...new Set([...superAdmins.emails, email])] : superAdmins.emails,
+        };
+
+    setBusy(`sa:${u.id}`);
+    try {
+      await FirestoreService.updateDocument('appConfig', 'superAdmins', {
+        uids: next.uids,
+        emails: next.emails,
+      });
+      setSuperAdmins(next);
+    } catch (err) {
+      console.error('Failed to update super admins:', err);
+      alert('Η ενημέρωση των super admins απέτυχε.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleRoleChange = async (userId: string, m: UserMembership, role: BrandMemberRole) => {
+    if (m.role === role) return;
+    setBusy(`role:${userId}:${m.brandId}`);
+    try {
+      await MembersService.updateRole(m.brandId, userId, role);
+      setMemberships((prev) => ({
+        ...prev,
+        [userId]: (prev[userId] || []).map((item) =>
+          item.brandId === m.brandId ? { ...item, role } : item
+        ),
+      }));
+    } catch (err) {
+      console.error('Failed to update role:', err);
+      alert('Η αλλαγή ρόλου απέτυχε.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleRemoveFromBrand = async (userId: string, m: UserMembership) => {
+    if (!confirm(`Αφαίρεση του χρήστη από το brand "${m.brandName}";`)) return;
+    setBusy(`remove:${userId}:${m.brandId}`);
+    try {
+      await MembersService.remove(m.brandId, userId);
+      setMemberships((prev) => ({
+        ...prev,
+        [userId]: (prev[userId] || []).filter((item) => item.brandId !== m.brandId),
+      }));
+    } catch (err) {
+      console.error('Failed to remove member:', err);
+      alert('Η αφαίρεση από το brand απέτυχε.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const term = search.trim().toLowerCase();
+  const filtered = term
+    ? users.filter((u) =>
+        (u.email || '').toLowerCase().includes(term) ||
+        (u.displayName || '').toLowerCase().includes(term) ||
+        u.id.toLowerCase().includes(term)
+      )
+    : users;
+
+  // Client-side pagination: only PAGE_SIZE cards are mounted at once so the DOM
+  // stays light regardless of total user count.
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageStart = safePage * PAGE_SIZE;
+  const visible = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+
+  if (loading) {
+    return <div style={{ padding: 24, textAlign: 'center', color: 'var(--fgColor-muted)' }}>Φόρτωση χρηστών...</div>;
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <Text as="p" style={{ color: 'var(--fgColor-muted)', fontSize: 14, margin: 0 }}>
+          Συνολικά {users.length} χρήστ{users.length === 1 ? 'ης' : 'ες'} στο σύστημα
+          {term && ` · ${filtered.length} με αναζήτηση`}
+        </Text>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            placeholder="Αναζήτηση email / όνομα..."
+            style={{
+              padding: '6px 12px',
+              fontSize: 13,
+              borderRadius: 6,
+              border: '1px solid var(--borderColor-default, #d0d7de)',
+              background: 'var(--bgColor-default, #fff)',
+              color: 'var(--fgColor-default)',
+              minWidth: 220,
+            }}
+          />
+          <button
+            type="button"
+            onClick={load}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', borderRadius: 6,
+              border: '1px solid var(--borderColor-default)',
+              background: 'var(--bgColor-default)', cursor: 'pointer',
+              fontSize: 13, color: 'var(--fgColor-default)',
+            }}
+          >
+            <SyncIcon size={14} />
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div style={{
+          padding: 12, borderRadius: 8,
+          background: 'rgba(239,68,68,0.08)',
+          border: '1px solid rgba(239,68,68,0.2)',
+          color: '#b91c1c', marginBottom: 16, fontSize: 13,
+        }}>
+          Δεν ήταν δυνατή η φόρτωση των χρηστών: {error}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gap: 12 }}>
+        {visible.map((u) => {
+          const userBrands = memberships[u.id] || [];
+          const admin = isSuperAdmin(u);
+          const isOpen = expanded === u.id;
+          const name = u.displayName || (u.email ? u.email.split('@')[0] : 'Χωρίς όνομα');
+          const initial = (u.displayName || u.email || '?')[0]?.toUpperCase();
+          const isSelf = u.id === currentUser?.uid;
+          return (
+            <div
+              key={u.id}
+              style={{
+                padding: 16, borderRadius: 10,
+                border: `1px solid ${admin ? 'rgba(212,133,74,0.4)' : 'var(--borderColor-default, #d0d7de)'}`,
+                background: 'var(--bgColor-default, #fff)',
+                display: 'grid', gap: 12,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: '50%',
+                    background: admin ? 'rgba(212,133,74,0.15)' : 'var(--bgColor-accent-muted, #ddf4ff)',
+                    display: 'grid', placeItems: 'center',
+                    fontWeight: 700, fontSize: 14,
+                    color: admin ? 'var(--nts-accent)' : '#0969da',
+                    flexShrink: 0,
+                  }}>
+                    {initial}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <Text as="span" weight="semibold" style={{ fontSize: 15 }}>{name}</Text>
+                      {admin && (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                          background: 'rgba(212,133,74,0.12)', color: 'var(--nts-accent)',
+                        }}>
+                          <ShieldIcon size={11} /> Super Admin
+                        </span>
+                      )}
+                      {isSelf && (
+                        <span style={{
+                          padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                          background: 'var(--bgColor-muted, #f6f8fa)', color: 'var(--fgColor-muted)',
+                        }}>
+                          εσύ
+                        </span>
+                      )}
+                    </div>
+                    <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {u.email || '—'} · Εγγραφή {formatUserDate(u.createdAt)}
+                    </Text>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{
+                    padding: '2px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600,
+                    background: 'var(--bgColor-muted, #f6f8fa)', color: 'var(--fgColor-muted)',
+                  }}>
+                    {userBrands.length} brand{userBrands.length !== 1 ? 's' : ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSuperAdmin(u)}
+                    disabled={busy === `sa:${u.id}` || isSelf}
+                    title={isSelf ? 'Δεν μπορείς να αλλάξεις τα δικά σου δικαιώματα' : admin ? 'Αφαίρεση super admin' : 'Παραχώρηση super admin'}
+                    style={{
+                      padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                      border: '1px solid var(--borderColor-default, #d0d7de)',
+                      background: admin ? 'rgba(207,34,46,0.06)' : 'var(--bgColor-default, #fff)',
+                      color: isSelf ? 'var(--fgColor-muted)' : admin ? '#cf222e' : 'var(--fgColor-default)',
+                      cursor: busy === `sa:${u.id}` ? 'wait' : isSelf ? 'not-allowed' : 'pointer',
+                      opacity: isSelf ? 0.5 : 1,
+                    }}
+                  >
+                    {busy === `sa:${u.id}` ? '...' : admin ? 'Αφαίρεση SA' : 'Κάνε Super Admin'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(isOpen ? null : u.id)}
+                    style={{
+                      padding: '5px 10px', borderRadius: 6, fontSize: 12,
+                      border: '1px solid var(--borderColor-default, #d0d7de)',
+                      background: 'var(--bgColor-default, #fff)',
+                      color: 'var(--fgColor-muted)', cursor: 'pointer',
+                    }}
+                  >
+                    {isOpen ? 'Απόκρυψη' : 'Διαχείριση brands'}
+                  </button>
+                </div>
+              </div>
+
+              {isOpen && (
+                <div style={{ borderTop: '1px solid var(--borderColor-muted, #e5e7eb)', paddingTop: 12, display: 'grid', gap: 8 }}>
+                  {userBrands.length === 0 && (
+                    <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>
+                      Ο χρήστης δεν ανήκει σε κανένα brand.
+                    </Text>
+                  )}
+                  {userBrands.map((m) => {
+                    const roleBusy = busy === `role:${u.id}:${m.brandId}`;
+                    const removeBusy = busy === `remove:${u.id}:${m.brandId}`;
+                    return (
+                      <div
+                        key={m.brandId}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          gap: 12, flexWrap: 'wrap',
+                          padding: '8px 12px', borderRadius: 8,
+                          background: 'var(--bgColor-muted, #f6f8fa)',
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <Text as="div" weight="semibold" style={{ fontSize: 13 }}>{m.brandName}</Text>
+                          {m.department && (
+                            <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>
+                              {DEPARTMENT_LABELS[m.department] ?? m.department}
+                            </Text>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--borderColor-default, #d0d7de)' }}>
+                            {MEMBERSHIP_ROLES.map((r) => (
+                              <button
+                                key={r}
+                                type="button"
+                                onClick={() => handleRoleChange(u.id, m, r)}
+                                disabled={roleBusy}
+                                style={{
+                                  padding: '4px 10px', fontSize: 12,
+                                  fontWeight: m.role === r ? 700 : 400,
+                                  border: 'none',
+                                  borderLeft: r !== 'owner' ? '1px solid var(--borderColor-default, #d0d7de)' : 'none',
+                                  background: m.role === r ? 'var(--nts-accent, #d4854a)' : 'var(--bgColor-default, #fff)',
+                                  color: m.role === r ? '#fff' : 'var(--fgColor-muted)',
+                                  cursor: roleBusy ? 'wait' : 'pointer',
+                                }}
+                              >
+                                {ROLE_LABELS[r]}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFromBrand(u.id, m)}
+                            disabled={removeBusy}
+                            title="Αφαίρεση από το brand"
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 4,
+                              padding: '4px 10px', borderRadius: 6, fontSize: 12,
+                              border: '1px solid var(--borderColor-default, #d0d7de)',
+                              background: 'var(--bgColor-default, #fff)',
+                              color: 'var(--danger-fg, #cf222e)',
+                              cursor: removeBusy ? 'wait' : 'pointer',
+                            }}
+                          >
+                            <TrashIcon size={12} />
+                            {removeBusy ? '...' : 'Αφαίρεση'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {filtered.length === 0 && !error && (
+          <Text as="p" style={{ color: 'var(--fgColor-muted)', textAlign: 'center', padding: 32 }}>
+            {term ? 'Κανένας χρήστης δεν ταιριάζει στην αναζήτηση.' : 'Δεν υπάρχουν χρήστες ακόμα.'}
+          </Text>
+        )}
+      </div>
+
+      {filtered.length > PAGE_SIZE && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: 12, marginTop: 16, flexWrap: 'wrap',
+        }}>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={safePage === 0}
+            style={{
+              padding: '6px 12px', borderRadius: 6, fontSize: 13,
+              border: '1px solid var(--borderColor-default, #d0d7de)',
+              background: 'var(--bgColor-default, #fff)',
+              color: 'var(--fgColor-default)',
+              cursor: safePage === 0 ? 'not-allowed' : 'pointer',
+              opacity: safePage === 0 ? 0.5 : 1,
+            }}
+          >
+            ← Προηγούμενη
+          </button>
+          <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)' }}>
+            Σελίδα {safePage + 1} / {pageCount} · {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, filtered.length)} από {filtered.length}
+          </Text>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+            disabled={safePage >= pageCount - 1}
+            style={{
+              padding: '6px 12px', borderRadius: 6, fontSize: 13,
+              border: '1px solid var(--borderColor-default, #d0d7de)',
+              background: 'var(--bgColor-default, #fff)',
+              color: 'var(--fgColor-default)',
+              cursor: safePage >= pageCount - 1 ? 'not-allowed' : 'pointer',
+              opacity: safePage >= pageCount - 1 ? 0.5 : 1,
+            }}
+          >
+            Επόμενη →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
