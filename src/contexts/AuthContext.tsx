@@ -24,6 +24,7 @@ import {
 import { Timestamp } from 'firebase/firestore';
 import { auth, getAppUrl } from '../config/firebase';
 import { getPublicSignupMode, isInviteReturnUrl } from '../config/authAccess';
+import { validatePassword } from '../utils/passwordPolicy';
 import { FirestoreService } from '../services/firestore';
 import { loadSuperAdmins } from '../services/appConfig';
 
@@ -120,6 +121,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!allowed) {
       throw new Error('auth/signup-disabled');
     }
+    const pwError = validatePassword(password);
+    if (pwError) throw new Error(pwError);
     await createUserWithEmailAndPassword(auth, email, password);
   }, []);
 
@@ -172,6 +175,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const linkPassword = useCallback(async (password: string) => {
     if (!auth.currentUser?.email) throw new Error('No email found');
+    const pwError = validatePassword(password);
+    if (pwError) throw new Error(pwError);
     const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
     await linkWithCredential(auth.currentUser, credential);
   }, []);

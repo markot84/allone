@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowLeft, Send } from 'lucide-react';
 import { PerformancePlusLogo } from '../common';
+import { validatePassword } from '../../utils/passwordPolicy';
 
 interface LoginPageProps {
   onSignIn: (email: string, password: string) => Promise<void>;
@@ -47,7 +48,8 @@ export function LoginPage({
     if (!password) { setError('Εισάγετε κωδικό'); return; }
     if (mode === 'register') {
       if (!allowEmailRegister) { setError('Η εγγραφή με email δεν είναι διαθέσιμη.'); return; }
-      if (password.length < 6) { setError('Κωδικός min 6 χαρακτήρες'); return; }
+      const pwError = validatePassword(password);
+      if (pwError) { setError(pwError); return; }
       if (password !== confirmPassword) { setError('Οι κωδικοί δεν ταιριάζουν'); return; }
     }
     setSubmitting(true);

@@ -5,6 +5,7 @@ import { verifyPasswordResetCode, confirmPasswordReset, applyActionCode } from '
 import { auth } from '../../config/firebase';
 import { Button, PerformancePlusLogo } from '../common';
 import { SUPPORT_EMAIL } from '../../config/superAdmins';
+import { validatePassword } from '../../utils/passwordPolicy';
 
 interface AuthActionPageProps {
   mode: string;
@@ -48,7 +49,8 @@ function ResetPasswordAction({ oobCode, onDone }: { oobCode: string; onDone: () 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (password.length < 6) { setError('Ο κωδικός πρέπει να έχει τουλάχιστον 6 χαρακτήρες'); return; }
+    const pwError = validatePassword(password);
+    if (pwError) { setError(pwError); return; }
     if (password !== confirmPw) { setError('Οι κωδικοί δεν ταιριάζουν'); return; }
     setSubmitting(true);
     try {

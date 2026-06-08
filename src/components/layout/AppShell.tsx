@@ -11,6 +11,7 @@ import { useModules } from '../../hooks/useModules';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { AppSectionId, Brand } from '../../types';
 import { getModuleIdForSection } from '../../config/modules';
+import { validatePassword, PASSWORD_REQUIREMENTS_HINT } from '../../utils/passwordPolicy';
 import { ACCENT_PRESETS, readStoredAccent, setStoredAccent, type AccentId } from '../../theme/accentTheme';
 import {
   GearIcon,
@@ -417,7 +418,7 @@ function AccountMenu({
                       type="password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Νέος κωδικός (min 6)"
+                      placeholder={PASSWORD_REQUIREMENTS_HINT}
                       style={{
                         width: '100%', padding: '6px 10px', fontSize: 13, borderRadius: 6,
                         border: '1px solid var(--borderColor-default)', marginBottom: 6
@@ -426,7 +427,8 @@ function AccountMenu({
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button
                         onClick={async () => {
-                          if (newPassword.length < 6) { setLinkMsg({ type: 'err', text: 'Min 6 χαρακτήρες' }); return; }
+                          const pwError = validatePassword(newPassword);
+                          if (pwError) { setLinkMsg({ type: 'err', text: pwError }); return; }
                           try {
                             await onLinkPassword(newPassword);
                             setLinkMsg({ type: 'ok', text: 'Κωδικός ορίστηκε!' });
