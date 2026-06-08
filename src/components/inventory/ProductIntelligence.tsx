@@ -301,7 +301,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         queryClient.invalidateQueries({ queryKey: ['productIntelligencePage', brandId] });
         queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', brandId] });
         if ((result.totalCount ?? 0) === 0) {
-          toast.info('Ο κατάλογος ανανεώθηκε αλλά δεν βρέθηκαν προϊόντα — ελέγξτε το OpenCart sync.');
+          toast.info('Ο κατάλογος ανανεώθηκε αλλά δεν βρέθηκαν προϊόντα — συνδέστε ή συγχρονίστε έναν connector (ERP ή e-shop).');
         } else {
           toast.success(`Κατάλογος ανανεώθηκε · ${formatNumber(result.totalCount ?? 0)} SKUs`);
         }

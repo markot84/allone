@@ -13,10 +13,15 @@ const GEMINI_SECRET = defineSecret('GEMINI_API_KEY');
 const SMTP_EMAIL_SECRET = defineSecret('SMTP_EMAIL');
 /** SMTP: κωδικός ή App Password */
 const SMTP_PASSWORD_SECRET = defineSecret('SMTP_PASSWORD');
-const OPENCART_EGRESS_OPTIONS = {
-  vpcConnector: 'pp-opencart-connector',
-  vpcConnectorEgressSettings: 'ALL_TRAFFIC' as const,
-};
+// OpenCart sync egresses through a fixed-IP VPC connector (pp-opencart-connector)
+// so the store firewall can allowlist the source IP. That connector only exists in
+// the production project, so gate it on GCLOUD_PROJECT (same convention as security.ts):
+// non-prod environments (e.g. staging) deploy these functions without VPC binding.
+const PROD_PROJECT_ID = 'performance-plus-4a5b2';
+const OPENCART_EGRESS_OPTIONS: { vpcConnector?: string; vpcConnectorEgressSettings?: 'ALL_TRAFFIC' } =
+  process.env.GCLOUD_PROJECT === PROD_PROJECT_ID
+    ? { vpcConnector: 'pp-opencart-connector', vpcConnectorEgressSettings: 'ALL_TRAFFIC' }
+    : {};
 import { sanitizeOAuthReturnOrigin } from './oauthRedirect';
 import { validateImportUrl, safeFetch } from './urlValidator';
 import { verifyState } from './oauthState';
