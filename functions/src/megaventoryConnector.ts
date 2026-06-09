@@ -16,6 +16,7 @@ import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
+import { planProcessing, PROCESSING_ORDER, type ProcessingStage } from './megaventorySyncPlan';
 import { buildHistoricalOrIncrementalWindow, buildRollingUtcDayWindow, toYmd } from './syncPolicy';
 import {
   cleanupManualImportsForMegaventoryMaster,
@@ -1528,16 +1529,24 @@ export async function fetchMegaventoryData(
     // a full budget reserve. Otherwise defer it to a fresh pass — large brands can't fit ingestion AND
     // processing in one 30-min invocation. Small brands keep their budget and finish in a single pass.
     const runProcessing = catalogComplete && (catalogAlreadyComplete || remainingBudgetMs() >= MV_PROCESSING_RESERVE_MS);
+    // PER-60: within the processing stage, run heavy sub-stages greedily but checkpoint between them
+    // (gapfill=0 → rfm=1 → finalize=2). `processingDoneThrough` = index of the next sub-stage still to
+    // run this pass; it advances as each completes. A brand whose processing alone exceeds 30min then
+    // completes across several passes; a light brand runs all three inline in one pass.
+    let processingDoneThrough = runProcessing
+      ? PROCESSING_ORDER.indexOf(planProcessing(conn.processingStage as ProcessingStage | null | undefined).run)
+      : 0;
     if (!catalogComplete) {
       needsContinuation = true;
       logger.warn(`[Megaventory] catalog fetch incomplete within budget for ${brandId} — deferring to continuation pass`);
     } else if (!runProcessing) {
       needsContinuation = true;
       logger.info(`[Megaventory] catalog complete; deferring heavy downstream to a fresh processing pass for ${brandId} (budget reserve)`);
-    } else if (overBudget()) {
+    } else if (processingDoneThrough === 0 && overBudget()) {
       needsContinuation = true;
       logger.warn(`[Megaventory] over soft deadline before gap-fill for ${brandId} — deferring downstream to continuation pass`);
-    } else {
+    } else if (processingDoneThrough === 0) {
+      // ── Processing sub-stage 0: gap-fill ──
       try {
         apiCatalogGapFillCount = await mergeMegaventoryApiCatalogProducts(
           db,
@@ -1554,6 +1563,7 @@ export async function fetchMegaventoryData(
         errors.push(`ApiCatalogGapFill: ${msg}`);
         logger.warnAlert(`[Megaventory] API catalog gap-fill failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
       }
+      processingDoneThrough = 1; // gap-fill stage done (advance even on error — don't loop on it)
     }
 
     if (apiCatalogGapFillCount > 0 && !(normalizedCounts && normalizedCounts.products > 0) && overBudget()) {
@@ -1638,62 +1648,80 @@ export async function fetchMegaventoryData(
     if (!runProcessing) {
       // PER-60: ingestion pass — RFM runs on the dedicated processing pass.
       rfmSkippedReason = 'deferred_to_processing_pass';
-    } else if (shouldRefreshDocuments && docsOk && !invoiceBackfillStillInProgress && overBudget()) {
+    } else if (processingDoneThrough !== 1) {
+      // not the RFM sub-stage on this pass (gap-fill deferred earlier, or RFM already done in a prior pass)
+    } else if (overBudget()) {
       // PER-60: defer the heavy RFM rebuild rather than running it into the hard timeout.
       needsContinuation = true;
       rfmSkippedReason = 'deferred_over_budget';
       logger.warn(`[Megaventory] over soft deadline before RFM refresh for ${brandId} — deferring to continuation pass`);
-    } else if (shouldRefreshDocuments && docsOk && !invoiceBackfillStillInProgress) {
-      try {
-        rfmCounts = await refreshMegaventoryRfmSegments(db, brandId);
-      } catch (rfmErr) {
-        const msg = rfmErr instanceof Error ? rfmErr.message : String(rfmErr);
-        errors.push(`MegaventoryRFM: ${msg}`);
-        logger.warnAlert(`[Megaventory] RFM refresh failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
+    } else {
+      // ── Processing sub-stage 1: RFM ──
+      if (shouldRefreshDocuments && docsOk && !invoiceBackfillStillInProgress) {
+        try {
+          rfmCounts = await refreshMegaventoryRfmSegments(db, brandId);
+        } catch (rfmErr) {
+          const msg = rfmErr instanceof Error ? rfmErr.message : String(rfmErr);
+          errors.push(`MegaventoryRFM: ${msg}`);
+          logger.warnAlert(`[Megaventory] RFM refresh failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
+        }
+      } else if (!shouldRefreshDocuments) {
+        rfmSkippedReason = 'manual_catalog_refresh';
+        logger.info(`[Megaventory] RFM refresh skipped for ${brandId}: manual catalog refresh`);
+      } else if (docsOk && invoiceBackfillStillInProgress) {
+        rfmSkippedReason = 'invoice_backfill_in_progress';
+        logger.info(`[Megaventory] RFM refresh skipped for ${brandId}: invoice backfill still in progress`);
       }
-    } else if (!shouldRefreshDocuments) {
-      rfmSkippedReason = 'manual_catalog_refresh';
-      logger.info(`[Megaventory] RFM refresh skipped for ${brandId}: manual catalog refresh`);
-    } else if (docsOk && invoiceBackfillStillInProgress) {
-      rfmSkippedReason = 'invoice_backfill_in_progress';
-      logger.info(`[Megaventory] RFM refresh skipped for ${brandId}: invoice backfill still in progress`);
+      processingDoneThrough = 2; // RFM stage done (or legitimately skipped) — advance to finalize
     }
 
-    if (!runProcessing) {
-      // PER-60: ingestion pass — procurement/stock-movement run on the dedicated processing pass.
-    } else if (normalizedCounts && normalizedCounts.products > 0 && overBudget()) {
+    if (!runProcessing || processingDoneThrough !== 2) {
+      // not the finalize sub-stage on this pass (earlier sub-stage deferred, or already finalized)
+    } else if (overBudget()) {
       // PER-60: defer the heavy procurement/stock-movement refresh rather than running into the hard timeout.
       needsContinuation = true;
       logger.warn(`[Megaventory] over soft deadline before procurement/stock-movement refresh for ${brandId} — deferring to continuation pass`);
-    } else if (normalizedCounts && normalizedCounts.products > 0) {
-      try {
-        const procurement = await refreshProcurementSignals(brandId);
-        await refreshStockMovement(brandId);
-        postNormalizeRefresh = {
-          procurementSignals: procurement,
-          stockMovement: 'refreshed',
-          ...(apiCatalogGapFillCount > 0 ? { apiCatalogGapFill: apiCatalogGapFillCount } : {}),
-        };
-      } catch (refreshErr) {
-        const msg = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
-        errors.push(`MegaventoryPostNormalizeRefresh: ${msg}`);
-        logger.warnAlert(`[Megaventory] Post-normalization refresh failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
+    } else {
+      // ── Processing sub-stage 2: procurement + stock-movement (finalize) ──
+      if (normalizedCounts && normalizedCounts.products > 0) {
+        try {
+          const procurement = await refreshProcurementSignals(brandId);
+          await refreshStockMovement(brandId);
+          postNormalizeRefresh = {
+            procurementSignals: procurement,
+            stockMovement: 'refreshed',
+            ...(apiCatalogGapFillCount > 0 ? { apiCatalogGapFill: apiCatalogGapFillCount } : {}),
+          };
+        } catch (refreshErr) {
+          const msg = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
+          errors.push(`MegaventoryPostNormalizeRefresh: ${msg}`);
+          logger.warnAlert(`[Megaventory] Post-normalization refresh failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
+        }
       }
+      processingDoneThrough = 3; // finalize done — whole processing stage complete
     }
 
     // PER-60: persist resumable catalog state AFTER every heavy phase (catalog/gap-fill/RFM/
     // procurement/stock-movement) has decided whether it needs continuation. Reset when the WHOLE
     // sync finishes (so the next manual sync re-fetches fresh); otherwise keep complete=true / cursor
     // so the next pass resumes the right phase instead of re-fetching the catalog from scratch.
-    if (catalogComplete && !needsContinuation) {
+    if (!catalogComplete) {
+      // ingestion still fetching the catalog — persist the resume cursor (needsContinuation already set)
+      if (productCatalogNextCursor) {
+        patch['megaventory.productCatalogCursor'] = productCatalogNextCursor;
+        patch['megaventory.productCatalogComplete'] = false;
+      }
+    } else if (runProcessing && processingDoneThrough >= PROCESSING_ORDER.length) {
+      // every processing sub-stage finished → whole sync complete → reset so the next sync re-ingests fresh
       patch['megaventory.productCatalogComplete'] = FieldValue.delete();
       patch['megaventory.productCatalogCursor'] = FieldValue.delete();
-    } else if (catalogComplete) {
+      patch['megaventory.processingStage'] = FieldValue.delete();
+    } else {
+      // catalog complete but processing in progress/deferred → keep complete, checkpoint the next sub-stage
       patch['megaventory.productCatalogComplete'] = true;
       patch['megaventory.productCatalogCursor'] = FieldValue.delete();
-    } else if (productCatalogNextCursor) {
-      patch['megaventory.productCatalogCursor'] = productCatalogNextCursor;
-      patch['megaventory.productCatalogComplete'] = false;
+      patch['megaventory.processingStage'] = PROCESSING_ORDER[Math.min(processingDoneThrough, PROCESSING_ORDER.length - 1)];
+      needsContinuation = true;
     }
 
     if (Object.keys(patch).length) {
