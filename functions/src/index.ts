@@ -1875,13 +1875,14 @@ export const processMegaventorySyncJobs = onSchedule(
   {
     schedule: 'every 1 minutes',
     region: 'europe-west1',
-    timeoutSeconds: 1800,
+    timeoutSeconds: 3600, // PER-60: 60min (gen2 max) — large brands (e-tennis ~87k SKUs) need >30min for a full single-pass catalog sync
     memory: '2GiB',
     secrets: ['CONNECTOR_TOKEN_KEY'],
   },
   async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
     const db = admin.firestore();
-    const STALE_RUNNING_MS = 40 * 60 * 1000;
+    // PER-60: must exceed the 3600s run ceiling, else the stale-sweep marks a legitimately-running job failed mid-flight.
+    const STALE_RUNNING_MS = 65 * 60 * 1000;
 
     const staleRunning = await db
       .collection('connector_sync_jobs')
@@ -1915,14 +1916,14 @@ export const processMegaventorySyncJobs = onSchedule(
     const jobRef = snap.docs[0].ref;
     const job = await db.runTransaction(async (tx) => {
       const latest = await tx.get(jobRef);
-      const data = latest.data() as { brandId?: string; status?: string } | undefined;
+      const data = latest.data() as { brandId?: string; status?: string; continuationAttempts?: number } | undefined;
       if (!latest.exists || data?.status !== 'pending' || !data.brandId) return null;
       tx.update(jobRef, {
         status: 'running',
         startedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return { brandId: data.brandId };
+      return { brandId: data.brandId, continuationAttempts: Number(data.continuationAttempts ?? 0) };
     });
 
     if (!job) return;
@@ -1930,12 +1931,30 @@ export const processMegaventorySyncJobs = onSchedule(
     try {
       logger.info(`[MegaventoryJob] Starting Megaventory refresh for ${job.brandId}`);
       const result = await fetchMegaventoryData(job.brandId, { mode: 'manual' });
+      // PER-60: if the run hit its soft budget before finishing (large catalog), re-enqueue so the
+      // every-1-min scheduler continues it on a fresh invocation. Bounded to avoid a livelock; the
+      // expensive post-steps (below) are intentionally skipped until the sync fully completes.
+      const MAX_CONTINUATIONS = 8;
+      if (result.success && result.needsContinuation && job.continuationAttempts < MAX_CONTINUATIONS) {
+        await jobRef.update({
+          status: 'pending',
+          continuationAttempts: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+          result,
+        });
+        logger.info(`[MegaventoryJob] ${job.brandId} needs continuation (pass ${job.continuationAttempts + 1}/${MAX_CONTINUATIONS}) — re-enqueued`);
+        return;
+      }
+      const completedClean = result.success && !result.needsContinuation;
       await jobRef.update({
-        status: result.success ? 'completed' : 'failed',
+        status: completedClean ? 'completed' : 'failed',
         result,
         completedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-        ...(result.error ? { error: result.error } : { error: FieldValue.delete() }),
+        continuationAttempts: FieldValue.delete(),
+        ...(completedClean
+          ? { error: FieldValue.delete() }
+          : { error: result.error || `Sync did not complete within ${MAX_CONTINUATIONS} continuation passes` }),
       });
       logger.info(`[MegaventoryJob] Completed catalog refresh for ${job.brandId}: ${JSON.stringify(result)}`);
 

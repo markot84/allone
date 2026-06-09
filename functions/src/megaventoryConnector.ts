@@ -48,6 +48,13 @@ const MV_TIMEOUT_MS = 120_000;
 const MV_PAGE_SIZE = 500;
 /** Ασφάλεια: max ~2.5M εγγραφές ανά endpoint ανά sync */
 const MV_MAX_PAGES = 5000;
+/**
+ * PER-60: soft budget για κάθε sync invocation, αρκετά κάτω από το 3600s timeout
+ * του processMegaventorySyncJobs worker. Όταν εξαντληθεί, σταματάμε με χάρη και
+ * επιστρέφουμε needsContinuation ώστε ο scheduler να συνεχίσει σε επόμενο pass —
+ * ποτέ hard-kill / orphaned job / μισο-γραμμένα δεδομένα.
+ */
+const MV_SYNC_SOFT_DEADLINE_MS = 55 * 60 * 1000; // 55min, ~5min margin under the 3600s worker timeout
 const MV_INVOICE_BACKFILL_PAGE_SIZE = 100;
 /** Manual connectorSync έχει 20' timeout· κρατάμε buffer για Firestore writes / response. */
 const MV_INVOICE_BACKFILL_RUNTIME_MS = 18 * 60 * 1000;
@@ -905,6 +912,8 @@ async function inferInvoiceBackfillCursor(db: Firestore, brandId: string): Promi
 export interface MegaventorySyncResult {
   success: boolean;
   imported: number;
+  /** PER-60: true όταν η fetch δεν ολοκληρώθηκε εντός του soft budget — ο worker κάνει re-enqueue. */
+  needsContinuation?: boolean;
   invoices?: number;
   salesOrders?: number;
   purchaseOrders?: number;
@@ -947,6 +956,11 @@ export async function fetchMegaventoryData(
   }
 
   const mode = options.mode || 'manual';
+  // PER-60: soft deadline ώστε καμία invocation να μην τρέξει μέσα στο hard timeout του worker.
+  const syncDeadlineAt = Date.now() + MV_SYNC_SOFT_DEADLINE_MS;
+  const remainingBudgetMs = () => Math.max(0, syncDeadlineAt - Date.now());
+  const overBudget = () => Date.now() >= syncDeadlineAt;
+  let needsContinuation = false;
   const shouldRefreshDocuments = options.skipDocuments !== true;
   let docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
   const invoiceBackfillPending = conn.invoiceDocumentBackfillComplete !== true;
@@ -1038,7 +1052,7 @@ export async function fetchMegaventoryData(
         pageSize: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_PAGE_SIZE : undefined,
         maxPages: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_MAX_PAGES_PER_SYNC : undefined,
         initialCursor: shouldStageInvoiceBackfill ? invoiceBackfillCursor : undefined,
-        maxRuntimeMs: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_RUNTIME_MS : undefined,
+        maxRuntimeMs: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_RUNTIME_MS : remainingBudgetMs(),
       }
     );
     let documentFallbackUsed = false;
@@ -1305,6 +1319,8 @@ export async function fetchMegaventoryData(
       label: 'ProductGet',
       // PER-60: ζητάμε referenced objects ώστε το ProductGet να επιστρέφει κατηγορία.
       extraBody: { includeReferencedObjects: true },
+      // PER-60: budget την (μεγάλη) catalog fetch ώστε να μην «φάει» το worker timeout.
+      maxRuntimeMs: remainingBudgetMs(),
     });
     if (prFetchErr) {
       referenceOk = false;
@@ -1460,7 +1476,17 @@ export async function fetchMegaventoryData(
       logger.warn(`[Megaventory] early lastSyncAt mark failed for ${brandId}: ${markErr instanceof Error ? markErr.message : String(markErr)}`);
     }
 
-    if (megaventoryApiProductRows.length > 0) {
+    // PER-60: το gap-fill ΔΙΑΓΡΑΦΕΙ & ξαναγράφει ΟΛΟΚΛΗΡΟ τον api-catalog από το in-memory set.
+    // Αν το ProductGet δεν εξαντλήθηκε (cut short από το budget) ΔΕΝ έχουμε όλο τον κατάλογο στη
+    // μνήμη — τρέξιμο εδώ θα έκανε purge-then-partial = data loss. Το αναβάλλουμε και ζητάμε
+    // continuation ώστε ένα επόμενο pass να ξανατραβήξει όλο τον κατάλογο και να το ολοκληρώσει.
+    if (productGetExhausted === false) {
+      needsContinuation = true;
+      logger.warn(`[Megaventory] ProductGet incomplete within budget for ${brandId} — deferring gap-fill/downstream to continuation pass`);
+    } else if (megaventoryApiProductRows.length > 0 && overBudget()) {
+      needsContinuation = true;
+      logger.warn(`[Megaventory] over soft deadline before gap-fill for ${brandId} — deferring to continuation pass`);
+    } else if (megaventoryApiProductRows.length > 0) {
       try {
         apiCatalogGapFillCount = await mergeMegaventoryApiCatalogProducts(
           db,
@@ -1627,6 +1653,7 @@ export async function fetchMegaventoryData(
     logger.info(`[Megaventory] Sync complete for brand ${brandId}: ${totalImported} total items (errors=${errors.length})`);
     return {
       success: true,
+      ...(needsContinuation ? { needsContinuation: true } : {}),
       imported: totalImported,
       ...counts,
       ...(normalizedCounts ? { normalized: normalizedCounts } : {}),
