@@ -62,6 +62,12 @@ const MV_SYNC_SOFT_DEADLINE_MS = 25 * 60 * 1000; // 25min, ~5min margin under th
  * το processing σε δικό του fresh pass (productCatalogComplete=true). Μικρά brands το τρέχουν inline.
  */
 const MV_PROCESSING_RESERVE_MS = 12 * 60 * 1000; // need ~12min of headroom to run the heavy downstream
+/**
+ * PER-60: SupplierClientGet is the slow non-resumable ancillary fetch (~12min for a big book). It can't
+ * resume across passes, so we only START it when at least this much budget remains — otherwise defer the
+ * whole fetch to a fresh pass. Prevents a near-deadline start from running into the 30min hard wall.
+ */
+const MV_SUPPLIERS_RESERVE_MS = 13 * 60 * 1000;
 const MV_INVOICE_BACKFILL_PAGE_SIZE = 100;
 /** Manual connectorSync έχει 20' timeout· κρατάμε buffer για Firestore writes / response. */
 const MV_INVOICE_BACKFILL_RUNTIME_MS = 18 * 60 * 1000;
@@ -455,7 +461,10 @@ async function fetchAllMvPages(
 ): Promise<{ rows: any[]; error: string | null; nextCursor: number | null; exhausted: boolean }> {
   const pageSize = opts.pageSize ?? MV_PAGE_SIZE;
   const maxPages = opts.maxPages ?? MV_MAX_PAGES;
-  const deadline = opts.maxRuntimeMs ? Date.now() + opts.maxRuntimeMs : null;
+  // PER-60: undefined ⇒ unbudgeted (null); a number (incl. 0) ⇒ a real deadline. A 0 budget means
+  // "already over the soft deadline" → fetch nothing and defer — NOT "run unbounded" (the old `? :`
+  // treated 0 as falsy → no deadline → could run the catalog/invoice walk straight into the hard wall).
+  const deadline = opts.maxRuntimeMs == null ? null : Date.now() + Math.max(0, opts.maxRuntimeMs);
   const rows: any[] = [];
   let cursor: number | null = opts.initialCursor ?? null;
   let nextCursor: number | null = cursor;
@@ -508,22 +517,35 @@ async function fetchAllMvPages(
  */
 async function fetchRecentMvDocumentsByLocalDate(
   apiKey: string,
-  sinceYmd: string
-): Promise<{ rows: any[]; error: string | null }> {
+  sinceYmd: string,
+  opts: { maxRuntimeMs?: number | null; initialCursor?: number | null; maxPages?: number } = {}
+): Promise<{ rows: any[]; error: string | null; nextCursor: number | null; exhausted: boolean }> {
   const rows: any[] = [];
-  let cursor: number | null = null;
+  let cursor: number | null = opts.initialCursor ?? null;
+  // PER-60: budget the fallback. Without a deadline this walked all ~50k recent docs (≈22min) and
+  // ate the whole worker budget before products. With maxRuntimeMs it stops at the soft deadline and
+  // returns nextCursor so the next pass resumes from where it left off (exhausted=false).
+  // PER-60: see fetchAllMvPages — undefined ⇒ unbudgeted; a number (incl. 0) ⇒ a real deadline so a
+  // 0 budget (already over the soft deadline) fetches nothing and defers instead of walking unbounded.
+  const deadline = opts.maxRuntimeMs == null ? null : Date.now() + Math.max(0, opts.maxRuntimeMs);
+  const maxPages = opts.maxPages && opts.maxPages > 0 ? opts.maxPages : MV_INCREMENTAL_DOCUMENT_FALLBACK_MAX_PAGES;
+  let exhausted = false;
 
-  for (let page = 0; page < MV_INCREMENTAL_DOCUMENT_FALLBACK_MAX_PAGES; page++) {
+  for (let page = 0; page < maxPages; page++) {
+    if (deadline && Date.now() >= deadline) {
+      // ran out of budget mid-walk — nextCursor holds the resume point, not exhausted yet
+      return { rows, error: null, nextCursor: cursor, exhausted: false };
+    }
     const filters = buildMvFiltersWithCursor([], 'DocumentId', cursor);
     const body: Record<string, unknown> = { ReturnTopNRecords: MV_PAGE_SIZE };
     if (filters.length > 0) body.Filters = filters;
 
     const call = await mvCall('DocumentGet', apiKey, body);
     const err = asMvError(call, 'DocumentGet (recent fallback)');
-    if (err) return { rows, error: err };
+    if (err) return { rows, error: err, nextCursor: cursor, exhausted: false };
 
     const batch = (call.body?.mvDocuments as any[]) || [];
-    if (!batch.length) break;
+    if (!batch.length) { exhausted = true; break; }
 
     let recentInBatch = 0;
     for (const row of batch) {
@@ -535,12 +557,13 @@ async function fetchRecentMvDocumentsByLocalDate(
     }
 
     const minId = minNumericId(batch, 'DocumentId', 'DocumentID');
-    if (minId <= 0 || batch.length < MV_PAGE_SIZE) break;
+    if (minId <= 0 || batch.length < MV_PAGE_SIZE) { exhausted = true; break; }
     cursor = minId;
-    if (recentInBatch === 0) break;
+    // walked past the since-window → no more recent docs further back
+    if (recentInBatch === 0) { exhausted = true; break; }
   }
 
-  return { rows, error: null };
+  return { rows, error: null, nextCursor: cursor, exhausted };
 }
 
 /** Το API επιστρέφει mvProductStockList με nested mvStock· ενοποιούμε σε flat rows όπως περιμένει το writeBatch. */
@@ -992,15 +1015,30 @@ export async function fetchMegaventoryData(
   const remainingBudgetMs = () => Math.max(0, syncDeadlineAt - Date.now());
   const overBudget = () => Date.now() >= syncDeadlineAt;
   let needsContinuation = false;
-  // PER-60: when productCatalogComplete is already set, this invocation is the dedicated "processing
-  // pass" — skip the ingestion fetches (already persisted) and run only the heavy downstream.
-  const catalogAlreadyComplete = conn.productCatalogComplete === true;
+  // PER-60: `ingestionComplete` = EVERY ingestion phase (invoices/orders/catalog/stock/suppliers) has
+  // been persisted → this invocation is the dedicated "processing pass" (skip all ingestion fetches,
+  // run only the heavy downstream). `productCatalogComplete` is narrower — it gates ONLY the ProductGet
+  // skip — so the catalog can finish while a slow ancillary (suppliers) still needs another pass, WITHOUT
+  // prematurely flipping us into processing and stranding that ancillary.
+  const ingestionAlreadyComplete = conn.ingestionComplete === true;
+  const catalogAlreadyComplete = ingestionAlreadyComplete || conn.productCatalogComplete === true;
+  // Per-cycle done flags for the non-resumable ancillary fetches (so they don't re-run every pass while
+  // the catalog spans multiple passes, and so they can defer/resume across passes under the budget).
+  const ordersIngestComplete = ingestionAlreadyComplete || conn.ordersIngestComplete === true;
+  const stockIngestComplete = ingestionAlreadyComplete || conn.stockIngestComplete === true;
+  const suppliersIngestComplete = ingestionAlreadyComplete || conn.suppliersIngestComplete === true;
   const shouldRefreshDocuments = options.skipDocuments !== true;
   let docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
   const invoiceBackfillPending = conn.invoiceDocumentBackfillComplete !== true;
   // Manual sync must refresh reference data quickly. Scheduled ERP runs can continue the historical
   // invoice detail backfill so existing documents gain product line items for Data Analysis.
   const shouldStageInvoiceBackfill = mode === 'scheduled' && invoiceBackfillPending;
+  // PER-60: manual/incremental invoice ingestion is now resumable too. The date-filtered DocumentGet
+  // often returns 0 (MV quirk) → unbounded fallback recovered ~50k docs and ate the whole budget. We
+  // now budget that fallback and checkpoint a cursor (manualInvoiceCursor) + a per-cycle complete flag
+  // (manualInvoiceComplete) so it resumes across passes instead of re-fetching every ingestion pass.
+  const manualInvoiceCursor = positiveNumber(conn.manualInvoiceCursor);
+  const manualInvoiceAlreadyComplete = conn.manualInvoiceComplete === true;
   let invoiceBackfillCursor = positiveNumber(conn.invoiceDocumentBackfillCursor);
   if (shouldStageInvoiceBackfill && invoiceBackfillCursor === null && conn.invoiceDocumentBackfillAt) {
     invoiceBackfillCursor = await inferInvoiceBackfillCursor(db, brandId);
@@ -1052,15 +1090,36 @@ export async function fetchMegaventoryData(
   let postNormalizeRefresh: Record<string, unknown> | null = null;
   let documentDiagnostics: Record<string, unknown> | null = null;
   let invoiceBackfillProgress: Record<string, unknown> | null = null;
+  // PER-60: manual/incremental invoice ingestion progress. invoiceIngestComplete gates products (manual
+  // path only) so the catalog gets a clean budget once invoices finish; manualInvoiceResumeCursor holds
+  // the checkpoint when we defer mid-walk. The staged 3-year backfill is spread across nights → never
+  // blocks the catalog (true here), and skipDocuments runs have no invoices to wait on.
+  let invoiceIngestComplete = shouldStageInvoiceBackfill || !shouldRefreshDocuments || manualInvoiceAlreadyComplete;
+  let manualInvoiceResumeCursor: number | null = null;
+  let manualInvoiceJustCompleted = false;
   let rfmSkippedReason = '';
   let customReportRowsSnapshot: Record<string, unknown>[] = [];
   let apiCatalogGapFillCount = 0;
   let productGetExhausted = false;
+  // PER-60: did each ancillary phase finish (fetch+write) on THIS pass — feeds the ingestionComplete gate.
+  let ordersDoneThisPass = false;
+  let stockDoneThisPass = false;
+  let suppliersDoneThisPass = false;
 
   try {
-    if (!shouldRefreshDocuments || catalogAlreadyComplete) {
-      documentDiagnostics = { skipped: true, reason: catalogAlreadyComplete ? 'processing_pass' : 'manual_catalog_refresh' };
-      logger.info(`[Megaventory] Documents skipped for ${brandId}: ${catalogAlreadyComplete ? 'processing pass' : 'manual catalog refresh'}`);
+    const skipDocumentsThisPass =
+      !shouldRefreshDocuments ||
+      ingestionAlreadyComplete ||
+      // PER-60: manual invoices already exhausted earlier this ingestion cycle — don't re-fetch every pass
+      (!shouldStageInvoiceBackfill && manualInvoiceAlreadyComplete);
+    if (skipDocumentsThisPass) {
+      const skipReason = ingestionAlreadyComplete
+        ? 'processing_pass'
+        : manualInvoiceAlreadyComplete
+          ? 'manual_invoices_complete'
+          : 'manual_catalog_refresh';
+      documentDiagnostics = { skipped: true, reason: skipReason };
+      logger.info(`[Megaventory] Documents skipped for ${brandId}: ${skipReason}`);
     } else {
     // ── Invoices (Documents type=Sales Invoice) → revenue ────────────
     const documentTypesResult = await fetchDocumentTypes(apiKey);
@@ -1084,29 +1143,54 @@ export async function fetchMegaventoryData(
         label: 'DocumentGet (invoices)',
         pageSize: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_PAGE_SIZE : undefined,
         maxPages: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_MAX_PAGES_PER_SYNC : undefined,
-        initialCursor: shouldStageInvoiceBackfill ? invoiceBackfillCursor : undefined,
+        // PER-60: resume the manual/incremental invoice walk from its checkpoint (same DocumentId cursor space)
+        initialCursor: shouldStageInvoiceBackfill ? invoiceBackfillCursor : (manualInvoiceCursor ?? undefined),
         maxRuntimeMs: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_RUNTIME_MS : remainingBudgetMs(),
       }
     );
     let documentFallbackUsed = false;
     let recentDocumentRowsMerged = 0;
     if (!shouldStageInvoiceBackfill && !invFetchErr && invRows.length === 0) {
-      const fallback = await fetchRecentMvDocumentsByLocalDate(apiKey, sinceStr);
+      // PER-60: budget the fallback + resume from the manual cursor so it can't run into the hard wall.
+      const fallback = await fetchRecentMvDocumentsByLocalDate(apiKey, sinceStr, {
+        maxRuntimeMs: remainingBudgetMs(),
+        initialCursor: manualInvoiceCursor,
+      });
       if (fallback.error) {
         invFetchErr = fallback.error;
-      } else if (fallback.rows.length > 0) {
+      } else if (fallback.rows.length > 0 || !fallback.exhausted) {
         invRows = fallback.rows;
-        invoiceBackfillNextCursor = null;
-        invoiceBackfillExhausted = true;
+        invoiceBackfillNextCursor = fallback.nextCursor;
+        invoiceBackfillExhausted = fallback.exhausted;
         documentFallbackUsed = true;
         logger.info(
-          `[Megaventory] DocumentGet date filter returned 0 rows for ${brandId}; fallback recovered ${fallback.rows.length} recent documents`
+          `[Megaventory] DocumentGet date filter returned 0 rows for ${brandId}; fallback recovered ${fallback.rows.length} recent documents (exhausted=${fallback.exhausted})`
+        );
+      } else {
+        // fallback found nothing and walked to the end → invoices genuinely exhausted for this window
+        invoiceBackfillExhausted = true;
+      }
+    }
+    if (!shouldStageInvoiceBackfill && !invFetchErr) {
+      // PER-60: translate the manual invoice walk outcome into resume/complete signals for products + state.
+      if (invoiceBackfillExhausted) {
+        invoiceIngestComplete = true;
+        manualInvoiceJustCompleted = true;
+      } else {
+        manualInvoiceResumeCursor = positiveNumber(invoiceBackfillNextCursor);
+        needsContinuation = true;
+        logger.warn(
+          `[Megaventory] manual invoice ingestion for ${brandId} over budget — deferring (cursor=${manualInvoiceResumeCursor ?? 'latest'})`
         );
       }
     }
     if (!invFetchErr) {
       const rollingRecentWindow = buildRollingUtcDayWindow(MV_RECENT_DOCUMENT_LOOKBACK_DAYS);
-      const recent = await fetchRecentMvDocumentsByLocalDate(apiKey, rollingRecentWindow.since);
+      // PER-60: budget the rolling-window merge too (best-effort freshness pull). When the pass already
+      // ran over budget — e.g. invoices were just deferred — remainingBudgetMs()≈0 makes this a no-op.
+      const recent = await fetchRecentMvDocumentsByLocalDate(apiKey, rollingRecentWindow.since, {
+        maxRuntimeMs: remainingBudgetMs(),
+      });
       if (recent.error) {
         logger.warn(
           `[Megaventory] Recent invoice merge failed for ${brandId}: ${recent.error}`
@@ -1250,7 +1334,17 @@ export async function fetchMegaventoryData(
         ...(errors.length ? { error: errors[0] } : {}),
       };
     }
+    } // PER-60: end invoice ingestion (documents refresh block)
 
+    // ── Sales & Purchase Orders (ingestion — own per-cycle done flag + budget guard) ──
+    // PER-60: pulled OUT of the documents-else so they still run on passes where invoices are already
+    // complete (otherwise they'd be skipped forever → strand). Invoices keep budget priority; the whole
+    // orders fetch is deferred (not truncated) when over the soft deadline.
+    if (!ingestionAlreadyComplete && !ordersIngestComplete && invoiceIngestComplete) {
+    if (overBudget()) {
+      needsContinuation = true;
+      logger.warn(`[Megaventory] over soft deadline before SalesOrder/PurchaseOrder fetch for ${brandId} — deferring orders to continuation pass`);
+    } else {
     // ── Sales Orders (cross-reference) ───────────────────────────────
     const { rows: soRows, error: soFetchErr } = await fetchAllMvPages(
       'SalesOrderGet',
@@ -1338,7 +1432,9 @@ export async function fetchMegaventoryData(
       totalImported += items.length;
       logger.info(`[Megaventory] Purchase orders: ${items.length} imported for brand ${brandId}`);
     }
-    }
+      ordersDoneThisPass = true;
+    } // end orders over-budget guard
+    } // end orders ingestion guard
 
     // ── Products (resumable catalog fetch) ────────────────────────────
     // PER-60: το ProductGet (87k+ SKU) δεν χωράει πάντα σε ένα 30min pass. Το τραβάμε σταδιακά με
@@ -1349,6 +1445,18 @@ export async function fetchMegaventoryData(
     let productCatalogNextCursor: number | null = null;
     if (catalogAlreadyComplete) {
       logger.info(`[Megaventory] catalog already complete for ${brandId} — skipping ProductGet, running downstream`);
+    } else if (!invoiceIngestComplete) {
+      // PER-60: invoices haven't finished ingesting this cycle — give them the remaining passes first so
+      // the catalog isn't started with a near-zero budget (which previously ran ProductGet into the wall).
+      productGetExhausted = false;
+      needsContinuation = true;
+      logger.info(`[Megaventory] ProductGet deferred for ${brandId} — manual invoice ingestion not yet complete`);
+    } else if (overBudget()) {
+      // PER-60: no budget left for the catalog this pass — defer rather than fetch unbounded (maxRuntimeMs≈0
+      // would otherwise disable the deadline inside fetchAllMvPages).
+      productGetExhausted = false;
+      needsContinuation = true;
+      logger.warn(`[Megaventory] over soft deadline before ProductGet for ${brandId} — deferring catalog to continuation pass`);
     } else {
       const { rows: prRows, error: prFetchErr, exhausted, nextCursor } = await fetchAllMvPages('ProductGet', apiKey, [], {
         responseArrayKey: 'mvProducts',
@@ -1389,8 +1497,12 @@ export async function fetchMegaventoryData(
       }
     }
 
-    // ── Stock per location (ingestion — skipped on the processing pass) ──
-    if (!catalogAlreadyComplete) {
+    // ── Stock per location (ingestion — own done flag + budget guard) ──
+    if (!ingestionAlreadyComplete && !stockIngestComplete && invoiceIngestComplete) {
+    if (overBudget()) {
+      needsContinuation = true;
+      logger.warn(`[Megaventory] over soft deadline before InventoryLocationStockGet for ${brandId} — deferring stock to continuation pass`);
+    } else {
     let stRowsRaw: any[] = [];
     let stFetchErr: string | null = null;
     ({ rows: stRowsRaw, error: stFetchErr } = await fetchAllMvPages('InventoryLocationStockGet', apiKey, [], {
@@ -1427,12 +1539,18 @@ export async function fetchMegaventoryData(
       if (items.length) await writeBatch(db, 'megaventory_stock', brandId, items);
       counts.stock = items.length;
       totalImported += items.length;
+      stockDoneThisPass = true;
       logger.info(`[Megaventory] Stock rows: ${items.length} imported for brand ${brandId}`);
     }
+    } // end stock over-budget guard
     } // end stock ingestion guard
 
-    // ── Suppliers (ingestion — skipped on the processing pass) ─────
-    if (!catalogAlreadyComplete) {
+    // ── Suppliers (ingestion — own done flag + reserve guard; SupplierClientGet is the slow one) ─────
+    if (!ingestionAlreadyComplete && !suppliersIngestComplete && invoiceIngestComplete) {
+    if (remainingBudgetMs() < MV_SUPPLIERS_RESERVE_MS) {
+      needsContinuation = true;
+      logger.warn(`[Megaventory] insufficient budget reserve before SupplierClientGet for ${brandId} — deferring suppliers to continuation pass`);
+    } else {
     const { rows: supRows, error: supFetchErr } = await fetchAllMvPages(
       'SupplierClientGet',
       apiKey,
@@ -1466,8 +1584,10 @@ export async function fetchMegaventoryData(
       if (items.length) await writeBatch(db, 'megaventory_suppliers', brandId, items);
       counts.suppliers = items.length;
       totalImported += items.length;
+      suppliersDoneThisPass = true;
       logger.info(`[Megaventory] Suppliers: ${items.length} imported for brand ${brandId}`);
     }
+    } // end suppliers reserve guard
     } // end suppliers ingestion guard
 
     // ── Custom saved report (π.χ. Performance / αποθέματα — CustomReportGetData) ──
@@ -1523,12 +1643,20 @@ export async function fetchMegaventoryData(
     // PER-60: gap-fill διαγράφει & ξαναγράφει ΟΛΟΚΛΗΡΟ τον api-catalog διαβάζοντας από το
     // megaventory_products (Firestore). Τρέχει ΜΟΝΟ όταν ο κατάλογος είναι ΠΛΗΡΗΣ — αλλιώς θα
     // έκανε purge-then-partial = data loss. Αν δεν είναι (ή ξεμείναμε από budget), ζητάμε continuation.
-    const catalogComplete = catalogAlreadyComplete || (referenceOk && productGetExhausted !== false);
-    // PER-60: run the heavy downstream (gap-fill/RFM/procurement/stock-movement) only when the catalog
-    // is complete AND we are either the dedicated processing pass (catalogAlreadyComplete) or still have
-    // a full budget reserve. Otherwise defer it to a fresh pass — large brands can't fit ingestion AND
-    // processing in one 30-min invocation. Small brands keep their budget and finish in a single pass.
-    const runProcessing = catalogComplete && (catalogAlreadyComplete || remainingBudgetMs() >= MV_PROCESSING_RESERVE_MS);
+    // PER-60: the catalog (ProductGet) is "done" when exhausted this pass or already complete from a prior.
+    const productCatalogDone = catalogAlreadyComplete || (referenceOk && productGetExhausted !== false);
+    const ordersDone = ordersIngestComplete || ordersDoneThisPass;
+    const stockDone = stockIngestComplete || stockDoneThisPass;
+    const suppliersDone = suppliersIngestComplete || suppliersDoneThisPass;
+    // PER-60: ingestion is complete only when EVERY phase (invoices/orders/catalog/stock/suppliers) is in.
+    // Processing (gap-fill etc.) purges+rewrites from Firestore — it must not start on a partial dataset,
+    // and no single fast phase may flip us into "processing pass" early and strand a slow one (suppliers).
+    const ingestionComplete = ingestionAlreadyComplete ||
+      (referenceOk && invoiceIngestComplete && productCatalogDone && ordersDone && stockDone && suppliersDone);
+    // PER-60: run the heavy downstream only when ingestion is complete AND we are either the dedicated
+    // processing pass or still have a full budget reserve. Otherwise defer to a fresh pass — large brands
+    // can't fit ingestion AND processing in one 30-min invocation; small brands finish in a single pass.
+    const runProcessing = ingestionComplete && (ingestionAlreadyComplete || remainingBudgetMs() >= MV_PROCESSING_RESERVE_MS);
     // PER-60: within the processing stage, run heavy sub-stages greedily but checkpoint between them
     // (gapfill=0 → rfm=1 → finalize=2). `processingDoneThrough` = index of the next sub-stage still to
     // run this pass; it advances as each completes. A brand whose processing alone exceeds 30min then
@@ -1536,9 +1664,9 @@ export async function fetchMegaventoryData(
     let processingDoneThrough = runProcessing
       ? PROCESSING_ORDER.indexOf(planProcessing(conn.processingStage as ProcessingStage | null | undefined).run)
       : 0;
-    if (!catalogComplete) {
+    if (!ingestionComplete) {
       needsContinuation = true;
-      logger.warn(`[Megaventory] catalog fetch incomplete within budget for ${brandId} — deferring to continuation pass`);
+      logger.warn(`[Megaventory] ingestion incomplete within budget for ${brandId} — deferring to continuation pass`);
     } else if (!runProcessing) {
       needsContinuation = true;
       logger.info(`[Megaventory] catalog complete; deferring heavy downstream to a fresh processing pass for ${brandId} (budget reserve)`);
@@ -1618,6 +1746,18 @@ export async function fetchMegaventoryData(
         if (invoiceBackfillProgress?.exhausted) {
           patch['megaventory.invoiceDocumentBackfillComplete'] = true;
           patch['megaventory.invoiceDocumentBackfillCompletedAt'] = FieldValue.serverTimestamp();
+        }
+      } else {
+        // PER-60: manual/incremental invoice resume state. Checkpoint the cursor when we defer mid-walk;
+        // mark complete (and drop the cursor) when the walk exhausts so later ingestion passes skip it.
+        // NOT reset on failure (unlike the catalog) — a saved cursor means a retry resumes instead of
+        // re-walking from scratch, which is what prevents re-hitting the wall at the same spot.
+        if (manualInvoiceJustCompleted) {
+          patch['megaventory.manualInvoiceComplete'] = true;
+          patch['megaventory.manualInvoiceCompletedAt'] = FieldValue.serverTimestamp();
+          patch['megaventory.manualInvoiceCursor'] = FieldValue.delete();
+        } else if (manualInvoiceResumeCursor) {
+          patch['megaventory.manualInvoiceCursor'] = manualInvoiceResumeCursor;
         }
       }
     }
@@ -1701,25 +1841,41 @@ export async function fetchMegaventoryData(
       processingDoneThrough = 3; // finalize done — whole processing stage complete
     }
 
-    // PER-60: persist resumable catalog state AFTER every heavy phase (catalog/gap-fill/RFM/
-    // procurement/stock-movement) has decided whether it needs continuation. Reset when the WHOLE
-    // sync finishes (so the next manual sync re-fetches fresh); otherwise keep complete=true / cursor
-    // so the next pass resumes the right phase instead of re-fetching the catalog from scratch.
-    if (!catalogComplete) {
-      // ingestion still fetching the catalog — persist the resume cursor (needsContinuation already set)
-      if (productCatalogNextCursor) {
+    // PER-60: persist resumable state AFTER every phase has decided whether it needs continuation.
+    // (a) Per-phase progress — checkpoint so the next pass skips finished phases. ProductGet has its own
+    //     complete/cursor; the ancillaries (orders/stock/suppliers) have per-cycle done flags. These persist
+    //     EVEN when the whole ingestion isn't done yet, so a multi-pass cycle never re-fetches a done phase.
+    if (!catalogAlreadyComplete) {
+      if (productGetExhausted !== false && referenceOk) {
+        patch['megaventory.productCatalogComplete'] = true;
+        patch['megaventory.productCatalogCursor'] = FieldValue.delete();
+      } else if (productCatalogNextCursor) {
         patch['megaventory.productCatalogCursor'] = productCatalogNextCursor;
         patch['megaventory.productCatalogComplete'] = false;
       }
+    }
+    if (ordersDoneThisPass) patch['megaventory.ordersIngestComplete'] = true;
+    if (stockDoneThisPass) patch['megaventory.stockIngestComplete'] = true;
+    if (suppliersDoneThisPass) patch['megaventory.suppliersIngestComplete'] = true;
+
+    // (b) Ingestion → processing transition / whole-sync reset.
+    if (!ingestionComplete) {
+      // still ingesting — needsContinuation already set by whichever phase deferred; progress is in (a).
     } else if (runProcessing && processingDoneThrough >= PROCESSING_ORDER.length) {
       // every processing sub-stage finished → whole sync complete → reset so the next sync re-ingests fresh
+      patch['megaventory.ingestionComplete'] = FieldValue.delete();
       patch['megaventory.productCatalogComplete'] = FieldValue.delete();
       patch['megaventory.productCatalogCursor'] = FieldValue.delete();
       patch['megaventory.processingStage'] = FieldValue.delete();
+      patch['megaventory.ordersIngestComplete'] = FieldValue.delete();
+      patch['megaventory.stockIngestComplete'] = FieldValue.delete();
+      patch['megaventory.suppliersIngestComplete'] = FieldValue.delete();
+      // clear the manual invoice cycle flags too so the next full sync re-walks invoices fresh
+      patch['megaventory.manualInvoiceComplete'] = FieldValue.delete();
+      patch['megaventory.manualInvoiceCursor'] = FieldValue.delete();
     } else {
-      // catalog complete but processing in progress/deferred → keep complete, checkpoint the next sub-stage
-      patch['megaventory.productCatalogComplete'] = true;
-      patch['megaventory.productCatalogCursor'] = FieldValue.delete();
+      // ingestion complete but processing in progress/deferred → mark the processing pass + checkpoint sub-stage
+      patch['megaventory.ingestionComplete'] = true;
       patch['megaventory.processingStage'] = PROCESSING_ORDER[Math.min(processingDoneThrough, PROCESSING_ORDER.length - 1)];
       needsContinuation = true;
     }

@@ -8,6 +8,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --passWithNoTests",
+    "test:integration": "firebase emulators:exec --only firestore --project=demo-test \"vitest run --config vitest.integration.config.ts\"",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "deploy": "firebase deploy --only functions",

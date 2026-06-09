@@ -1882,9 +1882,16 @@ export const processOpenCartSyncJobs = onSchedule(
 async function resetMegaventoryResumableState(db: admin.firestore.Firestore, brandId: string): Promise<void> {
   try {
     await db.doc(`connectors/${brandId}`).update({
+      'megaventory.ingestionComplete': FieldValue.delete(),
       'megaventory.productCatalogComplete': FieldValue.delete(),
       'megaventory.productCatalogCursor': FieldValue.delete(),
       'megaventory.processingStage': FieldValue.delete(),
+      // PER-60: clear the per-cycle ancillary done flags too so a failed pass re-ingests them cleanly.
+      // NOTE: manualInvoiceCursor/Complete are intentionally NOT reset — they're resume-friendly, so a
+      // retry continues the (expensive) invoice walk from its checkpoint instead of re-walking from scratch.
+      'megaventory.ordersIngestComplete': FieldValue.delete(),
+      'megaventory.stockIngestComplete': FieldValue.delete(),
+      'megaventory.suppliersIngestComplete': FieldValue.delete(),
     });
   } catch (e) {
     logger.warn(`[MegaventoryJob] could not reset resumable state for ${brandId}`, { err: e });

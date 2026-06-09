@@ -8,6 +8,9 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/__tests__/**/*.test.ts'],
+    // PER-60: integration tests need the Firestore emulator — run them via the
+    // dedicated `test:integration` config, not the plain unit run.
+    exclude: ['src/__tests__/integration/**', '**/node_modules/**'],
     setupFiles: ['src/__tests__/setup.ts'],
     coverage: {
       provider: 'v8',
