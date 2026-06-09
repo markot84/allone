@@ -53,6 +53,38 @@ describe('extractMvCategory (PER-60)', () => {
   it('ignores a non-object ProductCategory value safely', () => {
     expect(extractMvCategory({ ProductCategory: 42, ProductCategoryDescription: 'D' })).toBe('D');
   });
+
+  // PER-60 (live-confirmed): includeReferencedObjects embeds the category as `mvProductCategory`
+  // (mv prefix), with the name as a full path. The product itself carries only ProductCategoryID.
+  it('reads the real includeReferencedObjects shape mvProductCategory.ProductCategoryName (leaf of the path)', () => {
+    expect(
+      extractMvCategory({
+        ProductCategoryID: 8274,
+        mvProductCategory: {
+          ProductCategoryID: 8274,
+          ProductCategoryName: 'Root Catalog/e-tennis/Αθλητικά Παπούτσια',
+          ProductCategoryDescription: '<h3>...</h3>',
+        },
+      })
+    ).toBe('Αθλητικά Παπούτσια');
+  });
+
+  it('mvProductCategory takes precedence over flat fields', () => {
+    expect(
+      extractMvCategory({
+        ProductCategoryName: 'stale-flat',
+        mvProductCategory: { ProductCategoryName: 'Root Catalog/e-tennis/Babolat' },
+      })
+    ).toBe('Babolat');
+  });
+
+  it('strips the Root Catalog / brand path prefix down to the leaf segment', () => {
+    expect(extractMvCategory({ ProductCategoryName: 'Root Catalog/e-tennis/Ανδρικά Ρούχα' })).toBe('Ανδρικά Ρούχα');
+  });
+
+  it('returns empty when only a numeric ProductCategoryID is present (no referenced object)', () => {
+    expect(extractMvCategory({ ProductCategoryID: 8274 })).toBe('');
+  });
 });
 
 describe('normalizeMvCustomReportRow (SEC-L13)', () => {

@@ -392,31 +392,39 @@ function positiveNumber(value: unknown): number | null {
   return n > 0 ? n : null;
 }
 
+/** Τα MV category names είναι full paths («Root Catalog/e-tennis/Αθλητικά Παπούτσια») — κρατάμε το leaf. */
+function leafCategoryName(raw: unknown): string {
+  const s = String(raw ?? '').trim();
+  if (!s) return '';
+  const parts = s.split('/').map((x) => x.trim()).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : s;
+}
+
 /**
  * Εξάγει το όνομα κατηγορίας από ProductGet row.
  *
- * Το Megaventory επιστρέφει το πραγματικό όνομα στο `ProductCategoryName`
- * (π.χ. «Ανδρικά Ρούχα»), ενώ το `ProductCategoryDescription` έρχεται συχνά κενό.
- * Με `includeReferencedObjects: true` η κατηγορία μπορεί επίσης να έρθει ως
- * nested referenced object (`ProductCategory`). Σειρά προτίμησης:
- *   1) flat `ProductCategoryName`
- *   2) nested `ProductCategory.{ProductCategoryName|ProductCategoryDescription}`
- *   3) flat `ProductCategoryDescription` (last resort — συχνά κενό)
+ * ΣΗΜΑΝΤΙΚΟ (PER-60, επιβεβαιωμένο live): το ProductGet row κουβαλάει μόνο numeric
+ * `ProductCategoryID`. Με `includeReferencedObjects: true` το πραγματικό όνομα έρχεται
+ * embedded ως nested object **`mvProductCategory`** (mv prefix!) — ΟΧΙ `ProductCategory`.
+ * Το `ProductCategoryName` εκεί είναι full path («Root Catalog/<brand>/<κατηγορία>») οπότε
+ * κρατάμε το leaf segment. Σειρά προτίμησης:
+ *   1) `mvProductCategory.{ProductCategoryName|ProductCategoryDescription}` (referenced object)
+ *   2) flat `ProductCategoryName`
+ *   3) flat `ProductCategoryDescription` (last resort — σχεδόν πάντα κενό)
  */
 export function extractMvCategory(p: Record<string, unknown>): string {
-  const flatName = String((p.ProductCategoryName ?? '') as unknown as string).trim();
-  if (flatName) return flatName;
-
-  const nested = p.ProductCategory;
-  if (nested && typeof nested === 'object') {
-    const n = nested as Record<string, unknown>;
-    const nestedName = String((n.ProductCategoryName ?? '') as unknown as string).trim();
-    if (nestedName) return nestedName;
-    const nestedDesc = String((n.ProductCategoryDescription ?? '') as unknown as string).trim();
-    if (nestedDesc) return nestedDesc;
+  const ref = (p.mvProductCategory ?? p.ProductCategory) as Record<string, unknown> | undefined;
+  if (ref && typeof ref === 'object') {
+    const name = leafCategoryName(ref.ProductCategoryName);
+    if (name) return name;
+    const desc = leafCategoryName(ref.ProductCategoryDescription);
+    if (desc) return desc;
   }
 
-  return String((p.ProductCategoryDescription ?? '') as unknown as string).trim();
+  const flatName = leafCategoryName(p.ProductCategoryName);
+  if (flatName) return flatName;
+
+  return leafCategoryName(p.ProductCategoryDescription);
 }
 
 async function fetchAllMvPages(
