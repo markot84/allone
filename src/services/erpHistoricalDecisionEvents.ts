@@ -168,9 +168,11 @@ function stockEvent(
 }
 
 function rankEvent(event: CommercialDecisionEvent): number {
-  const change = event.changes?.find((c) => c.label.includes('change'))?.after;
-  const pct = typeof change === 'string' ? Number(change.replace(/[+%]/g, '')) : 0;
-  return Number.isFinite(pct) ? Math.abs(pct) : 0;
+  // CODE-2: rank by the typed numeric revenue-change field. The previous code matched the
+  // English substring 'change' against Greek labels ('Μεταβολή …'), so it never matched and
+  // every event ranked 0 — ranking was inert.
+  const pct = event.performance?.revenueChangePct;
+  return typeof pct === 'number' && Number.isFinite(pct) ? Math.abs(pct) : 0;
 }
 
 export function buildErpHistoricalDecisionEvents(input: ErpHistoricalDecisionEventsInput): CommercialDecisionEvent[] {

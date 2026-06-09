@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { escapeHtml } from '../../utils/escapeHtml';
 import { GrowthPlayPanel, usePlayContext } from './GrowthPlayPanel';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -2110,25 +2111,27 @@ function openBriefPdf(data: BriefData) {
     return `
       <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:#FAFAFA;border-radius:10px;margin:4px 0;border-left:3px solid ${ch.funnelColor}">
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:#1A1A1A">${ch.name}</div>
+          <div style="font-size:13px;font-weight:600;color:#1A1A1A">${escapeHtml(ch.name)}</div>
           <div style="font-size:11px;color:#4A4A4A;margin-top:2px">
             ${ch.funnel}${budgetDisplay ? ` · ${budgetDisplay}` : ''}${!ch.isPrimary ? ' · secondary' : ''}
           </div>
-          ${ch.note ? `<div style="font-size:11px;color:#4A4A4A;margin-top:4px;font-style:italic">${ch.note}</div>` : ''}
+          ${ch.note ? `<div style="font-size:11px;color:#4A4A4A;margin-top:4px;font-style:italic">${escapeHtml(ch.note)}</div>` : ''}
         </div>
-        <span style="font-size:11px;font-weight:600;color:${statusColor}">${statusLabel}</span>
+        <span style="font-size:11px;font-weight:600;color:${statusColor}">${escapeHtml(statusLabel)}</span>
       </div>`;
   }).join('');
 
+  // SEC-H1: split into paragraphs first, then escape each segment before wrapping in our
+  // own <p> tags — so member/AI-controlled rationale text can't inject markup.
   const rationaleHtml = data.rationale
-    ? data.rationale.split('||').map(p => `<p style="margin:6px 0;font-size:12px;color:#4A4A4A;line-height:1.6">${p.trim()}</p>`).join('')
+    ? data.rationale.split('||').map(p => `<p style="margin:6px 0;font-size:12px;color:#4A4A4A;line-height:1.6">${escapeHtml(p.trim())}</p>`).join('')
     : '';
 
   const html = `<!DOCTYPE html>
 <html lang="el">
 <head>
 <meta charset="UTF-8">
-<title>Channel Brief${data.brandName ? ` — ${data.brandName}` : ''}</title>
+<title>Channel Brief${data.brandName ? ` — ${escapeHtml(data.brandName)}` : ''}</title>
 <style>
   @media print { body { margin: 0; } .no-print { display: none !important; } }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1A1A1A; max-width: 700px; margin: 0 auto; padding: 40px 32px; background: #fff; }
@@ -2150,7 +2153,7 @@ function openBriefPdf(data: BriefData) {
 <body>
   <div class="header">
     <div>
-      <div class="brand-name">${data.brandName || 'Channel Brief'}</div>
+      <div class="brand-name">${data.brandName ? escapeHtml(data.brandName) : 'Channel Brief'}</div>
       <div class="date">${data.date}</div>
     </div>
     <div class="logo">≠</div>
@@ -2159,11 +2162,11 @@ function openBriefPdf(data: BriefData) {
   <div class="meta-grid"${data.monthlyBudget ? ' style="grid-template-columns:1fr 1fr 1fr"' : ''}>
     <div class="meta-card">
       <div class="meta-label">Στρατηγική</div>
-      <div class="meta-value">${data.strategyName}</div>
+      <div class="meta-value">${escapeHtml(data.strategyName)}</div>
     </div>
     <div class="meta-card">
       <div class="meta-label">Διάρκεια</div>
-      <div class="meta-value">${data.duration}</div>
+      <div class="meta-value">${escapeHtml(data.duration)}</div>
     </div>
     ${data.monthlyBudget ? `<div class="meta-card">
       <div class="meta-label">Μηνιαίο Budget</div>
@@ -2186,8 +2189,6 @@ function openBriefPdf(data: BriefData) {
     <div class="footer-text">Channel Brief — Performance+ | notthesame.ai</div>
     <div class="footer-brand">≠</div>
   </div>
-
-  <script>window.onload = function() { window.print(); }</script>
 </body>
 </html>`;
 
@@ -2195,5 +2196,15 @@ function openBriefPdf(data: BriefData) {
   if (win) {
     win.document.write(html);
     win.document.close();
+    // SEC-H1/PP-19: print from the opener instead of an inline <script> in the written
+    // document, so it survives removing CSP script-src 'unsafe-inline' (SEC-M7).
+    let printed = false;
+    const doPrint = () => {
+      if (printed) return;
+      printed = true;
+      try { win.focus(); win.print(); } catch { /* window closed by user */ }
+    };
+    win.onload = doPrint;
+    setTimeout(doPrint, 300);
   }
 }

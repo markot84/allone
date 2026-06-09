@@ -1235,9 +1235,10 @@ export const connectorCallback = onRequest(
         );
       }
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[ConnectorCallback] Error:', { alertKey: ALERT.connectorCallbackFailed, err: error });
-      res.status(500).send(`Callback error: ${msg}`);
+      const cid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      logger.error(`[ConnectorCallback] Error (cid=${cid}):`, { alertKey: ALERT.connectorCallbackFailed, err: error });
+      // SEC-L3: don't leak internal error detail to the browser; reference the log via cid.
+      res.status(500).send(`Callback error (ref: ${cid}). Please try reconnecting.`);
     }
   }
 );
@@ -1477,7 +1478,7 @@ export const connectorSelectAccount = onRequest(
  * Body: { brandId, provider }
  */
 export const connectorSync = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 1200, memory: '4GiB', cpu: 2, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
+  { region: 'europe-west1', timeoutSeconds: 1200, memory: '4GiB', cpu: 2, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
   async (req, res) => {
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
@@ -1637,8 +1638,9 @@ export const connectorSync = onRequest(
 export const ga4PeriodTotals = onRequest(
   // CONNECTOR_TOKEN_KEY: απαραίτητο — το decryptToken το χρειάζεται για να αποκρυπτογραφήσει το GA4
   // refresh token. Χωρίς αυτό η αποκρυπτογράφηση αποτυγχάνει → «GA4 token unavailable» → fallback.
-  { region: 'europe-west1', cors: true, secrets: ['GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'CONNECTOR_TOKEN_KEY'] },
+  { region: 'europe-west1', secrets: ['GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
@@ -1687,9 +1689,10 @@ export const ga4PeriodTotals = onRequest(
       res.status(200).json({ success: true, totals: r.totals, cached: false });
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[ga4PeriodTotals] failed:', { alertKey: ALERT.ga4PeriodTotalsFailed, err: error });
-      res.status(500).json({ error: msg });
+      const cid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      logger.error(`[ga4PeriodTotals] failed (cid=${cid}):`, { alertKey: ALERT.ga4PeriodTotalsFailed, err: error });
+      // SEC-L3: generic error to the client + correlation id for support; detail stays in logs.
+      res.status(500).json({ error: 'Internal error', correlationId: cid });
     }
   }
 );
@@ -1997,7 +2000,7 @@ export const processMegaventorySyncJobs = onSchedule(
  * Body: { brandId, provider: "woocommerce", storeUrl, consumerKey, consumerSecret }
  */
 export const connectorSaveCredentials = onRequest(
-  { region: 'europe-west1', cors: true, secrets: ['CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
+  { region: 'europe-west1', secrets: ['CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
   async (req, res) => {
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }

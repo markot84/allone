@@ -27,8 +27,12 @@ import type { Brand, ChangelogEntry, ModuleId, BrandMemberRole, BrandDepartment 
 import { ROLE_LABELS, DEPARTMENT_LABELS, normalizeBrandMemberRole } from '../../types';
 import { useAuth } from '../../hooks';
 import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
-import buildInfo from '../../generated/buildInfo.json';
+import buildInfoJson from '../../generated/buildInfo.json';
+import type { BuildInfo } from '../../types/buildInfo';
 import { logger } from '../../utils/logger';
+
+// CODE-B1: cast so empty commits/changes arrays don't infer as never[] under `tsc -b`.
+const buildInfo = buildInfoJson as BuildInfo;
 
 type AdminTab = 'brands' | 'users' | 'leads' | 'api' | 'changelog' | 'system';
 

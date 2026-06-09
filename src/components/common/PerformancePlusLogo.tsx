@@ -1,4 +1,8 @@
-import buildInfo from '../../generated/buildInfo.json';
+import buildInfoJson from '../../generated/buildInfo.json';
+import type { BuildInfo } from '../../types/buildInfo';
+
+// CODE-B1: cast so empty commits/changes arrays don't infer as never[] under `tsc -b`.
+const buildInfo = buildInfoJson as BuildInfo;
 
 /**
  * `onLight`: η εικόνα Performance.png σε σκούρο pill — ακριβώς όπως εμφανίζεται στο sidebar.

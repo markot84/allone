@@ -353,7 +353,11 @@ function classifyOne(
   }
 
   // 5) Hot Seller — top percentile qty30d + υγιές margin
+  // LOGIC-11: the cutoff is computed only from hasWindowSource products, so gate the
+  // classification on it too — otherwise import-only SKUs (no real velocity window) get
+  // mis-bucketed as hot_seller in mixed-source brands.
   if (
+    hasWindowSource &&
     typeof qty30d === 'number' &&
     qty30d >= ctx.hotSellerQty30dCutoff &&
     qty30d > 0 &&

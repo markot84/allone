@@ -359,13 +359,19 @@ function buildBehavioralProfile(g: SegmentAgg, totalRevenue: number, globalAov: 
     .sort((a, b) => b[1].revenue - a[1].revenue)
     .slice(0, 6);
   const maxCategoryRevenue = categoryRows[0]?.[1].revenue || 1;
-  const segmentRevenue = Math.max(g.revenue, 1e-6);
+  // LOGIC-7: the denominator must be GROSS — the sum of the same gross line revenues held in
+  // g.affinity — not the NET order revenue g.revenue. On discounted orders Σ(gross lines) > net
+  // total, so dividing a gross numerator by g.revenue let revenue_share_pct exceed 100%.
+  const affinityGrossRevenue = Math.max(
+    [...g.affinity.values()].reduce((sum, r) => sum + r.revenue, 0),
+    1e-6,
+  );
   const category_affinity = categoryRows.map(([name, row]) => ({
     name,
     affinity: Math.round((row.revenue / maxCategoryRevenue) * 100) / 100,
     avg_order: row.quantity > 0 ? Math.round(row.revenue / row.quantity) : Math.round(row.revenue),
     revenue_eur: Math.round(row.revenue * 100) / 100,
-    revenue_share_pct: Math.round((row.revenue / segmentRevenue) * 1000) / 10,
+    revenue_share_pct: Math.round((row.revenue / affinityGrossRevenue) * 1000) / 10,
   }));
   const diversity = Math.min(1, g.affinity.size / 6);
   const engagement = clamp(avgR * 13 + avgF * 8 + avgM * 4);
@@ -393,10 +399,12 @@ function buildBehavioralProfile(g: SegmentAgg, totalRevenue: number, globalAov: 
       lines_total: g.catalogLineCount,
       lines_matched: g.catalogMatchedLineCount,
     };
-    catalogExtras.brand_affinity = catalogMapToAffinity(g.catalogBrand, g.revenue, 10);
-    catalogExtras.category_affinity_catalog = catalogMapToAffinity(g.catalogCategory, g.revenue, 10);
-    catalogExtras.subcategory_affinity = catalogMapToAffinity(g.catalogSubcategory, g.revenue, 10);
-    catalogExtras.sku_affinity = catalogMapToAffinity(g.catalogSku, g.revenue, 10);
+    // LOGIC-7: catalog maps hold GROSS line revenue, so the share denominator must be the
+    // gross catalog line total (g.catalogLineRev), not the net order revenue (g.revenue).
+    catalogExtras.brand_affinity = catalogMapToAffinity(g.catalogBrand, g.catalogLineRev, 10);
+    catalogExtras.category_affinity_catalog = catalogMapToAffinity(g.catalogCategory, g.catalogLineRev, 10);
+    catalogExtras.subcategory_affinity = catalogMapToAffinity(g.catalogSubcategory, g.catalogLineRev, 10);
+    catalogExtras.sku_affinity = catalogMapToAffinity(g.catalogSku, g.catalogLineRev, 10);
   }
 
   return {

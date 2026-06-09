@@ -81,11 +81,17 @@ function assignQuintileScores(values: number[], lowIsHighScore: boolean): number
   const idx = values.map((v, i) => ({ v, i }));
   idx.sort((a, b) => (lowIsHighScore ? a.v - b.v : b.v - a.v));
   const out = new Array<number>(n).fill(1);
-  for (let band = 0; band < 5; band++) {
-    const score = 5 - band;
-    const start = Math.floor((band * n) / 5);
-    const end = Math.max(start, Math.floor(((band + 1) * n) / 5) - 1);
-    for (let j = start; j <= end; j++) out[idx[j].i] = score;
+  // LOGIC-10: tie-aware quintile banding — equal values share a score instead of being
+  // split across quintiles by array position (e.g. all frequency=1 customers).
+  let prevValue: number | undefined;
+  let prevScore = 5;
+  for (let j = 0; j < n; j++) {
+    const band = Math.min(4, Math.floor((j * 5) / n));
+    let score = 5 - band;
+    if (prevValue !== undefined && idx[j].v === prevValue) score = prevScore;
+    out[idx[j].i] = score;
+    prevValue = idx[j].v;
+    prevScore = score;
   }
   return out;
 }
@@ -136,7 +142,10 @@ async function loadOrders(db: Firestore, brandId: string): Promise<{ source: Meg
         customerKey: customerKey(d.clientId, customerName),
         customerName,
         date: text(d.date),
-        revenue: num(d.totalAmount || d.netAmount),
+        // LOGIC-8: use the NET (ex-VAT) amount as the monetary base, consistent with
+        // ecommerceAggregator — preferring totalAmount (VAT-inclusive) inflated the RFM M
+        // dimension / revenue_share ~24% vs the revenue dashboards.
+        revenue: num(d.netAmount || d.totalAmount),
         status: d.status,
       };
     })

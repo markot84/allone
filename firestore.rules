@@ -16,7 +16,10 @@ service cloud.firestore {
       return isSuperAdmin()
         || (request.auth != null
             && (exists(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid))
-                || get(/databases/$(database)/documents/brands/$(brandId)).data.createdBy == request.auth.uid));
+                // SEC-L15: guard the createdBy get() with exists() (mirrors isBrandOwnerOrAdmin)
+                // so a missing brand doc evaluates to false instead of erroring.
+                || (exists(/databases/$(database)/documents/brands/$(brandId))
+                    && get(/databases/$(database)/documents/brands/$(brandId)).data.createdBy == request.auth.uid)));
     }
 
     // Owner ή admin του brand. Ο δημιουργός θεωρείται owner για legacy brands χωρίς members doc.
@@ -107,7 +110,14 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120;
-      allow update, delete: if isBrandOwnerOrAdmin(brandId);
+      // SEC-M2: `createdBy` is trusted as a membership/ownership signal (isBrandMember,
+      // isBrandOwnerOrAdmin, Storage rules) but was mutable on update — letting an
+      // owner/admin re-point it to their own uid and keep a persistent backdoor even
+      // after being removed from members. Pin it immutable; a normal update (which never
+      // changes createdBy) still passes since request.resource.data carries it unchanged.
+      allow update: if isBrandOwnerOrAdmin(brandId)
+        && request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if isBrandOwnerOrAdmin(brandId);
 
       // Brand members — προσοχή: collection group query `where userId == request.auth.uid` ΔΕΝ πρέπει
       // να βασίζεται μόνο σε isBrandMember(), γιατί το exists(.../members/$(uid)) είναι το ίδιο doc
@@ -126,6 +136,9 @@ service cloud.firestore {
         allow create: if isSuperAdmin()
           || (request.auth != null
               && request.auth.uid == memberId
+              // SEC-M10: pin the userId payload to the caller too, so a creator cannot mint
+              // a member doc carrying another user's userId (collection-group query spoofing).
+              && request.resource.data.userId == request.auth.uid
               && request.resource.data.role == 'owner'
               && exists(/databases/$(database)/documents/brands/$(brandId))
               && get(/databases/$(database)/documents/brands/$(brandId)).data.createdBy == request.auth.uid);

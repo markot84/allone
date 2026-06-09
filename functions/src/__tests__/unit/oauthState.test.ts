@@ -160,4 +160,27 @@ describe('oauthState', () => {
       expect(verifyState(bareBody)).toBeNull();
     });
   });
+
+  describe('fail-closed when CONNECTOR_TOKEN_KEY is absent (SEC-L1)', () => {
+    it('signState throws and verifyState rejects without the key (no silent unsigned downgrade)', async () => {
+      // The module caches the key on first use, so load a FRESH instance with the env var
+      // removed to exercise the no-key path in isolation.
+      const saved = process.env.CONNECTOR_TOKEN_KEY;
+      delete process.env.CONNECTOR_TOKEN_KEY;
+      vi.resetModules();
+      vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+      try {
+        const mod = await import('../../oauthState');
+        // No key → refuse to ISSUE an unsigned (forgeable) state.
+        expect(() => mod.signState({ brandId: 'brand-nokey' })).toThrow();
+        // No key → can't verify a signature, so REJECT rather than accept unsigned/forged state.
+        const bareBody = Buffer.from(JSON.stringify({ brandId: 'x', iat: Date.now() })).toString('base64url');
+        expect(mod.verifyState(`${bareBody}.anysig`)).toBeNull();
+        expect(mod.verifyState(bareBody)).toBeNull();
+      } finally {
+        if (saved !== undefined) process.env.CONNECTOR_TOKEN_KEY = saved;
+        vi.resetModules();
+      }
+    });
+  });
 });

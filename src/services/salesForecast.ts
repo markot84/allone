@@ -33,6 +33,8 @@ export interface ForecastRow {
   forecastUnits: number;
   /** Συνοπτικές εμπορικές πληροφορίες που οδήγησαν στην προσαρμογή. */
   drivers: string[];
+  /** LOGIC-19: ids των infos που οδήγησαν την προσαρμογή — για σωστό unique count (όχι ανά κείμενο). */
+  driverIds: string[];
   confidence: CommercialConfidence;
 }
 
@@ -86,18 +88,20 @@ function applyInfos(
   category: string,
   parentSku: string | undefined,
   infos: CommercialInfo[]
-): { upliftPct: number; drivers: string[]; confidence: CommercialConfidence } {
+): { upliftPct: number; drivers: string[]; driverIds: string[]; confidence: CommercialConfidence } {
   let upliftRaw = 0;
   const drivers: string[] = [];
+  const driverIds: string[] = [];
   let conf: CommercialConfidence = 'low';
   for (const info of infos) {
     if (!infoMatchesGroup(info, category, parentSku)) continue;
     upliftRaw += baseUplift(info.direction, info.magnitude) * confWeight(info.confidence);
     drivers.push(info.summary);
+    driverIds.push(info.id);
     if (confRank[info.confidence] > confRank[conf]) conf = info.confidence;
   }
   const upliftPct = Math.max(-MAX_ABS_UPLIFT, Math.min(MAX_ABS_UPLIFT, upliftRaw));
-  return { upliftPct, drivers, confidence: conf };
+  return { upliftPct, drivers, driverIds, confidence: conf };
 }
 
 function buildRow(
@@ -105,7 +109,7 @@ function buildRow(
   g: ForecastGroupInput,
   infos: CommercialInfo[]
 ): ForecastRow {
-  const { upliftPct, drivers, confidence } = applyInfos(g.category, g.parentSku, infos);
+  const { upliftPct, drivers, driverIds, confidence } = applyInfos(g.category, g.parentSku, infos);
   const factor = 1 + upliftPct;
   return {
     key: level === 'category' ? g.category : `${g.category}__${g.parentSku ?? ''}`,
@@ -118,6 +122,7 @@ function buildRow(
     forecastRevenue: Math.round(g.pastRevenue * factor),
     forecastUnits: Math.round(g.pastUnits * factor),
     drivers,
+    driverIds,
     confidence,
   };
 }
@@ -143,7 +148,7 @@ export function buildSalesForecast(input: {
 
   const appliedIds = new Set<string>();
   for (const row of [...categories, ...parentSkus]) {
-    for (const d of row.drivers) appliedIds.add(d);
+    for (const id of row.driverIds) appliedIds.add(id); // LOGIC-19: dedup by info.id, not summary text
   }
 
   return {
