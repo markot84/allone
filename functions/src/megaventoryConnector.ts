@@ -372,6 +372,33 @@ function positiveNumber(value: unknown): number | null {
   return n > 0 ? n : null;
 }
 
+/**
+ * Εξάγει το όνομα κατηγορίας από ProductGet row.
+ *
+ * Το Megaventory επιστρέφει το πραγματικό όνομα στο `ProductCategoryName`
+ * (π.χ. «Ανδρικά Ρούχα»), ενώ το `ProductCategoryDescription` έρχεται συχνά κενό.
+ * Με `includeReferencedObjects: true` η κατηγορία μπορεί επίσης να έρθει ως
+ * nested referenced object (`ProductCategory`). Σειρά προτίμησης:
+ *   1) flat `ProductCategoryName`
+ *   2) nested `ProductCategory.{ProductCategoryName|ProductCategoryDescription}`
+ *   3) flat `ProductCategoryDescription` (last resort — συχνά κενό)
+ */
+export function extractMvCategory(p: Record<string, unknown>): string {
+  const flatName = String((p.ProductCategoryName ?? '') as unknown as string).trim();
+  if (flatName) return flatName;
+
+  const nested = p.ProductCategory;
+  if (nested && typeof nested === 'object') {
+    const n = nested as Record<string, unknown>;
+    const nestedName = String((n.ProductCategoryName ?? '') as unknown as string).trim();
+    if (nestedName) return nestedName;
+    const nestedDesc = String((n.ProductCategoryDescription ?? '') as unknown as string).trim();
+    if (nestedDesc) return nestedDesc;
+  }
+
+  return String((p.ProductCategoryDescription ?? '') as unknown as string).trim();
+}
+
 async function fetchAllMvPages(
   endpoint: string,
   apiKey: string,
@@ -387,6 +414,8 @@ async function fetchAllMvPages(
     maxPages?: number;
     initialCursor?: number | null;
     maxRuntimeMs?: number;
+    /** Extra body fields merged into every page request (π.χ. includeReferencedObjects). */
+    extraBody?: Record<string, unknown>;
   }
 ): Promise<{ rows: any[]; error: string | null; nextCursor: number | null; exhausted: boolean }> {
   const pageSize = opts.pageSize ?? MV_PAGE_SIZE;
@@ -404,6 +433,7 @@ async function fetchAllMvPages(
     const filters = buildMvFiltersWithCursor(baseFilters, opts.cursorField, cursor);
     const body: Record<string, unknown> = {
       ReturnTopNRecords: pageSize,
+      ...(opts.extraBody ?? {}),
     };
     if (filters.length > 0) {
       body.Filters = filters;
@@ -838,7 +868,7 @@ async function mergeMegaventoryApiCatalogProducts(
     const sell = num(p.ProductSellingPrice);
     const purchase = num(p.ProductPurchasePrice);
     const name = String(p.ProductDescription ?? '').trim() || sku;
-    const cat = String(p.ProductCategoryDescription ?? '').trim();
+    const cat = extractMvCategory(p as Record<string, unknown>);
     items.push({
       id: `mv_api_cat_${brandId}_${sku}`,
       data: {
@@ -1272,6 +1302,8 @@ export async function fetchMegaventoryData(
       cursorField: 'ProductID',
       idKeys: ['ProductID', 'ProductId'],
       label: 'ProductGet',
+      // PER-60: ζητάμε referenced objects ώστε το ProductGet να επιστρέφει κατηγορία.
+      extraBody: { includeReferencedObjects: true },
     });
     if (prFetchErr) {
       referenceOk = false;
@@ -1286,7 +1318,7 @@ export async function fetchMegaventoryData(
           sku: p.ProductSKU || '',
           name: p.ProductDescription || '',
           longDescription: p.ProductLongDescription || '',
-          category: p.ProductCategoryDescription || '',
+          category: extractMvCategory(p as Record<string, unknown>),
           unitOfMeasurement: p.ProductUnitOfMeasurement || '',
           sellingPrice: num(p.ProductSellingPrice),
           purchasePrice: num(p.ProductPurchasePrice),
