@@ -2559,7 +2559,31 @@ async function executeBrandNightlyWave(
       break;
     case 'erp':
       if (data.megaventory?.connected)
-        phase.wrap('Megaventory', fetchMegaventoryData(brandId, { mode: 'scheduled' }));
+        phase.wrap(
+          'Megaventory',
+          fetchMegaventoryData(brandId, { mode: 'scheduled' }).then(async (r) => {
+            // PER-60: a large brand (e-tennis ~87k SKUs) returns needsContinuation because the
+            // catalog/downstream can't finish in one budgeted pass. The nightly wave doesn't loop,
+            // so hand the rest off to the every-1-min processMegaventorySyncJobs worker — it drives
+            // the resumable continuation (from the persisted cursor) to completion the same day,
+            // instead of inching one pass per night. The scheduled-only invoice backfill already ran
+            // in this first pass; the worker continuation only finishes catalog + downstream.
+            if (r?.needsContinuation) {
+              const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+              await admin.firestore().collection('connector_sync_jobs').doc(jobId).set({
+                brandId,
+                provider: 'megaventory',
+                status: 'pending',
+                requestedBy: 'scheduled_continuation',
+                requestedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                mode: 'scheduled_continuation',
+              }, { merge: true });
+              logger.info(`[ScheduledSync/erp] Megaventory needs continuation for ${brandId} — handed to processMegaventorySyncJobs worker`);
+            }
+            return r;
+          })
+        );
       if (data.softone?.connected) phase.wrap('SoftOne', fetchSoftOneData(brandId));
       if (data.epsilon_net?.connected) phase.wrap('Epsilon Net', fetchEpsilonNetData(brandId));
       if (data.entersoft?.connected) phase.wrap('Entersoft', fetchEntersoftData(brandId));
