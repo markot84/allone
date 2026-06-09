@@ -256,9 +256,11 @@ async function sendDigestForBrand(brandId: string, brandName: string, transporte
       const email = userData?.email || memberDoc.data()?.email;
       if (!email) continue;
 
+      // SEC-M1: strip CR/LF so a crafted brand name can't inject extra mail headers.
+      const safeBrandName = brandName.replace(/[\r\n]+/g, ' ');
       const subject = recentAlerts.length > 0
-        ? `[Performance+] ${brandName} — ${recentAlerts.length} νέες ειδοποιήσεις`
-        : `[Performance+] ${brandName} — Daily Digest (${period.dateKey})`;
+        ? `[Performance+] ${safeBrandName} — ${recentAlerts.length} νέες ειδοποιήσεις`
+        : `[Performance+] ${safeBrandName} — Daily Digest (${period.dateKey})`;
 
       await transporter.sendMail({
         from: SENDER,
