@@ -853,7 +853,6 @@ async function writeBatch(
 async function mergeMegaventoryApiCatalogProducts(
   db: Firestore,
   brandId: string,
-  apiRows: Record<string, unknown>[],
   customReportSnapshotRows: Record<string, unknown>[],
 ): Promise<number> {
   const snap = await db.collection('products').where('brandId', '==', brandId).get();
@@ -877,18 +876,23 @@ async function mergeMegaventoryApiCatalogProducts(
     if (sku) reportSkus.add(sku);
   }
 
+  // PER-60: read the full catalog from megaventory_products (persisted across resumable passes)
+  // instead of an in-memory ProductGet set — so gap-fill works without holding the whole 87k-SKU
+  // catalog in one invocation. Fields are already normalized (incl. extractMvCategory at write time).
+  const catalogSnap = await db.collection('megaventory_products').where('brandId', '==', brandId).get();
   const items: { id: string; data: Record<string, unknown> }[] = [];
   const seenSku = new Set<string>();
-  for (const p of apiRows) {
-    const sku = String(p.ProductSKU ?? '').trim();
+  for (const doc of catalogSnap.docs) {
+    const p = doc.data();
+    const sku = String(p.sku ?? '').trim();
     if (!sku || seenSku.has(sku)) continue;
     seenSku.add(sku);
     if (reportSkus.has(sku)) continue;
-    const stock = num(p.ProductStockOnHandTotal);
-    const sell = num(p.ProductSellingPrice);
-    const purchase = num(p.ProductPurchasePrice);
-    const name = String(p.ProductDescription ?? '').trim() || sku;
-    const cat = extractMvCategory(p as Record<string, unknown>);
+    const stock = num(p.stockOnHand);
+    const sell = num(p.sellingPrice);
+    const purchase = num(p.purchasePrice);
+    const name = String(p.name ?? '').trim() || sku;
+    const cat = String(p.category ?? '').trim();
     items.push({
       id: `mv_api_cat_${brandId}_${sku}`,
       data: {
@@ -1031,7 +1035,6 @@ export async function fetchMegaventoryData(
   let documentDiagnostics: Record<string, unknown> | null = null;
   let invoiceBackfillProgress: Record<string, unknown> | null = null;
   let rfmSkippedReason = '';
-  let megaventoryApiProductRows: Record<string, unknown>[] = [];
   let customReportRowsSnapshot: Record<string, unknown>[] = [];
   let apiCatalogGapFillCount = 0;
   let productGetExhausted = false;
@@ -1319,46 +1322,54 @@ export async function fetchMegaventoryData(
     }
     }
 
-    // ── Products ─────────────────────────────────────────────────────
-    const {
-      rows: prRows,
-      error: prFetchErr,
-      exhausted: productGetExhausted,
-    } = await fetchAllMvPages('ProductGet', apiKey, [], {
-      responseArrayKey: 'mvProducts',
-      cursorField: 'ProductID',
-      idKeys: ['ProductID', 'ProductId'],
-      label: 'ProductGet',
-      // PER-60: ζητάμε referenced objects ώστε το ProductGet να επιστρέφει κατηγορία.
-      extraBody: { includeReferencedObjects: true },
-      // PER-60: budget την (μεγάλη) catalog fetch ώστε να μην «φάει» το worker timeout.
-      maxRuntimeMs: remainingBudgetMs(),
-    });
-    if (prFetchErr) {
-      referenceOk = false;
-      errors.push(prFetchErr);
+    // ── Products (resumable catalog fetch) ────────────────────────────
+    // PER-60: το ProductGet (87k+ SKU) δεν χωράει πάντα σε ένα 30min pass. Το τραβάμε σταδιακά με
+    // cursor (productCatalogCursor) γράφοντας idempotent στο megaventory_products. Όταν εξαντληθεί,
+    // productCatalogComplete=true και τα downstream (gap-fill κ.λπ.) διαβάζουν τον πλήρη κατάλογο
+    // από το Firestore σε επόμενο pass — αντί να τον κρατάμε όλο στη μνήμη.
+    const catalogAlreadyComplete = conn.productCatalogComplete === true;
+    let productGetExhausted = true;
+    let productCatalogNextCursor: number | null = null;
+    if (catalogAlreadyComplete) {
+      logger.info(`[Megaventory] catalog already complete for ${brandId} — skipping ProductGet, running downstream`);
     } else {
-      const products: any[] = prRows;
-      megaventoryApiProductRows = products as Record<string, unknown>[];
-      const items = products.map((p) => ({
-        id: `mv_p_${p.ProductID || p.ProductId || p.ProductSKU || Math.random().toString(36).slice(2)}`,
-        data: {
-          productId: String(p.ProductID || p.ProductId || ''),
-          sku: p.ProductSKU || '',
-          name: p.ProductDescription || '',
-          longDescription: p.ProductLongDescription || '',
-          category: extractMvCategory(p as Record<string, unknown>),
-          unitOfMeasurement: p.ProductUnitOfMeasurement || '',
-          sellingPrice: num(p.ProductSellingPrice),
-          purchasePrice: num(p.ProductPurchasePrice),
-          stockOnHand: num(p.ProductStockOnHandTotal),
-          source: 'megaventory_api',
-        },
-      }));
-      if (items.length) await writeBatch(db, 'megaventory_products', brandId, items);
-      counts.products = items.length;
-      totalImported += items.length;
-      logger.info(`[Megaventory] Products: ${items.length} imported for brand ${brandId}`);
+      const { rows: prRows, error: prFetchErr, exhausted, nextCursor } = await fetchAllMvPages('ProductGet', apiKey, [], {
+        responseArrayKey: 'mvProducts',
+        cursorField: 'ProductID',
+        idKeys: ['ProductID', 'ProductId'],
+        label: 'ProductGet',
+        // PER-60: referenced objects → κατηγορία· budget + cursor ώστε να μη «φάει» το worker timeout.
+        extraBody: { includeReferencedObjects: true },
+        maxRuntimeMs: remainingBudgetMs(),
+        initialCursor: positiveNumber(conn.productCatalogCursor) ?? undefined,
+      });
+      if (prFetchErr) {
+        referenceOk = false;
+        errors.push(prFetchErr);
+        productGetExhausted = false;
+      } else {
+        productGetExhausted = exhausted;
+        productCatalogNextCursor = nextCursor;
+        const items = (prRows as any[]).map((p) => ({
+          id: `mv_p_${p.ProductID || p.ProductId || p.ProductSKU || Math.random().toString(36).slice(2)}`,
+          data: {
+            productId: String(p.ProductID || p.ProductId || ''),
+            sku: p.ProductSKU || '',
+            name: p.ProductDescription || '',
+            longDescription: p.ProductLongDescription || '',
+            category: extractMvCategory(p as Record<string, unknown>),
+            unitOfMeasurement: p.ProductUnitOfMeasurement || '',
+            sellingPrice: num(p.ProductSellingPrice),
+            purchasePrice: num(p.ProductPurchasePrice),
+            stockOnHand: num(p.ProductStockOnHandTotal),
+            source: 'megaventory_api',
+          },
+        }));
+        if (items.length) await writeBatch(db, 'megaventory_products', brandId, items);
+        counts.products = items.length;
+        totalImported += items.length;
+        logger.info(`[Megaventory] Products: ${items.length} imported (cursor pass) for ${brandId}, exhausted=${exhausted}`);
+      }
     }
 
     // ── Stock per location ───────────────────────────────────────────
@@ -1488,27 +1499,26 @@ export async function fetchMegaventoryData(
       logger.warn(`[Megaventory] early lastSyncAt mark failed for ${brandId}: ${markErr instanceof Error ? markErr.message : String(markErr)}`);
     }
 
-    // PER-60: το gap-fill ΔΙΑΓΡΑΦΕΙ & ξαναγράφει ΟΛΟΚΛΗΡΟ τον api-catalog από το in-memory set.
-    // Αν το ProductGet δεν εξαντλήθηκε (cut short από το budget) ΔΕΝ έχουμε όλο τον κατάλογο στη
-    // μνήμη — τρέξιμο εδώ θα έκανε purge-then-partial = data loss. Το αναβάλλουμε και ζητάμε
-    // continuation ώστε ένα επόμενο pass να ξανατραβήξει όλο τον κατάλογο και να το ολοκληρώσει.
-    if (productGetExhausted === false) {
+    // PER-60: gap-fill διαγράφει & ξαναγράφει ΟΛΟΚΛΗΡΟ τον api-catalog διαβάζοντας από το
+    // megaventory_products (Firestore). Τρέχει ΜΟΝΟ όταν ο κατάλογος είναι ΠΛΗΡΗΣ — αλλιώς θα
+    // έκανε purge-then-partial = data loss. Αν δεν είναι (ή ξεμείναμε από budget), ζητάμε continuation.
+    const catalogComplete = catalogAlreadyComplete || (referenceOk && productGetExhausted !== false);
+    if (!catalogComplete) {
       needsContinuation = true;
-      logger.warn(`[Megaventory] ProductGet incomplete within budget for ${brandId} — deferring gap-fill/downstream to continuation pass`);
-    } else if (megaventoryApiProductRows.length > 0 && overBudget()) {
+      logger.warn(`[Megaventory] catalog fetch incomplete within budget for ${brandId} — deferring gap-fill/downstream to continuation pass`);
+    } else if (overBudget()) {
       needsContinuation = true;
-      logger.warn(`[Megaventory] over soft deadline before gap-fill for ${brandId} — deferring to continuation pass`);
-    } else if (megaventoryApiProductRows.length > 0) {
+      logger.warn(`[Megaventory] over soft deadline before gap-fill for ${brandId} — deferring downstream to continuation pass`);
+    } else {
       try {
         apiCatalogGapFillCount = await mergeMegaventoryApiCatalogProducts(
           db,
           brandId,
-          megaventoryApiProductRows,
           customReportRowsSnapshot,
         );
         if (apiCatalogGapFillCount > 0) {
           logger.info(
-            `[Megaventory] Product Intelligence gap-fill (ProductGet): +${apiCatalogGapFillCount} SKUs not in custom report for ${brandId}`
+            `[Megaventory] Product Intelligence gap-fill (catalog): +${apiCatalogGapFillCount} SKUs not in custom report for ${brandId}`
           );
         }
       } catch (gapErr) {
@@ -1518,7 +1528,10 @@ export async function fetchMegaventoryData(
       }
     }
 
-    if (apiCatalogGapFillCount > 0 && !(normalizedCounts && normalizedCounts.products > 0)) {
+    if (apiCatalogGapFillCount > 0 && !(normalizedCounts && normalizedCounts.products > 0) && overBudget()) {
+      needsContinuation = true;
+      logger.warn(`[Megaventory] over soft deadline before stock-movement refresh for ${brandId} — deferring to continuation pass`);
+    } else if (apiCatalogGapFillCount > 0 && !(normalizedCounts && normalizedCounts.products > 0)) {
       try {
         await refreshStockMovement(brandId);
         postNormalizeRefresh = {
@@ -1545,6 +1558,18 @@ export async function fetchMegaventoryData(
       patch['megaventory.lastSyncCustomReportRows'] = counts.customReportRows;
     }
     patch['megaventory.lastProductGetExhausted'] = productGetExhausted !== false;
+    // PER-60: persist resumable catalog state. Reset when the WHOLE sync finishes (so the next manual
+    // sync re-fetches fresh); keep complete=true / cursor otherwise so the next pass resumes correctly.
+    if (catalogComplete && !needsContinuation) {
+      patch['megaventory.productCatalogComplete'] = FieldValue.delete();
+      patch['megaventory.productCatalogCursor'] = FieldValue.delete();
+    } else if (catalogComplete) {
+      patch['megaventory.productCatalogComplete'] = true;
+      patch['megaventory.productCatalogCursor'] = FieldValue.delete();
+    } else if (productCatalogNextCursor) {
+      patch['megaventory.productCatalogCursor'] = productCatalogNextCursor;
+      patch['megaventory.productCatalogComplete'] = false;
+    }
     if (apiCatalogGapFillCount > 0) {
       patch['megaventory.lastApiCatalogGapFill'] = apiCatalogGapFillCount;
     }
