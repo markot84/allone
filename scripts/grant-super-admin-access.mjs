@@ -11,10 +11,20 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
-const EMAILS = ['tzavlop@gmail.com', 'george.meras@gmail.com'];
-const BRAND_IDS = ['safeblock', 'airblock', 'e-tennis'];
+// SEC-L12: don't commit super-admin emails / brand ids. Pass them via env when running this
+// one-off ops script (comma-separated), e.g.
+//   SUPER_ADMIN_EMAILS="a@x.com,b@y.com" SUPER_ADMIN_BRAND_IDS="brand1,brand2" \
+//     node scripts/grant-super-admin-access.mjs
+const EMAILS = (process.env.SUPER_ADMIN_EMAILS || '')
+  .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+const BRAND_IDS = (process.env.SUPER_ADMIN_BRAND_IDS || '')
+  .split(',').map((s) => s.trim()).filter(Boolean);
 
 async function main() {
+  if (EMAILS.length === 0) {
+    console.error('Set SUPER_ADMIN_EMAILS (comma-separated) before running this script.');
+    process.exit(1);
+  }
   const keyPath = process.argv[2] || process.env.GOOGLE_APPLICATION_CREDENTIALS;
   const app = keyPath
     ? initializeApp({ credential: cert(keyPath), projectId: PROJECT_ID })

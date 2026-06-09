@@ -2,6 +2,7 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import type { Transporter } from 'nodemailer';
 import { createTransporter, SENDER, NOREPLY_EMAIL, type SmtpCredentialInput } from './smtpConfig';
+import { escapeHtml } from './escapeHtml';
 
 let _db: Firestore;
 function db() {
@@ -142,8 +143,8 @@ function buildAlertRow(alert: AlertDoc): string {
     <tr>
       <td style="padding: 10px 16px; border-bottom: 1px solid #F3F4F6;">
         <span style="display: inline-block; padding: 2px 8px; font-size: 10px; font-weight: 700; color: #fff; background: ${color}; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">${label}</span>
-        <p style="margin: 6px 0 2px; font-size: 14px; font-weight: 600; color: #111827;">${alert.title}</p>
-        <p style="margin: 0; font-size: 12px; color: #6B7280; line-height: 1.4;">${alert.description}</p>
+        <p style="margin: 6px 0 2px; font-size: 14px; font-weight: 600; color: #111827;">${escapeHtml(alert.title)}</p>
+        <p style="margin: 0; font-size: 12px; color: #6B7280; line-height: 1.4;">${escapeHtml(alert.description)}</p>
       </td>
     </tr>`;
 }
@@ -192,7 +193,7 @@ function buildDigestHtml(
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; background: #F9FAFB;">
       <div style="background: #111; border-radius: 12px 12px 0 0; padding: 20px 24px; text-align: center;">
         <span style="color: #fff; font-size: 18px; font-weight: 700;">Performance+</span>
-        <span style="color: rgba(255,255,255,0.6); font-size: 13px; display: block; margin-top: 4px;">${brandName}</span>
+        <span style="color: rgba(255,255,255,0.6); font-size: 13px; display: block; margin-top: 4px;">${escapeHtml(brandName)}</span>
       </div>
       <div style="background: #fff; border: 1px solid #E5E7EB; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">
         <p style="margin: 0 0 4px; font-size: 16px; font-weight: 700; color: #111827;">Καλημέρα!</p>

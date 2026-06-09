@@ -728,8 +728,10 @@ function parseLooseNumber(value: string | number | null | undefined): number {
 // Validate and transform Products
 // Primary schema: FINAL_Unified_Production_Schema (SKU_ID, Product_Name, Category, Sell_Price, Cost_Price, Stock_On_Hand, Qty_Sold_Period, Revenue_Period, Supplier, Brand, First_Available_Date, Last_Sale_Date, Priority_Flag, Stock_Age_Days, Gross_Profit, Gross_Margin_%, Margin_Tier)
 function validateProduct(row: Record<string, string>, index: number): { valid: boolean; data?: Product; error?: string } {
-  // Debug: Log available keys for first few rows
-  if (index < 3) {
+  // Debug: Log available keys for first few rows.
+  // CODE-4: gate behind DEV — these logs include commercial values (price/cost/margin/SKU)
+  // and must not run in production.
+  if (import.meta.env.DEV && index < 3) {
     console.log('[Product Row] Available keys:', { row: index, count: Object.keys(row).length, keys: Object.keys(row) });
     const relevantKeys = Object.keys(row).filter(k =>
       k.includes('stock') || k.includes('price') || k.includes('cost') ||

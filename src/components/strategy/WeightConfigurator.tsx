@@ -792,7 +792,7 @@ export function WeightConfigurator({
       console.error('Error saving strategy:', error);
       toast.error(`Σφάλμα: ${error?.message || error}`);
     });
-  }, [user, saveActiveStrategy, toast, triggerAIGeneration, createStrategyDecision]);
+  }, [user, saveActiveStrategy, toast, triageOrigin, triggerAIGeneration, createStrategyDecision]); // CODE-5: triageOrigin in deps (was stale)
 
   const handleMixedApply = useCallback((blendedWeights: Record<string, number>, config: MixConfig) => {
     setMixConfig(config);
@@ -826,7 +826,7 @@ export function WeightConfigurator({
       console.error('Error saving mixed strategy:', error);
       toast.error(`Σφάλμα: ${error?.message || error}`);
     });
-  }, [user, saveActiveStrategy, toast, duration, triggerAIGeneration, createStrategyDecision]);
+  }, [user, saveActiveStrategy, toast, duration, triageOrigin, triggerAIGeneration, createStrategyDecision]); // CODE-5: triageOrigin in deps (was stale)
 
   const handleSeasonApply = useCallback((period: SeasonalPeriod) => {
     if (!user) {
@@ -916,7 +916,7 @@ export function WeightConfigurator({
       if (saved?.id) triggerAIGeneration(saved.id, 'seasonal_discount', weights);
       createStrategyDecision(`Εκπτωτική: ${config.periodName} (-${config.discountPercent}%)`);
     }).catch(() => {});
-  }, [user, saveActiveStrategy, toast, weights, duration, triggerAIGeneration, createStrategyDecision]);
+  }, [user, saveActiveStrategy, toast, weights, duration, triageOrigin, triggerAIGeneration, createStrategyDecision]); // CODE-5: triageOrigin in deps (was stale)
 
 
   const handleSaveCustomSeason = useCallback((period: SeasonalPeriod) => {

@@ -233,8 +233,10 @@ function asIsoDate(value: unknown): string | undefined {
   return Number.isFinite(d.getTime()) ? d.toISOString() : raw;
 }
 
-function stockBucket(stockLevel: number, qtySoldPeriod: number): StockBucket {
+function stockBucket(stockLevel: number, qtySoldPeriod: number | null): StockBucket {
   if (stockLevel <= 0) return 'no_stock';
+  // LOGIC-5: no period/velocity signal → classify by stock-presence only, not 'dead'.
+  if (qtySoldPeriod == null) return 'healthy';
   if (qtySoldPeriod <= 0) return 'dead';
   const daysOfStock = stockLevel / (qtySoldPeriod / SALES_PERIOD_DAYS);
   if (daysOfStock <= 30) return 'low';
@@ -269,10 +271,14 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
       row.qty,
       row.quantity
     );
+  // LOGIC-5: cumulative lifetime sales must NOT feed the 30-day velocity calc — period fields
+  // only. When no period field exists, pass null so stockBucket classifies by stock-presence.
   const qtySold =
-    firstPositive(row.qty_sold_period, row.qtySoldPeriod, row.qty_sold_last_30d, row.qtySold, row.qty_sold_lifetime);
+    firstPositive(row.qty_sold_period, row.qtySoldPeriod, row.qty_sold_last_30d, row.qtySold);
+  const hasPeriodField =
+    row.qty_sold_period != null || row.qtySoldPeriod != null || row.qty_sold_last_30d != null || row.qtySold != null;
   const margin = num(row.margin_percentage) || (price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0);
-  const bucket = stockBucket(stock, qtySold);
+  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null);
   const product: CompactProduct = {
     id: docId,
     ...(text(row.productId ?? row.ProductID ?? row.ProductId) ? { productId: text(row.productId ?? row.ProductID ?? row.ProductId) } : {}),
@@ -312,12 +318,15 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
 function overlayFromMegaventoryProduct(row: Record<string, unknown>): StockOverlay | null {
   const stock =
     firstPositive(row.stock_level, row.available_stock, row.stock_on_hand, row.stockOnHand, row.qty, row.quantity);
+  // LOGIC-5: same twin as productFromRow — period fields only, no lifetime leak into velocity.
   const qtySold =
-    firstPositive(row.qty_sold_period, row.qtySoldPeriod, row.qty_sold_last_30d, row.qty_sold_lifetime, row.qtySold);
+    firstPositive(row.qty_sold_period, row.qtySoldPeriod, row.qty_sold_last_30d, row.qtySold);
+  const hasPeriodField =
+    row.qty_sold_period != null || row.qtySoldPeriod != null || row.qty_sold_last_30d != null || row.qtySold != null;
   const price = firstPositive(row.price, row.sell_price, row.list_price, row.sellingPrice);
   const cost = firstPositive(row.cost_price, row.costPrice, row.purchasePrice);
   const margin = num(row.margin_percentage) || (price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0);
-  const bucket = stockBucket(stock, qtySold);
+  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null);
   return {
     stock_level: Math.round(stock * 100) / 100,
     stock_capacity: Math.max(Math.round(stock * 2 * 100) / 100, Math.round(stock * 100) / 100, 1),

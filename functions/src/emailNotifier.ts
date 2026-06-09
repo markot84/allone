@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import type { Firestore } from 'firebase-admin/firestore';
 import type { Transporter } from 'nodemailer';
 import { createTransporter, SENDER, NOREPLY_EMAIL } from './smtpConfig';
+import { escapeHtml } from './escapeHtml';
 
 let _db: Firestore;
 export function setDb(db: Firestore) { _db = db; }
@@ -70,11 +71,11 @@ export async function sendNotificationEmail(
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
       <div style="background: #111; border-radius: 12px 12px 0 0; padding: 20px 24px; text-align: center;">
         <span style="color: #fff; font-size: 18px; font-weight: 700;">Performance+</span>
-        ${brandName ? `<span style="color: rgba(255,255,255,0.6); font-size: 13px; display: block; margin-top: 4px;">${brandName}</span>` : ''}
+        ${brandName ? `<span style="color: rgba(255,255,255,0.6); font-size: 13px; display: block; margin-top: 4px;">${escapeHtml(brandName)}</span>` : ''}
       </div>
       <div style="border: 1px solid #E5E7EB; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">
-        <h2 style="margin: 0 0 8px; font-size: 16px; color: #111827;">${notification.title}</h2>
-        <p style="margin: 0 0 20px; font-size: 14px; color: #6B7280; line-height: 1.5;">${notification.body}</p>
+        <h2 style="margin: 0 0 8px; font-size: 16px; color: #111827;">${escapeHtml(notification.title)}</h2>
+        <p style="margin: 0 0 20px; font-size: 14px; color: #6B7280; line-height: 1.5;">${escapeHtml(notification.body)}</p>
         <a href="https://performanceplus.gr/#coordination"
            style="display: inline-block; padding: 10px 24px; background: #F97316; color: #fff; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600;">
           Δες στην εφαρμογή
@@ -90,7 +91,8 @@ export async function sendNotificationEmail(
     await transporter.sendMail({
       from: SENDER,
       to: toEmail,
-      subject: `[Performance+] ${notification.title}`,
+      // SEC-M1: strip CR/LF so a crafted title can't inject extra mail headers.
+      subject: `[Performance+] ${notification.title.replace(/[\r\n]+/g, ' ')}`,
       html,
     });
     logger.info(`Email sent to ${toEmail} for notification: ${notification.title}`);

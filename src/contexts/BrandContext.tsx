@@ -4,6 +4,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useRef,
   type ReactNode
 } from 'react';
 import { useAuth } from '../hooks';
@@ -46,8 +47,14 @@ export function BrandProvider({ children }: { children: ReactNode }) {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [currentBrand, setCurrentBrandState] = useState<Brand | null>(null);
   const [loading, setLoading] = useState(true);
+  // CODE-6: generation guard — a fast user/brand switch can fire refreshBrands again while an
+  // earlier run is still awaiting; only the latest run is allowed to commit its setState, so a
+  // stale resolve can't clobber a newer one with the wrong brand list/context.
+  const reqIdRef = useRef(0);
 
   const refreshBrands = useCallback(async () => {
+    const reqId = ++reqIdRef.current;
+    const isStale = () => reqId !== reqIdRef.current;
     if (!user?.uid) {
       setBrands([]);
       setCurrentBrandState(null);
@@ -70,6 +77,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     try {
       if (isSuperAdmin) {
         const allBrands = await FirestoreService.getDocuments<Brand>('brands', [], null, { forceServer: true });
+        if (isStale()) return;
         const brandList = allBrands.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'el'));
         setBrands(brandList);
 
@@ -99,6 +107,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       const fromMembers = await FirestoreService.getBrandIdsFromMembershipDocuments(user.uid);
       const brandIds = [...new Set([...fromProfile, ...fromMembers])];
 
+      if (isStale()) return;
       if (brandIds.length === 0) {
         setBrands([]);
         setCurrentBrandState(null);
@@ -133,6 +142,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
         );
       }
 
+      if (isStale()) return;
       setBrands(brandList);
       const defaultId = profile?.defaultBrandId ?? brandIds[0];
       const defaultBrand = brandList.find((b) => b.id === defaultId) ?? brandList[0] ?? null;
@@ -145,12 +155,12 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       setCurrentBrandState((prev) => prev ? brandList.find((b) => b.id === prev.id) ?? lastBrand : lastBrand);
     } catch (err) {
       console.error('refreshBrands:', err);
-      if (!cachedBrand) {
+      if (!isStale() && !cachedBrand) {
         setBrands([]);
         setCurrentBrandState(null);
       }
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }, [user?.uid, isSuperAdmin, isSuperAdminResolved]);
 

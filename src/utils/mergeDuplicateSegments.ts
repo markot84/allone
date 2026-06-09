@@ -20,7 +20,9 @@ export function mergeDuplicateSegmentRowsByName(segments: RFMSegment[]): RFMSegm
   const merged: RFMSegment[] = [];
   for (const [, group] of byName) {
     if (group.length === 1) {
-      merged.push(group[0]);
+      // LOGIC-15: copy — the percentage loop below mutates each `merged` entry in place,
+      // and pushing the input ref would mutate the caller's (React Query cache) object.
+      merged.push({ ...group[0] });
       continue;
     }
     const totalCount = group.reduce((a, s) => a + (s.count ?? 0), 0);

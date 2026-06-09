@@ -225,10 +225,22 @@ function normalizeMvCustomReportRow(r: Record<string, unknown>): Record<string, 
     source: 'megaventory_custom_report_row',
     cells,
   };
+  // SEC-L13: ColumnName comes from the Megaventory API and is used as a Firestore field key.
+  // Sanitize characters Firestore field names can't safely hold, cap the key length and the
+  // column count, and never let a column overwrite the reserved keys above — so a crafted
+  // report can't corrupt the doc or explode it past the 1 MiB limit.
+  const RESERVED = new Set(['mvRowIndex', 'source', 'cells']);
+  const MAX_COLUMNS = 200;
+  let colCount = 0;
   for (const c of cells) {
-    const name = String((c as { ColumnName?: string }).ColumnName || '').trim();
-    if (!name) continue;
+    if (colCount >= MAX_COLUMNS) break;
+    const name = String((c as { ColumnName?: string }).ColumnName || '')
+      .trim()
+      .replace(/[~*/[\]().]/g, '_')
+      .slice(0, 100);
+    if (!name || RESERVED.has(name)) continue;
     flat[name] = (c as { Value?: unknown }).Value;
+    colCount++;
   }
   return flat;
 }

@@ -22,13 +22,15 @@ export function formatPercent(n: number, decimals = 1): string {
   return formatNumber(n, decimals) + '%';
 }
 
-/** Compact: €18,3K or €1,2M */
+/** Compact: €18,3K or €1,2M (LOGIC-16: handles negatives via abs+sign). */
 export function formatCurrencyCompact(n: number, decimals = 1): string {
-  if (n >= 1_000_000) {
-    return `€${formatNumber(n / 1_000_000, decimals)}M`;
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (abs >= 1_000_000) {
+    return `${sign}€${formatNumber(abs / 1_000_000, decimals)}M`;
   }
-  if (n >= 1_000) {
-    return `€${formatNumber(n / 1_000, decimals)}K`;
+  if (abs >= 1_000) {
+    return `${sign}€${formatNumber(abs / 1_000, decimals)}K`;
   }
   return `€${formatCurrency(n, decimals)}`;
 }
@@ -38,9 +40,11 @@ export function formatMultiplier(n: number, decimals = 2): string {
   return `${formatNumber(n, decimals)}x`;
 }
 
-/** Compact plain number: 3,2M / 520K / 8.400 */
+/** Compact plain number: 3,2M / 520K / 8.400 (LOGIC-16: handles negatives via abs+sign). */
 export function formatCompact(n: number): string {
-  if (n >= 1_000_000) return `${formatNumber(n / 1_000_000, 1)}M`;
-  if (n >= 10_000)    return `${formatNumber(n / 1_000, 0)}K`;
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (abs >= 1_000_000) return `${sign}${formatNumber(abs / 1_000_000, 1)}M`;
+  if (abs >= 10_000)    return `${sign}${formatNumber(abs / 1_000, 0)}K`;
   return formatNumber(n, 0);
 }

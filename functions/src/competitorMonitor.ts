@@ -9,6 +9,7 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { decryptToken } from './tokenCrypto';
+import { safeFetch } from './urlValidator';
 
 let _db: Firestore | null = null;
 
@@ -355,7 +356,9 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
           );
           let res: Response;
           if (nextUrl) {
-            res = await fetch(nextUrl);
+            // SEC-L8: nextUrl is the response's paging.next — safeFetch blocks a next-page
+            // URL that resolves to an internal/private address.
+            res = await safeFetch(nextUrl);
           } else {
             const paramsStr = buildAdLibrarySearchParams(
               accessToken,

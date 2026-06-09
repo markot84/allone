@@ -17,14 +17,18 @@ interface ProductChartsProps {
   totalProducts?: number;
 }
 
+// CODE-4: dev-only logger — these debug logs carry commercial data (margin/cost/SKU/category),
+// so they must be no-ops in production.
+const devLog: (...args: unknown[]) => void = import.meta.env.DEV ? console.log : () => {};
+
 export function ProductCharts({ isOpen, onClose, products, supplierTodMap, useProcurementRowModel, aggregateCharts, totalProducts }: ProductChartsProps) {
-  // Debug: Log products count and sample data
+  // Debug: Log products count and sample data (dev-only via devLog).
   useEffect(() => {
     if (isOpen) {
-      console.log('[ProductCharts] Products count:', products.length);
+      devLog('[ProductCharts] Products count:', products.length);
       if (products.length > 0) {
         const sample = products[0];
-        console.log('[ProductCharts] Sample product:', {
+        devLog('[ProductCharts] Sample product:', {
           name: sample.name,
           margin_percentage: sample.margin_percentage,
           stock_level: sample.stock_level,
@@ -57,7 +61,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
     });
 
     const hasData = ranges.some(r => r.count > 0);
-    console.log('[ProductCharts] Margin distribution:', ranges, 'hasData:', hasData, 'totalProducts:', products.length);
+    devLog('[ProductCharts] Margin distribution:', ranges, 'hasData:', hasData, 'totalProducts:', products.length);
     return aggregateCharts?.marginDistribution ?? ranges;
   }, [products, aggregateCharts?.marginDistribution]);
 
@@ -82,7 +86,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
     });
 
     const hasData = ranges.some(r => r.count > 0);
-    console.log('[ProductCharts] Stock age distribution:', ranges, 'hasData:', hasData);
+    devLog('[ProductCharts] Stock age distribution:', ranges, 'hasData:', hasData);
     return aggregateCharts?.stockAgeDistribution ?? ranges;
   }, [products, aggregateCharts?.stockAgeDistribution]);
 
@@ -98,7 +102,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
-    console.log('[ProductCharts] Category breakdown:', result);
+    devLog('[ProductCharts] Category breakdown:', result);
     return aggregateCharts?.categoryBreakdown ?? result;
   }, [products, aggregateCharts?.categoryBreakdown]);
 
@@ -132,7 +136,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
       { name: 'Νεκρό απόθεμα', value: dead, color: '#EF4444' },
       { name: 'No stock', value: noStock, color: '#94A3B8' }
     ];
-    console.log('[ProductCharts] Stock status:', result);
+    devLog('[ProductCharts] Stock status:', result);
     return aggregateCharts?.stockStatus ?? result;
   }, [products, supplierTodMap, useProcurementRowModel, aggregateCharts?.stockStatus]);
 
@@ -146,7 +150,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
         margin: p.margin_percentage || 0,
         price: p.price || 0
       }));
-    console.log('[ProductCharts] Top products by margin:', result);
+    devLog('[ProductCharts] Top products by margin:', result);
     return aggregateCharts?.topProductsByMargin ?? result;
   }, [products, aggregateCharts?.topProductsByMargin]);
 
@@ -161,7 +165,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
         margin: p.margin_percentage || 0
       }))
       .sort((a, b) => a.age - b.age);
-    console.log('[ProductCharts] Stock age vs level:', result.length, 'items');
+    devLog('[ProductCharts] Stock age vs level:', result.length, 'items');
     return aggregateCharts?.stockAgeVsLevel ?? result;
   }, [products, aggregateCharts?.stockAgeVsLevel]);
 
@@ -214,7 +218,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
             </div>
             {(() => {
               const hasData = marginDistribution.some(r => r.count > 0);
-              console.log('[ProductCharts] Rendering Margin Distribution, hasData:', hasData, 'data:', marginDistribution);
+              devLog('[ProductCharts] Rendering Margin Distribution, hasData:', hasData, 'data:', marginDistribution);
               return hasData ? (
                 <div style={{ width: '100%', height: '300px', minHeight: '300px' }}>
                   <ResponsiveContainer width="100%" height="100%">

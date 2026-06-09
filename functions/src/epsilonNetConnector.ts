@@ -11,6 +11,7 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
+import { safeFetch } from './urlValidator';
 import { erpWriteBatch, erpNum, sanitizeFirestoreDocId } from './erpConnectorFirestore';
 
 let _db: Firestore | null = null;
@@ -32,6 +33,17 @@ function normalizeSmartUrl(url2: string): string {
   if (!s) return '';
   if (!/^https?:\/\//i.test(s)) s = `https://${s}`;
   if (!s.endsWith('/')) s = `${s}/`;
+  // SEC-M9: every smartBase request carries the bearer JWT, so pin the host to EpsilonNet
+  // (https only) before trusting the API-supplied url2 — a compromised/MITM upstream can't
+  // redirect the token to an attacker host. Reject anything that isn't *.epsilonnet.gr.
+  try {
+    const u = new URL(s);
+    if (u.protocol !== 'https:') return '';
+    const host = u.hostname.toLowerCase();
+    if (host !== 'epsilonnet.gr' && !host.endsWith('.epsilonnet.gr')) return '';
+  } catch {
+    return '';
+  }
   return s;
 }
 
@@ -69,7 +81,9 @@ async function epsilonGetJson(url: string, bearer: string): Promise<{ ok: boolea
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), EPS_TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
+    // SEC-M9: safeFetch re-validates every redirect hop, so even a *.epsilonnet.gr base
+    // can't 30x-bounce the bearer token to an internal/private address.
+    const res = await safeFetch(url, {
       method: 'GET',
       headers: {
         Accept: 'application/json, text/plain',

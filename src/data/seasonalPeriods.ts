@@ -101,7 +101,13 @@ export function getActiveSeasons(date: Date = new Date()): SeasonalPeriod[] {
     const start = dayOfYear(period.dateRange.startMonth, period.dateRange.startDay);
     const end = dayOfYear(period.dateRange.endMonth, period.dateRange.endDay);
     const lookaheadStart = start - LOOKAHEAD_DAYS;
-    return today >= lookaheadStart && today <= end;
+    // LOGIC-17: wrap the window across Jan 1. `dayOfYear` is 0..365 (leap baseline); a
+    // negative lookaheadStart (early-January period) or a period whose end < start crosses
+    // the year boundary, so normalize the window start and use an OR-test for the wrap —
+    // otherwise late December never matches a January/Valentine period or its lookahead.
+    const YEAR = 366;
+    const loN = ((lookaheadStart % YEAR) + YEAR) % YEAR;
+    return loN <= end ? (today >= loN && today <= end) : (today >= loN || today <= end);
   });
 }
 

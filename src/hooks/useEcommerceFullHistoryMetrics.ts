@@ -76,7 +76,14 @@ export function useEcommerceFullHistoryMetrics(options?: { mode?: EcommerceFullH
       ? ecomm.ordersByDay.filter((r) => passesBrandHistory(r.date, currentBrand))
       : ecomm.ordersByDay;
     const monthlyRevenueClamped = historyCutoff
-      ? ecomm.monthlyRevenue.filter((r) => passesBrandHistory(`${r.month}-01`, currentBrand))
+      ? ecomm.monthlyRevenue.filter((r) => {
+          // LOGIC-13: a month is in range if ANY of its days is ≥ the brand-history cutoff —
+          // compare its LAST day, not the 1st, so a mid-month historyStartDate doesn't drop
+          // the whole (partially-in-range) month from the monthly chart.
+          const [y, m] = r.month.split('-').map(Number);
+          const lastDay = new Date(y, m, 0).getDate();
+          return passesBrandHistory(`${r.month}-${String(lastDay).padStart(2, '0')}`, currentBrand);
+        })
       : ecomm.monthlyRevenue;
 
     if (!rawLoaded || !clampedRawOrders) {

@@ -17,6 +17,7 @@ import { signState } from './oauthState';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { decryptToken } from './tokenCrypto';
+import { safeFetch } from './urlValidator';
 import {
   buildRollingUtcDayWindow,
   DEFAULT_INCREMENTAL_ROLLING_LOOKBACK_DAYS,
@@ -606,7 +607,9 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           let monthPageCount = 0;
           const MAX_PAGES = 200;
           while (monthUrl && monthPageCount < MAX_PAGES) {
-            const monthRes: Response = await fetch(monthUrl);
+            // SEC-L8: monthUrl is reassigned to the response's paging.next each iteration —
+            // safeFetch blocks a next-page URL that points at an internal/private address.
+            const monthRes: Response = await safeFetch(monthUrl);
             if (!monthRes.ok) {
               if (monthPageCount === 0) {
                 logger.warn(`[Meta] Month ${mr.since} failed for ${accountId}: ${await monthRes.text()}`);
@@ -650,7 +653,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           let geoUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/insights?${geoParams}`;
           let geoPages = 0;
           while (geoUrl && geoPages < 100) {
-            const geoRes: Response = await fetch(geoUrl);
+            const geoRes: Response = await safeFetch(geoUrl); // SEC-L8: paging.next follow
             if (!geoRes.ok) {
               logger.warn(`[Meta] Geo breakdown failed (${w.tag}) for ${actAccountId}: ${await geoRes.text()}`);
               break;
@@ -718,7 +721,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           let regUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/insights?${regParams}`;
           let regPages = 0;
           while (regUrl && regPages < 100) {
-            const regRes: Response = await fetch(regUrl);
+            const regRes: Response = await safeFetch(regUrl); // SEC-L8: paging.next follow
             if (!regRes.ok) {
               logger.warn(`[Meta] Geo country+region breakdown failed (${w.tag}) for ${actAccountId}: ${await regRes.text()}`);
               break;
@@ -774,7 +777,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       try {
         let statusUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/campaigns?fields=id,name,effective_status&limit=500&access_token=${accessToken}`;
         while (statusUrl) {
-          const statusRes: Response = await fetch(statusUrl);
+          const statusRes: Response = await safeFetch(statusUrl); // SEC-L8: paging.next follow
           if (!statusRes.ok) break;
           const statusData: any = await statusRes.json();
           for (const c of (statusData.data || [])) {
@@ -807,7 +810,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           let fallbackUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/insights?${fallbackParams}`;
           let pageCount = 0;
           while (fallbackUrl && pageCount < 100) {
-            const fallbackRes: Response = await fetch(fallbackUrl);
+            const fallbackRes: Response = await safeFetch(fallbackUrl); // SEC-L8: paging.next follow
             if (!fallbackRes.ok) {
               logger.warn(`[Meta] Fallback insights failed for ${actAccountId}: ${await fallbackRes.text()}`);
               break;
