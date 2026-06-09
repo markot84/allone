@@ -1558,18 +1558,6 @@ export async function fetchMegaventoryData(
       patch['megaventory.lastSyncCustomReportRows'] = counts.customReportRows;
     }
     patch['megaventory.lastProductGetExhausted'] = productGetExhausted !== false;
-    // PER-60: persist resumable catalog state. Reset when the WHOLE sync finishes (so the next manual
-    // sync re-fetches fresh); keep complete=true / cursor otherwise so the next pass resumes correctly.
-    if (catalogComplete && !needsContinuation) {
-      patch['megaventory.productCatalogComplete'] = FieldValue.delete();
-      patch['megaventory.productCatalogCursor'] = FieldValue.delete();
-    } else if (catalogComplete) {
-      patch['megaventory.productCatalogComplete'] = true;
-      patch['megaventory.productCatalogCursor'] = FieldValue.delete();
-    } else if (productCatalogNextCursor) {
-      patch['megaventory.productCatalogCursor'] = productCatalogNextCursor;
-      patch['megaventory.productCatalogComplete'] = false;
-    }
     if (apiCatalogGapFillCount > 0) {
       patch['megaventory.lastApiCatalogGapFill'] = apiCatalogGapFillCount;
     }
@@ -1619,7 +1607,12 @@ export async function fetchMegaventoryData(
 
     const invoiceBackfillStillInProgress =
       invoiceBackfillPending && (!shouldStageInvoiceBackfill || invoiceBackfillProgress?.exhausted !== true);
-    if (shouldRefreshDocuments && docsOk && !invoiceBackfillStillInProgress) {
+    if (shouldRefreshDocuments && docsOk && !invoiceBackfillStillInProgress && overBudget()) {
+      // PER-60: defer the heavy RFM rebuild rather than running it into the hard timeout.
+      needsContinuation = true;
+      rfmSkippedReason = 'deferred_over_budget';
+      logger.warn(`[Megaventory] over soft deadline before RFM refresh for ${brandId} — deferring to continuation pass`);
+    } else if (shouldRefreshDocuments && docsOk && !invoiceBackfillStillInProgress) {
       try {
         rfmCounts = await refreshMegaventoryRfmSegments(db, brandId);
       } catch (rfmErr) {
@@ -1635,7 +1628,11 @@ export async function fetchMegaventoryData(
       logger.info(`[Megaventory] RFM refresh skipped for ${brandId}: invoice backfill still in progress`);
     }
 
-    if (normalizedCounts && normalizedCounts.products > 0) {
+    if (normalizedCounts && normalizedCounts.products > 0 && overBudget()) {
+      // PER-60: defer the heavy procurement/stock-movement refresh rather than running into the hard timeout.
+      needsContinuation = true;
+      logger.warn(`[Megaventory] over soft deadline before procurement/stock-movement refresh for ${brandId} — deferring to continuation pass`);
+    } else if (normalizedCounts && normalizedCounts.products > 0) {
       try {
         const procurement = await refreshProcurementSignals(brandId);
         await refreshStockMovement(brandId);
@@ -1649,6 +1646,21 @@ export async function fetchMegaventoryData(
         errors.push(`MegaventoryPostNormalizeRefresh: ${msg}`);
         logger.warnAlert(`[Megaventory] Post-normalization refresh failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
       }
+    }
+
+    // PER-60: persist resumable catalog state AFTER every heavy phase (catalog/gap-fill/RFM/
+    // procurement/stock-movement) has decided whether it needs continuation. Reset when the WHOLE
+    // sync finishes (so the next manual sync re-fetches fresh); otherwise keep complete=true / cursor
+    // so the next pass resumes the right phase instead of re-fetching the catalog from scratch.
+    if (catalogComplete && !needsContinuation) {
+      patch['megaventory.productCatalogComplete'] = FieldValue.delete();
+      patch['megaventory.productCatalogCursor'] = FieldValue.delete();
+    } else if (catalogComplete) {
+      patch['megaventory.productCatalogComplete'] = true;
+      patch['megaventory.productCatalogCursor'] = FieldValue.delete();
+    } else if (productCatalogNextCursor) {
+      patch['megaventory.productCatalogCursor'] = productCatalogNextCursor;
+      patch['megaventory.productCatalogComplete'] = false;
     }
 
     if (Object.keys(patch).length) {
