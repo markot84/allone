@@ -13,7 +13,8 @@
 
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { getCustomerEmailIdentity } from './customerIdentity';
 import { buildHistoricalOrIncrementalWindow, ECOMMERCE_INCREMENTAL_OVERLAP_HOURS } from './syncPolicy';
@@ -184,7 +185,8 @@ export async function testOpenCartConnection(
       details = '';
     }
     if (isCloudflareChallenge(details)) {
-      logger.warn('[OpenCart] OAuth request blocked by Cloudflare/WAF', {
+      logger.warnAlert('[OpenCart] OAuth request blocked by Cloudflare/WAF', {
+        alertKey: ALERT.opencartSyncFailed,
         storeUrl,
         status: res.status,
         outboundIp,
@@ -197,7 +199,8 @@ export async function testOpenCartConnection(
     }
     return { success: false, error: `OpenCart OAuth authentication failed (${res.status}). ${details.slice(0, 160)}`.trim() };
   } catch (error) {
-    logger.warn('[OpenCart] OAuth REST Admin authentication failed:', {
+    logger.warnAlert('[OpenCart] OAuth REST Admin authentication failed:', {
+      alertKey: ALERT.opencartSyncFailed,
       storeUrl,
       outboundIp,
       error: describeFetchError(error),
@@ -551,7 +554,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
           await refreshAuth();
           res = await safeFetch(url, { headers: buildHeaders() });
         } catch (reauthErr) {
-          logger.warn('[OpenCart] Re-auth after 401 failed:', reauthErr);
+          logger.warnAlert('[OpenCart] Re-auth after 401 failed:', { alertKey: ALERT.opencartSyncFailed, err: reauthErr });
         }
       }
       if (res.ok || !OPENCART_RETRYABLE_HTTP.has(res.status) || attempt === maxAttempts) {
@@ -683,7 +686,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
           productsAbort = true;
           productsCursorNext = prodPage;
           productsAbortReason = `page cap (${productImportedCount}+ products) — run sync again`;
-          logger.warn(`[OpenCart] Products page budget reached, resume page ${prodPage} ${brandId}`);
+          logger.warnAlert(`[OpenCart] Products page budget reached, resume page ${prodPage} ${brandId}`, { alertKey: ALERT.opencartSyncFailed });
         }
         break;
       }
@@ -712,7 +715,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
       if (!res.ok) {
         ordersAbortReason = `HTTP ${res.status} on page ${orderPage} (retry sync)`;
         ordersCursorNext = orderPage;
-        logger.warn(`[OpenCart] Orders page ${orderPage} returned ${res.status}`);
+        logger.warnAlert(`[OpenCart] Orders page ${orderPage} returned ${res.status}`, { alertKey: ALERT.opencartSyncFailed });
         ordersAbort = true;
         break;
       }
@@ -836,7 +839,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
           ordersAbort = true;
           ordersCursorNext = orderPage;
           ordersAbortReason = `page cap (${orderImportedCount}+ orders) — run sync again`;
-          logger.warn(`[OpenCart] Orders page budget reached, resume page ${orderPage} ${brandId}`);
+          logger.warnAlert(`[OpenCart] Orders page budget reached, resume page ${orderPage} ${brandId}`, { alertKey: ALERT.opencartSyncFailed });
         }
         break;
       }
@@ -933,7 +936,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     return { success: true, imported: totalImported };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`[OpenCart] fetchOpenCartData error for ${brandId}:`, msg);
+    logger.error(`[OpenCart] fetchOpenCartData error for ${brandId}:`, { alertKey: ALERT.opencartSyncFailed, err: msg });
     try {
       const failPatch: Record<string, unknown> = {
         'opencart.lastSyncAttemptAt': FieldValue.serverTimestamp(),
@@ -945,7 +948,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
       if (ordersCursorNext != null) failPatch['opencart.ordersSyncPageCursor'] = String(ordersCursorNext);
       await db.doc(`connectors/${brandId}`).update(failPatch);
     } catch (patchErr) {
-      logger.warn(`[OpenCart] Failed to persist sync error for ${brandId}:`, patchErr);
+      logger.warnAlert(`[OpenCart] Failed to persist sync error for ${brandId}:`, { alertKey: ALERT.opencartSyncFailed, err: patchErr });
     }
     return { success: false, imported: totalImported, error: msg };
   }

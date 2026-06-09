@@ -5,8 +5,10 @@ import './index.css';
 import App from './App.tsx';
 import { AuthProvider } from './contexts/AuthContext';
 import { bootstrapAccent } from './theme/accentTheme';
+import { installGlobalErrorHandlers } from './utils/globalErrorHandlers';
 
 bootstrapAccent();
+installGlobalErrorHandlers();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

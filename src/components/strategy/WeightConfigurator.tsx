@@ -75,6 +75,7 @@ import { useToast } from '../common/Toast';
 import { Tooltip } from '../common';
 import type { SeasonalPeriod } from '../../data/seasonalPeriods';
 import type { Product, PriceBenchmarkStrategyScope, SalesBaseScope } from '../../types';
+import { logger } from '../../utils/logger';
 
 
 const PreviewCell = memo(function PreviewCell({
@@ -702,7 +703,7 @@ export function WeightConfigurator({
             updatedAt: new Date().toISOString(),
           } as Record<string, unknown>);
         })
-          .catch(err => console.error('[AI] Activation failed:', err))
+          .catch(err => logger.error('[AI] Activation failed:', { err }))
       );
     }
 
@@ -713,7 +714,7 @@ export function WeightConfigurator({
         provenance: provenancePromptCtx,
         audience: dataCoverage,
       }).then(result => { if (result) return saveField('contentSuggestions', result); })
-        .catch(err => console.error('[AI] Content failed:', err))
+        .catch(err => logger.error('[AI] Content failed:', { err }))
     );
 
     await Promise.allSettled(promises);
@@ -789,7 +790,7 @@ export function WeightConfigurator({
       if (saved?.id) triggerAIGeneration(saved.id, scenarioId, newWeights);
       createStrategyDecision(scenarioName);
     }).catch((error) => {
-      console.error('Error saving strategy:', error);
+      logger.error('Error saving strategy:', { err: error });
       toast.error(`Σφάλμα: ${error?.message || error}`);
     });
   }, [user, saveActiveStrategy, toast, triggerAIGeneration, createStrategyDecision]);
@@ -823,7 +824,7 @@ export function WeightConfigurator({
       if (saved?.id) triggerAIGeneration(saved.id, 'mixed', blendedWeights);
       createStrategyDecision(`Μικτή: ${mixName}`);
     }).catch((error) => {
-      console.error('Error saving mixed strategy:', error);
+      logger.error('Error saving mixed strategy:', { err: error });
       toast.error(`Σφάλμα: ${error?.message || error}`);
     });
   }, [user, saveActiveStrategy, toast, duration, triggerAIGeneration, createStrategyDecision]);
@@ -891,7 +892,7 @@ export function WeightConfigurator({
       setShowSeasonalModal(false);
       createStrategyDecision(`Εποχική πρόταση: ${period.name}`);
     }).catch((error) => {
-      console.error('Error saving seasonal proposal:', error);
+      logger.error('Error saving seasonal proposal:', { err: error });
       toast.error(`Σφάλμα: ${error?.message || error}`);
     });
   }, [user, toast, currentBrand?.id, selectedScenario, activeStrategy, mixConfig, weights, duration, triageOrigin, createStrategyDecision, queryClient]);
@@ -1305,7 +1306,7 @@ export function WeightConfigurator({
         XLSX.writeFile(wb, `${brand}_product_feed_${selectedScenario}_${date}.xlsx`);
         toast.success('Product feed downloaded successfully');
       } catch (error) {
-        console.error('Excel export error:', error);
+        logger.error('Excel export error:', { err: error });
         toast.error('Σφάλμα κατά την εξαγωγή Excel. Δοκιμάστε CSV.');
       }
     }

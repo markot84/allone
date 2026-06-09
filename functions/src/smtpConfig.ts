@@ -1,6 +1,6 @@
 import * as nodemailer from 'nodemailer';
 import dns from 'node:dns';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
 import { defineString } from 'firebase-functions/params';
 
 /** Πολλοί SMTP (Papaki/Plesk) ακούνε μόνο IPv4· το Cloud Run μπορεί να δοκιμάζει IPv6 πρώτα → ETIMEDOUT στο CONN. */

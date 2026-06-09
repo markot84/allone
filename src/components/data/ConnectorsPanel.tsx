@@ -32,6 +32,8 @@ import {
 } from 'lucide-react';
 import { RevenueSourceSettings } from './RevenueSourceSettings';
 import { SalesChannelRulesEditor } from './SalesChannelRulesEditor';
+import { logger } from '../../utils/logger';
+import { CLIENT_ALERT } from '../../utils/alertKeys';
 
 interface AdAccount {
   id: string;
@@ -459,7 +461,7 @@ async function postConnectorSync(
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') throw err;
       lastNetworkError = err;
-      console.warn('[ConnectorsPanel] connectorSync network failed; trying fallback if available', { url, err });
+      logger.warn('[ConnectorsPanel] connectorSync network failed; trying fallback if available', { url, err });
     }
   }
   throw lastNetworkError instanceof Error ? lastNetworkError : new Error('Failed to fetch');
@@ -2255,7 +2257,7 @@ export function ConnectorsPanel() {
       toast.success('OpenCart sync ολοκληρώθηκε.');
       void refreshProductIntelligenceOnServer(brandId)
         .then(() => refreshCommerceRfmProductCaches())
-        .catch((err: unknown) => console.warn('[ConnectorsPanel] PI refresh after OpenCart job:', err));
+        .catch((err: unknown) => logger.warn('[ConnectorsPanel] PI refresh after OpenCart job:', { err }));
     } else {
       toast.error(opencartSyncJob.error || 'OpenCart sync απέτυχε.');
     }
@@ -2507,7 +2509,7 @@ export function ConnectorsPanel() {
       await fetchStates();
     } catch (err) {
       toast.error('Σφάλμα αποσύνδεσης');
-      console.error(err);
+      logger.error('disconnect failed', { err });
     }
   };
 
@@ -2706,7 +2708,7 @@ export function ConnectorsPanel() {
       recordSyncAttempt(provider, false, msg);
       void refreshAfterSyncAttempt();
       toast.error(msg);
-      console.error('[ConnectorsPanel] connectorSync failed:', err);
+      logger.error('[ConnectorsPanel] connectorSync failed:', { alertKey: CLIENT_ALERT.connectorSyncCallFailed, err });
     } finally {
       window.clearTimeout(syncTimer);
       if (!keepSyncingUntilBackgroundJobFinishes) {
@@ -2760,7 +2762,7 @@ export function ConnectorsPanel() {
     } catch (err) {
       const m = err instanceof Error ? err.message : 'Σφάλμα επιλογής λογαριασμού';
       toast.error(m);
-      console.error(err);
+      logger.error('account selection failed', { err });
     } finally {
       setConfirmingAccount(false);
     }

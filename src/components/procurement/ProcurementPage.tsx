@@ -20,6 +20,7 @@ import {
   PROCUREMENT_SHEET_LABELS,
   type ProcurementSheetType,
 } from '../../types/procurement';
+import { logger } from '../../utils/logger';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -266,7 +267,7 @@ function findCol(rows: Record<string, unknown>[], keyword: string): string {
     if (found) return found;
   }
   if (import.meta.env.DEV) {
-    console.warn('[Procurement] Column not found:', { keyword, available: keys });
+    logger.warn('[Procurement] Column not found:', { keyword, available: keys });
   }
   return keyword;
 }

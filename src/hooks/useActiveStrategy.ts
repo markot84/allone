@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { limit, orderBy } from 'firebase/firestore';
 import { FirestoreService } from '../services/firestore';
+import { logger } from '../utils/logger';
 import { useBrand } from './useBrand';
 import { scenarios } from '../data';
 import { useMemo } from 'react';
@@ -117,7 +118,7 @@ export function useActiveStrategy() {
         // If index is building, return null (will use fallback)
         // This allows saves to work even if query fails
         if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
-          console.debug('Index building, query unavailable. Saves will still work.');
+          logger.debug('Index building, query unavailable. Saves will still work.');
           return null;
         }
         throw error;

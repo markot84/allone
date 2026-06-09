@@ -4,6 +4,7 @@ import { X, FileSpreadsheet, FileText, FileCode, BarChart3, ExternalLink } from 
 import { Button, ModalHeader } from '../common';
 import { downloadProductIntelligenceCsv, downloadProductIntelligenceXlsx } from '../../utils/productIntelligenceExport';
 import { safeBrandName } from '../../services/reportExport';
+import { logger } from '../../utils/logger';
 import type { Product } from '../../types';
 
 interface ExportModalProps {
@@ -33,7 +34,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
       await downloadProductIntelligenceXlsx(filteredProducts, brandName);
       onClose();
     } catch (error) {
-      console.error('Excel export error:', error);
+      logger.error('Excel export error:', { err: error });
       alert('Σφάλμα κατά την εξαγωγή Excel. Δοκιμάστε CSV.');
     }
   };

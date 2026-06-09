@@ -15,7 +15,8 @@
 import * as admin from 'firebase-admin';
 import { signState } from './oauthState';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { decryptToken } from './tokenCrypto';
 import {
   buildRollingUtcDayWindow,
@@ -409,7 +410,7 @@ export async function handleMetaCallback(
 
     if (!tokenRes.ok) {
       const err = await tokenRes.text();
-      logger.error('[Meta] Token exchange failed:', err);
+      logger.error('[Meta] Token exchange failed:', { alertKey: ALERT.metaSyncFailed, err });
       return { success: false, error: `Token exchange failed: ${tokenRes.status}` };
     }
 
@@ -427,7 +428,7 @@ export async function handleMetaCallback(
     );
 
     if (!longRes.ok) {
-      logger.error('[Meta] Long-lived token exchange failed:', longRes.status);
+      logger.error('[Meta] Long-lived token exchange failed:', { alertKey: ALERT.metaSyncFailed, status: longRes.status });
       return { success: false, error: 'Failed to get long-lived token' };
     }
 
@@ -456,7 +457,7 @@ export async function handleMetaCallback(
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error('[Meta] Callback error:', msg);
+    logger.error('[Meta] Callback error:', { alertKey: ALERT.metaSyncFailed, err: error });
     return { success: false, error: msg };
   }
 }
@@ -503,7 +504,7 @@ async function listAdAccounts(accessToken: string): Promise<{ id: string; name: 
     if (!res.ok) return [];
 
     const data = await res.json();
-    logger.info('[Meta] listAdAccounts raw:', JSON.stringify(data.data?.slice(0, 3)));
+    logger.info('[Meta] listAdAccounts raw:', { raw: JSON.stringify(data.data?.slice(0, 3)) });
     return (data.data || [])
       .filter((a: any) => Number(a.account_status) !== 2) // exclude disabled (status=2); accept all others
       .map((a: any) => ({ id: a.id, name: a.name || a.id }));
@@ -1108,12 +1109,12 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       } catch (writeErr) {
         logger.warn(
           `[Meta] Batched writes failed for ${actAccountId}, falling back to sequential single-doc writes:`,
-          writeErr
+          { err: writeErr }
         );
         try {
           await commitCampaignsOneByOne(allCampaigns);
         } catch (seqErr) {
-          logger.error(`[Meta] Sequential writes also failed for ${actAccountId}:`, seqErr);
+          logger.error(`[Meta] Sequential writes also failed for ${actAccountId}:`, { alertKey: ALERT.metaSyncFailed, err: seqErr });
           throw seqErr;
         }
       }
@@ -1123,7 +1124,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         logger.info(`[Meta] Imported ${allCampaigns.length} campaigns for account ${actAccountId}`);
       }
     } catch (err) {
-      logger.error(`[Meta] Error for account ${accountId}:`, err);
+      logger.error(`[Meta] Error for account ${accountId}:`, { alertKey: ALERT.metaSyncFailed, err });
     }
   }
 

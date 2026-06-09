@@ -11,7 +11,8 @@
 import * as admin from 'firebase-admin';
 import { signState } from './oauthState';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
@@ -144,7 +145,7 @@ export async function handleMerchantCallback(
 
     if (!res.ok) {
       const err = await res.text();
-      logger.error('[Merchant] Token exchange failed:', err);
+      logger.error('[Merchant] Token exchange failed:', { alertKey: ALERT.merchantSyncFailed, err });
       return { success: false, error: `Token exchange failed: ${res.status}` };
     }
 
@@ -216,7 +217,7 @@ export async function handleMerchantCallback(
     return { success: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error('[Merchant] Callback error:', msg);
+    logger.error('[Merchant] Callback error:', { alertKey: ALERT.merchantSyncFailed, err: error });
     return { success: false, error: msg };
   }
 }
@@ -278,7 +279,7 @@ async function listMerchantAccounts(
     });
 
     if (!res.ok) {
-      logger.warn('[Merchant] authinfo failed:', res.status);
+      logger.warn('[Merchant] authinfo failed:', { status: res.status });
       return [];
     }
 
@@ -380,7 +381,8 @@ async function refreshAccessToken(refreshToken: string): Promise<RefreshResult> 
     const googleErrorDescription =
       typeof data.error_description === 'string' ? data.error_description : undefined;
     logger.error(
-      `[Merchant] Token refresh failed HTTP ${res.status} error=${googleError || 'n/a'}: ${text.slice(0, 800)}`
+      `[Merchant] Token refresh failed HTTP ${res.status} error=${googleError || 'n/a'}: ${text.slice(0, 800)}`,
+      { alertKey: ALERT.merchantSyncFailed }
     );
     return {
       ok: false,
@@ -393,7 +395,7 @@ async function refreshAccessToken(refreshToken: string): Promise<RefreshResult> 
 
   const accessToken = typeof data.access_token === 'string' ? data.access_token : '';
   if (!accessToken) {
-    logger.error('[Merchant] Token refresh OK but missing access_token in body');
+    logger.error('[Merchant] Token refresh OK but missing access_token in body', { alertKey: ALERT.merchantSyncFailed });
     return { ok: false, httpStatus: res.status, rawBody: text.slice(0, 500) };
   }
 
@@ -458,7 +460,7 @@ async function searchMerchantReports(
 
     if (!res.ok) {
       const errText = await res.text();
-      logger.error(`[Merchant] reports.search failed [${label}] (${res.status}): ${errText.slice(0, 500)}`);
+      logger.error(`[Merchant] reports.search failed [${label}] (${res.status}): ${errText.slice(0, 500)}`, { alertKey: ALERT.merchantSyncFailed });
       throw new Error(`Merchant API ${res.status}: ${errText.slice(0, 200)}`);
     }
 
@@ -658,14 +660,14 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
     try {
       compRows = await searchMerchantReports(merchantId, accessToken, competitivenessQuery, 'PriceCompetitiveness');
     } catch (e) {
-      logger.warn('[Merchant] PriceCompetitiveness query failed:', e);
+      logger.warn('[Merchant] PriceCompetitiveness query failed:', { err: e });
     }
 
     let catalogRows: any[] = [];
     try {
       catalogRows = await searchMerchantReports(merchantId, accessToken, productCatalogQuery, 'ProductView');
     } catch (e) {
-      logger.warn('[Merchant] ProductView catalog query failed:', e);
+      logger.warn('[Merchant] ProductView catalog query failed:', { err: e });
     }
 
     logger.info(
@@ -848,7 +850,7 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
         resolvedSellerLabel
       );
     } catch (e) {
-      logger.warn('[Merchant] PriceInsights fetch failed (non-blocking):', e);
+      logger.warn('[Merchant] PriceInsights fetch failed (non-blocking):', { err: e });
     }
 
     await getDb().collection('import_jobs').add({
@@ -873,7 +875,7 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
     return { success: true, imported: count, withMarketBenchmark: withMarketBenchmarkWritten };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`[Merchant] Error:`, msg);
+    logger.error(`[Merchant] Error:`, { alertKey: ALERT.merchantSyncFailed, err });
     return { success: false, imported: 0, error: msg };
   }
 }
@@ -906,7 +908,7 @@ async function fetchPriceInsights(
   try {
     allRows = await searchMerchantReports(merchantId, accessToken, query, 'PriceInsights');
   } catch (e) {
-    logger.warn('[Merchant] PriceInsights query failed:', e);
+    logger.warn('[Merchant] PriceInsights query failed:', { err: e });
     return 0;
   }
 

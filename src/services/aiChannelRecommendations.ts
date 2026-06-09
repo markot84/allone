@@ -20,6 +20,8 @@ import type { Scenario } from '../types';
 import type { RFMSegment } from '../types';
 import { deriveBehavioralProfile, derivePredictiveMetrics } from './behavioralEngine';
 import { hashBrandProfilePromptText } from './brandProfile';
+import { logger } from '../utils/logger';
+import { CLIENT_ALERT } from '../utils/alertKeys';
 
 const MODEL_NAME = 'gemini-2.5-pro';
 
@@ -190,7 +192,7 @@ PREDICTIVE METRICS (${segment.name}):
 
   const result = parseAIResponse(text);
   if (!result) {
-    console.error('[aiChannelRecommendations] Failed to parse AI response:', text.slice(0, 500));
+    logger.error('[aiChannelRecommendations] Failed to parse AI response:', { alertKey: CLIENT_ALERT.aiAssistantFailed, response: text.slice(0, 500) });
     throw new Error('AI response could not be parsed');
   }
 

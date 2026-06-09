@@ -1,5 +1,6 @@
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import type { Transporter } from 'nodemailer';
 import { createTransporter, SENDER, NOREPLY_EMAIL, type SmtpCredentialInput } from './smtpConfig';
 
@@ -269,7 +270,7 @@ async function sendDigestForBrand(brandId: string, brandName: string, transporte
       sent++;
       logger.info(`[Digest] Sent to ${email} for brand ${brandName}`);
     } catch (err) {
-      logger.warn(`[Digest] Failed for user ${userId}:`, err);
+      logger.warnAlert(`[Digest] Failed for user ${userId}:`, { alertKey: ALERT.dailyDigestFailed, err });
     }
   }
 
@@ -296,7 +297,7 @@ export async function sendDigestForAllBrands(
       totalEmails += sent;
       brandsProcessed++;
     } catch (err) {
-      logger.error(`[Digest] Failed for brand ${brandDoc.id}:`, err);
+      logger.error(`[Digest] Failed for brand ${brandDoc.id}:`, { alertKey: ALERT.dailyDigestFailed, err });
     }
   }
 

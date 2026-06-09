@@ -17,7 +17,8 @@
  * normal case) signing + verification are enforced.
  */
 import { createHmac, timingSafeEqual, scryptSync } from 'crypto';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 
 const KEY_ENV = 'CONNECTOR_TOKEN_KEY';
 const STATE_MAX_AGE_MS = 30 * 60 * 1000; // 30 min OAuth-flow window
@@ -48,7 +49,7 @@ export function signState(payload: Record<string, unknown>): string {
   const body = Buffer.from(JSON.stringify({ ...payload, iat: Date.now() })).toString('base64url');
   const key = loadKey();
   if (!key) {
-    logger.warn(`[oauthState] ${KEY_ENV} not configured — OAuth state will be unsigned`);
+    logger.warnAlert(`[oauthState] ${KEY_ENV} not configured — OAuth state will be unsigned`, { alertKey: ALERT.oauthStateFailed });
     return body;
   }
   return `${body}.${sign(body, key)}`;
@@ -65,13 +66,13 @@ export function verifyState<T = Record<string, unknown>>(state: string | undefin
 
   if (key) {
     if (!hasSig) {
-      logger.warn('[oauthState] rejecting unsigned OAuth state');
+      logger.warnAlert('[oauthState] rejecting unsigned OAuth state', { alertKey: ALERT.oauthStateFailed });
       return null;
     }
     const expected = Buffer.from(sign(body, key));
     const got = Buffer.from(sig);
     if (got.length !== expected.length || !timingSafeEqual(got, expected)) {
-      logger.warn('[oauthState] OAuth state signature mismatch — possible forgery');
+      logger.warnAlert('[oauthState] OAuth state signature mismatch — possible forgery', { alertKey: ALERT.oauthStateFailed });
       return null;
     }
   }

@@ -15,7 +15,8 @@
 import * as admin from 'firebase-admin';
 import { signState } from './oauthState';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { getCustomerEmailIdentity } from './customerIdentity';
 import { buildHistoricalOrIncrementalWindow, ECOMMERCE_INCREMENTAL_OVERLAP_HOURS, coerceSyncDate, subtractHours } from './syncPolicy';
@@ -105,7 +106,7 @@ export async function handleShopifyCallback(
 
     if (!res.ok) {
       const err = await res.text();
-      logger.error('[Shopify] Token exchange failed:', err);
+      logger.error('[Shopify] Token exchange failed:', { alertKey: ALERT.shopifySyncFailed, err });
       return { success: false, error: `Token exchange failed: ${res.status}` };
     }
 
@@ -146,7 +147,7 @@ export async function handleShopifyCallback(
     return { success: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error('[Shopify] Callback error:', msg);
+    logger.error('[Shopify] Callback error:', { alertKey: ALERT.shopifySyncFailed, err: msg });
     return { success: false, error: msg };
   }
 }
@@ -216,7 +217,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
       const res = await fetch(`${baseUrl}/orders.json?${params}`, { headers });
       if (!res.ok) {
         const errText = await res.text();
-        logger.error(`[Shopify] Orders fetch failed (${res.status}):`, errText.slice(0, 300));
+        logger.error(`[Shopify] Orders fetch failed (${res.status}):`, { alertKey: ALERT.shopifySyncFailed, err: errText.slice(0, 300) });
         ordersAbort = true;
         break;
       }
@@ -274,7 +275,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
       orderPage++;
       if (orderPage > 20) {
         ordersAbort = true;
-        logger.warn(`[Shopify] Orders paging safety cap (${orderPage}) for ${brandId} — rerun to continue`);
+        logger.warnAlert(`[Shopify] Orders paging safety cap (${orderPage}) for ${brandId} — rerun to continue`, { alertKey: ALERT.shopifySyncFailed });
         break;
       }
     }
@@ -352,7 +353,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
       prodPage++;
       if (prodPage > 20) {
         productsAbort = true;
-        logger.warn(`[Shopify] Products paging safety cap for ${brandId}`);
+        logger.warnAlert(`[Shopify] Products paging safety cap for ${brandId}`, { alertKey: ALERT.shopifySyncFailed });
         break;
       }
     }
@@ -414,7 +415,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
     return { success: true, imported: totalImported };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`[Shopify] fetchShopifyData error for ${brandId}:`, msg);
+    logger.error(`[Shopify] fetchShopifyData error for ${brandId}:`, { alertKey: ALERT.shopifySyncFailed, err: msg });
     return { success: false, imported: totalImported, error: msg };
   }
 }

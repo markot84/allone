@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AnalyticsService } from '../services/firestore';
+import { logger } from '../utils/logger';
 import { useBrand } from './useBrand';
 
 export interface AnalyticsRecord {
@@ -20,16 +21,16 @@ export function useAnalytics() {
     queryFn: async () => {
       if (!brandId) {
         if (import.meta.env.MODE === 'development') {
-          console.debug('[useAnalytics] No brandId, returning empty array');
+          logger.debug('[useAnalytics] No brandId, returning empty array');
         }
         return [];
       }
       if (import.meta.env.MODE === 'development') {
-        console.debug('[useAnalytics] Fetching analytics for brandId:', brandId);
+        logger.debug('[useAnalytics] Fetching analytics for brandId:', { brandId });
       }
       const records = await AnalyticsService.getAll(brandId);
       if (import.meta.env.MODE === 'development') {
-        console.debug('[useAnalytics] Fetched records:', records.length, records);
+        logger.debug('[useAnalytics] Fetched records:', { length: records.length, records });
       }
       return records as unknown as AnalyticsRecord[];
     },
@@ -44,7 +45,7 @@ export function useAnalytics() {
   const revenueData = useMemo(() => {
     if (analyticsRecords.length === 0) {
       if (import.meta.env.MODE === 'development') {
-        console.debug('[useAnalytics] No analytics records, returning empty revenueData');
+        logger.debug('[useAnalytics] No analytics records, returning empty revenueData');
       }
       return [];
     }
@@ -71,7 +72,7 @@ export function useAnalytics() {
       };
     });
     if (import.meta.env.MODE === 'development') {
-      console.debug('[useAnalytics] Processed revenueData:', result);
+      logger.debug('[useAnalytics] Processed revenueData:', { result });
     }
     return result;
   }, [analyticsRecords]);

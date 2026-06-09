@@ -23,6 +23,7 @@ import { DEFAULT_TOD } from '../../utils/productUtils';
 // format utility — currently unused but available for future formatting needs
 import type { Supplier } from '../../types';
 import * as XLSX from 'xlsx';
+import { logger } from '../../utils/logger';
 
 function sanitizeDocId(raw: string): string {
   return raw
@@ -182,7 +183,7 @@ export function SuppliersPage() {
       await invalidate();
       toast.success(`${items.length} προμηθευτές εισήχθησαν`);
     } catch (err) {
-      console.error('[SuppliersPage] Import error:', err);
+      logger.error('[SuppliersPage] Import error:', { err });
       toast.error('Σφάλμα κατά την εισαγωγή');
     } finally {
       setIsImporting(false);
@@ -204,7 +205,7 @@ export function SuppliersPage() {
       invalidate();
       toast.success('TOD ενημερώθηκε');
     } catch (err) {
-      console.error('[SuppliersPage] Update error:', err);
+      logger.error('[SuppliersPage] Update error:', { err });
       toast.error('Σφάλμα κατά την ενημέρωση');
     }
   };
@@ -215,7 +216,7 @@ export function SuppliersPage() {
       invalidate();
       toast.success('Προμηθευτής διαγράφηκε');
     } catch (err) {
-      console.error('[SuppliersPage] Delete error:', err);
+      logger.error('[SuppliersPage] Delete error:', { err });
       toast.error('Σφάλμα κατά τη διαγραφή');
     }
   };
@@ -241,7 +242,7 @@ export function SuppliersPage() {
       invalidate();
       toast.success('Προμηθευτής προστέθηκε');
     } catch (err) {
-      console.error('[SuppliersPage] Add error:', err);
+      logger.error('[SuppliersPage] Add error:', { err });
       toast.error('Σφάλμα κατά την αποθήκευση');
     }
   };

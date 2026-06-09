@@ -5,6 +5,7 @@ import { useBrand } from './useBrand';
 import { useBrandSyncVersion } from './useBrandSyncVersion';
 import type { Product } from '../types';
 import { excludeDemoProducts } from '../utils/productUtils';
+import { logger } from '../utils/logger';
 
 type UseProductsOptions = {
   maxDocs?: number;
@@ -31,7 +32,7 @@ export function useProducts(options: UseProductsOptions = {}) {
         return await ProductsService.getAll(brandId, constraints, { forceServer: true }) as Product[];
       } catch (error) {
         if (!inStockOnly) throw error;
-        console.warn('[useProducts] stock-only query failed; falling back to capped product query', error);
+        logger.warn('[useProducts] stock-only query failed; falling back to capped product query', { err: error });
         return await ProductsService.getAll(brandId, maxDocs ? [limit(maxDocs)] : [], { forceServer: true }) as Product[];
       }
     },

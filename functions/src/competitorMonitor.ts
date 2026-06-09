@@ -7,7 +7,8 @@
 
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
@@ -82,7 +83,7 @@ async function resolveAdLibraryAccessToken(
       logger.warn(`[Competitor] Meta OAuth token expired για ${brandId} — δοκιμή app token για ads_archive`);
     }
   } catch (e) {
-    logger.warn(`[Competitor] Ανάγνωση connectors/${brandId}:`, e);
+    logger.warn(`[Competitor] Ανάγνωση connectors/${brandId}:`, { err: e });
   }
   const app = getAppToken();
   if (!app || app === '|') return null;
@@ -461,7 +462,7 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Competitor] Error for ${competitor.name}:`, msg);
+      logger.error(`[Competitor] Error for ${competitor.name}:`, { alertKey: ALERT.competitorMonitorFailed, err: msg });
       warnings.push(`Exception for ${competitor.name}: ${msg.slice(0, 200)}`);
     }
   }

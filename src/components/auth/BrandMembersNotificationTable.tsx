@@ -7,6 +7,7 @@ import type { ActivityType, BrandMember, BrandMemberRole, NotificationChannel, N
 import { DEFAULT_NOTIFICATION_CHANNELS, DEPARTMENT_LABELS, normalizeBrandMemberRole, ROLE_LABELS } from '../../types';
 import { useToast } from '../common';
 import { ACTIVITY_GROUPS } from './NotificationSettings';
+import { logger } from '../../utils/logger';
 
 type Props = {
   members: BrandMember[];
@@ -127,7 +128,7 @@ function MemberRoleCell({
       await MembersService.updateRole(brandId, member.userId, next);
       onSaved();
     } catch (err) {
-      console.error(err);
+      logger.error('role change failed', { err });
       toast.error('Αποτυχία αλλαγής ρόλου.');
       e.target.value = er;
     } finally {
@@ -201,7 +202,7 @@ export function BrandMembersNotificationTable({ members, loadingMembers }: Props
       await refreshPrefs();
       toast.success('Οι ρυθμίσεις ειδοποιήσεων ενημερώθηκαν.');
     } catch (err) {
-      console.error(err);
+      logger.error('notification prefs save failed', { err });
       toast.error('Αποτυχία αποθήκευσης ρυθμίσεων ειδοποιήσεων.');
     } finally {
       setSavingPrefKey(null);

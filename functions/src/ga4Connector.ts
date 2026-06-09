@@ -11,7 +11,8 @@
 import * as admin from 'firebase-admin';
 import { signState } from './oauthState';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
@@ -239,7 +240,7 @@ export async function handleGA4Callback(
 
     if (!res.ok) {
       const err = await res.text();
-      logger.error('[GA4] Token exchange failed:', err);
+      logger.error('[GA4] Token exchange failed:', { alertKey: ALERT.ga4SyncFailed, err });
       return { success: false, error: `Token exchange failed: ${res.status}` };
     }
 
@@ -267,7 +268,7 @@ export async function handleGA4Callback(
       properties = await listGA4Properties(accessToken);
     } catch (listErr) {
       const msg = listErr instanceof Error ? listErr.message : String(listErr);
-      logger.error(`[GA4] Property listing failed: ${msg}`);
+      logger.error(`[GA4] Property listing failed: ${msg}`, { alertKey: ALERT.ga4SyncFailed });
       return { success: false, error: msg };
     }
 
@@ -319,7 +320,7 @@ export async function handleGA4Callback(
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error('[GA4] Callback error:', msg);
+    logger.error('[GA4] Callback error:', { alertKey: ALERT.ga4SyncFailed, err });
     return { success: false, error: msg };
   }
 }
@@ -335,7 +336,7 @@ async function listGA4Properties(accessToken: string): Promise<GA4Property[]> {
 
   if (!res.ok) {
     const body = await res.text();
-    logger.error(`[GA4] Account summaries failed: ${res.status}`, body);
+    logger.error(`[GA4] Account summaries failed: ${res.status}`, { alertKey: ALERT.ga4SyncFailed, body });
     throw new Error(
       res.status === 403
         ? 'GA4 Admin API not enabled or no access. Enable "Google Analytics Admin API" in Cloud Console → APIs & Services → Library.'
@@ -406,7 +407,7 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
 
   const rawText = await res.text();
   if (!res.ok) {
-    logger.error(`[GA4] Token refresh HTTP ${res.status}:`, rawText.slice(0, 500));
+    logger.error(`[GA4] Token refresh HTTP ${res.status}:`, { alertKey: ALERT.ga4SyncFailed, body: rawText.slice(0, 500) });
     throw new Error(explainGoogleTokenError(res.status, rawText));
   }
 
@@ -417,7 +418,7 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
     throw new Error('Token refresh failed: invalid JSON response from Google');
   }
   if (!data.access_token) {
-    logger.error('[GA4] Token refresh: missing access_token in body:', rawText.slice(0, 300));
+    logger.error('[GA4] Token refresh: missing access_token in body:', { alertKey: ALERT.ga4SyncFailed, body: rawText.slice(0, 300) });
     throw new Error('Token refresh failed: no access_token in response');
   }
   return data.access_token;
@@ -525,7 +526,7 @@ export async function fetchGA4PeriodTotals(
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error('[GA4] fetchGA4PeriodTotals error:', msg);
+    logger.error('[GA4] fetchGA4PeriodTotals error:', { alertKey: ALERT.ga4SyncFailed, err });
     return { success: false, error: msg };
   }
 }
@@ -609,7 +610,7 @@ export async function fetchGA4Data(
 
     if (!reportRes.ok) {
       const err = await reportRes.text();
-      logger.error(`[GA4] Report failed: ${reportRes.status}`, err);
+      logger.error(`[GA4] Report failed: ${reportRes.status}`, { alertKey: ALERT.ga4SyncFailed, err });
       return { success: false, imported: 0, error: `GA4 API error: ${reportRes.status}` };
     }
 
@@ -816,13 +817,13 @@ export async function fetchGA4Data(
             logger.info(`[GA4] sessionMedium last-resort: ${Object.keys(trafficSources).length} channels`);
           } else {
             const medErr = await medRes.text();
-            logger.error(`[GA4] All channel attempts failed. Last error (${medRes.status}): ${medErr.slice(0, 300)}`);
+            logger.error(`[GA4] All channel attempts failed. Last error (${medRes.status}): ${medErr.slice(0, 300)}`, { alertKey: ALERT.ga4SyncFailed });
           }
         }
       }
       void usedChannelDimension;
     } catch (e) {
-      logger.warn('[GA4] Traffic sources query failed:', e);
+      logger.warn('[GA4] Traffic sources query failed:', { err: e });
     }
 
     /**
@@ -910,10 +911,10 @@ export async function fetchGA4Data(
         }
       } else {
         const t = await purRes.text();
-        logger.warn(`[GA4] Purchase-by-channel report failed: ${purRes.status}`, t.slice(0, 400));
+        logger.warn(`[GA4] Purchase-by-channel report failed: ${purRes.status}`, { body: t.slice(0, 400) });
       }
     } catch (e) {
-      logger.warn('[GA4] Purchase-by-channel merge failed:', e);
+      logger.warn('[GA4] Purchase-by-channel merge failed:', { err: e });
     }
 
     // New users per acquisition channel — merge onto session-channel rows (same labels via fuzzy match)
@@ -971,10 +972,10 @@ export async function fetchGA4Data(
         }
       } else {
         const errText = await nuRes.text();
-        logger.warn(`[GA4] New users by channel report failed: ${nuRes.status}`, errText.slice(0, 400));
+        logger.warn(`[GA4] New users by channel report failed: ${nuRes.status}`, { body: errText.slice(0, 400) });
       }
     } catch (e) {
-      logger.warn('[GA4] New users by channel query failed:', e);
+      logger.warn('[GA4] New users by channel query failed:', { err: e });
     }
 
     // Daily organic revenue (sessionDefaultChannelGroup rows whose canonical label includes "organic") — ROI revenue trend.
@@ -1030,7 +1031,7 @@ export async function fetchGA4Data(
         logger.warn(`[GA4] daily organic by channel failed (${orgDailyRes.status}): ${txt.slice(0, 400)}`);
       }
     } catch (e) {
-      logger.warn('[GA4] organicRevenueByDay query failed:', e);
+      logger.warn('[GA4] organicRevenueByDay query failed:', { err: e });
     }
 
     let organicSearchFallbackRows: GA4OrganicFallbackRow[] = [];
@@ -1122,7 +1123,7 @@ export async function fetchGA4Data(
         logger.warn(`[GA4] organic landing page fallback failed (${fallbackRes.status}): ${fallbackErr.slice(0, 300)}`);
       }
     } catch (e) {
-      logger.warn('[GA4] organicSearchFallbackRows query failed:', e);
+      logger.warn('[GA4] organicSearchFallbackRows query failed:', { err: e });
     }
 
     // Top pages
@@ -1164,7 +1165,7 @@ export async function fetchGA4Data(
         }));
       }
     } catch (e) {
-      logger.warn('[GA4] Top pages query failed:', e);
+      logger.warn('[GA4] Top pages query failed:', { err: e });
     }
 
     /** Ημερομηνία × κανάλι → metrics (για φίλτρο ημερολογίου στο Web Analytics). */
@@ -1422,7 +1423,7 @@ export async function fetchGA4Data(
         );
       }
     } catch (e) {
-      logger.warn('[GA4] dailyTrafficByChannel exception:', e);
+      logger.warn('[GA4] dailyTrafficByChannel exception:', { err: e });
     }
 
     // Save to Firestore — split large fields into subcollection to stay under 1 MiB doc limit
@@ -1494,7 +1495,7 @@ export async function fetchGA4Data(
     return { success: true, imported: dayCount };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error('[GA4] fetchGA4Data error:', msg);
+    logger.error('[GA4] fetchGA4Data error:', { alertKey: ALERT.ga4SyncFailed, err });
     return { success: false, imported: 0, error: msg };
   }
 }

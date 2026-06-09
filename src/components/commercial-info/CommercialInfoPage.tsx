@@ -9,6 +9,7 @@ import type {
   CommercialMagnitude,
   CommercialConfidence,
 } from '../../services/commercialInfo';
+import { logger } from '../../utils/logger';
 
 const FACTOR_LABEL: Record<CommercialFactorType, string> = {
   event: 'Γεγονός',
@@ -211,7 +212,7 @@ export function CommercialInfoPage() {
       await addInfo.mutateAsync({ rawText: raw, structured, source: 'owner' });
       setDraft('');
     } catch (e) {
-      console.error('[CommercialInfo] add:', e);
+      logger.error('[CommercialInfo] add:', { err: e });
       const message = e instanceof Error && /permission|insufficient permissions/i.test(e.message)
         ? 'Δεν υπάρχει άδεια καταχώρησης για αυτό το brand. Ανανεώθηκε ο κανόνας ασφαλείας και χρειάζεται deploy.'
         : 'Δεν ολοκληρώθηκε η καταχώρηση. Δοκίμασε ξανά σε λίγο.';

@@ -23,7 +23,7 @@
 
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
 
 let _db: Firestore | null = null;
 

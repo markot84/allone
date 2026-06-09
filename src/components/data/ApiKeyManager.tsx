@@ -7,6 +7,7 @@ import { useBrand } from '../../hooks/useBrand';
 import { useAuth } from '../../hooks/useAuth';
 import { FirestoreService } from '../../services/firestore';
 import { buildFunctionUrl } from '../../config/firebase';
+import { logger } from '../../utils/logger';
 
 interface ApiKeyDoc {
   id: string;
@@ -73,7 +74,7 @@ export function ApiKeyManager() {
       setRevealedKeys((prev) => new Set(prev).add(key));
       await queryClient.invalidateQueries({ queryKey: ['apiKeys', brandId] });
     } catch (err) {
-      console.error('[ApiKeyManager] Generate error:', err);
+      logger.error('[ApiKeyManager] Generate error:', { err });
       toast.error('Σφάλμα κατά τη δημιουργία API key');
     } finally {
       setGenerating(false);
@@ -86,7 +87,7 @@ export function ApiKeyManager() {
       toast.success('API Key απενεργοποιήθηκε');
       await queryClient.invalidateQueries({ queryKey: ['apiKeys', brandId] });
     } catch (err) {
-      console.error('[ApiKeyManager] Revoke error:', err);
+      logger.error('[ApiKeyManager] Revoke error:', { err });
       toast.error('Σφάλμα');
     }
   };

@@ -53,6 +53,7 @@ import { classifyStockHealth } from '../../utils/productUtils';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent } from '../../utils/format';
 import { sanitizeCustomerMessage, containsForbiddenContent } from '../../utils/customerMessageSanitizer';
+import { logger } from '../../utils/logger';
 import {
   groupProductsForDecisionExport,
   isActionableStockProduct,
@@ -404,7 +405,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       await queryClient.refetchQueries({ queryKey: ['activeStrategy'] });
       if (!silent) toast.success('AI συστάσεις δημιουργήθηκαν');
     } catch (err) {
-      console.error('[ChannelActivation] AI generation failed:', err);
+      logger.error('[ChannelActivation] AI generation failed:', { err });
       if (!silent) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         toast.error(`AI error: ${msg}`);

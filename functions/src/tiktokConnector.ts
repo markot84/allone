@@ -1,7 +1,8 @@
 import * as admin from 'firebase-admin';
 import { signState } from './oauthState';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import {
   buildRollingUtcDayWindow,
@@ -340,7 +341,7 @@ async function refreshTikTokAccessToken(
   });
 
   if (!refreshResult.ok || !refreshResult.data) {
-    logger.error(`[TikTok] Token refresh failed: ${refreshResult.error || 'unknown error'}`);
+    logger.error(`[TikTok] Token refresh failed: ${refreshResult.error || 'unknown error'}`, { alertKey: ALERT.tiktokSyncFailed });
     return null;
   }
 
@@ -540,7 +541,7 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
           }
 
           if (!pageResult.ok) {
-            logger.warn(`[TikTok] Report fetch failed for advertiser ${advertiserId} (${mr.since}): ${pageResult.error}`);
+            logger.warnAlert(`[TikTok] Report fetch failed for advertiser ${advertiserId} (${mr.since}): ${pageResult.error}`, { alertKey: ALERT.tiktokSyncFailed });
             anyReportError = true;
             break;
           }
@@ -655,7 +656,7 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
       logger.info(`[TikTok] Imported ${campaigns.length} campaigns for advertiser ${advertiserId}`);
     } catch (err) {
       anyReportError = true;
-      logger.error(`[TikTok] Error for advertiser ${advertiserId}:`, err);
+      logger.error(`[TikTok] Error for advertiser ${advertiserId}:`, { alertKey: ALERT.tiktokSyncFailed, err });
     }
   }
 

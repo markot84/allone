@@ -6,6 +6,7 @@ import { FirestoreService, CampaignsService, ProcurementService, PROCUREMENT_COL
 import { PROCUREMENT_SHEET_NAMES } from '../types/procurement';
 import type { ProcurementSheetType } from '../types/procurement';
 import { FEED_SOURCE_CONFIG, type FeedSourceType } from '../data/feedSourceConfig';
+import { logger } from '../utils/logger';
 import type { Product, RFMSegment, Campaign } from '../types';
 
 const BATCH_SIZE = 500; // Firestore limit per writeBatch
@@ -524,8 +525,8 @@ function csvToObjects(csvRows: string[][], type?: ImportType): Record<string, st
   
   // Debug: Log detected headers for products
   if (type === 'products' && import.meta.env.MODE === 'development') {
-    console.debug('[csvToObjects] Detected headers for products:', headers);
-    console.debug('[csvToObjects] Looking for:', ['stock_on_hand', 'stock_level', 'stock', 'quantity', 'sell_price', 'price', 'cost_price', 'cost', 'gross_margin_%', 'margin_percentage', 'stock_age_days', 'age_days']);
+    logger.debug('[csvToObjects] Detected headers for products:', { headers });
+    logger.debug('[csvToObjects] Looking for:', { lookingFor: ['stock_on_hand', 'stock_level', 'stock', 'quantity', 'sell_price', 'price', 'cost_price', 'cost', 'gross_margin_%', 'margin_percentage', 'stock_age_days', 'age_days'] });
   }
   
   const objects: Record<string, string>[] = [];
@@ -586,7 +587,7 @@ function csvToObjects(csvRows: string[][], type?: ImportType): Record<string, st
     if (type === 'products' && objects.length < 3 && import.meta.env.MODE === 'development') {
       const relevantKeys = ['item_id', 'title', 'stock_on_hand', 'stock_level', 'stock', 'quantity', 'sell_price', 'price', 'cost_price', 'cost', 'gross_margin_%', 'margin_percentage', 'stock_age_days', 'age_days'];
       const relevantObj = Object.fromEntries(Object.entries(obj).filter(([k]) => relevantKeys.some(rk => k.includes(rk) || rk.includes(k))));
-      console.debug('[csvToObjects] relevant fields:', { row: objects.length + 1, fields: relevantObj });
+      logger.debug('[csvToObjects] relevant fields:', { row: objects.length + 1, fields: relevantObj });
     }
     
     objects.push(obj);
@@ -730,14 +731,14 @@ function parseLooseNumber(value: string | number | null | undefined): number {
 function validateProduct(row: Record<string, string>, index: number): { valid: boolean; data?: Product; error?: string } {
   // Debug: Log available keys for first few rows
   if (index < 3) {
-    console.log('[Product Row] Available keys:', { row: index, count: Object.keys(row).length, keys: Object.keys(row) });
+    logger.debug('[Product Row] Available keys:', { row: index, count: Object.keys(row).length, keys: Object.keys(row) });
     const relevantKeys = Object.keys(row).filter(k =>
       k.includes('stock') || k.includes('price') || k.includes('cost') ||
       k.includes('margin') || k.includes('age') || k.includes('quantity') ||
       k.includes('item') || k.includes('title') || k.includes('sku')
     );
-    console.log('[Product Row] Relevant keys:', { row: index, relevantKeys });
-    console.log('[Product Row] Relevant values:', { row: index, values: Object.fromEntries(relevantKeys.map(k => [k, row[k]])) });
+    logger.debug('[Product Row] Relevant keys:', { row: index, relevantKeys });
+    logger.debug('[Product Row] Relevant values:', { row: index, values: Object.fromEntries(relevantKeys.map(k => [k, row[k]])) });
   }
   
   // Headers are normalized: "Title" -> "title", "Item ID" -> "item_id"
@@ -786,7 +787,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
 
   // Debug: Log what was found
   if (index < 3) {
-    console.log('[Product Row] Found values:', {
+    logger.debug('[Product Row] Found values:', {
       row: index,
       name: name || '(empty)',
       sku: sku || '(empty)',
@@ -808,9 +809,9 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
     const priceKeys = ['sell_price', 'price', 'unit_price', 'retail_price', 'conv._value', 'conv_value', 'conversion_value', 'τιμή', 'msrp', 'MSRP'];
     const costKeys = ['cost_price', 'Cost_Price', 'cost', 'Cost', 'κόστος', 'Κόστος'];
     const stockKeys = ['stock_on_hand', 'Stock_On_Hand', 'stock_level', 'Stock_Level', 'stock', 'Stock', 'quantity', 'Quantity'];
-    console.log('[Product Row] Price keys found:', { row: index, found: priceKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`) });
-    console.log('[Product Row] Cost keys found:', { row: index, found: costKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`) });
-    console.log('[Product Row] Stock keys found:', { row: index, found: stockKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`) });
+    logger.debug('[Product Row] Price keys found:', { row: index, found: priceKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`) });
+    logger.debug('[Product Row] Cost keys found:', { row: index, found: costKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`) });
+    logger.debug('[Product Row] Stock keys found:', { row: index, found: stockKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`) });
   }
 
   const errors: string[] = [];
@@ -873,7 +874,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   
   // Debug: Log calculations for first few rows
   if (index < 3) {
-    console.log('[Product Row] Calculations:', {
+    logger.debug('[Product Row] Calculations:', {
       row: index,
       sellPriceNum,
       listPriceNum,
@@ -948,7 +949,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
 
   // Debug: Log final product for first few rows
   if (index < 3) {
-    console.log('[Product Row] Final product:', { row: index, product: {
+    logger.debug('[Product Row] Final product:', { row: index, product: {
       id: product.id,
       name: product.name,
       margin_percentage: product.margin_percentage,
@@ -1252,7 +1253,7 @@ function validateCampaignRow(
   
   // Debug logging in development
   if (import.meta.env.MODE === 'development' && index < 3) {
-    console.debug('[Campaign Row] Channel Detection:', {
+    logger.debug('[Campaign Row] Channel Detection:', {
       row: index,
       explicitChannel,
       hasGoogleAdsColumns,
@@ -1263,7 +1264,7 @@ function validateCampaignRow(
   }
   
   if (import.meta.env.MODE === 'development' && index < 3) {
-    console.debug('[Campaign Row] Channel detection:', {
+    logger.debug('[Campaign Row] Channel detection:', {
       row: index,
       explicitChannel,
       hasGoogleAdsColumns,
@@ -1423,7 +1424,7 @@ function validateCampaignRow(
     const amountSpentNum = amountSpent ? parseFloat(amountSpent) : 0;
     const conversionValueNum = conversionValue ? parseFloat(conversionValue) : 0;
     const roasNum = roasValue ? parseFloat(roasValue) : 0;
-    console.debug('[Campaign Row] Final Channel & Values:', {
+    logger.debug('[Campaign Row] Final Channel & Values:', {
       row: index,
       initialChannel: channel,
       finalChannel,
@@ -1929,8 +1930,8 @@ export async function importFile(
       if (type === 'products' && objects.length > 0) {
         const firstRowKeys = Object.keys(objects[0]);
         const firstRowSample = Object.fromEntries(Object.entries(objects[0]).slice(0, 10));
-        console.log('[Product Import] Detected headers:', firstRowKeys);
-        console.log('[Product Import] First row sample:', firstRowSample);
+        logger.debug('[Product Import] Detected headers:', { firstRowKeys });
+        logger.debug('[Product Import] First row sample:', { firstRowSample });
         result.warnings.push(`Debug: Detected ${firstRowKeys.length} columns. Sample keys: ${firstRowKeys.slice(0, 10).join(', ')}`);
       }
     }
@@ -1957,7 +1958,7 @@ export async function importFile(
 
         // Delete all existing products for this brand before importing new ones
         if (import.meta.env.MODE === 'development') {
-          console.debug(`[Import] Deleting existing products for brandId: ${brandId}`);
+          logger.debug(`[Import] Deleting existing products for brandId: ${brandId}`);
         }
         await FirestoreService.deleteCollection('products', brandId);
         const productChunks = chunk(validProducts, BATCH_SIZE);
@@ -1987,7 +1988,7 @@ export async function importFile(
             
             // Debug: Log batch processing for first product in first batch
             if (batchIndex === 0 && chunkItems.indexOf(p) === 0) {
-              console.log(`[Import Batch] Processing product:`, {
+              logger.debug(`[Import Batch] Processing product:`, {
                 id: p.id,
                 name: p.name,
                 price: p.price,
@@ -2001,7 +2002,7 @@ export async function importFile(
                 first_available_date: p.first_available_date,
                 createdAt: importTimestamp.toString()
               });
-              console.log(`[Import Batch] Full product object:`, JSON.stringify(p, null, 2));
+              logger.debug(`[Import Batch] Full product object:`, { product: JSON.stringify(p, null, 2) });
             }
             
             const docId = brandScopedProductId(brandId, p.id);
@@ -2059,7 +2060,7 @@ export async function importFile(
             result.warnings.push(`Αυτόματη εισαγωγή ${supItems.length} προμηθευτών με TOD`);
           }
         } catch (supErr) {
-          console.error('[Import] Auto-supplier extraction error:', supErr);
+          logger.error('[Import] Auto-supplier extraction error:', { err: supErr });
         }
 
         break;
@@ -2156,9 +2157,9 @@ export async function importFile(
         }
 
         if (import.meta.env.MODE === 'development') {
-          console.debug('[Import] Analytics: Valid records:', validAnalytics.length, 'BrandId:', brandId);
+          logger.debug('[Import] Analytics: Valid records:', { validRecords: validAnalytics.length, brandId });
           if (validAnalytics.length > 0) {
-            console.debug('[Import] First analytics record:', validAnalytics[0]);
+            logger.debug('[Import] First analytics record:', { record: validAnalytics[0] });
           }
         }
 

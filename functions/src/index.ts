@@ -2,7 +2,7 @@ import * as admin from 'firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Busboy from 'busboy';
@@ -151,6 +151,12 @@ import {
 } from './tiktokConnector';
 import { persistInterestLead } from './interestLead';
 import { applyStrictCors, enforceRateLimit, getClientIp, sendRateLimitExceeded } from './security';
+import { ALERT } from './utils/alertKeys';
+import { runWithLogContext } from './utils/logContext';
+import { getRequestId } from './utils/requestContext';
+
+/** Mirror of CLIENT_ALERT.unkeyed (src/utils/alertKeys.ts) for the client error sink fallback. */
+const ALERT_CLIENT_UNKEYED = 'client_unkeyed';
 import { encryptToken } from './tokenCrypto';
 
 admin.initializeApp();
@@ -204,7 +210,7 @@ async function loadSuperAdmins(): Promise<{ uids: Set<string>; emails: Set<strin
     superAdminCache = { uids, emails, fetchedAt: now };
     return { uids, emails };
   } catch (err) {
-    logger.warn('[superAdmins] Firestore read failed; allowlist empty until next retry', err);
+    logger.warn('[superAdmins] Firestore read failed; allowlist empty until next retry', { err });
     return { uids: new Set(), emails: new Set() };
   }
 }
@@ -412,7 +418,7 @@ async function importProcurement(
     } catch (err) {
       const msg = `Sheet "${sheetName}" failed: ${err instanceof Error ? err.message : String(err)}`;
       errors.push(msg);
-      logger.error(`[Procurement] ${msg}`);
+      logger.error(`[Procurement] ${msg}`, { alertKey: ALERT.importDataFailed, err });
     }
   }
 
@@ -454,7 +460,7 @@ async function importProducts(
     try {
       await refreshStockMovement(brandId);
     } catch (e) {
-      logger.warn(`[importProducts] stock movement refresh failed for ${brandId}:`, e);
+      logger.warn(`[importProducts] stock movement refresh failed for ${brandId}:`, { err: e });
     }
   }
 
@@ -601,7 +607,7 @@ export const importData = onRequest(
         try {
           response = await safeFetch(fileUrl);
         } catch (e) {
-          logger.error('fetchImportUrl fileUrl fetch failed:', e); res.status(400).json({ error: 'Failed to fetch fileUrl' });
+          logger.error('fetchImportUrl fileUrl fetch failed:', { alertKey: ALERT.importDataFailed, err: e }); res.status(400).json({ error: 'Failed to fetch fileUrl' });
           return;
         }
         if (!response.ok) {
@@ -640,7 +646,7 @@ export const importData = onRequest(
         }
 
         await logImportJob(brandId, result, urlFilename, 'api_url');
-        computeAggregatesForBrand(brandId).catch(e => logger.warn('[import] aggregate refresh failed:', e));
+        computeAggregatesForBrand(brandId).catch(e => logger.warn('[import] aggregate refresh failed:', { err: e }));
         res.status(200).json(result);
         return;
       }
@@ -700,12 +706,12 @@ export const importData = onRequest(
       }
 
       await logImportJob(brandId, result, fileName, 'api_upload');
-      computeAggregatesForBrand(brandId).catch(e => logger.warn('[import] aggregate refresh failed:', e));
+      computeAggregatesForBrand(brandId).catch(e => logger.warn('[import] aggregate refresh failed:', { err: e }));
 
       res.status(200).json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error('Import failed:', message);
+      logger.error('Import failed:', { alertKey: ALERT.importDataFailed, err: error });
       res.status(500).json({ error: 'Import failed — check file format and try again' });
     }
   }
@@ -749,43 +755,45 @@ export const fetchImportUrl = onRequest(
       return;
     }
 
-    // Outbound fetcher → rate limit per user (20 / 5 min) to prevent relay abuse.
-    const rl = await enforceRateLimit({ key: `fetchImportUrl:${uid}`, limit: 20, windowSeconds: 300 });
-    if (!rl.allowed) {
-      sendRateLimitExceeded(res, rl.resetInSeconds, 'fetchImportUrl');
-      return;
-    }
+    await runWithLogContext({ uid, requestId: getRequestId(req) }, async () => {
+      // Outbound fetcher → rate limit per user (20 / 5 min) to prevent relay abuse.
+      const rl = await enforceRateLimit({ key: `fetchImportUrl:${uid}`, limit: 20, windowSeconds: 300 });
+      if (!rl.allowed) {
+        sendRateLimitExceeded(res, rl.resetInSeconds, 'fetchImportUrl');
+        return;
+      }
 
-    const { url } = (req.body ?? {}) as { url?: string };
-    if (!url || typeof url !== 'string') {
-      res.status(400).json({ error: 'Missing url' });
-      return;
-    }
-    const check = validateImportUrl(url);
-    if (!check.ok) {
-      res.status(400).json({ error: `Invalid url: ${check.reason}` });
-      return;
-    }
+      const { url } = (req.body ?? {}) as { url?: string };
+      if (!url || typeof url !== 'string') {
+        res.status(400).json({ error: 'Missing url' });
+        return;
+      }
+      const check = validateImportUrl(url);
+      if (!check.ok) {
+        res.status(400).json({ error: `Invalid url: ${check.reason}` });
+        return;
+      }
 
-    let upstream: Awaited<ReturnType<typeof safeFetch>>;
-    try {
-      upstream = await safeFetch(url);
-    } catch (e) {
-      logger.error('fetchImportUrl url fetch failed:', e); res.status(400).json({ error: 'Failed to fetch URL' });
-      return;
-    }
-    if (!upstream.ok) {
-      res.status(502).json({ error: `Upstream responded ${upstream.status}` });
-      return;
-    }
+      let upstream: Awaited<ReturnType<typeof safeFetch>>;
+      try {
+        upstream = await safeFetch(url);
+      } catch (e) {
+        logger.error('fetchImportUrl url fetch failed:', { alertKey: ALERT.fetchImportUrlFailed, err: e }); res.status(400).json({ error: 'Failed to fetch URL' });
+        return;
+      }
+      if (!upstream.ok) {
+        res.status(502).json({ error: `Upstream responded ${upstream.status}` });
+        return;
+      }
 
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    if (buf.length > 50 * 1024 * 1024) {
-      res.status(413).json({ error: 'File too large (max 50MB)' });
-      return;
-    }
-    res.set('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
-    res.status(200).send(buf);
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      if (buf.length > 50 * 1024 * 1024) {
+        res.status(413).json({ error: 'File too large (max 50MB)' });
+        return;
+      }
+      res.set('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
+      res.status(200).send(buf);
+    });
   }
 );
 
@@ -814,34 +822,115 @@ export const generateApiKey = onRequest(
       const idToken = authHeader.slice(7).trim();
       const decoded = await admin.auth().verifyIdToken(idToken);
 
-      const { brandId } = req.body as { brandId?: string };
-      if (!brandId) {
-        res.status(400).json({ error: 'Missing brandId' });
-        return;
-      }
+      await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, async () => {
+        const { brandId } = req.body as { brandId?: string };
+        if (!brandId) {
+          res.status(400).json({ error: 'Missing brandId' });
+          return;
+        }
 
-      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
-        return;
-      }
+        if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+          res.status(403).json({ error: 'Not a member of this brand' });
+          return;
+        }
 
-      const { v4: uuidv4 } = await import('uuid');
-      const key = `pp_${uuidv4().replace(/-/g, '')}`;
+        const { v4: uuidv4 } = await import('uuid');
+        const key = `pp_${uuidv4().replace(/-/g, '')}`;
 
-      await db.collection('api_keys').add({
-        key,
-        brandId,
-        active: true,
-        createdBy: decoded.uid,
-        createdAt: FieldValue.serverTimestamp(),
+        await db.collection('api_keys').add({
+          key,
+          brandId,
+          active: true,
+          createdBy: decoded.uid,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+
+        logger.info(`API key created for brand ${brandId} by ${decoded.uid}`);
+        res.status(200).json({ apiKey: key, brandId });
       });
-
-      logger.info(`API key created for brand ${brandId} by ${decoded.uid}`);
-      res.status(200).json({ apiKey: key, brandId });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error('Generate API key failed:', message);
+      logger.error('Generate API key failed:', { alertKey: ALERT.generateApiKeyFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// ─── Client error sink (observability) ─────────────────────────
+//
+// Browser errors forwarded by src/utils/logger.ts land here and are re-emitted through the
+// structured backend logger so they flow into the same Cloud Monitoring → Slack alert pipeline
+// (see docs/manual-actions.md). Flood-capped per uid as a cost guard — a buggy client loop
+// can't blow up log ingestion. Auth is best-effort: unauthenticated reports are accepted but
+// keyed by IP so anonymous floods are still capped.
+
+const CLIENT_ERROR_FLOOD_CAP = 60; // reports/min/identity
+const CLIENT_ERROR_WINDOW_MS = 60_000;
+const clientErrorCounters = new Map<string, { count: number; resetAt: number }>();
+
+function clientErrorFlooding(identity: string, now: number): boolean {
+  const cur = clientErrorCounters.get(identity);
+  if (!cur || now >= cur.resetAt) {
+    clientErrorCounters.set(identity, { count: 1, resetAt: now + CLIENT_ERROR_WINDOW_MS });
+    return false;
+  }
+  cur.count += 1;
+  return cur.count > CLIENT_ERROR_FLOOD_CAP;
+}
+
+export const logClientError = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 10, memory: '256MiB', maxInstances: 10 },
+  async (req, res) => {
+    if (applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Use POST' });
+      return;
+    }
+
+    // Best-effort identity: verified uid if a valid token is present, else client IP.
+    let uid: string | null = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        uid = (await admin.auth().verifyIdToken(authHeader.slice(7).trim())).uid;
+      } catch {
+        uid = null; // invalid/expired token → treat as anonymous, don't reject
+      }
+    }
+    const identity = uid ?? `ip:${getClientIp(req)}`;
+
+    // Flood cap (memory-backed, per-instance) — accept-and-drop so the client never retries.
+    if (clientErrorFlooding(identity, Date.now())) {
+      res.status(200).json({ ok: true, dropped: true });
+      return;
+    }
+
+    try {
+      await runWithLogContext({ uid, requestId: getRequestId(req) }, async () => {
+        const d = (req.body ?? {}) as Record<string, unknown>;
+        const cap = (v: unknown, n: number) => (typeof v === 'string' ? v.slice(0, n) : undefined);
+        const ctx = (d.context ?? {}) as Record<string, unknown>;
+        const message = cap(d.message, 300) || 'client error';
+        const alertKey = cap(d.alertKey, 80) || ALERT_CLIENT_UNKEYED;
+
+        // Re-emit through the structured logger so it hits the alertable metric. `source: 'client'`
+        // lets operators filter browser-origin alerts from backend ones.
+        logger.error(message, {
+          alertKey,
+          source: 'client',
+          userId: uid,
+          clientRequestId: cap(ctx.requestId, 200),
+          page: cap(ctx.page, 200),
+          name: cap(ctx.name, 120),
+          code: cap(ctx.code, 120),
+          stack: cap(ctx.stack, 4000),
+        });
+
+        res.status(200).json({ ok: true, dropped: false });
+      });
+    } catch (err) {
+      logger.error('logClientError sink failed', { alertKey: ALERT.clientErrorSinkFailed, err });
+      res.status(500).json({ error: 'Internal error' });
     }
   }
 );
@@ -867,6 +956,7 @@ export const connectorAuth = onRequest(
       const idToken = authHeader.slice(7).trim();
       const decoded = await admin.auth().verifyIdToken(idToken);
 
+      await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, async () => {
       const { brandId, provider, redirectUri, shopDomain, returnOrigin } = req.body as {
         brandId?: string;
         provider?: string;
@@ -984,9 +1074,10 @@ export const connectorAuth = onRequest(
       }
 
       res.status(200).json({ authUrl });
+      });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('Request failed:', msg);
+      logger.error('Request failed:', { alertKey: ALERT.connectorAuthFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -1145,7 +1236,7 @@ export const connectorCallback = onRequest(
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[ConnectorCallback] Error:', msg);
+      logger.error('[ConnectorCallback] Error:', { alertKey: ALERT.connectorCallbackFailed, err: error });
       res.status(500).send(`Callback error: ${msg}`);
     }
   }
@@ -1170,6 +1261,7 @@ export const connectorDisconnect = onRequest(
       const idToken = authHeader.slice(7).trim();
       const decoded = await admin.auth().verifyIdToken(idToken);
 
+      await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, async () => {
       const { brandId, provider } = req.body as { brandId?: string; provider?: string };
       if (!brandId || !provider) { res.status(400).json({ error: 'Missing params' }); return; }
 
@@ -1267,9 +1359,10 @@ export const connectorDisconnect = onRequest(
       );
 
       res.status(200).json({ success: true });
+      });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('Request failed:', msg);
+      logger.error('Request failed:', { alertKey: ALERT.connectorDisconnectFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -1294,6 +1387,7 @@ export const connectorSelectAccount = onRequest(
       const idToken = authHeader.slice(7).trim();
       const decoded = await admin.auth().verifyIdToken(idToken);
 
+      await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, async () => {
       const { brandId, provider, accountId, accountName } = req.body as {
         brandId?: string; provider?: string; accountId?: string; accountName?: string;
       };
@@ -1367,9 +1461,10 @@ export const connectorSelectAccount = onRequest(
       }
 
       res.status(200).json(result);
+      });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('Request failed:', msg);
+      logger.error('Request failed:', { alertKey: ALERT.connectorSelectAccountFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -1396,6 +1491,7 @@ export const connectorSync = onRequest(
       const idToken = authHeader.slice(7).trim();
       const decoded = await admin.auth().verifyIdToken(idToken);
 
+      await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, async () => {
       const body = req.body as { brandId?: string; provider?: string; forceFullSync?: boolean };
       brandId = body.brandId || '';
       provider = body.provider || '';
@@ -1498,7 +1594,7 @@ export const connectorSync = onRequest(
         try {
           await computeEcommerceSummary(brandId);
         } catch (e) {
-          logger.warn(`[connectorSync] ecommerce summary refresh failed for ${brandId}:`, e);
+          logger.warn(`[connectorSync] ecommerce summary refresh failed for ${brandId}:`, { err: e });
         }
       }
 
@@ -1507,7 +1603,7 @@ export const connectorSync = onRequest(
         try {
           await refreshStockMovement(brandId);
         } catch (e) {
-          logger.warn(`[connectorSync] stock movement refresh failed for ${brandId}:`, e);
+          logger.warn(`[connectorSync] stock movement refresh failed for ${brandId}:`, { err: e });
         }
       }
 
@@ -1518,14 +1614,15 @@ export const connectorSync = onRequest(
         try {
           await refreshProductIntelligenceAggregate(brandId);
         } catch (e) {
-          logger.warn(`[connectorSync] product intelligence refresh failed for ${brandId}:`, e);
+          logger.warn(`[connectorSync] product intelligence refresh failed for ${brandId}:`, { err: e });
         }
       }
 
       res.status(200).json(result);
+      });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error(`[connectorSync] failed for brand=${brandId || 'unknown'} provider=${provider || 'unknown'}: ${msg}`);
+      logger.error(`[connectorSync] failed for brand=${brandId || 'unknown'} provider=${provider || 'unknown'}: ${msg}`, { alertKey: ALERT.connectorSyncFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -1548,6 +1645,7 @@ export const ga4PeriodTotals = onRequest(
 
     try {
       const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
+      await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, async () => {
       const body = req.body as { brandId?: string; startDate?: string; endDate?: string };
       const brandId = body.brandId || '';
       const startDate = body.startDate || '';
@@ -1587,9 +1685,10 @@ export const ga4PeriodTotals = onRequest(
         computedAt: FieldValue.serverTimestamp(),
       });
       res.status(200).json({ success: true, totals: r.totals, cached: false });
+      });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[ga4PeriodTotals] failed:', msg);
+      logger.error('[ga4PeriodTotals] failed:', { alertKey: ALERT.ga4PeriodTotalsFailed, err: error });
       res.status(500).json({ error: msg });
     }
   }
@@ -1644,7 +1743,7 @@ async function repairEmptyOpenCartProductIntelligence(db: FirebaseFirestore.Fire
       const result = await refreshProductIntelligenceAggregate(brandId);
       logger.info(`[PIWatchdog] ${brandId}: totalCount=${result.totalCount ?? 0}`);
     } catch (error) {
-      logger.warn(`[PIWatchdog] failed for ${brandId}:`, error);
+      logger.warn(`[PIWatchdog] failed for ${brandId}:`, { err: error });
     }
     return;
   }
@@ -1659,7 +1758,7 @@ export const processOpenCartSyncJobs = onSchedule(
     secrets: ['CONNECTOR_TOKEN_KEY'],
     ...OPENCART_EGRESS_OPTIONS,
   },
-  async () => {
+  async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
     const db = admin.firestore();
     const STALE_RUNNING_MS = 40 * 60 * 1000;
 
@@ -1728,12 +1827,12 @@ export const processOpenCartSyncJobs = onSchedule(
         try {
           await computeEcommerceSummary(job.brandId);
         } catch (e) {
-          logger.warn(`[OpenCartJob] ecommerce summary refresh failed for ${job.brandId}:`, e);
+          logger.warn(`[OpenCartJob] ecommerce summary refresh failed for ${job.brandId}:`, { err: e });
         }
         try {
           await refreshStockMovement(job.brandId);
         } catch (e) {
-          logger.warn(`[OpenCartJob] stock movement refresh failed for ${job.brandId}:`, e);
+          logger.warn(`[OpenCartJob] stock movement refresh failed for ${job.brandId}:`, { err: e });
         }
         try {
           const piResult = await refreshProductIntelligenceAggregate(job.brandId);
@@ -1741,7 +1840,7 @@ export const processOpenCartSyncJobs = onSchedule(
             `[OpenCartJob] Product intelligence refreshed for ${job.brandId}: totalCount=${piResult.totalCount ?? 0}`
           );
         } catch (e) {
-          logger.warn(`[OpenCartJob] product intelligence refresh failed for ${job.brandId}:`, e);
+          logger.warn(`[OpenCartJob] product intelligence refresh failed for ${job.brandId}:`, { err: e });
         }
       }
 
@@ -1762,14 +1861,14 @@ export const processOpenCartSyncJobs = onSchedule(
       logger.info(`[OpenCartJob] Batch finished for ${job.brandId}: ${JSON.stringify(result)}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[OpenCartJob] failed for ${job.brandId}: ${msg}`);
+      logger.error(`[OpenCartJob] failed for ${job.brandId}: ${msg}`, { alertKey: ALERT.syncJobProcessingFailed, err });
       await jobRef.update({
         status: 'pending',
         error: msg,
         updatedAt: FieldValue.serverTimestamp(),
       });
     }
-  }
+  })
 );
 
 export const processMegaventorySyncJobs = onSchedule(
@@ -1780,7 +1879,7 @@ export const processMegaventorySyncJobs = onSchedule(
     memory: '2GiB',
     secrets: ['CONNECTOR_TOKEN_KEY'],
   },
-  async () => {
+  async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
     const db = admin.firestore();
     const STALE_RUNNING_MS = 40 * 60 * 1000;
 
@@ -1843,7 +1942,7 @@ export const processMegaventorySyncJobs = onSchedule(
       try {
         await computeEcommerceSummary(job.brandId);
       } catch (e) {
-        logger.warn(`[MegaventoryJob] ecommerce summary refresh failed for ${job.brandId}:`, e);
+        logger.warn(`[MegaventoryJob] ecommerce summary refresh failed for ${job.brandId}:`, { err: e });
       }
       if (result.success) {
         try {
@@ -1852,7 +1951,7 @@ export const processMegaventorySyncJobs = onSchedule(
             `[MegaventoryJob] Product intelligence refreshed for ${job.brandId}: totalCount=${piResult.totalCount ?? 0}`
           );
         } catch (e) {
-          logger.warn(`[MegaventoryJob] product intelligence refresh failed for ${job.brandId}:`, e);
+          logger.warn(`[MegaventoryJob] product intelligence refresh failed for ${job.brandId}:`, { err: e });
         }
       }
       await jobRef.update({
@@ -1861,7 +1960,7 @@ export const processMegaventorySyncJobs = onSchedule(
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[MegaventoryJob] failed for ${job.brandId}: ${msg}`);
+      logger.error(`[MegaventoryJob] failed for ${job.brandId}: ${msg}`, { alertKey: ALERT.syncJobProcessingFailed, err });
       await jobRef.update({
         status: 'failed',
         error: msg,
@@ -1869,7 +1968,7 @@ export const processMegaventorySyncJobs = onSchedule(
         updatedAt: FieldValue.serverTimestamp(),
       });
     }
-  }
+  })
 );
 
 // ─── Connector: Save Credentials (WooCommerce) ────────────────
@@ -1891,6 +1990,7 @@ export const connectorSaveCredentials = onRequest(
       const idToken = authHeader.slice(7).trim();
       const decoded = await admin.auth().verifyIdToken(idToken);
 
+      await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, async () => {
       const { brandId, provider, storeUrl, consumerKey, consumerSecret } = req.body as {
         brandId?: string; provider?: string; storeUrl?: string; consumerKey?: string; consumerSecret?: string;
       };
@@ -2110,9 +2210,10 @@ export const connectorSaveCredentials = onRequest(
       } else {
         res.status(400).json({ error: `Credentials auth not supported for ${provider}` });
       }
+      });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('Request failed:', msg);
+      logger.error('Request failed:', { alertKey: ALERT.connectorSaveCredentialsFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -2136,6 +2237,7 @@ export const importMagentoSearchTerms = onRequest(
     try {
       const idToken = authHeader.slice(7).trim();
       const decoded = await admin.auth().verifyIdToken(idToken);
+      await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, async () => {
       const { brandId, terms, uploadedFileName } = req.body as {
         brandId?: string;
         terms?: MagentoSearchTermInput[];
@@ -2187,9 +2289,10 @@ export const importMagentoSearchTerms = onRequest(
 
       logger.info(`[Magento] Admin search terms imported: ${cleaned.length} for brand ${brandId}`);
       res.status(200).json({ success: true, imported: cleaned.length });
+      });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[Magento] Admin search terms import failed:', msg);
+      logger.error('[Magento] Admin search terms import failed:', { alertKey: ALERT.importMagentoSearchTermsFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -2238,6 +2341,100 @@ async function markNightlyJob(
 
   await db.doc('system_health/nightly_jobs').set(patch, { merge: true });
 }
+
+/**
+ * Health watchdog — reads `system_health/nightly_jobs` and pages (via the alert pipeline)
+ * any nightly job that did not finish cleanly. The `markNightlyJob` writes above are silent on
+ * their own; this is what turns a `failed`/stale status into an actual Slack alert.
+ *
+ * Runs at 08:30 Athens, after the last nightly wave (scheduledProductIntelligence ~07:40 /
+ * scheduledDigest). Alerts when a job is: status `failed`, stuck `running` (started but never
+ * finished — likely timed out/crashed), or hasn't succeeded within the staleness window.
+ */
+const NIGHTLY_JOB_KEYS: NightlyJobKey[] = [
+  'scheduledSyncMarketing',
+  'scheduledSyncEcommerce',
+  'scheduledSyncWebAnalytics',
+  'scheduledSyncErp',
+  'scheduledSyncFollowups',
+  'scheduledAggregates',
+  'scheduledAlerts',
+  'scheduledDigest',
+];
+
+/** A job that hasn't succeeded in this long is considered stale (jobs run daily). */
+const HEALTH_STALE_MS = 28 * 60 * 60 * 1000; // 28h — one missed daily run + slack
+
+function tsToMillis(v: unknown): number | null {
+  if (v == null) return null;
+  // Firestore Timestamp (admin SDK) exposes toMillis(); guard for plain objects too.
+  const anyV = v as { toMillis?: () => number; _seconds?: number; seconds?: number };
+  if (typeof anyV.toMillis === 'function') return anyV.toMillis();
+  const secs = anyV._seconds ?? anyV.seconds;
+  if (typeof secs === 'number') return secs * 1000;
+  return null;
+}
+
+export const healthWatch = onSchedule(
+  { timeZone: 'Europe/Athens', region: 'europe-west1', schedule: 'every day 08:30' },
+  async () =>
+    runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
+      const snap = await db.doc('system_health/nightly_jobs').get();
+      const jobs = (snap.data()?.jobs ?? {}) as Record<
+        string,
+        { status?: string; lastSuccessAt?: unknown; lastFinishedAt?: unknown; lastStartedAt?: unknown; lastMessage?: string }
+      >;
+      const now = Date.now();
+      let alerted = 0;
+
+      for (const job of NIGHTLY_JOB_KEYS) {
+        const j = jobs[job];
+        if (!j) {
+          // Never recorded a run — the scheduler may not have fired at all.
+          logger.alert(`[HealthWatch] nightly job never ran`, {
+            alertKey: ALERT.healthWatchStaleJob,
+            job,
+          });
+          alerted++;
+          continue;
+        }
+        const lastSuccess = tsToMillis(j.lastSuccessAt);
+        const lastStarted = tsToMillis(j.lastStartedAt);
+        const lastFinished = tsToMillis(j.lastFinishedAt);
+
+        if (j.status === 'failed') {
+          logger.alert(`[HealthWatch] nightly job failed`, {
+            alertKey: ALERT.healthWatchStaleJob,
+            job,
+            lastMessage: j.lastMessage,
+          });
+          alerted++;
+          continue;
+        }
+        // Stuck running: started but the finish is older than the start (or absent) — crashed/timed out.
+        if (j.status === 'running' && (lastFinished == null || (lastStarted != null && lastStarted > lastFinished))) {
+          logger.alert(`[HealthWatch] nightly job stuck running (no clean finish)`, {
+            alertKey: ALERT.healthWatchStaleJob,
+            job,
+            lastMessage: j.lastMessage,
+          });
+          alerted++;
+          continue;
+        }
+        // Stale: no successful run within the window.
+        if (lastSuccess == null || now - lastSuccess > HEALTH_STALE_MS) {
+          logger.alert(`[HealthWatch] nightly job stale (no recent success)`, {
+            alertKey: ALERT.healthWatchStaleJob,
+            job,
+            hoursSinceSuccess: lastSuccess == null ? null : Math.round((now - lastSuccess) / 3.6e6),
+          });
+          alerted++;
+        }
+      }
+
+      logger.info(`[HealthWatch] checked ${NIGHTLY_JOB_KEYS.length} jobs, ${alerted} alert(s)`);
+    })
+);
 
 /** Περιορισμένη παραλληλία (χαμηλότερο σφάξιμο API της Google σε νυχτερινό batch). */
 async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>): Promise<void> {
@@ -2292,14 +2489,15 @@ async function executeBrandNightlyWave(
             const result = r as { imported?: number; success?: boolean; error?: string } | undefined;
             const imported = result?.imported;
             if (result?.success === false || result?.error) {
-              logger.warn(
-                `[ScheduledSync/${wave}] ${label} for ${brandId}: imported ${imported ?? 0}, error: ${result.error || 'unknown'}`
+              logger.warnAlert(
+                `[ScheduledSync/${wave}] ${label} for ${brandId}: imported ${imported ?? 0}, error: ${result.error || 'unknown'}`,
+                { alertKey: ALERT.nightlyWaveFailed }
               );
             } else {
               logger.info(`[ScheduledSync/${wave}] ${label} for ${brandId}: imported ${imported ?? '—'}`);
             }
           })
-          .catch((err) => logger.error(`[ScheduledSync/${wave}] ${label} failed for ${brandId}:`, err))
+          .catch((err) => logger.error(`[ScheduledSync/${wave}] ${label} failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err }))
       );
     return { tasks, wrap };
   };
@@ -2325,7 +2523,7 @@ async function executeBrandNightlyWave(
                 logger.info(`[ScheduledSync/ecommerce] OpenCart backfill queued for ${brandId}: ${r.reason}`);
               }
             })
-            .catch((err) => logger.error(`[ScheduledSync/ecommerce] OpenCart queue failed for ${brandId}:`, err));
+            .catch((err) => logger.error(`[ScheduledSync/ecommerce] OpenCart queue failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err }));
         } else {
           phase.wrap('OpenCart', fetchOpenCartData(brandId));
         }
@@ -2354,13 +2552,13 @@ async function executeBrandNightlyWave(
     try {
       await computeEcommerceSummary(brandId);
     } catch (err) {
-      logger.error(`[ScheduledSync/erp] ecommerce_summary refresh failed for ${brandId}:`, err);
+      logger.error(`[ScheduledSync/erp] ecommerce_summary refresh failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
     }
     if (data.megaventory?.connected) {
       try {
         await refreshProductIntelligenceAggregate(brandId);
       } catch (err) {
-        logger.warn(`[ScheduledSync/erp] product intelligence refresh failed for ${brandId}:`, err);
+        logger.warnAlert(`[ScheduledSync/erp] product intelligence refresh failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
       }
     }
   }
@@ -2376,7 +2574,7 @@ async function executeBrandNightlyWave(
         await computeEcommerceSummary(brandId);
         logger.info(`[ScheduledSync/ecommerce] E-commerce summary updated for ${brandId}`);
       } catch (err) {
-        logger.error(`[ScheduledSync/ecommerce] E-commerce summary failed for ${brandId}:`, err);
+        logger.error(`[ScheduledSync/ecommerce] E-commerce summary failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
       }
     }
     const oc = data.opencart as Record<string, unknown> | undefined;
@@ -2384,18 +2582,19 @@ async function executeBrandNightlyWave(
       try {
         await refreshStockMovement(brandId);
       } catch (err) {
-        logger.warn(`[ScheduledSync/ecommerce] stock movement refresh failed for ${brandId}:`, err);
+        logger.warnAlert(`[ScheduledSync/ecommerce] stock movement refresh failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
       }
       try {
         await refreshProductIntelligenceAggregate(brandId);
       } catch (err) {
-        logger.warn(`[ScheduledSync/ecommerce] product intelligence refresh failed for ${brandId}:`, err);
+        logger.warnAlert(`[ScheduledSync/ecommerce] product intelligence refresh failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
       }
     }
   }
 }
 
 async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: NightlyJobKey): Promise<void> {
+  return runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
   const startedAt = Date.now();
   await markNightlyJob(jobKey, 'running', { message: `Nightly wave "${wave}" started` });
   logger.info(`[ScheduledSync] Starting "${wave}" wave`);
@@ -2412,7 +2611,7 @@ async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: Ni
         await executeBrandNightlyWave(brandId, data, wave);
       } catch (err) {
         failedConnectorBrands += 1;
-        logger.error(`[ScheduledSync/${wave}] Unexpected failure for ${brandId}:`, err);
+        logger.error(`[ScheduledSync/${wave}] Unexpected failure for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
       }
     });
 
@@ -2426,12 +2625,14 @@ async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: Ni
     const msg = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - startedAt;
     await markNightlyJob(jobKey, 'failed', { durationMs, message: msg });
-    logger.error(`[ScheduledSync/${wave}] Fatal error:`, msg);
+    logger.error(`[ScheduledSync/${wave}] Fatal error:`, { alertKey: ALERT.nightlyWaveFailed, err: error });
     throw error;
   }
+  });
 }
 
 async function runNightlyFollowupsJob(): Promise<void> {
+  return runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
   const startedAt = Date.now();
   await markNightlyJob('scheduledSyncFollowups', 'running', {
     message: 'Stock movement + competitor monitoring',
@@ -2445,7 +2646,7 @@ async function runNightlyFollowupsJob(): Promise<void> {
       try {
         await refreshStockMovement(brandId);
       } catch (err) {
-        logger.warn(`[ScheduledSync/followups] Stock movement failed for ${brandId}:`, err);
+        logger.warnAlert(`[ScheduledSync/followups] Stock movement failed for ${brandId}:`, { alertKey: ALERT.nightlySyncFollowupsFailed, err });
       }
     }
 
@@ -2462,7 +2663,7 @@ async function runNightlyFollowupsJob(): Promise<void> {
             `[ScheduledSync/followups] Competitors for ${brandId}: ${result.totalAds} ads (${result.newAds} new)`
           );
         } catch (err) {
-          logger.error(`[ScheduledSync/followups] Competitors failed for ${brandId}:`, err);
+          logger.error(`[ScheduledSync/followups] Competitors failed for ${brandId}:`, { alertKey: ALERT.nightlySyncFollowupsFailed, err });
         }
       }
     }
@@ -2477,9 +2678,10 @@ async function runNightlyFollowupsJob(): Promise<void> {
     const msg = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - startedAt;
     await markNightlyJob('scheduledSyncFollowups', 'failed', { durationMs, message: msg });
-    logger.error('[ScheduledSync/followups] Fatal error:', msg);
+    logger.error('[ScheduledSync/followups] Fatal error:', { alertKey: ALERT.nightlySyncFollowupsFailed, err: error });
     throw error;
   }
+  });
 }
 
 const nightlyConnectorScheduleBase = {
@@ -2532,31 +2734,31 @@ export const scheduledSyncFollowups = onSchedule(
 /** Data Analysis RFM aggregate — monthly compact summary refresh; manual refresh remains available on demand. */
 export const scheduledDataAnalysisRfm = onSchedule(
   { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: '20 7 1 * *' },
-  async () => {
+  async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
     const snap = await db.collection('connectors').get();
     for (const doc of snap.docs) {
       try {
         await refreshDataAnalysisRfmAggregate(doc.id);
       } catch (error) {
-        logger.warn(`[scheduledDataAnalysisRfm] failed for ${doc.id}:`, error);
+        logger.warnAlert(`[scheduledDataAnalysisRfm] failed for ${doc.id}:`, { alertKey: ALERT.scheduledDataAnalysisRfmFailed, err: error });
       }
     }
-  }
+  })
 );
 
 /** Product Intelligence aggregate — connector-backed catalogs only; procurement/import brands keep the UI path. */
 export const scheduledProductIntelligence = onSchedule(
   { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: 'every day 07:40' },
-  async () => {
+  async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
     const snap = await db.collection('connectors').get();
     for (const doc of snap.docs) {
       try {
         await refreshProductIntelligenceAggregate(doc.id);
       } catch (error) {
-        logger.warn(`[scheduledProductIntelligence] failed for ${doc.id}:`, error);
+        logger.warnAlert(`[scheduledProductIntelligence] failed for ${doc.id}:`, { alertKey: ALERT.scheduledProductIntelligenceFailed, err: error });
       }
     }
-  }
+  })
 );
 
 /**
@@ -2700,7 +2902,7 @@ export const acceptInvite = onRequest(
         res.status(409).json({ error: 'Invite already used' });
         return;
       }
-      logger.error('[acceptInvite] failed', err);
+      logger.error('[acceptInvite] failed', { alertKey: ALERT.unkeyed, err });
       res.status(500).json({ error: 'Invite acceptance failed' });
     }
   }
@@ -2772,7 +2974,7 @@ export const geminiProxy = onRequest(
         return;
       }
     } catch (err) {
-      logger.error('[geminiProxy] brand-membership check failed', err);
+      logger.error('[geminiProxy] brand-membership check failed', { alertKey: ALERT.unkeyed, err });
       res.status(403).json({ error: 'Forbidden' });
       return;
     }
@@ -2862,13 +3064,13 @@ export const geminiProxy = onRequest(
           });
         }
       } catch (logErr) {
-        logger.warn('[geminiProxy] usage log failed:', logErr);
+        logger.warn('[geminiProxy] usage log failed:', { err: logErr });
       }
 
       res.status(200).json({ text });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error('[geminiProxy] Gemini error:', message);
+      logger.error('[geminiProxy] Gemini error:', { alertKey: ALERT.unkeyed, err: error });
       res.status(500).json({ error: 'AI request failed — please try again' });
     }
   }
@@ -2914,7 +3116,7 @@ export const webSearch = onRequest(
       // Return the raw DuckDuckGo payload — the client parses it unchanged.
       res.status(200).json(data);
     } catch (err) {
-      logger.error('[webSearch] upstream error:', err);
+      logger.error('[webSearch] upstream error:', { alertKey: ALERT.unkeyed, err });
       res.status(502).json({ error: 'Search unavailable' });
     }
   }
@@ -3115,7 +3317,7 @@ export const sendInviteEmail = onRequest(
         return;
       }
     } catch (err) {
-      logger.warn('[sendInviteEmail] invite lookup failed', err);
+      logger.warn('[sendInviteEmail] invite lookup failed', { err });
       res.status(500).json({ error: 'Invite lookup failed' });
       return;
     }
@@ -3174,7 +3376,7 @@ export const sendInviteEmail = onRequest(
       logger.info(`Invite email sent to ${to} for brand ${brandName}`);
       res.status(200).json({ ok: true });
     } catch (err) {
-      logger.error('Failed to send invite email:', err);
+      logger.error('Failed to send invite email:', { alertKey: ALERT.emailSendFailed, err });
       res.status(500).json({ ok: false, error: 'Email send failed' });
     }
   }
@@ -3208,24 +3410,24 @@ export const refreshAggregates = onRequest(
       try {
         await computeEcommerceSummary(brandId);
       } catch (e) {
-        logger.warn('[refreshAggregates] ecommerce summary refresh failed (non-fatal):', e);
+        logger.warn('[refreshAggregates] ecommerce summary refresh failed (non-fatal):', { err: e });
       }
       // Stock movement: capture σημερινό snapshot + recompute deltas (universal)
       try {
         await refreshStockMovement(brandId);
       } catch (e) {
-        logger.warn('[refreshAggregates] stock movement refresh failed (non-fatal):', e);
+        logger.warn('[refreshAggregates] stock movement refresh failed (non-fatal):', { err: e });
       }
       // Procurement signals: re-aggregate (status, tied capital, margin, lifetime κλπ)
       try {
         await refreshProcurementSignals(brandId);
       } catch (e) {
-        logger.warn('[refreshAggregates] procurement signals refresh failed (non-fatal):', e);
+        logger.warn('[refreshAggregates] procurement signals refresh failed (non-fatal):', { err: e });
       }
       res.status(200).json({ success: true, brandId });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[refreshAggregates]', msg);
+      logger.error('[refreshAggregates]', { alertKey: ALERT.aggregateStatsFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -3266,7 +3468,7 @@ export const refreshDataAnalysisRfm = onRequest(
       res.status(200).json({ success: true, brandId, action: 'run', result });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[refreshDataAnalysisRfm]', msg);
+      logger.error('[refreshDataAnalysisRfm]', { alertKey: ALERT.dataAnalysisRfmFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -3297,7 +3499,7 @@ export const refreshProductIntelligence = onRequest(
       res.status(200).json({ success: true, brandId, result });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[refreshProductIntelligence]', msg);
+      logger.error('[refreshProductIntelligence]', { alertKey: ALERT.productIntelligenceFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -3327,7 +3529,7 @@ export const queryProductIntelligence = onRequest(
       res.status(200).json({ success: true, brandId, result });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[queryProductIntelligence]', msg);
+      logger.error('[queryProductIntelligence]', { alertKey: ALERT.productIntelligenceFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -3357,7 +3559,7 @@ export const refreshCompetitiveInventory = onRequest(
       res.status(200).json({ success: true, brandId, result });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[refreshCompetitiveInventory]', msg);
+      logger.error('[refreshCompetitiveInventory]', { alertKey: ALERT.competitorMonitorFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -3397,7 +3599,7 @@ export const captureStock = onRequest(
       res.status(200).json({ success: true, brandId, captured, movement });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[captureStock]', msg);
+      logger.error('[captureStock]', { alertKey: ALERT.stockMovementTrackFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -3436,7 +3638,7 @@ export const refreshSignals = onRequest(
       res.status(200).json({ success: true, brandId, ...result });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[refreshSignals]', msg);
+      logger.error('[refreshSignals]', { alertKey: ALERT.procurementSignalsFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -3452,7 +3654,7 @@ export const scheduledAggregates = onSchedule(
     memory: '512MiB',
     timeoutSeconds: 300,
   },
-  async () => {
+  async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
     const startedAt = Date.now();
     await markNightlyJob('scheduledAggregates', 'running', { message: 'Aggregate computation started' });
     try {
@@ -3468,10 +3670,10 @@ export const scheduledAggregates = onSchedule(
       const msg = error instanceof Error ? error.message : String(error);
       const durationMs = Date.now() - startedAt;
       await markNightlyJob('scheduledAggregates', 'failed', { durationMs, message: msg });
-      logger.error('[scheduledAggregates] Fatal error:', msg);
+      logger.error('[scheduledAggregates] Fatal error:', { alertKey: ALERT.nightlyAggregatesFailed, err: error });
       throw error;
     }
-  }
+  })
 );
 
 // ── Server-Side Alert Evaluation (runs after aggregates are fresh) ──────────
@@ -3484,7 +3686,7 @@ export const scheduledAlerts = onSchedule(
     memory: '512MiB',
     timeoutSeconds: 300,
   },
-  async () => {
+  async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
     const startedAt = Date.now();
     await markNightlyJob('scheduledAlerts', 'running', { message: 'Alert evaluation started' });
     try {
@@ -3500,10 +3702,10 @@ export const scheduledAlerts = onSchedule(
       const msg = error instanceof Error ? error.message : String(error);
       const durationMs = Date.now() - startedAt;
       await markNightlyJob('scheduledAlerts', 'failed', { durationMs, message: msg });
-      logger.error('[scheduledAlerts] Fatal error:', msg);
+      logger.error('[scheduledAlerts] Fatal error:', { alertKey: ALERT.scheduledAlertsFailed, err: error });
       throw error;
     }
-  }
+  })
 );
 
 // ── Daily Email Digest (runs after alerts are generated) ────────────────────
@@ -3517,7 +3719,7 @@ export const scheduledDigest = onSchedule(
     timeoutSeconds: 300,
     secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET],
   },
-  async () => {
+  async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
     const startedAt = Date.now();
     await markNightlyJob('scheduledDigest', 'running', { message: 'Daily digest started' });
     try {
@@ -3536,10 +3738,10 @@ export const scheduledDigest = onSchedule(
       const msg = error instanceof Error ? error.message : String(error);
       const durationMs = Date.now() - startedAt;
       await markNightlyJob('scheduledDigest', 'failed', { durationMs, message: msg });
-      logger.error('[scheduledDigest] Fatal error:', msg);
+      logger.error('[scheduledDigest] Fatal error:', { alertKey: ALERT.scheduledDigestFailed, err: error });
       throw error;
     }
-  }
+  })
 );
 
 // ── Public: εκδήλωση ενδιαφέροντος (landing, χωρίς auth) ─────────────────────
@@ -3588,7 +3790,7 @@ export const submitInterestLead = onRequest(
       res.status(200).json({ ok: true, emailResult: result.emailResult ?? null });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      logger.error('[submitInterestLead]', msg);
+      logger.error('[submitInterestLead]', { alertKey: ALERT.interestLeadFailed, err: e });
       if (/smtp|email notification|notify email/i.test(msg)) {
         res.status(502).json({
           error: 'Η υποβολή καταγράφηκε, αλλά δεν στάλθηκε email στο support. Δοκιμάστε ξανά ή επικοινωνήστε με support@notthesame.gr.',

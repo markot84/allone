@@ -9,6 +9,7 @@ import {
   saveBrandProfile,
 } from '../../services/brandProfile';
 import type { BrandArchetype, BrandICP, BrandIcpPriceSensitivity, BrandProfile } from '../../types';
+import { logger } from '../../utils/logger';
 
 const PRICE_LABEL: Record<BrandIcpPriceSensitivity, string> = {
   low: 'Χαμηλή',
@@ -177,10 +178,10 @@ export function BrandProfilePage() {
       await saveBrandProfile(currentBrand.id, savedProfile);
       setProfile(savedProfile);
       setCurrentBrand({ ...currentBrand, brandProfile: savedProfile });
-      void refreshBrands().catch((err) => console.warn('[BrandProfile] background refresh:', err));
+      void refreshBrands().catch((err) => logger.warn('[BrandProfile] background refresh:', { err }));
       toast.success('Το Brand Profile αποθηκεύτηκε.');
     } catch (err) {
-      console.error('[BrandProfile] save:', err);
+      logger.error('[BrandProfile] save:', { err });
       setError('Δεν ολοκληρώθηκε η αποθήκευση. Δοκίμασε ξανά σε λίγο.');
     } finally {
       setSaving(false);

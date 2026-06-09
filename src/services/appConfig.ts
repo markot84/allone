@@ -11,6 +11,7 @@
  */
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { logger } from '../utils/logger';
 
 export interface SuperAdminsConfig {
   uids: string[];
@@ -41,7 +42,7 @@ export async function loadSuperAdmins(): Promise<SuperAdminsConfig> {
       };
       return superAdminsCache;
     } catch (err) {
-      console.warn('[appConfig] superAdmins fetch failed', err);
+      logger.warn('[appConfig] superAdmins fetch failed', { err });
       superAdminsCache = { uids: [], emails: [] };
       return superAdminsCache;
     }

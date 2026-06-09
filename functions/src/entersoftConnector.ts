@@ -12,7 +12,8 @@
 import * as admin from 'firebase-admin';
 import { safeFetch } from './urlValidator';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { erpWriteBatch, normalizeHttpBase, sanitizeFirestoreDocId } from './erpConnectorFirestore';
 
@@ -364,7 +365,7 @@ export async function fetchEntersoftData(brandId: string): Promise<EntersoftSync
     return { success: true, imported: totalImported, ...counts };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`[Entersoft] fetchEntersoftData ${brandId}:`, msg);
+    logger.error(`[Entersoft] fetchEntersoftData ${brandId}:`, { alertKey: ALERT.entersoftSyncFailed, err: msg });
     return { success: false, imported: totalImported, ...counts, error: msg };
   }
 }

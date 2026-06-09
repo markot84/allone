@@ -81,6 +81,7 @@ import { eachDateInclusiveLocal, computeMarketingOverheadForPeriod } from '../..
 import { getCostingReal12mTurnover } from '../../utils/procurement12mTurnover';
 import { coerceToDate } from '../../utils/coerceDate';
 import { INSIGHT_NAV } from '../insights/aiInsightsConfig';
+import { logger } from '../../utils/logger';
 import type { AIInsight } from '../../types';
 
 /** Ημερήσια σημεία στο chart· πάνω από αυτό → μηνιαία σύνοψη (αναγνώσιμο άξονα). */
@@ -859,7 +860,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   // Debug logging
   useEffect(() => {
     if (import.meta.env.MODE === 'development') {
-      console.debug('[Dashboard] Organic revenue:', totalOrganicRevenue, 'hasOrganic:', hasOrganic);
+      logger.debug('[Dashboard] Organic revenue:', { totalOrganicRevenue, hasOrganic });
     }
   }, [totalOrganicRevenue, hasOrganic]);
   const { aiInsights } = useAiInsightsData({ skipOrderHydration: true, useServerAggregate: true });

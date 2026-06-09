@@ -13,7 +13,8 @@
 import * as admin from 'firebase-admin';
 import { safeFetch } from './urlValidator';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { getCustomerEmailIdentity } from './customerIdentity';
 import { buildHistoricalOrIncrementalWindow, ECOMMERCE_INCREMENTAL_OVERLAP_HOURS, coerceSyncDate, subtractHours } from './syncPolicy';
@@ -104,7 +105,7 @@ export async function testWooConnection(
     return { success: true, shopName, version };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error('[WooCommerce] Connection test failed:', msg);
+    logger.error('[WooCommerce] Connection test failed:', { alertKey: ALERT.woocommerceSyncFailed, err: msg });
     if (msg.includes('ENOTFOUND') || msg.includes('getaddrinfo')) {
       return { success: false, error: 'e-shop URL not reachable. Check the domain.' };
     }
@@ -177,7 +178,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
 
       const res = await safeFetch(`${storeUrl}/wp-json/wc/v3/orders?${params}`, { headers: baseHeaders });
       if (!res.ok) {
-        logger.error(`[WooCommerce] Orders fetch failed (${res.status})`);
+        logger.error(`[WooCommerce] Orders fetch failed (${res.status})`, { alertKey: ALERT.woocommerceSyncFailed });
         ordersAbort = true;
         break;
       }
@@ -226,7 +227,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
       orderPage++;
       if (orderPage > 30) {
         ordersAbort = true;
-        logger.warn(`[WooCommerce] Orders page safety cap (${orderPage}) for ${brandId}`);
+        logger.warnAlert(`[WooCommerce] Orders page safety cap (${orderPage}) for ${brandId}`, { alertKey: ALERT.woocommerceSyncFailed });
         break;
       }
     }
@@ -264,7 +265,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
       const res = await safeFetch(`${storeUrl}/wp-json/wc/v3/products?${params}`, { headers: baseHeaders });
       if (!res.ok) {
         productsAbort = true;
-        logger.error(`[WooCommerce] Products fetch failed (${res.status})`);
+        logger.error(`[WooCommerce] Products fetch failed (${res.status})`, { alertKey: ALERT.woocommerceSyncFailed });
         break;
       }
 
@@ -301,7 +302,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
       prodPage++;
       if (prodPage > 30) {
         productsAbort = true;
-        logger.warn(`[WooCommerce] Products page safety cap (${prodPage}) for ${brandId}`);
+        logger.warnAlert(`[WooCommerce] Products page safety cap (${prodPage}) for ${brandId}`, { alertKey: ALERT.woocommerceSyncFailed });
         break;
       }
     }
@@ -362,7 +363,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
     return { success: true, imported: totalImported };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`[WooCommerce] fetchWooCommerceData error for ${brandId}:`, msg);
+    logger.error(`[WooCommerce] fetchWooCommerceData error for ${brandId}:`, { alertKey: ALERT.woocommerceSyncFailed, err: msg });
     return { success: false, imported: totalImported, error: msg };
   }
 }

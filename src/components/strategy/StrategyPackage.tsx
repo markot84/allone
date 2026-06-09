@@ -12,6 +12,7 @@ import { openPackagePdf } from '../../services/strategyPackagePdf';
 import { saveSharedPackage, type SharedPackageData } from '../../services/strategyPackageShare';
 import type { ChannelRecommendation } from '../../types';
 import type { ScoredSegment } from '../../utils/segmentRelevance';
+import { logger } from '../../utils/logger';
 
 interface StrategyPackageProps {
   scenarioId: string | null;
@@ -90,7 +91,7 @@ export function StrategyPackage(props: StrategyPackageProps) {
       setTimeout(() => setLinkCopied(false), 3000);
     } catch (err) {
       const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-      console.error('[StrategyPackage] saveSharedPackage failed', err);
+      logger.error('[StrategyPackage] saveSharedPackage failed', { err });
       toast.error(`Αποτυχία δημιουργίας link — ${msg}`);
     } finally {
       setLinkLoading(false);

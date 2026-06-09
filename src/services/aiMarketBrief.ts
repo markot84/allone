@@ -1,6 +1,8 @@
 import { callGemini } from './geminiProxy';
 import { MARKET_BRIEF_SYSTEM_PROMPT, buildMarketBriefUserPrompt, type MarketBriefPromptContext } from '../data/marketBriefPrompt';
 import { parseJsonObject } from '../utils/aiJson';
+import { logger } from '../utils/logger';
+import { CLIENT_ALERT } from '../utils/alertKeys';
 
 const MODEL_NAME = 'gemini-2.5-pro';
 
@@ -156,7 +158,7 @@ export async function generateMarketBrief(ctx: MarketBriefPromptContext): Promis
   });
   const parsed = parseMarketBriefFromText(text);
   if (!parsed) {
-    console.error('[aiMarketBrief] parse failed, head:', text.slice(0, 400));
+    logger.error('[aiMarketBrief] parse failed, head:', { alertKey: CLIENT_ALERT.aiAssistantFailed, head: text.slice(0, 400) });
     throw new Error('Το AI brief δεν μπόρεσε να αναλυθεί. Δοκίμασε ξανά.');
   }
   parsed.country_code = ctx.countryCode.toUpperCase().slice(0, 2);

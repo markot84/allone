@@ -10,6 +10,7 @@ import type {
   NotificationPreferences, NotificationChannel
 } from '../types';
 import { DEFAULT_NOTIFICATION_CHANNELS, DEPARTMENT_LABELS, normalizeBrandMemberRole } from '../types';
+import { logger } from '../utils/logger';
 
 const ts = () => new Date().toISOString();
 
@@ -188,7 +189,7 @@ export const NotificationsService = {
     return onSnapshot(q, snap => {
       callback(snap.docs.map(d => ({ id: d.id, ...d.data() }) as UserNotification));
     }, (error) => {
-      console.warn('Notifications listener error:', error);
+      logger.warn('Notifications listener error:', { err: error });
       callback([]);
     });
   },
@@ -303,7 +304,7 @@ export async function broadcastNotification(
     emailSent = emailResult.sent;
     emailFailed = emailResult.failed;
     if (emailFailed > 0) {
-      console.warn('sendEmailNotification: κάποια email απέτυχαν', emailResult);
+      logger.warn('sendEmailNotification: κάποια email απέτυχαν', { emailResult });
     }
   }
 
@@ -324,7 +325,7 @@ async function sendEmailNotifications(
     const auth = getAuth();
     const token = await auth.currentUser?.getIdToken();
     if (!token) {
-      console.warn('sendEmailNotification: no auth token');
+      logger.warn('sendEmailNotification: no auth token');
       return { sent: 0, failed: userIds.length };
     }
 
@@ -354,7 +355,7 @@ async function sendEmailNotifications(
         try {
           const j = JSON.parse(errText) as { reason?: string };
           if (j.reason === 'smtp_not_configured') {
-            console.warn(
+            logger.warn(
               'sendEmailNotification: SMTP δεν είναι ρυθμισμένο στο backend (secrets SMTP_EMAIL / SMTP_PASSWORD)'
             );
           }
@@ -362,7 +363,7 @@ async function sendEmailNotifications(
           /* ignore */
         }
       }
-      console.warn('sendEmailNotification HTTP', res.status, errText);
+      logger.warn('sendEmailNotification HTTP', { status: res.status, errText });
       return { sent: 0, failed: userIds.length };
     }
     const json = (await res.json()) as { ok?: boolean; results?: string[] };
@@ -378,7 +379,7 @@ async function sendEmailNotifications(
     }
     return { sent, failed };
   } catch (e) {
-    console.warn('Email notification failed (non-critical):', e);
+    logger.warn('Email notification failed (non-critical):', { err: e });
     return { sent: 0, failed: userIds.length };
   }
 }

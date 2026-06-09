@@ -9,7 +9,8 @@
 
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { erpWriteBatch, erpNum, sanitizeFirestoreDocId } from './erpConnectorFirestore';
 
@@ -384,7 +385,7 @@ export async function fetchEpsilonNetData(brandId: string): Promise<EpsilonNetSy
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`[EpsilonNet] fetchEpsilonNetData ${brandId}:`, msg);
+    logger.error(`[EpsilonNet] fetchEpsilonNetData ${brandId}:`, { alertKey: ALERT.epsilonNetSyncFailed, err: msg });
     return { success: false, imported: totalImported, ...counts, error: msg };
   }
 }
