@@ -25,6 +25,9 @@ import { Timestamp } from 'firebase/firestore';
 import { auth, getAppUrl } from '../config/firebase';
 import { getPublicSignupMode, isInviteReturnUrl } from '../config/authAccess';
 import { validatePassword } from '../utils/passwordPolicy';
+import { setCurrentUid } from '../utils/authState';
+import { logger } from '../utils/logger';
+import { CLIENT_ALERT } from '../utils/alertKeys';
 import { FirestoreService } from '../services/firestore';
 import { loadSuperAdmins } from '../services/appConfig';
 
@@ -60,6 +63,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
+      // Feed the client logger so every log line carries the current uid (src/utils/authState.ts).
+      setCurrentUid(u?.uid ?? null);
     });
     return () => unsubscribe();
   }, []);
@@ -80,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } as Record<string, unknown>);
       }
     };
-    ensureProfile().catch(console.error);
+    ensureProfile().catch((err) => logger.error('ensureProfile failed', { alertKey: CLIENT_ALERT.authActionFailed, err }));
   }, [user?.uid]);
 
   // Resolve super-admin flag from Firestore appConfig/superAdmins.uids

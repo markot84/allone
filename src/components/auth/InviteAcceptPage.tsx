@@ -4,6 +4,8 @@ import { CheckCircle, Loader2 } from 'lucide-react';
 import { PerformancePlusLogo } from '../common';
 import { useAuth } from '../../hooks';
 import { getInviteByToken, acceptInvite } from '../../services/invites';
+import { logger } from '../../utils/logger';
+import { CLIENT_ALERT } from '../../utils/alertKeys';
 
 interface InviteAcceptPageProps {
   token: string;
@@ -26,7 +28,7 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
     getInviteByToken(token)
       .then(setInvite)
       .catch((err) => {
-        console.error('Invite fetch error:', err);
+        logger.error('Invite fetch error:', { alertKey: CLIENT_ALERT.authActionFailed, err });
         setInvite(null);
       })
       .finally(() => setLoading(false));

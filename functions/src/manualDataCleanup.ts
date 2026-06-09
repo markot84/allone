@@ -1,5 +1,5 @@
 import { type Firestore, type Query } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
 
 const BATCH_SIZE = 400;
 const PRESERVED_MEGAVENTORY_SOURCE = 'megaventory_custom_report';

@@ -1,5 +1,5 @@
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
 
 const WRITE_BATCH_SIZE = 500;
 const DELETE_BATCH_SIZE = 400;

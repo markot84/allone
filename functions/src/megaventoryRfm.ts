@@ -1,5 +1,5 @@
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
 
 const SOURCE = 'megaventory_rfm';
 const WRITE_BATCH_SIZE = 450;

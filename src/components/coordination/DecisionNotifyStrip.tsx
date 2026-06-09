@@ -9,6 +9,7 @@ import { useBrandMembers } from '../../hooks/useCoordination';
 import type { Decision, BrandDepartment } from '../../types';
 import { BRIEFING_MESSAGE_TEMPLATES, getBriefingTemplate } from './briefingShared';
 import { DepartmentBriefingFields } from './DepartmentBriefingFields';
+import { logger } from '../../utils/logger';
 import type { BroadcastResult } from '../../services/coordination';
 
 interface DecisionNotifyStripProps {
@@ -75,7 +76,7 @@ export function DecisionNotifyStrip({ decision: d, variant = 'default' }: Decisi
         toast.success('Η ειδοποίηση στάλθηκε στα τμήματα (in-app & email).');
       }
     } catch (e) {
-      console.error(e);
+      logger.error('DecisionNotifyStrip send failed', { err: e });
       toast.error('Αποτυχία αποστολής');
     } finally {
       setSending(false);

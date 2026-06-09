@@ -17,7 +17,8 @@
 import * as admin from 'firebase-admin';
 import { signState } from './oauthState';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import {
   buildRollingUtcDayWindow,
@@ -371,7 +372,7 @@ export async function handleGoogleAdsCallback(
 
     if (!res.ok) {
       const err = await res.text();
-      logger.error('[GoogleAds] Token exchange failed:', err);
+      logger.error('[GoogleAds] Token exchange failed:', { alertKey: ALERT.googleAdsSyncFailed, err });
       return { success: false, error: `Token exchange failed: ${res.status}` };
     }
 
@@ -450,7 +451,7 @@ export async function handleGoogleAdsCallback(
     return { success: true, needsSelection: true, availableAccounts: customers, accessToken, refreshToken };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error('[GoogleAds] Callback error:', msg);
+    logger.error('[GoogleAds] Callback error:', { alertKey: ALERT.googleAdsSyncFailed, err: error });
     return { success: false, error: msg };
   }
 }
@@ -493,7 +494,7 @@ async function listAccessibleCustomers(accessToken: string): Promise<GoogleAdsCu
     const res = await fetch(`${GOOGLE_ADS_BASE_URL}/customers:listAccessibleCustomers`, { headers });
 
     if (!res.ok) {
-      logger.warn('[GoogleAds] listAccessibleCustomers failed:', res.status, await res.text());
+      logger.warn('[GoogleAds] listAccessibleCustomers failed:', { status: res.status, body: await res.text() });
       return [];
     }
 
@@ -575,13 +576,13 @@ async function refreshAccessToken(refreshToken: string): Promise<string | null> 
 
   if (!res.ok) {
     const errText = await res.text();
-    logger.error(`[GoogleAds] Token refresh failed (${res.status}): ${errText.slice(0, 200)}`);
+    logger.error(`[GoogleAds] Token refresh failed (${res.status}): ${errText.slice(0, 200)}`, { alertKey: ALERT.googleAdsSyncFailed });
     return null;
   }
 
   const data = await res.json();
   if (!data.access_token) {
-    logger.error('[GoogleAds] Token refresh returned no access_token:', JSON.stringify(data).slice(0, 200));
+    logger.error('[GoogleAds] Token refresh returned no access_token:', { alertKey: ALERT.googleAdsSyncFailed, body: JSON.stringify(data).slice(0, 200) });
     return null;
   }
   logger.info(`[GoogleAds] Token refresh OK — scope: ${data.scope || 'unknown'}`);
@@ -722,7 +723,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
 
     if (!found) {
       const lastErrMsg = `All ${attempts.length} login-customer-id attempts failed for customer ${customerId}`;
-      logger.error(`[GoogleAds] ${lastErrMsg}`);
+      logger.error(`[GoogleAds] ${lastErrMsg}`, { alertKey: ALERT.googleAdsSyncFailed });
       return { success: false, imported: 0, error: `Google Ads: ${lastErrMsg}. Βεβαιωθείτε ότι ο λογαριασμός ${customerId} είναι προσβάσιμος μέσω του MCC.` };
     }
 
@@ -748,7 +749,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
 
       if (!res.ok) {
         const errText = await res.text();
-        logger.error(`[GoogleAds] Query failed — status:${res.status} customerId:${customerId} loginId:${effectiveLoginId} devToken:${developerToken.slice(0,6)}*** body:${errText.slice(0, 500)}`);
+        logger.error(`[GoogleAds] Query failed — status:${res.status} customerId:${customerId} loginId:${effectiveLoginId} devToken:${developerToken.slice(0,6)}*** body:${errText.slice(0, 500)}`, { alertKey: ALERT.googleAdsSyncFailed });
         let detail = errText;
         try {
           const parsed = JSON.parse(errText);
@@ -867,7 +868,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       } while (purNext);
       logger.info('[GoogleAds] Merged PURCHASE (category) metrics into campaigns');
     } catch (purErr) {
-      logger.warn('[GoogleAds] Purchase category query error (non-fatal):', purErr);
+      logger.warn('[GoogleAds] Purchase category query error (non-fatal):', { err: purErr });
     }
 
     // Second query: per-conversion-action **per calendar day** (same window as campaign daily metrics).
@@ -945,13 +946,13 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
             }
           } while (caNextToken);
         } catch (e) {
-          logger.warn(`[GoogleAds] Conv action query error for ${mr.since}:`, e);
+          logger.warn(`[GoogleAds] Conv action query error for ${mr.since}:`, { err: e });
         }
       }
 
       logger.info(`[GoogleAds] Fetched conversion actions for ${convActionMap.size} campaigns (daily per action)`);
     } catch (caErr) {
-      logger.warn(`[GoogleAds] Conversion action query error, skipping:`, caErr);
+      logger.warn(`[GoogleAds] Conversion action query error, skipping:`, { err: caErr });
     }
 
     // ── Geographic breakdown (country-level) ──────────────────────────────────
@@ -1128,10 +1129,10 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
         } while (cityNext);
         logger.info(`[GoogleAds] Fetched city-level geo for ${geoCityByCampaign.size} campaigns`);
       } catch (cityErr) {
-        logger.warn(`[GoogleAds] user_location_view query error, skipping:`, cityErr);
+        logger.warn(`[GoogleAds] user_location_view query error, skipping:`, { err: cityErr });
       }
     } catch (geoErr) {
-      logger.warn(`[GoogleAds] geographic_view query error, skipping:`, geoErr);
+      logger.warn(`[GoogleAds] geographic_view query error, skipping:`, { err: geoErr });
     }
 
     // Firestore allows max 500 ops per batch but also ~10MB total payload per commit.
@@ -1281,7 +1282,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     } catch (writeErr) {
       logger.warn(
         `[GoogleAds] Batched writes failed for ${customerId}, falling back to sequential single-doc writes:`,
-        writeErr
+        { err: writeErr }
       );
       await commitCampaignsOneByOne(prepared);
     }
@@ -1293,10 +1294,10 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     try {
       await fetchSearchTermsAndKeywords(brandId, customerId, headers);
     } catch (e) {
-      logger.warn('[GoogleAds] Search terms/keywords fetch failed (non-blocking):', e);
+      logger.warn('[GoogleAds] Search terms/keywords fetch failed (non-blocking):', { err: e });
     }
   } catch (err) {
-    logger.error(`[GoogleAds] Error for customer ${customerId}:`, err);
+    logger.error(`[GoogleAds] Error for customer ${customerId}:`, { alertKey: ALERT.googleAdsSyncFailed, err });
     return { success: false, imported: 0, error: String(err) };
   }
 
@@ -1399,7 +1400,7 @@ async function fetchSearchTermsAndKeywords(
       }
     } while (nextToken);
   } catch (e) {
-    logger.warn('[GoogleAds] Search terms fetch error:', e);
+    logger.warn('[GoogleAds] Search terms fetch error:', { err: e });
   }
 
   // ── Keywords ──
@@ -1464,7 +1465,7 @@ async function fetchSearchTermsAndKeywords(
       }
     } while (nextToken);
   } catch (e) {
-    logger.warn('[GoogleAds] Keywords fetch error:', e);
+    logger.warn('[GoogleAds] Keywords fetch error:', { err: e });
   }
 
   // Save to Firestore

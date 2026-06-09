@@ -12,6 +12,7 @@ import {
   TrendingUp, Megaphone, BarChart3, X,
 } from 'lucide-react';
 import type { RFMSegment, ChannelRecommendation } from '../../types';
+import { logger } from '../../utils/logger';
 
 export type PlayContext = 'cross_sell' | 'upsell' | 'winback' | null;
 
@@ -507,7 +508,7 @@ function ExportButton({
 
       XLSX.writeFile(wb, `${brand}_${playLabel}_GrowthPlay_${date}.xlsx`);
     } catch (e) {
-      console.error('Export failed', e);
+      logger.error('Export failed', { err: e });
     } finally {
       setExporting(false);
     }

@@ -1,5 +1,6 @@
 import * as admin from 'firebase-admin';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import type { Firestore } from 'firebase-admin/firestore';
 import type { Transporter } from 'nodemailer';
 import { createTransporter, SENDER, NOREPLY_EMAIL } from './smtpConfig';
@@ -21,7 +22,7 @@ export async function sendNotificationEmail(
   reuseTransporter?: Transporter
 ): Promise<void> {
   if (!_db) {
-    logger.error('emailNotifier: db not set');
+    logger.error('emailNotifier: db not set', { alertKey: ALERT.emailSendFailed });
     throw new Error('emailNotifier db not set');
   }
 
@@ -39,7 +40,7 @@ export async function sendNotificationEmail(
       const rec = await admin.auth().getUser(userId);
       toEmail = rec.email || undefined;
     } catch (e) {
-      logger.warn(`[emailNotifier] Auth lookup failed for ${userId}`, e);
+      logger.warn(`[emailNotifier] Auth lookup failed for ${userId}`, { err: e });
     }
   }
   if (!toEmail && notification.brandId) {
@@ -52,7 +53,7 @@ export async function sendNotificationEmail(
         .get();
       toEmail = (mem.data()?.email as string | undefined) || undefined;
     } catch (e) {
-      logger.warn(`[emailNotifier] Member doc lookup failed for ${userId}`, e);
+      logger.warn(`[emailNotifier] Member doc lookup failed for ${userId}`, { err: e });
     }
   }
   if (!toEmail) {
@@ -95,7 +96,7 @@ export async function sendNotificationEmail(
     });
     logger.info(`Email sent to ${toEmail} for notification: ${notification.title}`);
   } catch (err) {
-    logger.error('Failed to send email:', err);
+    logger.error('Failed to send email:', { alertKey: ALERT.emailSendFailed, err });
     throw err;
   }
 }

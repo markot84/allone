@@ -50,6 +50,8 @@ import { useProductSource } from '../../hooks/useProductSource';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { calculateCampaignMetrics } from '../../utils/roiUtils';
 import { applyCampaignDateRangeToMetrics } from '../../utils/campaignDateRangeMetrics';
+import { logger } from '../../utils/logger';
+import { CLIENT_ALERT } from '../../utils/alertKeys';
 
 interface Message {
   id: string;
@@ -836,7 +838,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
             webSources = webResults.results.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet }));
           }
         } catch (webError) {
-          console.error('Web search error:', webError);
+          logger.error('Web search error:', { err: webError });
         }
       }
 
@@ -858,7 +860,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
             webContext: webBlock,
           });
         } catch (geminiErr) {
-          console.error('[Mark] Gemini:', geminiErr);
+          logger.error('[Mark] Gemini:', { err: geminiErr });
           response = fallbackKnowledgeAnswer(userQuery, articleCandidates);
           const errMsg = geminiErr instanceof Error ? geminiErr.message : '';
           if (errMsg.includes('Rate limit') || errMsg.includes('429')) {
@@ -893,7 +895,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
       setMessages((prev) => [...prev, assistantMessage]);
       setIsTyping(false);
     } catch (error) {
-      console.error('Error generating response:', error);
+      logger.error('Error generating response:', { alertKey: CLIENT_ALERT.aiAssistantFailed, err: error });
       if (loadedBrandRef.current !== requestBrandId) {
         setIsTyping(false);
         return;
@@ -960,7 +962,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
           handleClose();
         }
       } catch (e) {
-        console.error('[Mark] save info:', e);
+        logger.error('[Mark] save info:', { err: e });
         setMessages((prev) => [
           ...prev,
           { id: `mark-info-err-${Date.now()}`, type: 'assistant', content: 'Δεν κατάφερα να καταχωρήσω την πληροφορία. Δοκίμασε ξανά.', timestamp: new Date() },

@@ -18,6 +18,7 @@ import {
   PenLine,
 } from 'lucide-react';
 import { Card, Badge, Spinner, FormattedProse, toPlainProseText, PageHeader } from '../common';
+import { logger } from '../../utils/logger';
 // Data is now read from activeStrategy.contentSuggestions (persisted on strategy save)
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useBrand } from '../../hooks/useBrand';
@@ -111,7 +112,7 @@ export function ContentStrategy() {
         }
       })
       .catch((error) => {
-        console.error('[ContentStrategy] content generation failed:', error);
+        logger.error('[ContentStrategy] content generation failed:', { err: error });
       })
       .finally(() => setContentGenerating(false));
   }, [

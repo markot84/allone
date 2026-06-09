@@ -1,6 +1,7 @@
 import type { Firestore, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { computeProcurementSignals } from './procurementSignals';
 
 let db: Firestore;
@@ -743,7 +744,7 @@ async function loadSkuStats(brandId: string): Promise<{ rowsRead: number; bySku:
         bySku.set(normalizeSku(sku), stats);
       }
     } catch (error) {
-      logger.warn(`[ProductIntelligence] bad sku_stats chunk for ${brandId}/${doc.id}:`, error);
+      logger.warn(`[ProductIntelligence] bad sku_stats chunk for ${brandId}/${doc.id}:`, { err: error });
     }
   }
   return { rowsRead: snap.size, bySku };
@@ -1304,7 +1305,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
         return { success: true, brandId, totalCount: procProducts.length, source: 'procurement', pagesByBucket };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        logger.error(`[ProductIntelligence] procurement failed brand=${brandId}: ${message}`);
+        logger.error(`[ProductIntelligence] procurement failed brand=${brandId}: ${message}`, { alertKey: ALERT.productIntelligenceFailed });
         await ref.set(
           { brandId, status: 'failed', error: message, updatedAt: FieldValue.serverTimestamp() },
           { merge: true }
@@ -1408,7 +1409,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`[ProductIntelligence] failed brand=${brandId}: ${message}`);
+    logger.error(`[ProductIntelligence] failed brand=${brandId}: ${message}`, { alertKey: ALERT.productIntelligenceFailed });
     await ref.set({
       brandId,
       status: 'failed',

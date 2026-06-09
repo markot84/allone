@@ -11,7 +11,8 @@
 import * as admin from 'firebase-admin';
 import { safeFetch } from './urlValidator';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { erpWriteBatch, erpIsoDate, erpNum, normalizeHttpBase, sanitizeFirestoreDocId } from './erpConnectorFirestore';
 import { buildHistoricalOrIncrementalWindow, toYmd } from './syncPolicy';
@@ -241,7 +242,7 @@ async function fetchBrowserAll(
     });
     const errD = softoneError(dataCall, `${label} getBrowserData`);
     if (errD) {
-      if (out.length) logger.warn(`[SoftOne] ${errD} — partial ${out.length} rows`);
+      if (out.length) logger.warnAlert(`[SoftOne] ${errD} — partial ${out.length} rows`, { alertKey: ALERT.softoneSyncFailed });
       break;
     }
     const chunk = (dataCall.data?.rows as unknown[][]) || [];
@@ -538,7 +539,7 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`[SoftOne] fetchSoftOneData ${brandId}:`, msg);
+    logger.error(`[SoftOne] fetchSoftOneData ${brandId}:`, { alertKey: ALERT.softoneSyncFailed, err: msg });
     return { success: false, imported: totalImported, ...counts, error: msg };
   }
 }

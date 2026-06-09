@@ -9,7 +9,8 @@
 import * as admin from 'firebase-admin';
 import { signState } from './oauthState';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { decryptToken, encryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
@@ -104,7 +105,7 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
 
   const rawText = await res.text();
   if (!res.ok) {
-    logger.error(`[SearchConsole] Token refresh HTTP ${res.status}:`, rawText.slice(0, 500));
+    logger.error(`[SearchConsole] Token refresh HTTP ${res.status}:`, { alertKey: ALERT.searchConsoleSyncFailed, body: rawText.slice(0, 500) });
     throw new Error(explainGoogleTokenError(res.status, rawText));
   }
 
@@ -156,7 +157,7 @@ async function listSearchConsoleSites(accessToken: string): Promise<SearchConsol
 
   const raw = await res.text();
   if (!res.ok) {
-    logger.error(`[SearchConsole] Sites listing failed: ${res.status}`, raw.slice(0, 300));
+    logger.error(`[SearchConsole] Sites listing failed: ${res.status}`, { alertKey: ALERT.searchConsoleSyncFailed, body: raw.slice(0, 300) });
     throw new Error(explainSearchConsoleError(res.status, raw));
   }
 
@@ -197,7 +198,7 @@ export async function handleSearchConsoleCallback(
 
     if (!res.ok) {
       const err = await res.text();
-      logger.error('[SearchConsole] Token exchange failed:', err);
+      logger.error('[SearchConsole] Token exchange failed:', { alertKey: ALERT.searchConsoleSyncFailed, err });
       return { success: false, error: `Token exchange failed: ${res.status}` };
     }
 
@@ -270,7 +271,7 @@ export async function handleSearchConsoleCallback(
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error('[SearchConsole] Callback error:', msg);
+    logger.error('[SearchConsole] Callback error:', { alertKey: ALERT.searchConsoleSyncFailed, err });
     return { success: false, error: msg };
   }
 }
@@ -303,7 +304,7 @@ async function fetchSearchConsoleRows(accessToken: string, siteUrl: string, star
 
     const raw = await res.text();
     if (!res.ok) {
-      logger.error(`[SearchConsole] Query failed (page ${page}, status ${res.status})`, raw.slice(0, 300));
+      logger.error(`[SearchConsole] Query failed (page ${page}, status ${res.status})`, { alertKey: ALERT.searchConsoleSyncFailed, body: raw.slice(0, 300) });
       throw new Error(explainSearchConsoleError(res.status, raw));
     }
 
@@ -408,7 +409,7 @@ export async function fetchSearchConsoleData(
     return { success: true, imported: queryRows.length };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error('[SearchConsole] fetchSearchConsoleData error:', msg);
+    logger.error('[SearchConsole] fetchSearchConsoleData error:', { alertKey: ALERT.searchConsoleSyncFailed, err });
     return { success: false, imported: 0, error: msg };
   }
 }

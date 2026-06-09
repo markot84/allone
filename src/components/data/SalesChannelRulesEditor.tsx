@@ -12,6 +12,7 @@ import {
   type EcommerceSalesChannel,
   type EcommerceSalesChannelRule,
 } from '../../services/ecommerceSalesChannel';
+import { logger } from '../../utils/logger';
 
 const CHANNEL_OPTIONS: Array<{ id: EcommerceSalesChannel; label: string; included: boolean }> = [
   { id: 'direct_eshop', label: 'Direct e-shop (περιλαμβάνεται)', included: true },
@@ -252,7 +253,7 @@ export function SalesChannelRulesEditor() {
         );
       }
     } catch (err) {
-      console.error('[SalesChannelRulesEditor] save failed:', err);
+      logger.error('[SalesChannelRulesEditor] save failed:', { err });
       toast.error('Αποτυχία αποθήκευσης κανόνων.');
     } finally {
       setSaving(false);

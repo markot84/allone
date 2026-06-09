@@ -42,6 +42,7 @@ import type { Campaign } from '../../types';
 import { FirestoreService } from '../../services/firestore';
 import { useBrand } from '../../hooks/useBrand';
 import { formatCurrency, formatNumber } from '../../utils/format';
+import { logger } from '../../utils/logger';
 
 const PRESETS: { id: MarketingPlanPresetId; label: string }[] = [
   { id: 'next_month', label: 'Επόμενος μήνας' },
@@ -389,7 +390,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         { savedAt, plan }
       );
     }).catch((error) => {
-      console.warn('[MarketingPlan] remote cache write failed:', error);
+      logger.warn('[MarketingPlan] remote cache write failed:', { err: error });
     });
   };
 

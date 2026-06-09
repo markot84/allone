@@ -13,7 +13,8 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { safeFetch } from './urlValidator';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { getCustomerEmailIdentity } from './customerIdentity';
 import {
@@ -293,7 +294,7 @@ async function fetchAndSaveMagentoPopularSearchTerms(
         logger.info(`[Magento] Popular search terms (REST): ${terms.length} for brand ${brandId}`);
         return terms.length;
       } catch (e) {
-        logger.warn(`[Magento] searchTerms failed [store=${code || 'default'}] (${path}):`, e);
+        logger.warn(`[Magento] searchTerms failed [store=${code || 'default'}] (${path}):`, { err: e });
       }
     }
   }
@@ -574,7 +575,7 @@ async function probeMagentoStoreConfigs(
 
         return { ok: true, restApiBase, configs };
       } catch (e) {
-        logger.warn(`[Magento] probe fetch error ${url}:`, e);
+        logger.warn(`[Magento] probe fetch error ${url}:`, { err: e });
       }
     }
   }
@@ -800,7 +801,7 @@ export async function testMagentoConnection(
       productCatalogAccessError = formatMagentoProductAccessError(productAccess.status, productAccess.url, productAccess.body);
       if (productAccess.status === 401 || productAccess.status === 403) {
         productCatalogAccess = false;
-        logger.warn(`[Magento] Connect: product catalog denied (degraded) — orders/store OK. ${productCatalogAccessError}`);
+        logger.warnAlert(`[Magento] Connect: product catalog denied (degraded) — orders/store OK. ${productCatalogAccessError}`, { alertKey: ALERT.magentoSyncFailed });
       } else {
         // Μη-auth αποτυχία (π.χ. 404/500) → πιθανό config issue, μπλοκάρουμε όπως πριν.
         return {
@@ -846,7 +847,7 @@ export async function testMagentoConnection(
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error('[Magento] Connection test failed:', msg);
+    logger.error('[Magento] Connection test failed:', { alertKey: ALERT.magentoSyncFailed, err: msg });
     if (msg.includes('ENOTFOUND') || msg.includes('getaddrinfo')) {
       return { success: false, error: 'e-shop URL not reachable. Check the domain.' };
     }
@@ -1082,7 +1083,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
       }
     }
   } catch (e) {
-    logger.warn(`[Magento] storeDirectory refresh skipped for ${brandId}:`, e);
+    logger.warn(`[Magento] storeDirectory refresh skipped for ${brandId}:`, { err: e });
   }
 
   let totalImported = 0;
@@ -1138,7 +1139,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
       const res = await magentoFetch(buildMagentoRestUrl(restApiBase, `orders?${searchParams.toString()}`, storeCode), { headers });
       if (!res.ok) {
         const error = `Orders fetch failed (${res.status})`;
-        logger.error(`[Magento] ${error}`);
+        logger.error(`[Magento] ${error}`, { alertKey: ALERT.magentoSyncFailed });
         errors.push(error);
         ordersOk = false;
         break;
@@ -1337,7 +1338,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         if (!res.ok) {
           const bodyText = await res.text().catch(() => '');
           const error = `${formatMagentoProductAccessError(res.status, productUrl, bodyText)} page=${prodPage}`;
-          logger.warn(`[Magento] ${error}`);
+          logger.warnAlert(`[Magento] ${error}`, { alertKey: ALERT.magentoSyncFailed });
           productsOk = false;
           if (res.status === 401 || res.status === 403) {
             productCatalogDenied = true;
@@ -1364,7 +1365,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         if (prodMore && pagesFetched >= MAGENTO_FULL_CATALOG_PAGE_BUDGET) {
           productsBackfillIncomplete = true;
           prodMore = false;
-          logger.warn(`[Magento] Full catalog page budget (${MAGENTO_FULL_CATALOG_PAGE_BUDGET}) reached for ${brandId}, resume next run`);
+          logger.warnAlert(`[Magento] Full catalog page budget (${MAGENTO_FULL_CATALOG_PAGE_BUDGET}) reached for ${brandId}, resume next run`, { alertKey: ALERT.magentoSyncFailed });
         }
         prodPage++;
       }
@@ -1396,7 +1397,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
           if (!res.ok) {
             const bodyText = await res.text().catch(() => '');
             const error = `${formatMagentoProductAccessError(res.status, productUrl, bodyText)} page=${prodPage}`;
-            logger.warn(`[Magento] ${error}`);
+            logger.warnAlert(`[Magento] ${error}`, { alertKey: ALERT.magentoSyncFailed });
             productsOk = false;
             if (res.status === 401 || res.status === 403) {
               productCatalogDenied = true;
@@ -1527,7 +1528,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`[Magento] fetchMagentoData error for ${brandId}:`, msg);
+    logger.error(`[Magento] fetchMagentoData error for ${brandId}:`, { alertKey: ALERT.magentoSyncFailed, err: msg });
     return { success: false, imported: totalImported, error: msg };
   }
 }

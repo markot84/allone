@@ -23,7 +23,8 @@
  *   3) Redeploy. Νέα tokens encrypt-άρονται αυτόματα.
  */
 import { randomBytes, createCipheriv, createDecipheriv, scryptSync, type CipherGCM, type DecipherGCM } from 'crypto';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 
 const PREFIX = 'enc:v1:';
 const KEY_ENV = 'CONNECTOR_TOKEN_KEY';
@@ -65,7 +66,7 @@ export function encryptToken(plaintext: string | null | undefined): string {
     // fresh connector token declares CONNECTOR_TOKEN_KEY, and already-encrypted
     // values return early above — so in a correct deployment this never fires; if
     // it does, it signals a missing secret instead of a silent security downgrade.
-    logger.error(`[tokenCrypto] ${KEY_ENV} not configured — refusing to store connector token in plaintext`);
+    logger.error(`[tokenCrypto] ${KEY_ENV} not configured — refusing to store connector token in plaintext`, { alertKey: ALERT.tokenCryptoFailed });
     throw new Error('Connector token encryption key (CONNECTOR_TOKEN_KEY) is not configured');
   }
   try {
@@ -76,7 +77,7 @@ export function encryptToken(plaintext: string | null | undefined): string {
     const payload = Buffer.concat([enc, tag]);
     return `${PREFIX}${nonce.toString('base64url')}:${payload.toString('base64url')}`;
   } catch (err) {
-    logger.error('[tokenCrypto] encrypt failed (fail-open, returning plaintext):', err);
+    logger.error('[tokenCrypto] encrypt failed (fail-open, returning plaintext):', { alertKey: ALERT.tokenCryptoFailed, err });
     return plaintext;
   }
 }
@@ -90,7 +91,7 @@ export function decryptToken(value: string | null | undefined): string {
   if (!isEncrypted(value)) return value;
   const key = loadKey();
   if (!key) {
-    logger.error(`[tokenCrypto] cannot decrypt — ${KEY_ENV} missing. Token will appear empty.`);
+    logger.error(`[tokenCrypto] cannot decrypt — ${KEY_ENV} missing. Token will appear empty.`, { alertKey: ALERT.tokenCryptoFailed });
     return '';
   }
   try {
@@ -109,7 +110,7 @@ export function decryptToken(value: string | null | undefined): string {
     const dec = Buffer.concat([decipher.update(ct), decipher.final()]);
     return dec.toString('utf8');
   } catch (err) {
-    logger.error('[tokenCrypto] decrypt failed:', err);
+    logger.error('[tokenCrypto] decrypt failed:', { alertKey: ALERT.tokenCryptoFailed, err });
     return '';
   }
 }

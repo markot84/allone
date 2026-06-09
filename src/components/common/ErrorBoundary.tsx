@@ -1,6 +1,8 @@
-import type { ReactNode } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 import { Component } from 'react';
 import { Button } from './Button';
+import { logger } from '../../utils/logger';
+import { CLIENT_ALERT } from '../../utils/alertKeys';
 
 interface Props {
   children: ReactNode;
@@ -17,6 +19,15 @@ export class ErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Forwards to the backend sink (logClientError) → Slack alert, deduped per alertKey.
+    logger.error('ErrorBoundary caught a render error', {
+      alertKey: CLIENT_ALERT.errorBoundaryCaught,
+      err: error,
+      componentStack: errorInfo.componentStack,
+    });
   }
 
   render() {

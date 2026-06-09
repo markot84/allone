@@ -1,5 +1,6 @@
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 
 let _db: Firestore;
 function db() {
@@ -317,7 +318,7 @@ export async function evaluateAllBrandsServerSide(): Promise<{ brands: number; a
       totalAlerts += count;
       brandsProcessed++;
     } catch (err) {
-      logger.error(`[ServerAlerts] Failed for brand ${doc.id}:`, err);
+      logger.error(`[ServerAlerts] Failed for brand ${doc.id}:`, { alertKey: ALERT.serverAlertEvalFailed, err });
     }
   }
 

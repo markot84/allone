@@ -27,6 +27,7 @@ export const createOrderBy = (field: string, direction: 'asc' | 'desc' = 'desc')
   return orderBy(field, direction);
 };
 import { db } from '../config/firebase';
+import { logger } from '../utils/logger';
 import type { Product } from '../types';
 import type { MarketBrief } from './aiMarketBrief';
 import { marketBriefDocId } from './aiMarketBrief';
@@ -71,7 +72,7 @@ export class FirestoreService {
       }
       return null;
     } catch (error) {
-      console.error('Error getting document', docId, 'from', collectionName, error);
+      logger.error('Error getting document', { docId, collectionName, err: error });
       throw error;
     }
   }
@@ -129,7 +130,7 @@ export class FirestoreService {
       }
       return [...new Set(ids)];
     } catch (error) {
-      console.error('getBrandIdsFromMembershipDocuments:', error);
+      logger.error('getBrandIdsFromMembershipDocuments:', { err: error });
       return [];
     }
   }
@@ -160,7 +161,7 @@ export class FirestoreService {
         ...d.data(),
       })) as T[];
     } catch (error) {
-      console.error('Error getting documents from', collectionName, error);
+      logger.error('Error getting documents from', { collectionName, err: error });
       throw error;
     }
   }
@@ -200,7 +201,7 @@ export class FirestoreService {
 
       return { items, lastDoc, totalCount };
     } catch (error) {
-      console.error('Error paginating', collectionName, error);
+      logger.error('Error paginating', { collectionName, err: error });
       throw error;
     }
   }
@@ -214,7 +215,7 @@ export class FirestoreService {
     if (items.length === 0) return;
     const MAX_BATCH = 500;
     if (import.meta.env.MODE === 'development') {
-      console.debug('[FirestoreService] batchSet:', { collectionName, count: items.length, brandId });
+      logger.debug('[FirestoreService] batchSet:', { collectionName, count: items.length, brandId });
     }
     for (let i = 0; i < items.length; i += MAX_BATCH) {
       const chunk = items.slice(i, i + MAX_BATCH);
@@ -233,7 +234,7 @@ export class FirestoreService {
       await batch.commit();
     }
     if (import.meta.env.MODE === 'development') {
-      console.debug(`[FirestoreService] batchSet completed: ${collectionName}`);
+      logger.debug(`[FirestoreService] batchSet completed: ${collectionName}`);
     }
   }
 
@@ -258,7 +259,7 @@ export class FirestoreService {
       // Use setDoc with merge to update existing fields, but clean object ensures no undefined values
       await setDoc(docRef, clean, { merge: true });
     } catch (error) {
-      console.error('Error setting document', docId, 'in', collectionName, error);
+      logger.error('Error setting document', { docId, collectionName, err: error });
       throw error;
     }
   }
@@ -277,7 +278,7 @@ export class FirestoreService {
       }) as DocumentData;
       await updateDoc(docRef, payload);
     } catch (error) {
-      console.error('Error updating document', docId, 'in', collectionName, error);
+      logger.error('Error updating document', { docId, collectionName, err: error });
       throw error;
     }
   }
@@ -288,7 +289,7 @@ export class FirestoreService {
       const docRef = doc(db, collectionName, docId);
       await deleteDoc(docRef);
     } catch (error) {
-      console.error('Error deleting document', docId, 'from', collectionName, error);
+      logger.error('Error deleting document', { docId, collectionName, err: error });
       throw error;
     }
   }
@@ -304,13 +305,13 @@ export class FirestoreService {
 
     if (snapshot.empty) {
       if (import.meta.env.MODE === 'development') {
-        console.debug(`[FirestoreService] deleteCollection: No documents to delete in ${collectionName}${brandId ? ` for brandId ${brandId}` : ''}`);
+        logger.debug(`[FirestoreService] deleteCollection: No documents to delete in ${collectionName}${brandId ? ` for brandId ${brandId}` : ''}`);
       }
       return;
     }
 
     if (import.meta.env.MODE === 'development') {
-      console.debug(`[FirestoreService] deleteCollection: Starting deletion of ${snapshot.size} documents from ${collectionName}${brandId ? ` for brandId ${brandId}` : ''}`);
+      logger.debug(`[FirestoreService] deleteCollection: Starting deletion of ${snapshot.size} documents from ${collectionName}${brandId ? ` for brandId ${brandId}` : ''}`);
     }
 
     while (!snapshot.empty) {
@@ -325,7 +326,7 @@ export class FirestoreService {
     }
 
     if (import.meta.env.MODE === 'development') {
-      console.debug(`[FirestoreService] deleteCollection: Deleted ${totalDeleted} documents from ${collectionName}${brandId ? ` for brandId ${brandId}` : ''}`);
+      logger.debug(`[FirestoreService] deleteCollection: Deleted ${totalDeleted} documents from ${collectionName}${brandId ? ` for brandId ${brandId}` : ''}`);
     }
   }
 
@@ -339,7 +340,7 @@ export const ProductsService = {
     // Debug: Log sample products to help diagnose data issues
     if (import.meta.env.MODE === 'development' && products.length > 0) {
       const sample = products.slice(0, 5) as any[];
-      console.debug('[ProductsService.getAll] Sample products from Firestore:', sample.map((p: any) => ({
+      logger.debug('[ProductsService.getAll] Sample products from Firestore:', { sample: sample.map((p: any) => ({
         id: p.id,
         name: p.name,
         sku: p.sku,
@@ -352,7 +353,7 @@ export const ProductsService = {
         first_available_date: p.first_available_date,
         createdAt: p.createdAt,
         hasQuestionMarks: String(p.name || '').includes('?') || String(p.sku || '').includes('?'),
-      })));
+      })) });
       
       // Also log summary statistics
       const withStockLevel = products.filter((p: any) => (p.stock_level ?? 0) > 0).length;
@@ -361,7 +362,7 @@ export const ProductsService = {
       const withPrice = products.filter((p: any) => (p.price ?? 0) > 0).length;
       const withCostPrice = products.filter((p: any) => (p.cost_price ?? 0) > 0).length;
       
-      console.debug('[ProductsService.getAll] Summary:', {
+      logger.debug('[ProductsService.getAll] Summary:', {
         total: products.length,
         withStockLevel,
         withMargin,

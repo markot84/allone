@@ -34,6 +34,7 @@ import {
   exportInsightsXlsx,
 } from '../../utils/competitiveTableExport';
 import { safeBrandName } from '../../services/reportExport';
+import { logger } from '../../utils/logger';
 
 const FUNCTIONS_BASE = FUNCTIONS_BASE_URL.replace(/\/$/, '');
 const COMPETITIVE_BENCHMARK_LIMIT = 5000;
@@ -571,7 +572,7 @@ export function CompetitorInsights() {
           queryClient.invalidateQueries({ queryKey: ['productIntelligenceInventory', brandId] });
         }
       } catch (error) {
-        console.warn('[CompetitiveInventory] refresh failed', error);
+        logger.warn('[CompetitiveInventory] refresh failed', { err: error });
       }
     })();
   }, [
@@ -1070,7 +1071,7 @@ export function CompetitorInsights() {
         }
         toast.success(`Εξαγωγή ${fmt === 'csv' ? 'CSV' : 'Excel'}: ${filteredBenchmarks.length} γραμμές.`);
       } catch (e) {
-        console.error(e);
+        logger.error('benchmarks export failed', { err: e });
         toast.error('Αποτυχία εξαγωγής.');
       }
     },
@@ -1093,7 +1094,7 @@ export function CompetitorInsights() {
         }
         toast.success(`Εξαγωγή ${fmt === 'csv' ? 'CSV' : 'Excel'}: ${filteredInsights.length} γραμμές.`);
       } catch (e) {
-        console.error(e);
+        logger.error('insights export failed', { err: e });
         toast.error('Αποτυχία εξαγωγής.');
       }
     },

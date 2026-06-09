@@ -13,6 +13,7 @@ import {
   loadSavedBriefingDepartments,
   saveBriefingDepartments,
 } from './briefingShared';
+import { logger } from '../../utils/logger';
 
 interface BriefingDrawerProps {
   strategyName: string;
@@ -130,7 +131,7 @@ export function BriefingDrawer({ strategyName, initialTitle, onClose, onSent }: 
       }
       onSent();
     } catch (e) {
-      console.error('Briefing failed:', e);
+      logger.error('Briefing failed:', { err: e });
       const msg = e instanceof Error ? e.message : String(e);
       const short = msg.length > 120 ? `${msg.slice(0, 120)}…` : msg;
       toast.error(`Αποτυχία αποστολής: ${short}`);

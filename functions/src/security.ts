@@ -11,7 +11,7 @@
 import type { Request } from 'firebase-functions/v2/https';
 import type { Response } from 'express';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
 
 // `GCLOUD_PROJECT` is set automatically by the Firebase Functions runtime
 // (and by the local emulator). Δεν δεχόμαστε fallback — αν λείπει, σπάμε
@@ -158,7 +158,7 @@ export async function enforceRateLimit(opts: {
   try {
     return await Promise.race([txPromise, timeoutPromise]);
   } catch (e) {
-    logger.warn(`[RateLimit] ${safeKey} transaction failed (${mode}):`, e);
+    logger.warn(`[RateLimit] ${safeKey} transaction failed (${mode}):`, { err: e });
     return degraded;
   } finally {
     if (timer) clearTimeout(timer);

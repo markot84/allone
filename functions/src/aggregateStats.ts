@@ -1,5 +1,6 @@
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 
 let _db: Firestore;
 function db() {
@@ -238,7 +239,7 @@ export async function computeAggregatesForAllBrands(): Promise<number> {
       await computeAggregatesForBrand(doc.id);
       count++;
     } catch (err) {
-      logger.error(`[Aggregates] Failed for brand ${doc.id}:`, err);
+      logger.error(`[Aggregates] Failed for brand ${doc.id}:`, { alertKey: ALERT.aggregateStatsFailed, err });
     }
   }
 

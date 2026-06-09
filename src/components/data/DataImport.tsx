@@ -14,6 +14,7 @@ import { ApiKeyManager } from './ApiKeyManager';
 import { ConnectorsPanel } from './ConnectorsPanel';
 import { refreshProductIntelligenceOnServer } from '../../services/productIntelligenceAggregate';
 import { motion, AnimatePresence } from 'framer-motion';
+import { logger } from '../../utils/logger';
 
 export type FileWithType = { file: File; type: ImportType; campaignChannel?: CampaignChannelOverride };
 
@@ -389,7 +390,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
         queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', brandId] });
         
         if (import.meta.env.MODE === 'development') {
-          console.debug('[DataImport] Import successful, invalidating queries for:', Array.from(typesImported), 'brandId:', brandId);
+          logger.debug('[DataImport] Import successful, invalidating queries for:', { typesImported: Array.from(typesImported), brandId });
         }
         
         // Invalidate queries with brandId to ensure fresh data
@@ -413,7 +414,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           queryClient.invalidateQueries({ queryKey: ['campaigns', brandId] });
           queryClient.invalidateQueries({ queryKey: ['campaigns'] });
           if (import.meta.env.MODE === 'development') {
-            console.debug('[DataImport] Campaigns queries invalidated, should refetch now');
+            logger.debug('[DataImport] Campaigns queries invalidated, should refetch now');
           }
         }
         if (typesImported.has('procurement')) {
@@ -437,7 +438,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           refreshProcurementSignals()
             .then((r) => {
               if (!r.ok && import.meta.env.MODE === 'development') {
-                console.warn('[DataImport] refreshProcurementSignals failed:', r.error);
+                logger.warn('[DataImport] refreshProcurementSignals failed:', { err: r.error });
               }
               if (!piBrandId) return;
               return refreshProductIntelligenceOnServer(piBrandId).then(() => {
@@ -448,7 +449,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
             })
             .catch((err: unknown) => {
               if (import.meta.env.MODE === 'development') {
-                console.warn('[DataImport] post-procurement refresh failed:', err);
+                logger.warn('[DataImport] post-procurement refresh failed:', { err });
               }
             });
         }
@@ -498,7 +499,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
       const history = await getImportJobs(brandId);
       setImportHistory(history.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
     } catch (error) {
-      console.error('Failed to load import history:', error);
+      logger.error('Failed to load import history:', { err: error });
       toast.error('Αποτυχία φόρτωσης ιστορικού');
     } finally {
       setHistoryLoading(false);

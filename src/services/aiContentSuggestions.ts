@@ -11,6 +11,7 @@ import { strategyContentMap } from '../data/mockContent';
 import { scenarios } from '../data/mockScenarios';
 import { parseJsonObject } from '../utils/aiJson';
 import { hashBrandProfilePromptText } from './brandProfile';
+import { logger } from '../utils/logger';
 
 const MODEL_NAME = 'gemini-2.5-pro';
 
@@ -174,7 +175,7 @@ export async function generateContentSuggestions(
     if (parsed && (parsed.actions.length > 0 || parsed.directions.length > 0)) return { ...parsed, brandProfileContextSig };
     return { actions: getFallbackSuggestions(scenarioId, scenarioName, brandName, topCategories), directions: [], brief: '', brandProfileContextSig };
   } catch (error) {
-    console.error('[aiContentSuggestions]', error);
+    logger.error('[aiContentSuggestions]', { err: error });
     return { actions: getFallbackSuggestions(scenarioId, scenarioName, brandName, topCategories), directions: [], brief: '', brandProfileContextSig };
   }
 }

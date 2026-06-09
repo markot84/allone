@@ -13,7 +13,8 @@
 
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { buildHistoricalOrIncrementalWindow, buildRollingUtcDayWindow, toYmd } from './syncPolicy';
 import {
@@ -1410,7 +1411,7 @@ export async function fetchMegaventoryData(
       } catch (crErr) {
         const msg = crErr instanceof Error ? crErr.message : String(crErr);
         errors.push(`CustomReport (${reportId}): ${msg}`);
-        logger.warn(`[Megaventory] Custom report sync failed brand ${brandId}: ${msg}`);
+        logger.warnAlert(`[Megaventory] Custom report sync failed brand ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
       }
     }
 
@@ -1443,7 +1444,7 @@ export async function fetchMegaventoryData(
       } catch (gapErr) {
         const msg = gapErr instanceof Error ? gapErr.message : String(gapErr);
         errors.push(`ApiCatalogGapFill: ${msg}`);
-        logger.warn(`[Megaventory] API catalog gap-fill failed for ${brandId}: ${msg}`);
+        logger.warnAlert(`[Megaventory] API catalog gap-fill failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
       }
     }
 
@@ -1458,7 +1459,7 @@ export async function fetchMegaventoryData(
       } catch (mvErr) {
         const msg = mvErr instanceof Error ? mvErr.message : String(mvErr);
         errors.push(`StockMovement(api_catalog): ${msg}`);
-        logger.warn(`[Megaventory] Stock movement refresh after gap-fill failed for ${brandId}: ${msg}`);
+        logger.warnAlert(`[Megaventory] Stock movement refresh after gap-fill failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
       }
     }
 
@@ -1517,7 +1518,7 @@ export async function fetchMegaventoryData(
         errors.push(`ManualCleanup: ${manualCleanupError}`);
         patch['megaventory.manualImportCleanupError'] = manualCleanupError.slice(0, 500);
         patch['megaventory.manualImportCleanupErrorAt'] = FieldValue.serverTimestamp();
-        logger.error(`[Megaventory] Manual import cleanup failed for ${brandId}:`, manualCleanupError);
+        logger.error(`[Megaventory] Manual import cleanup failed for ${brandId}:`, { alertKey: ALERT.megaventorySyncFailed, err: manualCleanupError });
       }
     }
 
@@ -1529,7 +1530,7 @@ export async function fetchMegaventoryData(
       } catch (rfmErr) {
         const msg = rfmErr instanceof Error ? rfmErr.message : String(rfmErr);
         errors.push(`MegaventoryRFM: ${msg}`);
-        logger.warn(`[Megaventory] RFM refresh failed for ${brandId}: ${msg}`);
+        logger.warnAlert(`[Megaventory] RFM refresh failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
       }
     } else if (!shouldRefreshDocuments) {
       rfmSkippedReason = 'manual_catalog_refresh';
@@ -1551,7 +1552,7 @@ export async function fetchMegaventoryData(
       } catch (refreshErr) {
         const msg = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
         errors.push(`MegaventoryPostNormalizeRefresh: ${msg}`);
-        logger.warn(`[Megaventory] Post-normalization refresh failed for ${brandId}: ${msg}`);
+        logger.warnAlert(`[Megaventory] Post-normalization refresh failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
       }
     }
 
@@ -1603,7 +1604,7 @@ export async function fetchMegaventoryData(
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`[Megaventory] fetchMegaventoryData error for ${brandId}:`, msg);
+    logger.error(`[Megaventory] fetchMegaventoryData error for ${brandId}:`, { alertKey: ALERT.megaventorySyncFailed, err: msg });
     return { success: false, imported: totalImported, ...counts, error: msg };
   }
 }

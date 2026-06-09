@@ -55,6 +55,7 @@ import { downloadProductIntelligenceCsv, downloadProductIntelligenceXlsx } from 
 import type { Product, InventorySummary, InventoryAlert } from '../../types';
 import type { ProductIntelligenceBucket, ProductIntelligenceQuery } from '../../services/productIntelligenceAggregate';
 import { refreshProductIntelligenceOnServer } from '../../services/productIntelligenceAggregate';
+import { logger } from '../../utils/logger';
 
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
 type SortDirection = 'asc' | 'desc';
@@ -310,7 +311,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         piRefreshAttemptRef.current = null;
         const msg = err instanceof Error ? err.message : 'Product Intelligence refresh failed';
         toast.error(`Αποτυχία ανανέωσης καταλόγου: ${msg}`);
-        console.warn('[ProductIntelligence] refresh failed:', err);
+        logger.warn('[ProductIntelligence] refresh failed:', { err });
       })
       .finally(() => setPiRebuilding(false));
   }, [brandId, piRebuilding, queryClient, toast]);
@@ -402,7 +403,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       await downloadProductIntelligenceXlsx(paginatedProducts, currentBrand?.name);
       toast.success(`Έγινε λήψη Excel τρέχουσας σελίδας (${formatNumber(paginatedProducts.length)} γραμμές).`);
     } catch (e) {
-      console.error(e);
+      logger.error('Excel export failed', { err: e });
       toast.error('Σφάλμα εξαγωγής Excel. Δοκιμάστε CSV.');
     }
   };

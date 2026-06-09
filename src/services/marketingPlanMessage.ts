@@ -1,4 +1,5 @@
 import { parseJsonObject } from '../utils/aiJson';
+import { logger } from '../utils/logger';
 import { callGemini } from './geminiProxy';
 import { buildFallbackCoreMessage, type MarketingPlanCoreMessage } from './marketingPlanEngine';
 import type { MarketingPlanInsight } from './marketingPlanInsights';
@@ -97,7 +98,7 @@ export async function generateMarketingPlanMessage(input: {
     });
     return parseMarketingPlanMessage(text) ?? fallback;
   } catch (error) {
-    console.warn('[marketingPlanMessage]', error);
+    logger.warn('[marketingPlanMessage]', { err: error });
     return fallback;
   }
 }

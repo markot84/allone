@@ -2,6 +2,7 @@
 // Provides internet access for marketing, digital marketing, procurement, analytics, content marketing topics
 import { getAuth } from 'firebase/auth';
 import { buildFunctionUrl, getAppCheckHeader } from '../config/firebase';
+import { logger } from '../utils/logger';
 
 interface SearchResult {
   title: string;
@@ -135,7 +136,7 @@ export async function searchWeb(query: string): Promise<WebSearchResponse> {
       totalResults: results.length
     };
   } catch (error) {
-    console.error('Web search error:', error);
+    logger.error('Web search error:', { err: error });
     // Fallback to curated resources
     return getCuratedMarketingResources(query);
   }

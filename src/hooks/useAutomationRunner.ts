@@ -11,6 +11,7 @@ import { useGA4Data } from './useGA4Data';
 import { runAutomationEvaluation } from '../services/automationEngine';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { logger } from '../utils/logger';
 import type { Campaign } from '../types';
 
 async function getRecentNewAdsCount(brandId: string): Promise<number> {
@@ -65,7 +66,7 @@ export function useAutomationRunner() {
             topPages: ga4.topPages,
           } : undefined,
         });
-      })().catch(err => console.error('Automation evaluation failed:', err));
+      })().catch(err => logger.error('Automation evaluation failed:', { err }));
     }, 10_000);
 
     return () => clearTimeout(timer);

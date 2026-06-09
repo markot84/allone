@@ -1,6 +1,7 @@
 import type { Firestore, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { FieldPath, FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { classifyEcommerceOrder, mergeSalesChannelRulesForBrand } from './ecommerceSalesChannel';
 import { filterMagentoLineItemsForTopProducts, lineRevenueAndQtyForTopProducts } from './productLineStats';
 
@@ -1260,7 +1261,7 @@ export async function refreshDataAnalysisRfmAggregate(brandId: string): Promise<
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`[dataAnalysisRfm] failed brand=${brandId}: ${message}`);
+    logger.error(`[dataAnalysisRfm] failed brand=${brandId}: ${message}`, { alertKey: ALERT.dataAnalysisRfmFailed });
     await ref.set({
       brandId,
       status: 'failed' satisfies RfmStatus,

@@ -16,6 +16,8 @@ import { useAppWarmup } from './hooks/useAppWarmup';
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
 import { TermsOfService } from './components/legal/TermsOfService';
 import { captureOAuthParamsFromLocation } from './utils/oauthSession';
+import { logger } from './utils/logger';
+import { CLIENT_ALERT } from './utils/alertKeys';
 import { AttributionProvider } from './contexts/AttributionContext';
 import { APP_SECTIONS } from './config/modules';
 import { BarChart3, ClipboardList, MessageCircle } from 'lucide-react';
@@ -49,6 +51,11 @@ function lazyNamedWithRetry<T extends Record<string, unknown>, K extends keyof T
           window.location.reload();
           await new Promise<never>(() => {});
         }
+        // Already retried once and it still failed — a stale/broken deploy the user is stuck on.
+        logger.error('Chunk load failed after retry', {
+          alertKey: CLIENT_ALERT.chunkLoadFailed,
+          err,
+        });
       }
       throw err;
     }

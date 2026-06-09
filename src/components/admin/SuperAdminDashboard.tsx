@@ -28,6 +28,7 @@ import { ROLE_LABELS, DEPARTMENT_LABELS, normalizeBrandMemberRole } from '../../
 import { useAuth } from '../../hooks';
 import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import buildInfo from '../../generated/buildInfo.json';
+import { logger } from '../../utils/logger';
 
 type AdminTab = 'brands' | 'users' | 'leads' | 'api' | 'changelog' | 'system';
 
@@ -144,7 +145,7 @@ function BrandsTab() {
         }
         setUserCounts(counts);
       } catch (err) {
-        console.error('Failed to load brands:', err);
+        logger.error('Failed to load brands:', { err });
       } finally {
         setLoading(false);
       }
@@ -158,7 +159,7 @@ function BrandsTab() {
       await FirestoreService.updateDocument('brands', brandId, { plan: newPlan });
       setBrands((prev) => prev.map((b) => (b.id === brandId ? { ...b, plan: newPlan } : b)));
     } catch (err) {
-      console.error('Failed to update plan:', err);
+      logger.error('Failed to update plan:', { err });
     } finally {
       setUpdatingPlan(null);
     }
@@ -170,7 +171,7 @@ function BrandsTab() {
       await FirestoreService.updateDocument('brands', brandId, { type: newType });
       setBrands((prev) => prev.map((b) => (b.id === brandId ? { ...b, type: newType } : b)));
     } catch (err) {
-      console.error('Failed to update brand type:', err);
+      logger.error('Failed to update brand type:', { err });
     } finally {
       setUpdatingBrandType(null);
     }
@@ -194,7 +195,7 @@ function BrandsTab() {
       queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
       queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
     } catch (err) {
-      console.error('Failed to update historyStartDate:', err);
+      logger.error('Failed to update historyStartDate:', { err });
     } finally {
       setUpdatingHistory(null);
     }
@@ -219,7 +220,7 @@ function BrandsTab() {
         item.id === brand.id ? { ...item, enabledModules: nextOverrides } : item
       )));
     } catch (err) {
-      console.error('Failed to update modules:', err);
+      logger.error('Failed to update modules:', { err });
     } finally {
       setUpdatingModule(null);
     }
@@ -541,7 +542,7 @@ function UsersTab() {
                 });
               }
             } catch (memErr) {
-              console.error('Failed to load members for brand', brand.id, memErr);
+              logger.error('Failed to load members for brand', { brandId: brand.id, err: memErr });
             }
           })
         );
@@ -554,7 +555,7 @@ function UsersTab() {
       usersList.sort((a, b) => (a.email || '').localeCompare(b.email || ''));
       setUsers(usersList);
     } catch (err) {
-      console.error('Failed to load users:', err);
+      logger.error('Failed to load users:', { err });
       setError(err instanceof Error ? err.message : 'Could not load users');
     } finally {
       setLoading(false);
@@ -593,7 +594,7 @@ function UsersTab() {
       });
       setSuperAdmins(next);
     } catch (err) {
-      console.error('Failed to update super admins:', err);
+      logger.error('Failed to update super admins:', { err });
       alert('Η ενημέρωση των super admins απέτυχε.');
     } finally {
       setBusy(null);
@@ -612,7 +613,7 @@ function UsersTab() {
         ),
       }));
     } catch (err) {
-      console.error('Failed to update role:', err);
+      logger.error('Failed to update role:', { err });
       alert('Η αλλαγή ρόλου απέτυχε.');
     } finally {
       setBusy(null);
@@ -629,7 +630,7 @@ function UsersTab() {
         [userId]: (prev[userId] || []).filter((item) => item.brandId !== m.brandId),
       }));
     } catch (err) {
-      console.error('Failed to remove member:', err);
+      logger.error('Failed to remove member:', { err });
       alert('Η αφαίρεση από το brand απέτυχε.');
     } finally {
       setBusy(null);
@@ -976,7 +977,7 @@ function LeadsTab() {
         ...leadDoc.data(),
       })) as InterestLeadRow[]);
     } catch (err) {
-      console.error('Failed to load interest leads:', err);
+      logger.error('Failed to load interest leads:', { err });
       setError(err instanceof Error ? err.message : 'Could not load leads');
     } finally {
       setLoading(false);
@@ -1387,7 +1388,7 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
       setEntries(docs);
       return docs;
     } catch (err) {
-      console.error('Failed to load changelog:', err);
+      logger.error('Failed to load changelog:', { err });
       return [];
     } finally {
       setLoading(false);
@@ -1707,11 +1708,11 @@ function SystemInfoTab() {
       if (usersRes.status === 'fulfilled' && brandsRes.status === 'fulfilled') {
         setStats({ users: usersRes.value.size, brands: brandsRes.value.size });
       } else {
-        if (usersRes.status === 'rejected') console.error('Failed to load users count:', usersRes.reason);
-        if (brandsRes.status === 'rejected') console.error('Failed to load brands count:', brandsRes.reason);
+        if (usersRes.status === 'rejected') logger.error('Failed to load users count:', { err: usersRes.reason });
+        if (brandsRes.status === 'rejected') logger.error('Failed to load brands count:', { err: brandsRes.reason });
       }
       if (saRes.status === 'fulfilled') setAdminEmails(saRes.value.emails);
-      else console.error('Failed to load super admins:', saRes.reason);
+      else logger.error('Failed to load super admins:', { err: saRes.reason });
       setLoading(false);
     }
     load();

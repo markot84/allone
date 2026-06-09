@@ -1,5 +1,6 @@
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
+import { logger } from './utils/logger';
+import { ALERT } from './utils/alertKeys';
 import { createSender, createTransporter, type SmtpCredentialInput } from './smtpConfig';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -31,7 +32,7 @@ async function loadInterestLeadRecipients(db: Firestore): Promise<string[]> {
     notifyCache = { emails, fetchedAt: now };
     return emails;
   } catch (err) {
-    logger.warn('[interestLead] appConfig/notifications fetch failed; using default recipient', err);
+    logger.warn('[interestLead] appConfig/notifications fetch failed; using default recipient', { err });
     return [];
   }
 }
@@ -154,7 +155,7 @@ async function sendInterestLeadEmails(
     teamNotified = true;
     logger.info(`[interestLead] Team notify email sent to ${teamTo.join(', ')}`);
   } catch (e) {
-    logger.error('[interestLead] Team notify email failed', e);
+    logger.error('[interestLead] Team notify email failed', { alertKey: ALERT.interestLeadFailed, err: e });
   }
 
   try {
@@ -173,7 +174,7 @@ async function sendInterestLeadEmails(
     userConfirmed = true;
     logger.info(`[interestLead] User confirmation email sent to ${data.email}`);
   } catch (e) {
-    logger.error('[interestLead] User confirmation email failed', e);
+    logger.error('[interestLead] User confirmation email failed', { alertKey: ALERT.interestLeadFailed, err: e });
   }
 
   return { teamNotified, userConfirmed };
@@ -202,7 +203,7 @@ async function sendInterestLeadEmailsBestEffort(
       }),
     ]);
   } catch (e) {
-    logger.error('[interestLead] Email notification failed; lead remains saved', e);
+    logger.error('[interestLead] Email notification failed; lead remains saved', { alertKey: ALERT.interestLeadFailed, err: e });
     return { teamNotified: false, userConfirmed: false };
   } finally {
     if (timer) clearTimeout(timer);

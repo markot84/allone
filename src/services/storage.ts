@@ -1,6 +1,7 @@
 // Firebase Storage Service for Brand Assets
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import { storage } from '../config/firebase';
+import { logger } from '../utils/logger';
 
 export interface UploadProgress {
   bytesTransferred: number;
@@ -47,7 +48,7 @@ export async function uploadBrandAsset(
 
     return downloadURL;
   } catch (error) {
-    console.error('Error uploading brand asset:', error);
+    logger.error('Error uploading brand asset:', { err: error });
     throw error instanceof Error ? error : new Error('Σφάλμα ανέβασματος αρχείου');
   }
 }
@@ -71,7 +72,7 @@ export async function deleteBrandAsset(url: string): Promise<void> {
 
     await deleteObject(storageRef);
   } catch (error) {
-    console.error('Error deleting brand asset:', error);
+    logger.error('Error deleting brand asset:', { err: error });
     throw error instanceof Error ? error : new Error('Σφάλμα διαγραφής αρχείου');
   }
 }
@@ -102,7 +103,7 @@ export async function getBrandAssets(
 
     return urls;
   } catch (error) {
-    console.error('Error getting brand assets:', error);
+    logger.error('Error getting brand assets:', { err: error });
     return [];
   }
 }

@@ -8,6 +8,8 @@ import {
 } from 'react';
 import { useAuth } from '../hooks';
 import { FirestoreService } from '../services/firestore';
+import { logger } from '../utils/logger';
+import { CLIENT_ALERT } from '../utils/alertKeys';
 import type { Brand } from '../types';
 
 interface BrandContextValue {
@@ -92,7 +94,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
           15000
         );
       } catch (e) {
-        console.error('refreshBrands: user profile fetch failed or timed out', e);
+        logger.error('refreshBrands: user profile fetch failed or timed out', { err: e });
         profile = null;
       }
       const fromProfile = profile?.brandIds ?? [];
@@ -121,7 +123,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
           // b === null => brand doc no longer exists; drop the orphan id.
         } catch (err) {
           // permission-denied / unreadable brand — skip it, don't abort the list.
-          console.warn('refreshBrands: skipping inaccessible brand', bid, err);
+          logger.warn('refreshBrands: skipping inaccessible brand', { bid, err });
         }
       }
 
@@ -129,7 +131,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       // brand, pruning orphans so they stop poisoning future loads.
       if (resolvedIds.length > 0 && !sameStringSet(fromProfile, resolvedIds)) {
         FirestoreService.setDocument('users', user.uid, { brandIds: resolvedIds } as Record<string, unknown>).catch((err) =>
-          console.warn('refreshBrands: could not sync brandIds on user profile', err)
+          logger.warn('refreshBrands: could not sync brandIds on user profile', { err })
         );
       }
 
@@ -144,7 +146,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
         : defaultBrand;
       setCurrentBrandState((prev) => prev ? brandList.find((b) => b.id === prev.id) ?? lastBrand : lastBrand);
     } catch (err) {
-      console.error('refreshBrands:', err);
+      logger.error('refreshBrands:', { alertKey: CLIENT_ALERT.brandLoadFailed, err });
       if (!cachedBrand) {
         setBrands([]);
         setCurrentBrandState(null);

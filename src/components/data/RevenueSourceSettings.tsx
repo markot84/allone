@@ -4,6 +4,7 @@ import { useBrand } from '../../hooks/useBrand';
 import { useRefreshAggregates } from '../../hooks/useAggregates';
 import { FirestoreService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
+import { logger } from '../../utils/logger';
 import type { Brand } from '../../types';
 
 type Mode = NonNullable<Brand['revenueSourceMode']>;
@@ -80,7 +81,7 @@ export function RevenueSourceSettings() {
         );
       }
     } catch (err) {
-      console.error('[RevenueSourceSettings] save failed:', err);
+      logger.error('[RevenueSourceSettings] save failed:', { err });
       toast.error('Αποτυχία αποθήκευσης. Δοκιμάστε ξανά.');
     } finally {
       setSaving(false);
