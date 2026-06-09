@@ -55,6 +55,12 @@ const MV_MAX_PAGES = 5000;
  * συνεχίσει σε επόμενο pass — ποτέ hard-kill / orphaned job / μισο-γραμμένα δεδομένα.
  */
 const MV_SYNC_SOFT_DEADLINE_MS = 25 * 60 * 1000; // 25min, ~5min margin under the 1800s onSchedule cap
+/**
+ * PER-60: budget που κρατάμε για τα heavy downstream (gap-fill/RFM/procurement/stock-movement).
+ * Αν μετά το ingestion (catalog/docs/stock/suppliers) έχει μείνει λιγότερο από αυτό, αναβάλλουμε
+ * το processing σε δικό του fresh pass (productCatalogComplete=true). Μικρά brands το τρέχουν inline.
+ */
+const MV_PROCESSING_RESERVE_MS = 12 * 60 * 1000; // need ~12min of headroom to run the heavy downstream
 const MV_INVOICE_BACKFILL_PAGE_SIZE = 100;
 /** Manual connectorSync έχει 20' timeout· κρατάμε buffer για Firestore writes / response. */
 const MV_INVOICE_BACKFILL_RUNTIME_MS = 18 * 60 * 1000;
@@ -985,6 +991,9 @@ export async function fetchMegaventoryData(
   const remainingBudgetMs = () => Math.max(0, syncDeadlineAt - Date.now());
   const overBudget = () => Date.now() >= syncDeadlineAt;
   let needsContinuation = false;
+  // PER-60: when productCatalogComplete is already set, this invocation is the dedicated "processing
+  // pass" — skip the ingestion fetches (already persisted) and run only the heavy downstream.
+  const catalogAlreadyComplete = conn.productCatalogComplete === true;
   const shouldRefreshDocuments = options.skipDocuments !== true;
   let docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
   const invoiceBackfillPending = conn.invoiceDocumentBackfillComplete !== true;
@@ -1048,9 +1057,9 @@ export async function fetchMegaventoryData(
   let productGetExhausted = false;
 
   try {
-    if (!shouldRefreshDocuments) {
-      documentDiagnostics = { skipped: true, reason: 'manual_catalog_refresh' };
-      logger.info(`[Megaventory] Documents skipped for ${brandId}: manual catalog refresh`);
+    if (!shouldRefreshDocuments || catalogAlreadyComplete) {
+      documentDiagnostics = { skipped: true, reason: catalogAlreadyComplete ? 'processing_pass' : 'manual_catalog_refresh' };
+      logger.info(`[Megaventory] Documents skipped for ${brandId}: ${catalogAlreadyComplete ? 'processing pass' : 'manual catalog refresh'}`);
     } else {
     // ── Invoices (Documents type=Sales Invoice) → revenue ────────────
     const documentTypesResult = await fetchDocumentTypes(apiKey);
@@ -1335,7 +1344,6 @@ export async function fetchMegaventoryData(
     // cursor (productCatalogCursor) γράφοντας idempotent στο megaventory_products. Όταν εξαντληθεί,
     // productCatalogComplete=true και τα downstream (gap-fill κ.λπ.) διαβάζουν τον πλήρη κατάλογο
     // από το Firestore σε επόμενο pass — αντί να τον κρατάμε όλο στη μνήμη.
-    const catalogAlreadyComplete = conn.productCatalogComplete === true;
     let productGetExhausted = true;
     let productCatalogNextCursor: number | null = null;
     if (catalogAlreadyComplete) {
@@ -1380,7 +1388,8 @@ export async function fetchMegaventoryData(
       }
     }
 
-    // ── Stock per location ───────────────────────────────────────────
+    // ── Stock per location (ingestion — skipped on the processing pass) ──
+    if (!catalogAlreadyComplete) {
     let stRowsRaw: any[] = [];
     let stFetchErr: string | null = null;
     ({ rows: stRowsRaw, error: stFetchErr } = await fetchAllMvPages('InventoryLocationStockGet', apiKey, [], {
@@ -1419,8 +1428,10 @@ export async function fetchMegaventoryData(
       totalImported += items.length;
       logger.info(`[Megaventory] Stock rows: ${items.length} imported for brand ${brandId}`);
     }
+    } // end stock ingestion guard
 
-    // ── Suppliers (από SupplierClient — type 2=supplier, 3=both) ─────
+    // ── Suppliers (ingestion — skipped on the processing pass) ─────
+    if (!catalogAlreadyComplete) {
     const { rows: supRows, error: supFetchErr } = await fetchAllMvPages(
       'SupplierClientGet',
       apiKey,
@@ -1456,6 +1467,7 @@ export async function fetchMegaventoryData(
       totalImported += items.length;
       logger.info(`[Megaventory] Suppliers: ${items.length} imported for brand ${brandId}`);
     }
+    } // end suppliers ingestion guard
 
     // ── Custom saved report (π.χ. Performance / αποθέματα — CustomReportGetData) ──
     const reportId = String(conn.customReportId || '').trim();
@@ -1511,9 +1523,17 @@ export async function fetchMegaventoryData(
     // megaventory_products (Firestore). Τρέχει ΜΟΝΟ όταν ο κατάλογος είναι ΠΛΗΡΗΣ — αλλιώς θα
     // έκανε purge-then-partial = data loss. Αν δεν είναι (ή ξεμείναμε από budget), ζητάμε continuation.
     const catalogComplete = catalogAlreadyComplete || (referenceOk && productGetExhausted !== false);
+    // PER-60: run the heavy downstream (gap-fill/RFM/procurement/stock-movement) only when the catalog
+    // is complete AND we are either the dedicated processing pass (catalogAlreadyComplete) or still have
+    // a full budget reserve. Otherwise defer it to a fresh pass — large brands can't fit ingestion AND
+    // processing in one 30-min invocation. Small brands keep their budget and finish in a single pass.
+    const runProcessing = catalogComplete && (catalogAlreadyComplete || remainingBudgetMs() >= MV_PROCESSING_RESERVE_MS);
     if (!catalogComplete) {
       needsContinuation = true;
-      logger.warn(`[Megaventory] catalog fetch incomplete within budget for ${brandId} — deferring gap-fill/downstream to continuation pass`);
+      logger.warn(`[Megaventory] catalog fetch incomplete within budget for ${brandId} — deferring to continuation pass`);
+    } else if (!runProcessing) {
+      needsContinuation = true;
+      logger.info(`[Megaventory] catalog complete; deferring heavy downstream to a fresh processing pass for ${brandId} (budget reserve)`);
     } else if (overBudget()) {
       needsContinuation = true;
       logger.warn(`[Megaventory] over soft deadline before gap-fill for ${brandId} — deferring downstream to continuation pass`);
@@ -1615,7 +1635,10 @@ export async function fetchMegaventoryData(
 
     const invoiceBackfillStillInProgress =
       invoiceBackfillPending && (!shouldStageInvoiceBackfill || invoiceBackfillProgress?.exhausted !== true);
-    if (shouldRefreshDocuments && docsOk && !invoiceBackfillStillInProgress && overBudget()) {
+    if (!runProcessing) {
+      // PER-60: ingestion pass — RFM runs on the dedicated processing pass.
+      rfmSkippedReason = 'deferred_to_processing_pass';
+    } else if (shouldRefreshDocuments && docsOk && !invoiceBackfillStillInProgress && overBudget()) {
       // PER-60: defer the heavy RFM rebuild rather than running it into the hard timeout.
       needsContinuation = true;
       rfmSkippedReason = 'deferred_over_budget';
@@ -1636,7 +1659,9 @@ export async function fetchMegaventoryData(
       logger.info(`[Megaventory] RFM refresh skipped for ${brandId}: invoice backfill still in progress`);
     }
 
-    if (normalizedCounts && normalizedCounts.products > 0 && overBudget()) {
+    if (!runProcessing) {
+      // PER-60: ingestion pass — procurement/stock-movement run on the dedicated processing pass.
+    } else if (normalizedCounts && normalizedCounts.products > 0 && overBudget()) {
       // PER-60: defer the heavy procurement/stock-movement refresh rather than running into the hard timeout.
       needsContinuation = true;
       logger.warn(`[Megaventory] over soft deadline before procurement/stock-movement refresh for ${brandId} — deferring to continuation pass`);
