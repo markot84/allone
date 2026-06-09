@@ -28,7 +28,7 @@ const MYACCOUNT_BASE = 'https://myaccount.epsilonnet.gr';
 const EPS_TIMEOUT_MS = 120_000;
 const EPS_UA = 'PerformancePlus-EpsilonNetConnector/1.0';
 
-function normalizeSmartUrl(url2: string): string {
+export function normalizeSmartUrl(url2: string): string {
   let s = String(url2 || '').trim();
   if (!s) return '';
   if (!/^https?:\/\//i.test(s)) s = `https://${s}`;

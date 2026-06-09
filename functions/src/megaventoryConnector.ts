@@ -214,7 +214,7 @@ export function extractCustomReportRows(body: unknown): Record<string, unknown>[
 }
 
 /** Επίσημη δομή γραμμής: `{ Index?, Data?: [{ ColumnId, ColumnName, Value }] }` */
-function normalizeMvCustomReportRow(r: Record<string, unknown>): Record<string, unknown> {
+export function normalizeMvCustomReportRow(r: Record<string, unknown>): Record<string, unknown> {
   const dataRaw = r.Data ?? r.data;
   if (!Array.isArray(dataRaw)) {
     return { ...r };
