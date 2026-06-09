@@ -89,6 +89,7 @@ import {
   updateMegaventoryConnectorSettings,
   setDb as setMegaventoryDb,
 } from './megaventoryConnector';
+import { decideStaleRecovery } from './megaventorySyncPlan';
 import {
   saveSoftOneCredentials,
   fetchSoftOneData,
@@ -1874,6 +1875,22 @@ export const processOpenCartSyncJobs = onSchedule(
   })
 );
 
+/**
+ * PER-60: clear the resumable catalog state so a brand isn't livelocked in "processing-only" mode
+ * (productCatalogComplete=true) after a failure/timeout. Best-effort; next sync re-ingests fresh.
+ */
+async function resetMegaventoryResumableState(db: admin.firestore.Firestore, brandId: string): Promise<void> {
+  try {
+    await db.doc(`connectors/${brandId}`).update({
+      'megaventory.productCatalogComplete': FieldValue.delete(),
+      'megaventory.productCatalogCursor': FieldValue.delete(),
+      'megaventory.processingStage': FieldValue.delete(),
+    });
+  } catch (e) {
+    logger.warn(`[MegaventoryJob] could not reset resumable state for ${brandId}`, { err: e });
+  }
+}
+
 export const processMegaventorySyncJobs = onSchedule(
   {
     schedule: 'every 1 minutes',
@@ -1897,14 +1914,21 @@ export const processMegaventorySyncJobs = onSchedule(
       const data = doc.data();
       const updatedAt = data.updatedAt?.toDate?.() as Date | undefined;
       if (!updatedAt || Date.now() - updatedAt.getTime() <= STALE_RUNNING_MS) continue;
-      const result = data.result as { success?: boolean; error?: string } | undefined;
-      logger.warn(`[MegaventoryJob] Recovering stale running job ${doc.id}`);
+      // PER-60 FIX: a stale-recovered job timed out before finalizing — it is ALWAYS a failure.
+      // Never inherit data.result.success from a prior (deferred) pass: that masked failures as
+      // 'completed' and, combined with productCatalogComplete=true, livelocked the brand.
+      const recovery = decideStaleRecovery();
+      logger.warn(`[MegaventoryJob] Recovering stale running job ${doc.id} → failed (timed out)`);
       await doc.ref.update({
-        status: result?.success ? 'completed' : 'failed',
-        completedAt: data.completedAt || FieldValue.serverTimestamp(),
+        status: recovery.status,
+        completedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-        error: result?.error || 'Megaventory sync timed out before job finalization',
+        error: recovery.error,
+        continuationAttempts: FieldValue.delete(),
       });
+      if (recovery.resetCatalogState && typeof data.brandId === 'string') {
+        await resetMegaventoryResumableState(db, data.brandId);
+      }
     }
 
     const snap = await db
@@ -1988,7 +2012,11 @@ export const processMegaventorySyncJobs = onSchedule(
         error: msg,
         completedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
+        continuationAttempts: FieldValue.delete(),
       });
+      // PER-60 FIX: clear resumable state on failure so the brand re-ingests fresh next time
+      // instead of being stuck with productCatalogComplete=true.
+      await resetMegaventoryResumableState(db, job.brandId);
     }
   })
 );
