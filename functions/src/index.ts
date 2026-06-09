@@ -1878,14 +1878,14 @@ export const processMegaventorySyncJobs = onSchedule(
   {
     schedule: 'every 1 minutes',
     region: 'europe-west1',
-    timeoutSeconds: 3600, // PER-60: 60min (gen2 max) — large brands (e-tennis ~87k SKUs) need >30min for a full single-pass catalog sync
+    timeoutSeconds: 1800, // onSchedule hard cap is 1800s (30min). Completing >30min brands relies on the budget+continuation below (re-enqueued across passes), not a longer single run.
     memory: '2GiB',
     secrets: ['CONNECTOR_TOKEN_KEY'],
   },
   async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
     const db = admin.firestore();
-    // PER-60: must exceed the 3600s run ceiling, else the stale-sweep marks a legitimately-running job failed mid-flight.
-    const STALE_RUNNING_MS = 65 * 60 * 1000;
+    // PER-60: > the 1800s (30min) run ceiling so the stale-sweep can't mark a legitimately-running job failed mid-flight.
+    const STALE_RUNNING_MS = 40 * 60 * 1000;
 
     const staleRunning = await db
       .collection('connector_sync_jobs')

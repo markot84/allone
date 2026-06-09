@@ -49,12 +49,12 @@ const MV_PAGE_SIZE = 500;
 /** Ασφάλεια: max ~2.5M εγγραφές ανά endpoint ανά sync */
 const MV_MAX_PAGES = 5000;
 /**
- * PER-60: soft budget για κάθε sync invocation, αρκετά κάτω από το 3600s timeout
- * του processMegaventorySyncJobs worker. Όταν εξαντληθεί, σταματάμε με χάρη και
- * επιστρέφουμε needsContinuation ώστε ο scheduler να συνεχίσει σε επόμενο pass —
- * ποτέ hard-kill / orphaned job / μισο-γραμμένα δεδομένα.
+ * PER-60: soft budget για κάθε sync invocation, αρκετά κάτω από το 1800s timeout
+ * του processMegaventorySyncJobs worker (onSchedule hard cap). Όταν εξαντληθεί,
+ * σταματάμε με χάρη και επιστρέφουμε needsContinuation ώστε ο scheduler να
+ * συνεχίσει σε επόμενο pass — ποτέ hard-kill / orphaned job / μισο-γραμμένα δεδομένα.
  */
-const MV_SYNC_SOFT_DEADLINE_MS = 55 * 60 * 1000; // 55min, ~5min margin under the 3600s worker timeout
+const MV_SYNC_SOFT_DEADLINE_MS = 25 * 60 * 1000; // 25min, ~5min margin under the 1800s onSchedule cap
 const MV_INVOICE_BACKFILL_PAGE_SIZE = 100;
 /** Manual connectorSync έχει 20' timeout· κρατάμε buffer για Firestore writes / response. */
 const MV_INVOICE_BACKFILL_RUNTIME_MS = 18 * 60 * 1000;
