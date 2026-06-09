@@ -68,6 +68,18 @@ const MV_PROCESSING_RESERVE_MS = 12 * 60 * 1000; // need ~12min of headroom to r
  * whole fetch to a fresh pass. Prevents a near-deadline start from running into the 30min hard wall.
  */
 const MV_SUPPLIERS_RESERVE_MS = 13 * 60 * 1000;
+/**
+ * PER-60: minimum budget required to START a processing sub-stage. A pre-flight `overBudget()` check
+ * is NOT enough for a monolithic module: starting refreshStockMovement (~20min on an 88k-SKU brand,
+ * measured on staging) with 12min of budget left still runs through the 30min hard wall. If the
+ * remaining budget is below the module's reserve, defer it to a fresh pass (full ~25min budget).
+ * Light brands burn almost no budget before these gates, so they still run everything inline.
+ */
+const MV_STAGE_RESERVE_MS: Record<string, number> = {
+  rfm: 15 * 60 * 1000,
+  procurement: 10 * 60 * 1000,
+  stockmovement: 22 * 60 * 1000,
+};
 const MV_INVOICE_BACKFILL_PAGE_SIZE = 100;
 /** Manual connectorSync έχει 20' timeout· κρατάμε buffer για Firestore writes / response. */
 const MV_INVOICE_BACKFILL_RUNTIME_MS = 18 * 60 * 1000;
@@ -1694,23 +1706,9 @@ export async function fetchMegaventoryData(
       processingDoneThrough = 1; // gap-fill stage done (advance even on error — don't loop on it)
     }
 
-    if (apiCatalogGapFillCount > 0 && !(normalizedCounts && normalizedCounts.products > 0) && overBudget()) {
-      needsContinuation = true;
-      logger.warn(`[Megaventory] over soft deadline before stock-movement refresh for ${brandId} — deferring to continuation pass`);
-    } else if (apiCatalogGapFillCount > 0 && !(normalizedCounts && normalizedCounts.products > 0)) {
-      try {
-        await refreshStockMovement(brandId);
-        postNormalizeRefresh = {
-          ...(postNormalizeRefresh ?? {}),
-          stockMovement: 'refreshed_after_api_catalog_gap_fill',
-          apiCatalogGapFill: apiCatalogGapFillCount,
-        };
-      } catch (mvErr) {
-        const msg = mvErr instanceof Error ? mvErr.message : String(mvErr);
-        errors.push(`StockMovement(api_catalog): ${msg}`);
-        logger.warnAlert(`[Megaventory] Stock movement refresh after gap-fill failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
-      }
-    }
+    // PER-60: the standalone after-gap-fill stock-movement refresh was REMOVED — it ran the ~20min
+    // module right after gap-fill inside the same pass (the pass-2 hard-kill). The dedicated
+    // 'stockmovement' sub-stage below covers its case (gap-fill signal) in its own budgeted pass.
 
     // ── Log import_jobs ──────────────────────────────────────────────
     const patch: Record<string, unknown> = {};
@@ -1790,11 +1788,11 @@ export async function fetchMegaventoryData(
       rfmSkippedReason = 'deferred_to_processing_pass';
     } else if (processingDoneThrough !== 1) {
       // not the RFM sub-stage on this pass (gap-fill deferred earlier, or RFM already done in a prior pass)
-    } else if (overBudget()) {
-      // PER-60: defer the heavy RFM rebuild rather than running it into the hard timeout.
+    } else if (remainingBudgetMs() < MV_STAGE_RESERVE_MS.rfm) {
+      // PER-60: not enough budget to fit the monolithic RFM rebuild — defer it to a fresh pass.
       needsContinuation = true;
       rfmSkippedReason = 'deferred_over_budget';
-      logger.warn(`[Megaventory] over soft deadline before RFM refresh for ${brandId} — deferring to continuation pass`);
+      logger.warn(`[Megaventory] insufficient budget reserve before RFM refresh for ${brandId} — deferring to continuation pass`);
     } else {
       // ── Processing sub-stage 1: RFM ──
       if (shouldRefreshDocuments && docsOk && !invoiceBackfillStillInProgress) {
@@ -1816,29 +1814,56 @@ export async function fetchMegaventoryData(
     }
 
     if (!runProcessing || processingDoneThrough !== 2) {
-      // not the finalize sub-stage on this pass (earlier sub-stage deferred, or already finalized)
-    } else if (overBudget()) {
-      // PER-60: defer the heavy procurement/stock-movement refresh rather than running into the hard timeout.
+      // not the procurement sub-stage on this pass (earlier sub-stage deferred, or already done)
+    } else if (remainingBudgetMs() < MV_STAGE_RESERVE_MS.procurement) {
+      // PER-60: not enough budget to fit the procurement refresh — defer it to a fresh pass.
       needsContinuation = true;
-      logger.warn(`[Megaventory] over soft deadline before procurement/stock-movement refresh for ${brandId} — deferring to continuation pass`);
+      logger.warn(`[Megaventory] insufficient budget reserve before procurement refresh for ${brandId} — deferring to continuation pass`);
     } else {
-      // ── Processing sub-stage 2: procurement + stock-movement (finalize) ──
+      // ── Processing sub-stage 2: procurement signals ──
       if (normalizedCounts && normalizedCounts.products > 0) {
         try {
           const procurement = await refreshProcurementSignals(brandId);
+          postNormalizeRefresh = {
+            ...(postNormalizeRefresh ?? {}),
+            procurementSignals: procurement,
+          };
+        } catch (refreshErr) {
+          const msg = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
+          errors.push(`MegaventoryProcurementRefresh: ${msg}`);
+          logger.warnAlert(`[Megaventory] Procurement refresh failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
+        }
+      }
+      processingDoneThrough = 3; // procurement done (or skipped) — advance to stock-movement
+    }
+
+    if (!runProcessing || processingDoneThrough !== 3) {
+      // not the stock-movement sub-stage on this pass (earlier sub-stage deferred, or already done)
+    } else if (remainingBudgetMs() < MV_STAGE_RESERVE_MS.stockmovement) {
+      // PER-60: refreshStockMovement alone takes ~20min for an 88k-SKU brand (the pass-2 hard-kill on
+      // staging) — only START it with a near-full budget, i.e. effectively in its OWN fresh pass.
+      needsContinuation = true;
+      logger.warn(`[Megaventory] insufficient budget reserve before stock-movement refresh for ${brandId} — deferring to continuation pass`);
+    } else {
+      // ── Processing sub-stage 3: stock movement (last) ──
+      // Runs when the custom report normalized products OR the gap-fill added catalog SKUs (this pass
+      // or a prior checkpointed one) — covers the old standalone after-gap-fill refresh too.
+      const gapFillSignal = apiCatalogGapFillCount > 0 || Number(conn.lastApiCatalogGapFill) > 0;
+      if ((normalizedCounts && normalizedCounts.products > 0) || gapFillSignal) {
+        try {
           await refreshStockMovement(brandId);
           postNormalizeRefresh = {
-            procurementSignals: procurement,
+            ...(postNormalizeRefresh ?? {}),
             stockMovement: 'refreshed',
             ...(apiCatalogGapFillCount > 0 ? { apiCatalogGapFill: apiCatalogGapFillCount } : {}),
           };
         } catch (refreshErr) {
           const msg = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
-          errors.push(`MegaventoryPostNormalizeRefresh: ${msg}`);
-          logger.warnAlert(`[Megaventory] Post-normalization refresh failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
+          errors.push(`MegaventoryStockMovementRefresh: ${msg}`);
+          logger.warnAlert(`[Megaventory] Stock-movement refresh failed for ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
         }
       }
-      processingDoneThrough = 3; // finalize done — whole processing stage complete
+      processingDoneThrough = 4; // stock-movement done — whole processing stage complete
     }
 
     // PER-60: persist resumable state AFTER every phase has decided whether it needs continuation.

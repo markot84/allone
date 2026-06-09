@@ -24,25 +24,30 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import * as admin from 'firebase-admin';
 
 // ── Mock the heavy downstream modules BEFORE importing the connector ──────────
+// Each mock advances the fake clock by a configurable per-test duration, so a test can give the
+// processing modules realistic costs (e-tennis profile: stock-movement ~20min, gap-fill ~5min)
+// and prove the per-module sub-stage checkpoints split them across passes.
+const moduleDurations = { rfm: 0, procurement: 0, stockMovement: 0, gapFill: 0 };
+const burn = (ms: number) => { if (ms) vi.setSystemTime(Date.now() + ms); };
 vi.mock('../../megaventoryRfm', () => ({
-  refreshMegaventoryRfmSegments: vi.fn(async () => ({ segments: 0, customers: 0 })),
+  refreshMegaventoryRfmSegments: vi.fn(async () => { burn(moduleDurations.rfm); return { segments: 0, customers: 0 }; }),
 }));
 vi.mock('../../procurementSignals', () => ({
-  refreshProcurementSignals: vi.fn(async () => ({ signals: 0 })),
+  refreshProcurementSignals: vi.fn(async () => { burn(moduleDurations.procurement); return { signals: 0 }; }),
 }));
 vi.mock('../../stockMovementTracker', () => ({
-  refreshStockMovement: vi.fn(async () => {}),
+  refreshStockMovement: vi.fn(async () => { burn(moduleDurations.stockMovement); }),
 }));
 vi.mock('../../megaventoryNormalizer', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
     // Pretend the custom report normalized into 5 products so the processing
-    // finalize sub-stage (which gates on normalizedCounts.products > 0) runs.
+    // procurement/stock-movement sub-stages (which gate on normalizedCounts.products > 0) run.
     normalizeMegaventoryCustomReportRows: vi.fn(async () => ({ products: 5, invoices: 0, stock: 0 })),
-    // gap-fill purges+rewrites the whole catalog from Firestore — no-op it (0 ⇒ the
-    // post-gap-fill stock-movement branch is skipped) to keep passes fast.
-    mergeMegaventoryApiCatalogProducts: vi.fn(async () => 0),
+    // gap-fill purges+rewrites the whole catalog from Firestore — return 0 fast by default; tests
+    // with a non-zero moduleDurations.gapFill simulate the heavy variant.
+    mergeMegaventoryApiCatalogProducts: vi.fn(async () => { burn(moduleDurations.gapFill); return 0; }),
   };
 });
 vi.mock('../../manualDataCleanup', async (importOriginal) => {
@@ -208,6 +213,10 @@ afterAll(async () => {
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(CLOCK_START);
+  moduleDurations.rfm = 0;
+  moduleDurations.procurement = 0;
+  moduleDurations.stockMovement = 0;
+  moduleDurations.gapFill = 0;
   await db.doc(`connectors/${BRAND}`).delete();
 });
 
@@ -301,7 +310,8 @@ describe('Megaventory sync — full ingestion converges within the worker cap (n
       vi.setSystemTime(CLOCK_START); // each worker invocation starts a fresh 30-min clock
       passMaxElapsed = 0;
       res = await fetchMegaventoryData(BRAND, { mode: 'manual' });
-      elapsedPerPass.push(passMaxElapsed);
+      // pass cost = furthest the clock got, via fetches OR module burns (Date.now() at pass end)
+      elapsedPerPass.push(Math.max(passMaxElapsed, Date.now() - CLOCK_START));
       totals.products += res.products ?? 0;
       totals.suppliers += res.suppliers ?? 0;
       totals.salesOrders += res.salesOrders ?? 0;
@@ -346,5 +356,28 @@ describe('Megaventory sync — full ingestion converges within the worker cap (n
     expect(st.ingestionComplete).toBeUndefined();
     expect(st.suppliersIngestComplete).toBeUndefined();
     expect(st.manualInvoiceComplete).toBeUndefined();
+  });
+
+  it('heavy processing modules (gap-fill 5min, procurement 8min, stock-movement 20min) split across passes — the staging pass-2 hard-kill profile', async () => {
+    moduleDurations.gapFill = 5 * MIN;
+    moduleDurations.procurement = 8 * MIN;
+    moduleDurations.stockMovement = 20 * MIN;
+    installMvMock({
+      ...emptyDataset(),
+      invoices: descById(5, 'DocumentId', 9000, (id) => ({ DocumentDate: '2026-06-01', DocumentTypeId: 1, DocumentId: id })),
+      products: descById(20, 'ProductID', 500, (id) => ({ ProductID: id, ProductSKU: `sku-${id}` })),
+    });
+    await seedConnector();
+
+    const { res, elapsedPerPass } = await driveToCompletion();
+
+    expect(res.needsContinuation).toBeFalsy();
+    expect(elapsedPerPass.length).toBeLessThanOrEqual(MAX_PASSES);
+    // No single pass may run a module past the hard wall — the exact bug that killed staging pass 2
+    // (stock-movement started with 12min of budget and ran to minute 33).
+    const worst = Math.max(...elapsedPerPass);
+    expect(worst).toBeLessThanOrEqual(HARD_CAP_MS);
+    const st = await connState();
+    expect(st.processingStage).toBeUndefined(); // chain completed and reset
   });
 });

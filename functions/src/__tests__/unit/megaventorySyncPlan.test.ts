@@ -52,11 +52,17 @@ describe('planProcessing (sub-stage split)', () => {
   it('gapfill → next rfm', () => {
     expect(planProcessing('gapfill')).toEqual({ run: 'gapfill', next: 'rfm' });
   });
-  it('rfm → next finalize', () => {
-    expect(planProcessing('rfm')).toEqual({ run: 'rfm', next: 'finalize' });
+  it('rfm → next procurement', () => {
+    expect(planProcessing('rfm')).toEqual({ run: 'rfm', next: 'procurement' });
   });
-  it('finalize → next null (whole sync done after this)', () => {
-    expect(planProcessing('finalize')).toEqual({ run: 'finalize', next: null });
+  it('procurement → next stockmovement', () => {
+    expect(planProcessing('procurement')).toEqual({ run: 'procurement', next: 'stockmovement' });
+  });
+  it('stockmovement → next null (whole sync done after this)', () => {
+    expect(planProcessing('stockmovement')).toEqual({ run: 'stockmovement', next: null });
+  });
+  it("legacy persisted 'finalize' resumes at procurement (pre-split checkpoint compat)", () => {
+    expect(planProcessing('finalize')).toEqual({ run: 'procurement', next: 'stockmovement' });
   });
   it('unknown value falls back to the first stage (no crash / stuck)', () => {
     expect(planProcessing('bogus' as ProcessingStage)).toEqual({ run: 'gapfill', next: 'rfm' });

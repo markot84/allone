@@ -12,10 +12,18 @@
  * Each pass either finishes a stage and re-enqueues, or completes the whole sync and resets state.
  */
 
-export type ProcessingStage = 'gapfill' | 'rfm' | 'finalize';
+export type ProcessingStage = 'gapfill' | 'rfm' | 'procurement' | 'stockmovement';
 
-/** Ordered processing sub-stages — each runs in its own bounded pass for very heavy brands. */
-export const PROCESSING_ORDER: ProcessingStage[] = ['gapfill', 'rfm', 'finalize'];
+/**
+ * Ordered processing sub-stages — each runs in its own bounded pass for very heavy brands.
+ * PER-60: 'finalize' (procurement+stock-movement bundled) was split — refreshStockMovement alone
+ * takes ~20min for an 88k-SKU brand, so bundling it with procurement blew the 25min budget and the
+ * pass was hard-killed. One heavy module per checkpoint ⇒ each gets a fresh pass when needed.
+ */
+export const PROCESSING_ORDER: ProcessingStage[] = ['gapfill', 'rfm', 'procurement', 'stockmovement'];
+
+/** Legacy persisted value (pre-split) — resume it at the first of its two halves. */
+const LEGACY_FINALIZE = 'finalize';
 
 export interface SyncPersistedState {
   /** Catalog has been fully fetched (ingestion done); we're in the processing stage. */
@@ -51,12 +59,14 @@ export function planAfterCatalog(rt: {
  * Which processing sub-stage runs on this pass, and what comes next.
  * `next === null` means this was the last sub-stage → the whole sync is done after it.
  */
-export function planProcessing(current: ProcessingStage | null | undefined): {
+export function planProcessing(current: ProcessingStage | string | null | undefined): {
   run: ProcessingStage;
   next: ProcessingStage | null;
 } {
-  const known = current && PROCESSING_ORDER.includes(current);
-  const idx = known ? PROCESSING_ORDER.indexOf(current as ProcessingStage) : 0;
+  // legacy pre-split checkpoint: 'finalize' meant procurement+stock-movement → resume at procurement
+  const normalized = current === LEGACY_FINALIZE ? 'procurement' : current;
+  const known = normalized && PROCESSING_ORDER.includes(normalized as ProcessingStage);
+  const idx = known ? PROCESSING_ORDER.indexOf(normalized as ProcessingStage) : 0;
   const run = PROCESSING_ORDER[idx];
   const next = PROCESSING_ORDER[idx + 1] ?? null;
   return { run, next };
