@@ -22,10 +22,11 @@ export async function uploadBrandAsset(
   assetType: 'logo' | 'image' | 'document' = 'image'
 ): Promise<string> {
   try {
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/svg+xml', 'image/webp', 'image/gif'];
+    // Validate file type. SEC-L7: SVG is excluded — an uploaded SVG can carry inline
+    // <script>, which would be stored XSS when the asset is opened same-origin.
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!allowedTypes.includes(file.type) && assetType !== 'document') {
-      throw new Error('Μη υποστηριζόμενος τύπος αρχείου. Χρησιμοποιήστε: JPEG, PNG, SVG, WebP, GIF');
+      throw new Error('Μη υποστηριζόμενος τύπος αρχείου. Χρησιμοποιήστε: JPEG, PNG, WebP, GIF');
     }
 
     // Validate file size (max 5MB)

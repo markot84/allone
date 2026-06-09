@@ -729,8 +729,10 @@ function parseLooseNumber(value: string | number | null | undefined): number {
 // Validate and transform Products
 // Primary schema: FINAL_Unified_Production_Schema (SKU_ID, Product_Name, Category, Sell_Price, Cost_Price, Stock_On_Hand, Qty_Sold_Period, Revenue_Period, Supplier, Brand, First_Available_Date, Last_Sale_Date, Priority_Flag, Stock_Age_Days, Gross_Profit, Gross_Margin_%, Margin_Tier)
 function validateProduct(row: Record<string, string>, index: number): { valid: boolean; data?: Product; error?: string } {
-  // Debug: Log available keys for first few rows
-  if (index < 3) {
+  // Debug: Log available keys for first few rows.
+  // CODE-4: gate behind DEV — these logs include commercial values (price/cost/margin/SKU)
+  // and must not run in production.
+  if (import.meta.env.DEV && index < 3) {
     logger.debug('[Product Row] Available keys:', { row: index, count: Object.keys(row).length, keys: Object.keys(row) });
     const relevantKeys = Object.keys(row).filter(k =>
       k.includes('stock') || k.includes('price') || k.includes('cost') ||
@@ -964,13 +966,24 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
 }
 
 // Check if this is customer-level data (each row = customer) vs segment-level (each row = aggregated segment)
-function isCustomerLevelData(objects: Record<string, string>[]): boolean {
+export function isCustomerLevelData(objects: Record<string, string>[]): boolean {
   if (objects.length === 0) return false;
   const first = objects[0];
+
+  // Detect columns by EXACT (normalized) name. The shared pick() helper does fuzzy substring
+  // matching, which mis-classifies a segment-summary file (one row per segment) as customer-level:
+  // a bare `id` column matches `customer_id` ("customer_id".includes("id")) and `purchase_frequency`
+  // matches `frequency`. That flips the file into the per-customer branch, where every row counts as
+  // one customer → each segment gets count 1 → a flat 1/N split (e.g. 20% across 5 segments).
+  const normCols = new Set(
+    Object.keys(first).map((k) => k.toLowerCase().replace(/\s+/g, '_').replace(/[()]/g, ''))
+  );
+  const hasCol = (...names: string[]) => names.some((n) => normCols.has(n));
   const segmentCol = (r: Record<string, string>) =>
     pick(r, 'rfm_segment', 'segment', 'segment_name', 'name');
-  const hasSegmentCol = !!segmentCol(first);
-  const hasCustomerCol = !!pick(first, 'customerid', 'customer_id', 'user_id', 'client_id', 'email');
+
+  const hasSegmentCol = hasCol('rfm_segment', 'segment', 'segment_name', 'name');
+  const hasCustomerCol = hasCol('customerid', 'customer_id', 'user_id', 'client_id', 'email');
   if (!hasSegmentCol || !hasCustomerCol) return false;
 
   // Σύνοψη segments (π.χ. 9 γραμμές, μία ανά segment, διαφορετικά ονόματα): όχι customer-level
@@ -978,7 +991,7 @@ function isCustomerLevelData(objects: Record<string, string>[]): boolean {
     const names = objects.map((r) => segmentCol(r).toLowerCase().trim()).filter(Boolean);
     const unique = new Set(names);
     if (unique.size === objects.length) {
-      const looksLikeCustomerMetrics = !!pick(first, 'recency', 'frequency', 'monetary', 'r_score', 'f_score', 'rfm_score');
+      const looksLikeCustomerMetrics = hasCol('recency', 'frequency', 'monetary', 'r_score', 'f_score', 'rfm_score');
       if (!looksLikeCustomerMetrics) return false;
     }
   }

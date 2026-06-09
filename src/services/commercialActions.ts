@@ -41,6 +41,13 @@ export async function saveCommercialAction(
 ): Promise<CommercialAction> {
   const now = new Date().toISOString();
   const id = action.id || `ca_${Date.now()}`;
+  // LOGIC-18: this is a full-document overwrite, so on update we must carry the ORIGINAL
+  // createdAt forward — otherwise every edit re-stamps it to now and the audit trail is lost.
+  let createdAt = now;
+  if (action.id) {
+    const existing = await FirestoreService.getDocument<CommercialAction>('commercial_actions', action.id);
+    createdAt = existing?.createdAt ?? now;
+  }
   const doc: CommercialAction = {
     id,
     brandId,
@@ -54,7 +61,7 @@ export async function saveCommercialAction(
     targets: action.targets,
     source: action.source,
     strategyRef: action.strategyRef,
-    createdAt: now,
+    createdAt,
     updatedAt: now,
   };
   await FirestoreService.setDocument('commercial_actions', id, doc as unknown as Record<string, unknown>);

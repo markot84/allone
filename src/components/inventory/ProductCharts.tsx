@@ -19,7 +19,7 @@ interface ProductChartsProps {
 }
 
 export function ProductCharts({ isOpen, onClose, products, supplierTodMap, useProcurementRowModel, aggregateCharts, totalProducts }: ProductChartsProps) {
-  // Debug: Log products count and sample data
+  // Debug: Log products count and sample data (dev-only via devLog).
   useEffect(() => {
     if (isOpen) {
       logger.debug('[ProductCharts] Products count:', { count: products.length });

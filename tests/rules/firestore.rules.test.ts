@@ -593,3 +593,60 @@ describe('J. collectionGroup(members) self-scoped query', () => {
     await assertFails(getDocs(collectionGroup(db, 'members')));
   });
 });
+
+// ===========================================================================================
+// K. SEC-M2 — brand.createdBy is immutable on update (persistent-backdoor block)
+//    createdBy is trusted as a membership/ownership signal (isBrandMember / isBrandOwnerOrAdmin
+//    / Storage rules). It was mutable on update, letting an owner/admin re-point it and keep
+//    access after removal. The update rule now pins createdBy == resource.data.createdBy.
+// ===========================================================================================
+
+describe('K. SEC-M2 brand.createdBy immutable on update', () => {
+  it('lets an owner update a brand field without touching createdBy', async () => {
+    const db = authed(OWNER_A);
+    await assertSucceeds(updateDoc(doc(db, `brands/${BRAND_A}`), { name: 'Brand A renamed' }));
+  });
+
+  it('denies an owner changing brand.createdBy', async () => {
+    const db = authed(OWNER_A);
+    await assertFails(updateDoc(doc(db, `brands/${BRAND_A}`), { createdBy: 'attackerUid' }));
+  });
+
+  it('denies an admin changing brand.createdBy (even to their own uid)', async () => {
+    const db = authed(ADMIN_A);
+    await assertFails(updateDoc(doc(db, `brands/${BRAND_A}`), { createdBy: ADMIN_A }));
+  });
+});
+
+// ===========================================================================================
+// L. SEC-M10 — member create pins request.resource.data.userId == auth.uid
+//    The create rule pinned the doc id (memberId == auth.uid) but not the userId FIELD, so a
+//    brand creator could mint a member doc carrying another user's userId — which the
+//    collection-group `where userId == X` query then surfaces in the victim's brand list.
+// ===========================================================================================
+
+describe('L. SEC-M10 member create userId pin', () => {
+  const BRAND_C = 'brandC';
+  const CREATOR_C = 'creatorC';
+
+  beforeEach(async () => {
+    // A brand whose creator has NOT yet self-provisioned a members doc (so `create` fires).
+    await seed(async (db) => {
+      await setDoc(doc(db, `brands/${BRAND_C}`), { name: 'Brand C', createdBy: CREATOR_C });
+    });
+  });
+
+  it('lets the brand creator self-provision an owner member with their OWN userId', async () => {
+    const db = authed(CREATOR_C);
+    await assertSucceeds(
+      setDoc(doc(db, `brands/${BRAND_C}/members/${CREATOR_C}`), { userId: CREATOR_C, role: 'owner' }),
+    );
+  });
+
+  it('denies a member-create whose userId payload is a DIFFERENT uid (CG-query spoofing)', async () => {
+    const db = authed(CREATOR_C);
+    await assertFails(
+      setDoc(doc(db, `brands/${BRAND_C}/members/${CREATOR_C}`), { userId: OUTSIDER, role: 'owner' }),
+    );
+  });
+});

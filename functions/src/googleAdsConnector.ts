@@ -482,7 +482,8 @@ export async function selectGoogleAdsAccount(brandId: string, customerId: string
 async function listAccessibleCustomers(accessToken: string): Promise<GoogleAdsCustomer[]> {
   const { developerToken, loginCustomerId } = getCredentials();
 
-  logger.info(`[GoogleAds] DIAG listAccessible — loginCustomerId="${loginCustomerId}" devToken="${developerToken.slice(0,6)}..." rawEnv="${(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID || '').slice(0,30)}"`);
+  // SEC-L14: log only presence/shape of credentials, never token bytes/prefix.
+  logger.info(`[GoogleAds] DIAG listAccessible — loginCustomerIdSet=${Boolean(loginCustomerId)} devTokenPresent=${Boolean(developerToken)} rawEnvSet=${Boolean(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID)}`);
 
   try {
     const headers: Record<string, string> = {

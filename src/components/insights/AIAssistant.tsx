@@ -67,6 +67,17 @@ interface Message {
   pendingInfoText?: string;
 }
 
+// SEC-L10: web-source URLs come from AI/web-search output — only allow http(s)
+// before rendering a navigable link, so a `javascript:`/`data:` URL can't fire on click.
+function toHttpUrl(url: string): string | undefined {
+  try {
+    const p = new URL(url).protocol;
+    return p === 'http:' || p === 'https:' ? url : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const MARK_VOICE_REPLIES_KEY = 'mark_voice_replies_enabled';
 const VOICE_AUTO_SUBMIT_DELAY_MS = 2000;
 const MARK_START_VOICE_EVENT = 'performance-plus:start-mark-voice';
@@ -224,7 +235,7 @@ const MarkMessageItem = memo(function MarkMessageItem({
               {message.webSources.map((source, idx) => (
                 <a
                   key={idx}
-                  href={source.url}
+                  href={toHttpUrl(source.url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block text-xs p-2 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] transition-colors"

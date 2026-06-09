@@ -77,8 +77,10 @@ export function encryptToken(plaintext: string | null | undefined): string {
     const payload = Buffer.concat([enc, tag]);
     return `${PREFIX}${nonce.toString('base64url')}:${payload.toString('base64url')}`;
   } catch (err) {
-    logger.error('[tokenCrypto] encrypt failed (fail-open, returning plaintext):', { alertKey: ALERT.tokenCryptoFailed, err });
-    return plaintext;
+    // SEC-L2: fail CLOSED on a cipher error too (not just the missing-key path above) —
+    // refuse to persist a connector token in plaintext rather than silently downgrading.
+    logger.error('[tokenCrypto] encrypt failed — refusing to store connector token in plaintext:', { alertKey: ALERT.tokenCryptoFailed, err });
+    throw new Error('Connector token encryption failed');
   }
 }
 

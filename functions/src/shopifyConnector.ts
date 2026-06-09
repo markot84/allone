@@ -231,9 +231,12 @@ export async function fetchShopifyData(brandId: string): Promise<{
       for (const o of orders) {
         const shopifyCid = o.customer_id != null && o.customer_id !== '' ? String(o.customer_id) : '';
         const emailIdentity = getCustomerEmailIdentity(o.email || o.contact_email);
+        // LOGIC-4: parenthesize the customer-name ternary. Without the parens the `||` chain
+        // binds tighter than `?:`, so any truthy billing/shipping name forced the customer
+        // template branch (→ "undefined undefined" when customer fields were absent).
         const shopifyName = [o.billing_address?.first_name, o.billing_address?.last_name].filter(Boolean).join(' ').trim()
           || [o.shipping_address?.first_name, o.shipping_address?.last_name].filter(Boolean).join(' ').trim()
-          || o.customer?.first_name && o.customer?.last_name ? `${o.customer.first_name} ${o.customer.last_name}`.trim() : '';
+          || (o.customer?.first_name && o.customer?.last_name ? `${o.customer?.first_name} ${o.customer?.last_name}`.trim() : '');
         batchItems.push({
           id: `shopify_${o.id}`,
           data: {

@@ -174,7 +174,9 @@ function computeDynamicBudgetSplit(campaigns: Campaign[]): { split: { googleAds:
   if (totalSpend > 0) {
     const googleAds = Math.round((googleSpend / totalSpend) * 90);
     const meta = 90 - googleAds;
-    return { split: { googleAds, meta, organic: 10, other: 0 }, source: 'data' };
+    // LOGIC-14: this is a spend-based inference, not revenue-backed data — label it 'fallback'
+    // so consumers don't present it as a data-driven split.
+    return { split: { googleAds, meta, organic: 10, other: 0 }, source: 'fallback' };
   }
 
   return { split: { googleAds: 55, meta: 35, organic: 10, other: 0 }, source: 'fallback' };

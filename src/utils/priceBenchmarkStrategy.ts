@@ -189,7 +189,10 @@ export function filterProductsByPriceBenchmarkScope<T extends BenchmarkPriceFiel
 /** 0–100: υψηλό = ισχυρό πλεονέκτημα τιμής έναντι αγοράς. */
 export function calculatePriceBenchmarkAdvantageScore(b: BenchmarkPriceFields | undefined): number {
   if (!b || b.benchmarkPrice <= 0) return 22;
-  if (b.priceDiff >= 0) return 32 + Math.min(28, b.priceDiff);
-  const depth = Math.min(55, -b.priceDiff * 2.2);
-  return Math.round(48 + depth);
+  // LOGIC-6: cheaper-than-market (priceDiff < 0) is the advantage, so the score must
+  // DECREASE as priceDiff rises. The old two-branch form rewarded overpriced products
+  // (at-market 32, +30% → 60). One continuous, monotone-decreasing function, clamped:
+  // −30 → 100, 0 → 50, +30 → 0.
+  const score = 50 - b.priceDiff * 2.2;
+  return Math.round(Math.max(0, Math.min(100, score)));
 }

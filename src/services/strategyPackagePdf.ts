@@ -1,10 +1,11 @@
 import type { SharedPackageData } from './strategyPackageShare';
+import { escapeHtml } from '../utils/escapeHtml';
 
 function weightBar(label: string, value: number): string {
   const barWidth = Math.round(value * 2.5);
   return `
     <div style="display:flex;align-items:center;gap:10px;margin:4px 0">
-      <span style="width:90px;font-size:12px;color:#4A4A4A">${label}</span>
+      <span style="width:90px;font-size:12px;color:#4A4A4A">${escapeHtml(label)}</span>
       <div style="flex:1;height:6px;background:#F5F5F5;border-radius:3px;overflow:hidden">
         <div style="width:${barWidth}%;height:100%;background:#F97316;border-radius:3px"></div>
       </div>
@@ -26,7 +27,7 @@ export function generatePackageHtml(data: SharedPackageData): string {
     const pct = Object.entries(data.budgetAllocation)
       .find(([k]) => ch.toLowerCase().includes(k) || k.includes(ch.toLowerCase().split(' ')[0]));
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#FAFAFA;border-radius:8px;margin:4px 0">
-      <span style="font-size:13px;color:#1A1A1A"><strong>${i + 1}.</strong> ${ch}</span>
+      <span style="font-size:13px;color:#1A1A1A"><strong>${i + 1}.</strong> ${escapeHtml(ch)}</span>
       ${pct ? `<span style="font-size:11px;font-weight:600;color:#F97316">${pct[1]}%</span>` : ''}
     </div>`;
   }).join('');
@@ -35,13 +36,16 @@ export function generatePackageHtml(data: SharedPackageData): string {
     const pct = Object.entries(data.budgetAllocation)
       .find(([k]) => ch.toLowerCase().includes(k) || k.includes(ch.toLowerCase().split(' ')[0]));
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;margin:3px 0">
-      <span style="font-size:12px;color:#4A4A4A">${data.primaryChannels.length + i + 1}. ${ch}</span>
+      <span style="font-size:12px;color:#4A4A4A">${data.primaryChannels.length + i + 1}. ${escapeHtml(ch)}</span>
       ${pct ? `<span style="font-size:11px;color:#9CA3AF">${pct[1]}%</span>` : ''}
     </div>`;
   }).join('');
 
+  // SEC-C2: escape FIRST, then apply the structural `||`→paragraph transform — escaping
+  // after would neutralize our own injected <p> tags; escaping before is safe because the
+  // structural markers (`||`, `—`, `•`) contain none of the escaped characters.
   const rationaleHtml = data.rationale
-    ? data.rationale
+    ? escapeHtml(data.rationale)
         .replace(/\|\|/g, '</p><p style="margin:8px 0;font-size:13px;color:#4A4A4A;line-height:1.6">')
         .replace(/—/g, ',')
         .replace(/•\s*/g, '<br>· ')
@@ -51,7 +55,7 @@ export function generatePackageHtml(data: SharedPackageData): string {
 <html lang="el">
 <head>
 <meta charset="UTF-8">
-<title>Strategy Package${data.brandName ? ` — ${data.brandName}` : ''}</title>
+<title>Strategy Package${data.brandName ? ` — ${escapeHtml(data.brandName)}` : ''}</title>
 <style>
   @media print {
     body { margin: 0; }
@@ -124,7 +128,7 @@ export function generatePackageHtml(data: SharedPackageData): string {
 <body>
   <div class="header">
     <div>
-      <div class="brand-name">${data.brandName || 'Strategy Package'}</div>
+      <div class="brand-name">${data.brandName ? escapeHtml(data.brandName) : 'Strategy Package'}</div>
       <div class="date">${date}</div>
     </div>
     <div class="logo">≠</div>
@@ -133,19 +137,19 @@ export function generatePackageHtml(data: SharedPackageData): string {
   <div class="meta-grid">
     <div class="meta-card">
       <div class="meta-label">Στρατηγική</div>
-      <div class="meta-value">${data.strategyName}</div>
+      <div class="meta-value">${escapeHtml(data.strategyName)}</div>
     </div>
     <div class="meta-card">
       <div class="meta-label">Διάρκεια</div>
-      <div class="meta-value">${data.duration}</div>
+      <div class="meta-value">${escapeHtml(data.duration)}</div>
     </div>
   </div>
 
   <div class="section">
     <div class="section-title">Segments</div>
     <div>
-      ${data.idealSegments.map(s => `<span class="segment-pill ideal">${s}</span>`).join('')}
-      ${data.goodSegments.map(s => `<span class="segment-pill good">${s}</span>`).join('')}
+      ${data.idealSegments.map(s => `<span class="segment-pill ideal">${escapeHtml(s)}</span>`).join('')}
+      ${data.goodSegments.map(s => `<span class="segment-pill good">${escapeHtml(s)}</span>`).join('')}
     </div>
   </div>
 
@@ -175,8 +179,6 @@ export function generatePackageHtml(data: SharedPackageData): string {
     <div class="footer-text">Δημιουργήθηκε από Performance+ | notthesame.ai</div>
     <div class="footer-brand">≠</div>
   </div>
-
-  <script>window.onload = function() { window.print(); }</script>
 </body>
 </html>`;
 }
@@ -187,5 +189,17 @@ export function openPackagePdf(data: SharedPackageData) {
   if (win) {
     win.document.write(html);
     win.document.close();
+    // SEC-C2/PP-19: print is triggered from the opener, not an inline <script> in the
+    // written document — so it survives removing CSP script-src 'unsafe-inline' (SEC-M7).
+    // onload can be flaky on about:blank, so fall back to a timer; a guard prevents a
+    // double print dialog if both fire.
+    let printed = false;
+    const doPrint = () => {
+      if (printed) return;
+      printed = true;
+      try { win.focus(); win.print(); } catch { /* window closed by user */ }
+    };
+    win.onload = doPrint;
+    setTimeout(doPrint, 300);
   }
 }

@@ -28,7 +28,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { XMLParser } from 'fast-xml-parser';
-import { previewFileForProducts } from './import';
+import { previewFileForProducts, isCustomerLevelData } from './import';
 import { makeProduct } from '../test/helpers';
 
 // ── Minimal DOMParser polyfill (DOM surface used by the two XML parsers) ──────
@@ -428,6 +428,40 @@ describe('import.ts — product feed parsing & routing (previewFileForProducts)'
       expect(raw.name).toBe(expected.name);
       expect(raw.unique_id).toBe(expected.sku);
       expect(parseFloat(raw.price)).toBeCloseTo(expected.price);
+    });
+  });
+
+  describe('isCustomerLevelData segment-vs-customer classification', () => {
+    // A segment-SUMMARY file: one row per segment, no per-customer identifier. Must NOT be
+    // treated as customer-level — otherwise each row is counted as one customer and every
+    // segment collapses to a flat 1/N split (e.g. 20% across 5 segments). Regression for the
+    // fuzzy-pick false positives where `id`→`customer_id` and `purchase_frequency`→`frequency`.
+    const segmentSummaryRow = (id: string, name: string, count: string, pct: string) => ({
+      id, name, rfm_score: '555', count, percentage: pct, revenue_share: '28.0',
+      color: '#10B981', description: 'top', icon: '⭐', persona: 'Power Buyer',
+      lifecycle_stage: 'loyal', purchase_frequency: 'weekly', avg_basket_size: '180',
+      engagement_score: '90', price_sensitivity: 'low', device_preference: 'desktop',
+      preferred_channels: 'Email;Push', estimated_ltv: '2400', churn_risk: '8', demand_trend: 'growing',
+    });
+
+    it('classifies a segment-summary CSV (with id + purchase_frequency) as segment-level', () => {
+      const rows = [
+        segmentSummaryRow('qa-champions', 'QA Champions', '120', '4.5'),
+        segmentSummaryRow('qa-loyal', 'QA Loyal Customers', '310', '11.7'),
+        segmentSummaryRow('qa-potential', 'QA Potential Loyalists', '420', '15.8'),
+        segmentSummaryRow('qa-at-risk', 'QA At Risk', '265', '10.0'),
+        segmentSummaryRow('qa-hibernating', 'QA Hibernating', '540', '20.4'),
+      ];
+      expect(isCustomerLevelData(rows)).toBe(false);
+    });
+
+    it('still classifies a true per-customer CSV (customer_id + recency/frequency/monetary) as customer-level', () => {
+      const rows = [
+        { customer_id: 'C1', segment: 'Champions', recency: '5', frequency: '12', monetary: '900' },
+        { customer_id: 'C2', segment: 'Champions', recency: '8', frequency: '9', monetary: '600' },
+        { customer_id: 'C3', segment: 'At Risk', recency: '120', frequency: '2', monetary: '80' },
+      ];
+      expect(isCustomerLevelData(rows)).toBe(true);
     });
   });
 });
