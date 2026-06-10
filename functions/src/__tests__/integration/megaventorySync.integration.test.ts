@@ -120,6 +120,22 @@ function page(all: Row[], idField: string, body: Row): Row[] {
   const filtered = cursor != null ? all.filter((r) => Number(r[idField]) < cursor) : all;
   return filtered.slice(0, pageSize);
 }
+/**
+ * ASC variant mirroring the REAL InventoryLocationStockGet behaviour (probe-verified): rows come in
+ * ASCENDING productID order and the cursor must be GreaterThan. A DESC LessThan walk against this
+ * shape silently truncates to the first page — the live bug this mock pins against regression.
+ */
+function pageAsc(all: Row[], idField: string, body: Row): Row[] {
+  const pageSize = Number(body.ReturnTopNRecords) || 500;
+  const filters = (body.Filters as Row[] | undefined) ?? [];
+  const gt = filters.find((x) => x.SearchOperator === 'GreaterThan' && x.FieldName === idField.toLowerCase());
+  const lt = filters.find((x) => x.SearchOperator === 'LessThan' && x.FieldName === idField.toLowerCase());
+  const sorted = [...all].sort((a, b) => Number(a[idField]) - Number(b[idField]));
+  let filtered = sorted;
+  if (gt) filtered = sorted.filter((r) => Number(r[idField]) > Number(gt.SearchValue));
+  else if (lt) filtered = sorted.filter((r) => Number(r[idField]) < Number(lt.SearchValue));
+  return filtered.slice(0, pageSize);
+}
 
 // Largest simulated elapsed (ms since the pass clock origin) reached during a
 // single fetchMegaventoryData pass — used to assert no pass runs into the wall.
@@ -159,7 +175,13 @@ function installMvMock(dataset: MvDataset, msPerPage: MsPerPage = {}) {
         payload.mvProducts = page(dataset.products, 'ProductID', body);
         break;
       case 'InventoryLocationStockGet':
-        payload.mvProductStockList = page(dataset.stock, 'productID', body);
+        // real shape: ASC ordering, one row per product with nested mvStock per-location entries
+        payload.mvProductStockList = pageAsc(dataset.stock, 'productID', body).map((r) => ({
+          productID: r.productID,
+          mvStock: [
+            { InventoryLocationID: 18, StockPhysical: Number(r.qty ?? 1), StockOnHand: Number(r.qty ?? 1), SubLocation: '' },
+          ],
+        }));
         break;
       case 'SupplierClientGet':
         payload.mvSupplierClients = page(dataset.suppliers, 'SupplierClientID', body);
@@ -304,7 +326,7 @@ describe('Megaventory sync — full ingestion converges within the worker cap (n
 
   async function driveToCompletion() {
     const elapsedPerPass: number[] = [];
-    const totals = { products: 0, suppliers: 0, salesOrders: 0, purchaseOrders: 0 };
+    const totals = { products: 0, suppliers: 0, salesOrders: 0, purchaseOrders: 0, stock: 0 };
     let res: Awaited<ReturnType<typeof fetchMegaventoryData>> | undefined;
     for (let pass = 0; pass < MAX_PASSES + 2; pass++) {
       vi.setSystemTime(CLOCK_START); // each worker invocation starts a fresh 30-min clock
@@ -316,6 +338,7 @@ describe('Megaventory sync — full ingestion converges within the worker cap (n
       totals.suppliers += res.suppliers ?? 0;
       totals.salesOrders += res.salesOrders ?? 0;
       totals.purchaseOrders += res.purchaseOrders ?? 0;
+      totals.stock += res.stock ?? 0;
       if (!res.needsContinuation) break;
     }
     return { res: res!, elapsedPerPass, totals };
@@ -330,7 +353,9 @@ describe('Megaventory sync — full ingestion converges within the worker cap (n
         salesOrders: descById(50, 'SalesOrderId', 700, (id) => ({ SalesOrderId: id, SalesOrderDate: '2026-06-01' })),
         purchaseOrders: descById(50, 'PurchaseOrderId', 600, (id) => ({ PurchaseOrderId: id, PurchaseOrderDate: '2026-06-01' })),
         products: descById(600, 'ProductID', 80000, (id) => ({ ProductID: id, ProductSKU: `sku-${id}` })),
-        stock: descById(80, 'productID', 4000, (id) => ({ productID: id, productSKU: `sku-${id}` })),
+        // 1,200 stock products = 3 ASC pages → proves the GreaterThan cursor walks the FULL set
+        // (the live bug ingested only the lowest 500 = page 1)
+        stock: descById(1200, 'productID', 4000, (id) => ({ productID: id, qty: 2 })),
         suppliers: descById(120, 'SupplierClientID', 5000, (id) => ({ SupplierClientID: id, SupplierClientType: 'supplier', SupplierClientName: `s${id}` })),
       },
       { DocumentGet: 5 * MIN, SupplierClientGet: 12 * MIN, ProductGet: 2 * MIN },
@@ -351,6 +376,8 @@ describe('Megaventory sync — full ingestion converges within the worker cap (n
     expect(totals.suppliers).toBe(120);
     expect(totals.salesOrders).toBe(50);
     expect(totals.purchaseOrders).toBe(50);
+    // ASC stock walk crossed all 3 pages (1,200 products × 1 location each) — not just page 1
+    expect(totals.stock).toBe(1200);
     // whole sync finished → every resumable flag cleared for the next cycle
     const st = await connState();
     expect(st.ingestionComplete).toBeUndefined();

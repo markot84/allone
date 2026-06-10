@@ -390,12 +390,21 @@ export async function updateMegaventoryConnectorSettings(
  * Όλα τα *Get της Megaventory με ReturnTopNRecords επιστρέφουν τα "top N" σε **φθίνουσα** σειρά
  * primary id. Επόμενη σελίδα: ίδια φίλτρα + And LessThan min(id) της προηγούμενης σελίδας.
  */
-function buildMvFiltersWithCursor(base: MvFilter[], cursorField: string, cursor: number | null): MvFilter[] {
+function buildMvFiltersWithCursor(
+  base: MvFilter[],
+  cursorField: string,
+  cursor: number | null,
+  direction: 'asc' | 'desc' = 'desc'
+): MvFilter[] {
   if (cursor === null) return [...base];
   const cursorFilter: MvFilter = {
     AndOr: base.length ? 'And' : undefined,
     FieldName: cursorField,
-    SearchOperator: 'LessThan',
+    // PER-60: cursor direction must match the endpoint's natural ordering. ProductGet/DocumentGet
+    // return DESC (walk downward with LessThan); InventoryLocationStockGet returns ASC — a LessThan
+    // walk there asked for ids below page 1's (the lowest) and silently stopped at 500 products
+    // (proven live: only productIDs 34166..36594 of 34166..300662 were ever ingested).
+    SearchOperator: direction === 'asc' ? 'GreaterThan' : 'LessThan',
     SearchValue: cursor,
   };
   return [...base, cursorFilter];
@@ -410,6 +419,17 @@ function minNumericId(rows: any[], ...keys: string[]): number {
     }
   }
   return Number.isFinite(m) ? m : 0;
+}
+
+function maxNumericId(rows: any[], ...keys: string[]): number {
+  let m = 0;
+  for (const row of rows) {
+    for (const k of keys) {
+      const v = num(row?.[k]);
+      if (v > m) m = v;
+    }
+  }
+  return m;
 }
 
 function positiveNumber(value: unknown): number | null {
@@ -469,6 +489,12 @@ async function fetchAllMvPages(
     maxRuntimeMs?: number;
     /** Extra body fields merged into every page request (π.χ. includeReferencedObjects). */
     extraBody?: Record<string, unknown>;
+    /**
+     * Match the endpoint's natural ordering: 'desc' (default — ProductGet/DocumentGet, LessThan/min)
+     * or 'asc' (InventoryLocationStockGet, GreaterThan/max). Wrong direction silently truncates to
+     * the first page.
+     */
+    cursorDirection?: 'asc' | 'desc';
   }
 ): Promise<{ rows: any[]; error: string | null; nextCursor: number | null; exhausted: boolean }> {
   const pageSize = opts.pageSize ?? MV_PAGE_SIZE;
@@ -486,7 +512,8 @@ async function fetchAllMvPages(
     if (deadline && Date.now() >= deadline) {
       break;
     }
-    const filters = buildMvFiltersWithCursor(baseFilters, opts.cursorField, cursor);
+    const direction = opts.cursorDirection ?? 'desc';
+    const filters = buildMvFiltersWithCursor(baseFilters, opts.cursorField, cursor, direction);
     const body: Record<string, unknown> = {
       ReturnTopNRecords: pageSize,
       ...(opts.extraBody ?? {}),
@@ -507,13 +534,15 @@ async function fetchAllMvPages(
     }
 
     rows.push(...batch);
-    const minId = minNumericId(batch, ...opts.idKeys);
-    if (minId > 0) nextCursor = minId;
-    if (batch.length < pageSize || minId <= 0) {
+    const edgeId = direction === 'asc'
+      ? maxNumericId(batch, ...opts.idKeys)
+      : minNumericId(batch, ...opts.idKeys);
+    if (edgeId > 0) nextCursor = edgeId;
+    if (batch.length < pageSize || edgeId <= 0) {
       exhausted = true;
       break;
     }
-    cursor = minId;
+    cursor = edgeId;
     if (deadline && Date.now() >= deadline) {
       break;
     }
@@ -1517,11 +1546,15 @@ export async function fetchMegaventoryData(
     } else {
     let stRowsRaw: any[] = [];
     let stFetchErr: string | null = null;
+    // PER-60: this endpoint returns rows in ASCENDING productID order (probe-verified) — the cursor
+    // must walk upward (GreaterThan/max), or the walk silently stops after the first 500 products.
     ({ rows: stRowsRaw, error: stFetchErr } = await fetchAllMvPages('InventoryLocationStockGet', apiKey, [], {
       responseArrayKey: 'mvProductStockList',
       cursorField: 'productid',
       idKeys: ['productID', 'ProductId', 'ProductID'],
       label: 'InventoryLocationStockGet',
+      cursorDirection: 'asc',
+      maxRuntimeMs: remainingBudgetMs(),
     }));
     if (!stFetchErr && !stRowsRaw.length) {
       ({ rows: stRowsRaw, error: stFetchErr } = await fetchAllMvPages('InventoryLocationStockGet', apiKey, [], {
@@ -1529,6 +1562,8 @@ export async function fetchMegaventoryData(
         cursorField: 'productid',
         idKeys: ['productID', 'ProductId', 'ProductID'],
         label: 'InventoryLocationStockGet',
+        cursorDirection: 'asc',
+        maxRuntimeMs: remainingBudgetMs(),
       }));
     }
     if (stFetchErr) {
