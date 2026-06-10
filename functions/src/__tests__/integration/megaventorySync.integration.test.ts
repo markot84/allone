@@ -180,9 +180,13 @@ function installMvMock(dataset: MvDataset, msPerPage: MsPerPage = {}) {
           : page(dataset.products, 'ProductID', body);
         break;
       case 'InventoryLocationStockGet':
-        // real shape: ASC ordering, one row per product with nested mvStock per-location entries
+        // real shape (probe-verified): ASC ordering, one row per product with row-level
+        // Stock*Total fields plus nested mvStock per-location entries. ProductGet carries
+        // NO stock fields — this endpoint is the only stock source.
         payload.mvProductStockList = pageAsc(dataset.stock, 'productID', body).map((r) => ({
           productID: r.productID,
+          StockOnHandTotal: Number(r.qty ?? 1),
+          StockPhysicalTotal: Number(r.qty ?? 1),
           mvStock: [
             { InventoryLocationID: 18, StockPhysical: Number(r.qty ?? 1), StockOnHand: Number(r.qty ?? 1), SubLocation: '' },
           ],
@@ -359,8 +363,9 @@ describe('Megaventory sync — full ingestion converges within the worker cap (n
         purchaseOrders: descById(50, 'PurchaseOrderId', 600, (id) => ({ PurchaseOrderId: id, PurchaseOrderDate: '2026-06-01' })),
         products: descById(600, 'ProductID', 80000, (id) => ({ ProductID: id, ProductSKU: `sku-${id}` })),
         // 1,200 stock products = 3 ASC pages → proves the GreaterThan cursor walks the FULL set
-        // (the live bug ingested only the lowest 500 = page 1)
-        stock: descById(1200, 'productID', 4000, (id) => ({ productID: id, qty: 2 })),
+        // (the live bug ingested only the lowest 500 = page 1). IDs overlap the catalog so the
+        // totals→mirror→gap-fill stock chain is asserted end-to-end below.
+        stock: descById(1200, 'productID', 80000, (id) => ({ productID: id, qty: 2 })),
         suppliers: descById(120, 'SupplierClientID', 5000, (id) => ({ SupplierClientID: id, SupplierClientType: 'supplier', SupplierClientName: `s${id}` })),
       },
       { DocumentGet: 5 * MIN, SupplierClientGet: 12 * MIN, ProductGet: 2 * MIN },
@@ -383,6 +388,15 @@ describe('Megaventory sync — full ingestion converges within the worker cap (n
     expect(totals.purchaseOrders).toBe(50);
     // ASC stock walk crossed all 3 pages (1,200 products × 1 location each) — not just page 1
     expect(totals.stock).toBe(1200);
+    // (4) stock totals flowed walk → mirror → gap-fill (ProductGet has no stock fields, so this
+    //     chain is the ONLY way products.stock_level can be non-zero — the live "everything
+    //     without stock" bug).
+    const mirror = (await db.doc('megaventory_products/mv_p_80000').get()).data();
+    expect(mirror?.stockOnHand).toBe(2);
+    expect(mirror?.availableStockTotal).toBe(2);
+    const intel = (await db.doc(`products/mv_api_cat_${BRAND}_sku-80000`).get()).data();
+    expect(intel?.stock_level).toBe(2);
+    expect(intel?.stock_capacity).toBe(4);
     // whole sync finished → every resumable flag cleared for the next cycle
     const st = await connState();
     expect(st.ingestionComplete).toBeUndefined();

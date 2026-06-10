@@ -1573,7 +1573,10 @@ export async function fetchMegaventoryData(
             unitOfMeasurement: p.ProductUnitOfMeasurement || '',
             sellingPrice: num(p.ProductSellingPrice),
             purchasePrice: num(p.ProductPurchasePrice),
-            stockOnHand: num(p.ProductStockOnHandTotal),
+            // PER-60: NO stockOnHand here — ProductGet carries no stock fields at all
+            // (probe-verified 2026-06-10: ProductStockOnHandTotal does not exist in the
+            // response, so the old num() mapping wrote 0 for every product and would
+            // clobber the real totals the stock walk merges in below).
             source: 'megaventory_api',
           },
         }));
@@ -1592,9 +1595,10 @@ export async function fetchMegaventoryData(
     } else {
     let stRowsRaw: any[] = [];
     let stFetchErr: string | null = null;
+    let stExhausted = false;
     // PER-60: this endpoint returns rows in ASCENDING productID order (probe-verified) — the cursor
     // must walk upward (GreaterThan/max), or the walk silently stops after the first 500 products.
-    ({ rows: stRowsRaw, error: stFetchErr } = await fetchAllMvPages('InventoryLocationStockGet', apiKey, [], {
+    ({ rows: stRowsRaw, error: stFetchErr, exhausted: stExhausted } = await fetchAllMvPages('InventoryLocationStockGet', apiKey, [], {
       responseArrayKey: 'mvProductStockList',
       cursorField: 'productid',
       idKeys: ['productID', 'ProductId', 'ProductID'],
@@ -1603,7 +1607,7 @@ export async function fetchMegaventoryData(
       maxRuntimeMs: remainingBudgetMs(),
     }));
     if (!stFetchErr && !stRowsRaw.length) {
-      ({ rows: stRowsRaw, error: stFetchErr } = await fetchAllMvPages('InventoryLocationStockGet', apiKey, [], {
+      ({ rows: stRowsRaw, error: stFetchErr, exhausted: stExhausted } = await fetchAllMvPages('InventoryLocationStockGet', apiKey, [], {
         responseArrayKey: 'mvInventoryLocationStocks',
         cursorField: 'productid',
         idKeys: ['productID', 'ProductId', 'ProductID'],
@@ -1615,6 +1619,12 @@ export async function fetchMegaventoryData(
     if (stFetchErr) {
       referenceOk = false;
       errors.push(stFetchErr);
+    } else if (!stExhausted) {
+      // PER-60: budget truncated the walk mid-way. A partial row set would produce WRONG
+      // per-product totals below (and a half-rewritten megaventory_stock) — defer the whole
+      // phase and re-walk with a fresh budget on the continuation pass.
+      needsContinuation = true;
+      logger.warn(`[Megaventory] InventoryLocationStockGet truncated by budget for ${brandId} (${stRowsRaw.length} rows) — deferring stock to continuation pass`);
     } else {
       let stocks: any[] = normalizeInventoryStockRows(stRowsRaw);
       const items = stocks.map((s, idx) => ({
@@ -1632,8 +1642,34 @@ export async function fetchMegaventoryData(
       if (items.length) await writeBatch(db, 'megaventory_stock', brandId, items);
       counts.stock = items.length;
       totalImported += items.length;
+
+      // PER-60: per-product stock totals → megaventory_products mirrors. ProductGet returns NO
+      // stock fields (probe-verified), so this walk is the ONLY source for the mirrors'
+      // stockOnHand — which gap-fill then copies into products.stock_level. Same semantics as
+      // the PI overlay (applyMegaventoryStockOverlay): available when positive, else physical.
+      const totals = new Map<string, { available: number; physical: number }>();
+      for (const s of stocks) {
+        const pid = String(s.productID || s.ProductId || '');
+        if (!pid) continue;
+        const cur = totals.get(pid) ?? { available: 0, physical: 0 };
+        cur.available += num(s.productAvailableStockQty || s.ProductAvailableStockQty);
+        cur.physical += num(s.productPhysicalStockQty || s.ProductPhysicalStockQty);
+        totals.set(pid, cur);
+      }
+      // merge-write: rows for productIds without a mirror create sku-less stubs that gap-fill
+      // skips (deleted products return zero stock rows, so stubs stay a rare edge, not pollution)
+      const totalItems = Array.from(totals.entries()).map(([pid, t]) => ({
+        id: `mv_p_${pid}`,
+        data: {
+          productId: pid,
+          stockOnHand: t.available > 0 ? t.available : t.physical,
+          availableStockTotal: t.available,
+          physicalStockTotal: t.physical,
+        },
+      }));
+      if (totalItems.length) await writeBatch(db, 'megaventory_products', brandId, totalItems);
       stockDoneThisPass = true;
-      logger.info(`[Megaventory] Stock rows: ${items.length} imported for brand ${brandId}`);
+      logger.info(`[Megaventory] Stock rows: ${items.length} imported for brand ${brandId}; totals merged onto ${totalItems.length} product mirrors`);
     }
     } // end stock over-budget guard
     } // end stock ingestion guard
