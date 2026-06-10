@@ -1893,6 +1893,9 @@ async function resetMegaventoryResumableState(db: admin.firestore.Firestore, bra
       'megaventory.ordersIngestComplete': FieldValue.delete(),
       'megaventory.stockIngestComplete': FieldValue.delete(),
       'megaventory.suppliersIngestComplete': FieldValue.delete(),
+      // deleted-scan: the complete-flag is per-cycle, but the CURSOR survives (resume-friendly like
+      // the invoice walk — the first 133k-product backlog import should not restart from scratch).
+      'megaventory.deletedScanComplete': FieldValue.delete(),
     });
   } catch (e) {
     logger.warn(`[MegaventoryJob] could not reset resumable state for ${brandId}`, { err: e });

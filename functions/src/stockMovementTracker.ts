@@ -139,19 +139,46 @@ async function readJsonChunks<T>(
  * I/O και κόντευε το 30min hard cap του worker. Με projection: ίδια σημασιολογία, ~sec αντί λεπτά,
  * και το stream αποφεύγει να υλοποιήσει όλο το QuerySnapshot στη μνήμη καθώς ο κατάλογος μεγαλώνει.
  */
-async function readImportedStockBySku(db: Firestore, brandId: string): Promise<Map<string, number>> {
-  const out = new Map<string, number>();
+async function readImportedStockBySku(
+  db: Firestore,
+  brandId: string
+): Promise<{ stock: Map<string, number>; discontinued: Set<string> }> {
+  const stock = new Map<string, number>();
+  const discontinued = new Set<string>();
   const query = db
     .collection('products')
     .where('brandId', '==', brandId)
-    .select('sku', 'stock_level');
+    .select('sku', 'stock_level', 'discontinued_at');
   for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
     const d = doc.data();
     const sku = String(d.sku || '').trim();
     if (!sku) continue;
+    // PER-60 (deleted-products reconcile): discontinued products (deleted in the ERP, kept for
+    // history with stock 0) are EXCLUDED from snapshots — otherwise the day their stock is zeroed
+    // registers as an N-unit "sale" in the movement deltas and pollutes velocity/procurement signals.
+    if (d.discontinued_at) {
+      discontinued.add(sku);
+      continue;
+    }
     const qty = typeof d.stock_level === 'number' ? d.stock_level : 0;
     // Επιτρέπει πολλαπλά docs με ίδιο SKU (variants) — άθροιση.
-    out.set(sku, (out.get(sku) || 0) + qty);
+    stock.set(sku, (stock.get(sku) || 0) + qty);
+  }
+  return { stock, discontinued };
+}
+
+/** SKUs μαρκαρισμένα discontinued — η compute τα εξαιρεί από το union των snapshots (τα παλιά
+ *  snapshots τα περιέχουν ακόμη για έως 90 μέρες μετά τη διαγραφή). */
+async function readDiscontinuedSkus(db: Firestore, brandId: string): Promise<Set<string>> {
+  const out = new Set<string>();
+  const query = db
+    .collection('products')
+    .where('brandId', '==', brandId)
+    .select('sku', 'discontinued_at');
+  for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
+    const d = doc.data();
+    const sku = String(d.sku || '').trim();
+    if (sku && d.discontinued_at) out.add(sku);
   }
   return out;
 }
@@ -188,11 +215,13 @@ export async function captureStockSnapshot(brandId: string): Promise<{
 
   // 2) Import-based stock (πάντα διαβάζεται — covers brands χωρίς connector
   // και SKUs που υπάρχουν μόνο στο catalog).
-  const importMap = await readImportedStockBySku(db, brandId);
+  const { stock: importMap, discontinued } = await readImportedStockBySku(db, brandId);
 
   // Συνδυασμός: connector value προτεραιότητα αν υπάρχει.
   const merged = new Map<string, number>(importMap);
   for (const [sku, qty] of connectorMap.entries()) merged.set(sku, qty);
+  // PER-60: discontinued SKUs δεν μπαίνουν ΠΟΤΕ στο snapshot (ούτε από connector πλατφόρμες).
+  for (const sku of discontinued) merged.delete(sku);
 
   if (merged.size === 0) {
     logger.info(`[StockMovement] No stock data found for brand ${brandId} — skipping snapshot`);
@@ -340,6 +369,11 @@ export async function computeStockMovement(brandId: string): Promise<{
     ...(snap30 ? Object.keys(snap30.data) : []),
     ...(snap90 ? Object.keys(snap90.data) : []),
   ]);
+  // PER-60: discontinued SKUs βγαίνουν από το union — τα baseline snapshots (έως 90 μέρες πίσω) τα
+  // περιέχουν ακόμη, και χωρίς αυτό το φίλτρο η απουσία τους από το σημερινό snapshot θα μετρούσε
+  // ως dec = ολόκληρο το παλιό απόθεμα (ψεύτικη «πώληση» Ν τεμαχίων τη μέρα της διαγραφής).
+  const discontinuedNow = await readDiscontinuedSkus(db, brandId);
+  for (const sku of discontinuedNow) allSkus.delete(sku);
 
   for (const sku of allSkus) {
     const now = todayData[sku] ?? 0;

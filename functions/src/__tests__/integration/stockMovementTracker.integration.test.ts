@@ -102,4 +102,34 @@ describe('stockMovementTracker (real module, projected reads)', () => {
     expect(movement['SKU-A'].dec7d).toBe(3);
     expect(movement['SKU-B'].dec7d).toBe(0);
   });
+
+  it('excludes discontinued products from snapshots AND the movement union (no fake sale on deletion)', async () => {
+    await seedProduct('p1', 'SKU-A', 7); // live: was 10 → dec7d = 3
+    await seedProduct('p2', 'SKU-B', 0); // discontinued with stock zeroed — was 10 in the baseline
+    await db.doc('products/p2').set({ discontinued_at: new Date().toISOString() }, { merge: true });
+
+    // baseline snapshot from before the deletion — contains BOTH SKUs
+    const oldKey = ymdDaysAgo(7);
+    await db
+      .doc(`stock_snapshots/${BRAND}/days/${oldKey}/chunks/0`)
+      .set({ skuStockJson: JSON.stringify({ 'SKU-A': 10, 'SKU-B': 10 }), keyCount: 2 });
+    await db
+      .doc(`stock_snapshots/${BRAND}/days/${oldKey}`)
+      .set({ stockSnapshotChunkCount: 1, skuCount: 2, source: 'import' });
+
+    const cap = await captureStockSnapshot(BRAND);
+    expect(cap.skuCount).toBe(1); // SKU-B excluded from today's snapshot entirely
+
+    const res = await computeStockMovement(BRAND);
+    expect(res.skuCount).toBe(1);
+    const chunks = await db.collection(`stock_movement/${BRAND}/chunks`).get();
+    const movement = Object.assign(
+      {},
+      ...chunks.docs.map((d) => JSON.parse(d.data().skuMovementJson as string)),
+    );
+    expect(movement['SKU-A'].dec7d).toBe(3);
+    // the deleted product produced NO movement entry — without the union exclusion this would
+    // read dec7d = 10 (baseline 10 → absent today), i.e. a fabricated 10-unit "sale"
+    expect(movement['SKU-B']).toBeUndefined();
+  });
 });

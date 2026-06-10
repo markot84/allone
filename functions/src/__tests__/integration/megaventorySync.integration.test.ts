@@ -78,6 +78,8 @@ interface MvDataset {
   salesOrders: Row[];
   purchaseOrders: Row[];
   products: Row[]; // sorted DESC by ProductID
+  /** served when the request body carries showDeleted (the deleted-products reconcile walk) */
+  deletedProducts?: Row[];
   stock: Row[];
   suppliers: Row[];
   customReportRows: Row[];
@@ -172,7 +174,10 @@ function installMvMock(dataset: MvDataset, msPerPage: MsPerPage = {}) {
         payload.mvPurchaseOrders = page(dataset.purchaseOrders, 'PurchaseOrderId', body);
         break;
       case 'ProductGet':
-        payload.mvProducts = page(dataset.products, 'ProductID', body);
+        // the deleted-products reconcile walk sends showDeleted — serve the deleted dataset
+        payload.mvProducts = body.showDeleted
+          ? page(dataset.deletedProducts ?? [], 'ProductID', body)
+          : page(dataset.products, 'ProductID', body);
         break;
       case 'InventoryLocationStockGet':
         // real shape: ASC ordering, one row per product with nested mvStock per-location entries
@@ -406,5 +411,86 @@ describe('Megaventory sync — full ingestion converges within the worker cap (n
     expect(worst).toBeLessThanOrEqual(HARD_CAP_MS);
     const st = await connState();
     expect(st.processingStage).toBeUndefined(); // chain completed and reset
+  });
+});
+
+describe('Megaventory sync — deleted-products lifecycle (import, tombstone, undelete)', () => {
+  async function purgeBrandCatalog() {
+    for (const coll of ['megaventory_products', 'products']) {
+      const snap = await db.collection(coll).where('brandId', '==', BRAND).get();
+      for (let i = 0; i < snap.docs.length; i += 400) {
+        const batch = db.batch();
+        for (const d of snap.docs.slice(i, i + 400)) batch.delete(d.ref);
+        await batch.commit();
+      }
+    }
+  }
+
+  async function runCycle() {
+    let res: Awaited<ReturnType<typeof fetchMegaventoryData>> | undefined;
+    for (let pass = 0; pass < 10; pass++) {
+      vi.setSystemTime(CLOCK_START);
+      res = await fetchMegaventoryData(BRAND, { mode: 'manual' });
+      if (!res.needsContinuation) break;
+    }
+    return res!;
+  }
+
+  async function mirrorDoc(pid: number) {
+    const snap = await db.doc(`megaventory_products/mv_p_${pid}`).get();
+    return snap.exists ? snap.data()! : null;
+  }
+  async function intelDoc(sku: string) {
+    const snap = await db.doc(`products/mv_api_cat_${BRAND}_${sku}`).get();
+    return snap.exists ? snap.data()! : null;
+  }
+
+  const liveProduct = (id: number) => ({ ProductID: id, ProductSKU: `sku-${id}`, ProductDescription: `P${id}` });
+
+  it('imports the deleted backlog tombstoned, marks later deletions, heals undeletes', async () => {
+    await purgeBrandCatalog();
+    await seedConnector();
+
+    // ── Cycle 1: 5 live + 2 deleted (never synced → full import, tombstoned) ──
+    installMvMock({
+      ...emptyDataset(),
+      products: [500, 499, 498, 497, 496].map(liveProduct),
+      deletedProducts: [900, 899].map(liveProduct),
+    });
+    const res1 = await runCycle();
+    expect(res1.success).toBe(true);
+    expect(res1.deletedImported).toBe(2);
+    const dead900 = await mirrorDoc(900);
+    expect(dead900?.mvDeletedAt).toBeTruthy();
+    expect(dead900?.stockOnHand).toBe(0);
+    expect((await mirrorDoc(500))?.mvDeletedAt).toBeUndefined();
+    // gap-fill propagated marker + zero stock into the intelligence catalog
+    const intel900 = await intelDoc('sku-900');
+    expect(intel900?.discontinued_at).toBeTruthy();
+    expect(intel900?.stock_level).toBe(0);
+    expect((await intelDoc('sku-500'))?.discontinued_at).toBeUndefined();
+
+    // ── Cycle 2: product 500 gets deleted in MV → tombstoned (not re-imported) ──
+    installMvMock({
+      ...emptyDataset(),
+      products: [499, 498, 497, 496].map(liveProduct),
+      deletedProducts: [900, 899, 500].map(liveProduct),
+    });
+    const res2 = await runCycle();
+    expect(res2.deletedMarked).toBe(1);
+    expect((await mirrorDoc(500))?.mvDeletedAt).toBeTruthy();
+    expect((await intelDoc('sku-500'))?.discontinued_at).toBeTruthy();
+    expect((await intelDoc('sku-500'))?.stock_level).toBe(0);
+
+    // ── Cycle 3: product 900 is UNDELETED in MV → marker cleared, doc heals ──
+    installMvMock({
+      ...emptyDataset(),
+      products: [900, 499, 498, 497, 496].map(liveProduct),
+      deletedProducts: [899, 500].map(liveProduct),
+    });
+    const res3 = await runCycle();
+    expect(res3.deletedUnmarked).toBe(1);
+    expect((await mirrorDoc(900))?.mvDeletedAt).toBeUndefined();
+    expect((await intelDoc('sku-900'))?.discontinued_at).toBeUndefined();
   });
 });

@@ -80,6 +80,13 @@ const MV_STAGE_RESERVE_MS: Record<string, number> = {
   procurement: 10 * 60 * 1000,
   stockmovement: 22 * 60 * 1000,
 };
+/**
+ * PER-60: deleted-products walk (ProductGet showOnlyDeleted). The first cycle imports the whole
+ * deleted backlog (e-tennis: ~133k products → ~133 pages + writes), later cycles only diff. Don't
+ * START a chunk of it without this much budget; the cursor makes it resumable across passes anyway.
+ */
+const MV_DELETED_SCAN_RESERVE_MS = 8 * 60 * 1000;
+const MV_DELETED_SCAN_PAGE_SIZE = 1000;
 const MV_INVOICE_BACKFILL_PAGE_SIZE = 100;
 /** Manual connectorSync έχει 20' timeout· κρατάμε buffer για Firestore writes / response. */
 const MV_INVOICE_BACKFILL_RUNTIME_MS = 18 * 60 * 1000;
@@ -961,13 +968,20 @@ async function mergeMegaventoryApiCatalogProducts(
   const catalogSnap = await db.collection('megaventory_products').where('brandId', '==', brandId).get();
   const items: { id: string; data: Record<string, unknown> }[] = [];
   const seenSku = new Set<string>();
+  const deletedSkus = new Set<string>();
   for (const doc of catalogSnap.docs) {
     const p = doc.data();
     const sku = String(p.sku ?? '').trim();
     if (!sku || seenSku.has(sku)) continue;
     seenSku.add(sku);
+    // PER-60 (deleted-products reconcile): mvDeletedAt → the intelligence doc stays (history,
+    // invoice attribution) but carries discontinued_at and ZERO stock, so dashboards/procurement
+    // can tell "delisted in the ERP" from "sold out". Reversible: an unmarked source doc on a later
+    // cycle rebuilds the doc here without these fields (this is a purge-then-rewrite).
+    const isDeleted = Boolean(p.mvDeletedAt);
+    if (isDeleted) deletedSkus.add(sku);
     if (reportSkus.has(sku)) continue;
-    const stock = num(p.stockOnHand);
+    const stock = isDeleted ? 0 : num(p.stockOnHand);
     const sell = num(p.sellingPrice);
     const purchase = num(p.purchasePrice);
     const name = String(p.name ?? '').trim() || sku;
@@ -982,10 +996,31 @@ async function mergeMegaventoryApiCatalogProducts(
         price: sell,
         cost_price: purchase,
         stock_level: stock,
-        stock_capacity: Math.max(stock * 2, stock),
+        stock_capacity: isDeleted ? 0 : Math.max(stock * 2, stock),
         source: PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE,
+        ...(isDeleted ? { discontinued_at: p.mvDeletedAt } : {}),
       },
     });
+  }
+  // PER-60: report-covered (normalized-source) docs are NOT rebuilt by gap-fill — patch the ones
+  // whose source product is deleted (and heal ones that reappeared) so the marker can't go stale.
+  const normalizedPatches: { ref: FirebaseFirestore.DocumentReference; data: Record<string, unknown> }[] = [];
+  for (const doc of snap.docs) {
+    if (doc.data().source !== MEGAVENTORY_NORMALIZED_SOURCE) continue;
+    const sku = String(doc.data().sku ?? '').trim();
+    if (!sku) continue;
+    const isDeleted = deletedSkus.has(sku);
+    const wasMarked = Boolean(doc.data().discontinued_at);
+    if (isDeleted && !wasMarked) {
+      normalizedPatches.push({ ref: doc.ref, data: { discontinued_at: FieldValue.serverTimestamp(), stock_level: 0, stock_capacity: 0 } });
+    } else if (!isDeleted && wasMarked) {
+      normalizedPatches.push({ ref: doc.ref, data: { discontinued_at: FieldValue.delete() } });
+    }
+  }
+  for (let i = 0; i < normalizedPatches.length; i += 400) {
+    const batch = db.batch();
+    for (const p of normalizedPatches.slice(i, i + 400)) batch.set(p.ref, p.data, { merge: true });
+    await batch.commit();
   }
   if (!items.length) return 0;
   await writeBatch(db, 'products', brandId, items);
@@ -1021,6 +1056,10 @@ export interface MegaventorySyncResult {
   /** SKU που προστέθηκαν στη συλλογή `products` από πλήρες ProductGet (έλλειψη από custom report). */
   apiCatalogGapFill?: number;
   rfm?: MegaventoryRfmCounts;
+  /** PER-60: deleted-products reconcile — imported (new tombstones), marked (existing → deleted), unmarked (reappeared). */
+  deletedImported?: number;
+  deletedMarked?: number;
+  deletedUnmarked?: number;
   error?: string;
 }
 
@@ -1068,6 +1107,11 @@ export async function fetchMegaventoryData(
   const ordersIngestComplete = ingestionAlreadyComplete || conn.ordersIngestComplete === true;
   const stockIngestComplete = ingestionAlreadyComplete || conn.stockIngestComplete === true;
   const suppliersIngestComplete = ingestionAlreadyComplete || conn.suppliersIngestComplete === true;
+  // PER-60: deleted-products reconcile (tombstone, never delete). Walks ProductGet showOnlyDeleted
+  // and marks/unmarks `mvDeletedAt` on catalog docs so removed ERP products stop polluting stock,
+  // movement and procurement while their history stays analyzable.
+  const deletedScanComplete = ingestionAlreadyComplete || conn.deletedScanComplete === true;
+  const deletedScanCursor = positiveNumber(conn.deletedScanCursor);
   const shouldRefreshDocuments = options.skipDocuments !== true;
   let docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
   const invoiceBackfillPending = conn.invoiceDocumentBackfillComplete !== true;
@@ -1146,6 +1190,8 @@ export async function fetchMegaventoryData(
   let ordersDoneThisPass = false;
   let stockDoneThisPass = false;
   let suppliersDoneThisPass = false;
+  let deletedScanDoneThisPass = false;
+  let deletedScanResult: Record<string, unknown> | null = null;
 
   try {
     const skipDocumentsThisPass =
@@ -1637,6 +1683,154 @@ export async function fetchMegaventoryData(
     } // end suppliers reserve guard
     } // end suppliers ingestion guard
 
+    // ── Deleted products (import + tombstone reconcile) ──────────────
+    // PER-60: MV stops returning ANY data for deleted products in the normal sync, so our mirrors
+    // would freeze at last-seen stock forever. Per the agreed requirements (Makis 2026-06-10): keep
+    // deleted products (history/statistics), import the FULL deleted backlog (~133k for e-tennis,
+    // first cycle only — later cycles diff), mark with `mvDeletedAt`, zero their stock, and unmark
+    // products that reappear (MV supports undelete). Budgeted + cursor-resumable like every phase.
+    if (!ingestionAlreadyComplete && !deletedScanComplete && invoiceIngestComplete) {
+    if (remainingBudgetMs() < MV_DELETED_SCAN_RESERVE_MS) {
+      needsContinuation = true;
+      logger.warn(`[Megaventory] insufficient budget reserve before deleted-products scan for ${brandId} — deferring to continuation pass`);
+    } else {
+      const { rows: delRows, error: delFetchErr, exhausted: delExhausted, nextCursor: delNextCursor } = await fetchAllMvPages('ProductGet', apiKey, [], {
+        responseArrayKey: 'mvProducts',
+        cursorField: 'ProductID',
+        idKeys: ['ProductID', 'ProductId'],
+        label: 'ProductGet (deleted scan)',
+        pageSize: MV_DELETED_SCAN_PAGE_SIZE,
+        extraBody: { showDeleted: 'showOnlyDeleted', includeReferencedObjects: true },
+        maxRuntimeMs: remainingBudgetMs(),
+        initialCursor: deletedScanCursor ?? undefined,
+      });
+      if (delFetchErr) {
+        referenceOk = false;
+        errors.push(delFetchErr);
+      } else {
+        // Current mirror state (projected): which productIds exist, which are already tombstoned.
+        const mirror = await db.collection('megaventory_products')
+          .where('brandId', '==', brandId)
+          .select('productId', 'mvDeletedAt')
+          .get();
+        const existingIds = new Set<string>();
+        const markedIds = new Set<string>();
+        for (const doc of mirror.docs) {
+          const pid = String(doc.data().productId ?? '').trim();
+          if (!pid) continue;
+          existingIds.add(pid);
+          if (doc.data().mvDeletedAt) markedIds.add(pid);
+        }
+
+        const toImport: { id: string; data: Record<string, unknown> }[] = [];
+        const newlyMarkedPids: string[] = [];
+        const walkedPids = new Set<string>();
+        for (const p of delRows as any[]) {
+          const pid = String(p.ProductID || p.ProductId || '').trim();
+          if (!pid) continue;
+          walkedPids.add(pid);
+          if (!existingIds.has(pid)) {
+            // never synced (deleted before we existed) → import full record, tombstoned, zero stock
+            toImport.push({
+              id: `mv_p_${pid}`,
+              data: {
+                productId: pid,
+                sku: p.ProductSKU || '',
+                name: p.ProductDescription || '',
+                longDescription: p.ProductLongDescription || '',
+                category: extractMvCategory(p as Record<string, unknown>),
+                unitOfMeasurement: p.ProductUnitOfMeasurement || '',
+                sellingPrice: num(p.ProductSellingPrice),
+                purchasePrice: num(p.ProductPurchasePrice),
+                stockOnHand: 0,
+                source: 'megaventory_api',
+                mvDeletedAt: FieldValue.serverTimestamp(),
+              },
+            });
+          } else if (!markedIds.has(pid)) {
+            // known product deleted since our last cycle → tombstone it
+            newlyMarkedPids.push(pid);
+          }
+        }
+
+        if (toImport.length) await writeBatch(db, 'megaventory_products', brandId, toImport);
+
+        for (let i = 0; i < newlyMarkedPids.length; i += 400) {
+          const batch = db.batch();
+          for (const pid of newlyMarkedPids.slice(i, i + 400)) {
+            batch.set(
+              db.collection('megaventory_products').doc(sanitizeFirestoreDocId(`mv_p_${pid}`)),
+              { mvDeletedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() },
+              { merge: true }
+            );
+          }
+          await batch.commit();
+        }
+
+        // Zero stock rows of newly tombstoned products (preserve forensics in stockAtDeletion).
+        let zeroedStockRows = 0;
+        if (newlyMarkedPids.length) {
+          const markedSet = new Set(newlyMarkedPids);
+          const stockSnap = await db.collection('megaventory_stock')
+            .where('brandId', '==', brandId)
+            .select('productId', 'physicalStock', 'availableStock')
+            .get();
+          const updates = stockSnap.docs.filter((d) => markedSet.has(String(d.data().productId ?? '')));
+          for (let i = 0; i < updates.length; i += 400) {
+            const batch = db.batch();
+            for (const doc of updates.slice(i, i + 400)) {
+              batch.set(doc.ref, {
+                stockAtDeletion: num(doc.data().physicalStock),
+                physicalStock: 0,
+                availableStock: 0,
+                updatedAt: FieldValue.serverTimestamp(),
+              }, { merge: true });
+            }
+            await batch.commit();
+            zeroedStockRows += Math.min(400, updates.length - i);
+          }
+        }
+
+        // Reverse direction (undelete support): only when this pass saw the FULL deleted set
+        // (started from scratch AND exhausted) — a partial walk must not unmark out-of-window ids.
+        let unmarked = 0;
+        if (delExhausted && deletedScanCursor === null) {
+          const toUnmark = [...markedIds].filter((pid) => !walkedPids.has(pid));
+          for (let i = 0; i < toUnmark.length; i += 400) {
+            const batch = db.batch();
+            for (const pid of toUnmark.slice(i, i + 400)) {
+              batch.set(
+                db.collection('megaventory_products').doc(sanitizeFirestoreDocId(`mv_p_${pid}`)),
+                { mvDeletedAt: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() },
+                { merge: true }
+              );
+            }
+            await batch.commit();
+            unmarked += Math.min(400, toUnmark.length - i);
+          }
+        }
+
+        deletedScanResult = {
+          imported: toImport.length,
+          marked: newlyMarkedPids.length,
+          unmarked,
+          zeroedStockRows,
+          exhausted: delExhausted,
+          nextCursor: delNextCursor,
+        };
+        if (delExhausted) {
+          deletedScanDoneThisPass = true;
+        } else {
+          needsContinuation = true;
+        }
+        totalImported += toImport.length;
+        logger.info(
+          `[Megaventory] Deleted scan for ${brandId}: imported=${toImport.length} marked=${newlyMarkedPids.length} unmarked=${unmarked} stockRowsZeroed=${zeroedStockRows} exhausted=${delExhausted}`
+        );
+      }
+    } // end deleted-scan reserve guard
+    } // end deleted-scan ingestion guard
+
     // ── Custom saved report (π.χ. Performance / αποθέματα — CustomReportGetData) ──
     const reportId = String(conn.customReportId || '').trim();
     const reportEnabled = conn.customReportEnabled !== false;
@@ -1695,11 +1889,13 @@ export async function fetchMegaventoryData(
     const ordersDone = ordersIngestComplete || ordersDoneThisPass;
     const stockDone = stockIngestComplete || stockDoneThisPass;
     const suppliersDone = suppliersIngestComplete || suppliersDoneThisPass;
-    // PER-60: ingestion is complete only when EVERY phase (invoices/orders/catalog/stock/suppliers) is in.
-    // Processing (gap-fill etc.) purges+rewrites from Firestore — it must not start on a partial dataset,
-    // and no single fast phase may flip us into "processing pass" early and strand a slow one (suppliers).
+    const deletedScanDone = deletedScanComplete || deletedScanDoneThisPass;
+    // PER-60: ingestion is complete only when EVERY phase (invoices/orders/catalog/stock/suppliers/
+    // deleted-scan) is in. Processing (gap-fill etc.) purges+rewrites from Firestore — it must not start
+    // on a partial dataset, and no single fast phase may flip us into "processing pass" early and strand
+    // a slow one.
     const ingestionComplete = ingestionAlreadyComplete ||
-      (referenceOk && invoiceIngestComplete && productCatalogDone && ordersDone && stockDone && suppliersDone);
+      (referenceOk && invoiceIngestComplete && productCatalogDone && ordersDone && stockDone && suppliersDone && deletedScanDone);
     // PER-60: run the heavy downstream only when ingestion is complete AND we are either the dedicated
     // processing pass or still have a full budget reserve. Otherwise defer to a fresh pass — large brands
     // can't fit ingestion AND processing in one 30-min invocation; small brands finish in a single pass.
@@ -1917,6 +2113,12 @@ export async function fetchMegaventoryData(
     if (ordersDoneThisPass) patch['megaventory.ordersIngestComplete'] = true;
     if (stockDoneThisPass) patch['megaventory.stockIngestComplete'] = true;
     if (suppliersDoneThisPass) patch['megaventory.suppliersIngestComplete'] = true;
+    if (deletedScanDoneThisPass) {
+      patch['megaventory.deletedScanComplete'] = true;
+      patch['megaventory.deletedScanCursor'] = FieldValue.delete();
+    } else if (deletedScanResult && deletedScanResult.nextCursor) {
+      patch['megaventory.deletedScanCursor'] = deletedScanResult.nextCursor;
+    }
 
     // (b) Ingestion → processing transition / whole-sync reset.
     if (!ingestionComplete) {
@@ -1930,6 +2132,8 @@ export async function fetchMegaventoryData(
       patch['megaventory.ordersIngestComplete'] = FieldValue.delete();
       patch['megaventory.stockIngestComplete'] = FieldValue.delete();
       patch['megaventory.suppliersIngestComplete'] = FieldValue.delete();
+      patch['megaventory.deletedScanComplete'] = FieldValue.delete();
+      patch['megaventory.deletedScanCursor'] = FieldValue.delete();
       // clear the manual invoice cycle flags too so the next full sync re-walks invoices fresh
       patch['megaventory.manualInvoiceComplete'] = FieldValue.delete();
       patch['megaventory.manualInvoiceCursor'] = FieldValue.delete();
@@ -1969,6 +2173,7 @@ export async function fetchMegaventoryData(
       ...(invoiceBackfillProgress ? { invoiceBackfillProgress } : {}),
       ...(postNormalizeRefresh ? { postNormalizeRefresh } : {}),
       ...(apiCatalogGapFillCount > 0 ? { apiCatalogGapFill: apiCatalogGapFillCount } : {}),
+      ...(deletedScanResult ? { deletedScan: deletedScanResult } : {}),
       imported: totalImported,
       ...counts,
       failed: errors.length,
@@ -1985,6 +2190,11 @@ export async function fetchMegaventoryData(
       ...(normalizedCounts ? { normalized: normalizedCounts } : {}),
       ...(apiCatalogGapFillCount > 0 ? { apiCatalogGapFill: apiCatalogGapFillCount } : {}),
       ...(rfmCounts ? { rfm: rfmCounts } : {}),
+      ...(deletedScanResult ? {
+        deletedImported: Number(deletedScanResult.imported ?? 0),
+        deletedMarked: Number(deletedScanResult.marked ?? 0),
+        deletedUnmarked: Number(deletedScanResult.unmarked ?? 0),
+      } : {}),
       ...(errors.length ? { error: errors[0] } : {}),
     };
   } catch (err) {
