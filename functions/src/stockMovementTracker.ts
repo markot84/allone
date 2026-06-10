@@ -48,18 +48,33 @@ function dateKeyDaysAgo(days: number, from: Date = new Date()): string {
   return todayKey(d);
 }
 
-function chunkRecord<T>(record: Record<string, T>): Record<string, T>[] {
+/**
+ * PER-60 perf: size is tracked INCREMENTALLY (stringify only the entry being added), not by
+ * re-stringifying the whole growing bucket on every insertion — that was O(n·bucketSize) ≈ quadratic:
+ * measured ~11min for an 88k-SKU stock record + ~8min for its movement record of pure CPU per
+ * stock-movement refresh, which is what actually ran the worker into the 30min hard cap.
+ * Exported for the unit test that pins this from regressing.
+ */
+export function chunkRecord<T>(record: Record<string, T>): Record<string, T>[] {
   const chunks: Record<string, T>[] = [];
   let bucket: Record<string, T> = {};
+  let bucketCount = 0;
+  let bucketBytes = 2; // '{}'
   for (const [key, value] of Object.entries(record)) {
-    bucket[key] = value;
-    if (JSON.stringify(bucket).length > JSON_CHUNK_TARGET_BYTES) {
-      delete bucket[key];
-      if (Object.keys(bucket).length > 0) chunks.push(bucket);
-      bucket = { [key]: value };
+    // ~bytes this entry adds when serialized: "key":<value>, (separator counted via +1)
+    const entryBytes =
+      Buffer.byteLength(JSON.stringify(key)) + 1 + Buffer.byteLength(JSON.stringify(value)) + 1;
+    if (bucketCount > 0 && bucketBytes + entryBytes > JSON_CHUNK_TARGET_BYTES) {
+      chunks.push(bucket);
+      bucket = {};
+      bucketCount = 0;
+      bucketBytes = 2;
     }
+    bucket[key] = value;
+    bucketCount++;
+    bucketBytes += entryBytes;
   }
-  if (Object.keys(bucket).length > 0) chunks.push(bucket);
+  if (bucketCount > 0) chunks.push(bucket);
   return chunks.length ? chunks : [{}];
 }
 

@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isProcessingPass,
+  isJobWriteOwned,
   planAfterCatalog,
   planProcessing,
   decideStaleRecovery,
@@ -99,5 +100,24 @@ describe('shouldResetCatalogState (stuck-state bug)', () => {
   it('failure → reset so the brand is not stuck in processing-only mode', () => {
     expect(shouldResetCatalogState({ success: false, needsContinuation: false })).toBe(true);
     expect(shouldResetCatalogState({ success: false, needsContinuation: true })).toBe(true);
+  });
+});
+
+describe('isJobWriteOwned (zombie-finalization race)', () => {
+  const claimToken = 'tok-abc';
+  it('owned: still running with our claim token', () => {
+    expect(isJobWriteOwned({ currentStatus: 'running', currentClaimToken: 'tok-abc', claimToken })).toBe(true);
+  });
+  it('NOT owned after the stale sweep marked it failed (the observed live race)', () => {
+    expect(isJobWriteOwned({ currentStatus: 'failed', currentClaimToken: 'tok-abc', claimToken })).toBe(false);
+  });
+  it('NOT owned after a newer pass re-claimed (token rotated)', () => {
+    expect(isJobWriteOwned({ currentStatus: 'running', currentClaimToken: 'tok-xyz', claimToken })).toBe(false);
+  });
+  it('NOT owned when the job has no token (legacy doc / sweep-cleared)', () => {
+    expect(isJobWriteOwned({ currentStatus: 'running', currentClaimToken: undefined, claimToken })).toBe(false);
+  });
+  it('NOT owned when the job was completed elsewhere', () => {
+    expect(isJobWriteOwned({ currentStatus: 'completed', currentClaimToken: 'tok-abc', claimToken })).toBe(false);
   });
 });

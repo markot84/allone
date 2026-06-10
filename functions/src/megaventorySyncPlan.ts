@@ -91,6 +91,21 @@ export function decideStaleRecovery(): {
 }
 
 /**
+ * FIX (zombie-finalization race): an invocation that outlives its 30min request can keep running
+ * detached on a warm instance. Meanwhile the stale sweep marks the job `failed` (and may be followed
+ * by a NEW claim). Observed live: the zombie's `completed` write overwrote the sweep's `failed` 10s
+ * later. A pass may finalize the job ONLY while it still owns it: status is still `running` AND the
+ * claimToken is the one this pass wrote at claim time (a re-claim rotates the token).
+ */
+export function isJobWriteOwned(args: {
+  currentStatus: unknown;
+  currentClaimToken: unknown;
+  claimToken: string;
+}): boolean {
+  return args.currentStatus === 'running' && args.currentClaimToken === args.claimToken;
+}
+
+/**
  * FIX (reset-on-failure): when a pass ends not-clean (error, or killed/recovered), the resumable
  * state must be cleared so the next sync re-ingests from scratch instead of being stuck with
  * productCatalogComplete=true forever. Returns true when the connector flags should be deleted.

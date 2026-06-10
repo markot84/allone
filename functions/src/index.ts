@@ -89,7 +89,8 @@ import {
   updateMegaventoryConnectorSettings,
   setDb as setMegaventoryDb,
 } from './megaventoryConnector';
-import { decideStaleRecovery } from './megaventorySyncPlan';
+import { decideStaleRecovery, isJobWriteOwned } from './megaventorySyncPlan';
+import { randomUUID } from 'crypto';
 import {
   saveSoftOneCredentials,
   fetchSoftOneData,
@@ -1948,12 +1949,18 @@ export const processMegaventorySyncJobs = onSchedule(
     if (snap.empty) return;
 
     const jobRef = snap.docs[0].ref;
+    // PER-60 FIX (zombie-finalization race): each claim gets a unique token. A pass may finalize the
+    // job only while the token still matches — a stale-swept or re-claimed job rejects the write, so
+    // an invocation that outlived its 30min request can't overwrite the sweep's `failed` (observed
+    // live) or stomp a newer pass's `running` state.
+    const claimToken = randomUUID();
     const job = await db.runTransaction(async (tx) => {
       const latest = await tx.get(jobRef);
       const data = latest.data() as { brandId?: string; status?: string; continuationAttempts?: number } | undefined;
       if (!latest.exists || data?.status !== 'pending' || !data.brandId) return null;
       tx.update(jobRef, {
         status: 'running',
+        claimToken,
         startedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
@@ -1961,6 +1968,20 @@ export const processMegaventorySyncJobs = onSchedule(
     });
 
     if (!job) return;
+
+    /** Apply a terminal/continuation patch only if this pass still owns the job. */
+    const updateJobIfOwned = async (
+      patch: admin.firestore.UpdateData<admin.firestore.DocumentData>
+    ): Promise<boolean> =>
+      db.runTransaction(async (tx) => {
+        const latest = await tx.get(jobRef);
+        const data = latest.data() as { status?: string; claimToken?: string } | undefined;
+        if (!latest.exists || !isJobWriteOwned({ currentStatus: data?.status, currentClaimToken: data?.claimToken, claimToken })) {
+          return false;
+        }
+        tx.update(jobRef, patch);
+        return true;
+      });
 
     try {
       logger.info(`[MegaventoryJob] Starting Megaventory refresh for ${job.brandId}`);
@@ -1970,18 +1991,24 @@ export const processMegaventorySyncJobs = onSchedule(
       // expensive post-steps (below) are intentionally skipped until the sync fully completes.
       const MAX_CONTINUATIONS = 8;
       if (result.success && result.needsContinuation && job.continuationAttempts < MAX_CONTINUATIONS) {
-        await jobRef.update({
+        const reEnqueued = await updateJobIfOwned({
           status: 'pending',
+          claimToken: FieldValue.delete(),
           continuationAttempts: FieldValue.increment(1),
           updatedAt: FieldValue.serverTimestamp(),
           result,
         });
+        if (!reEnqueued) {
+          logger.warn(`[MegaventoryJob] ${job.brandId} lost job ownership before continuation re-enqueue (stale-swept or re-claimed) — skipping`);
+          return;
+        }
         logger.info(`[MegaventoryJob] ${job.brandId} needs continuation (pass ${job.continuationAttempts + 1}/${MAX_CONTINUATIONS}) — re-enqueued`);
         return;
       }
       const completedClean = result.success && !result.needsContinuation;
-      await jobRef.update({
+      const finalized = await updateJobIfOwned({
         status: completedClean ? 'completed' : 'failed',
+        claimToken: FieldValue.delete(),
         result,
         completedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -1990,6 +2017,12 @@ export const processMegaventorySyncJobs = onSchedule(
           ? { error: FieldValue.delete() }
           : { error: result.error || `Sync did not complete within ${MAX_CONTINUATIONS} continuation passes` }),
       });
+      if (!finalized) {
+        // The stale sweep (or a newer claim) took the job from us — its verdict stands. Skip the
+        // post-steps too: a newer pass owns the brand now and will refresh aggregates itself.
+        logger.warn(`[MegaventoryJob] ${job.brandId} lost job ownership before finalization (stale-swept or re-claimed) — keeping the sweep's verdict`);
+        return;
+      }
       logger.info(`[MegaventoryJob] Completed catalog refresh for ${job.brandId}: ${JSON.stringify(result)}`);
 
       try {
@@ -2014,16 +2047,23 @@ export const processMegaventorySyncJobs = onSchedule(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error(`[MegaventoryJob] failed for ${job.brandId}: ${msg}`, { alertKey: ALERT.syncJobProcessingFailed, err });
-      await jobRef.update({
+      const failedWritten = await updateJobIfOwned({
         status: 'failed',
+        claimToken: FieldValue.delete(),
         error: msg,
         completedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         continuationAttempts: FieldValue.delete(),
       });
-      // PER-60 FIX: clear resumable state on failure so the brand re-ingests fresh next time
-      // instead of being stuck with productCatalogComplete=true.
-      await resetMegaventoryResumableState(db, job.brandId);
+      if (failedWritten) {
+        // PER-60 FIX: clear resumable state on failure so the brand re-ingests fresh next time
+        // instead of being stuck with productCatalogComplete=true.
+        await resetMegaventoryResumableState(db, job.brandId);
+      } else {
+        // Stale-swept (which already reset the state) or re-claimed by a newer pass — don't stomp
+        // the newer pass's status/resumable state from a zombie error handler.
+        logger.warn(`[MegaventoryJob] ${job.brandId} lost job ownership before failure write — skipping state reset`);
+      }
     }
   })
 );
