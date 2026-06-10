@@ -20,7 +20,7 @@
  */
 
 import * as admin from 'firebase-admin';
-import { type Firestore, FieldValue } from 'firebase-admin/firestore';
+import { type Firestore, type QueryDocumentSnapshot, FieldValue } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 import { ECOMMERCE_PROVIDERS, readPlatformStockBySku } from './ecommerceAggregator';
 
@@ -116,11 +116,21 @@ async function readJsonChunks<T>(
   return Object.keys(merged).length ? merged : null;
 }
 
-/** Διαβάζει stock από το `products` collection (import-based brands). */
+/**
+ * Διαβάζει stock από το `products` collection (import-based brands).
+ *
+ * PER-60 perf: `.select('sku','stock_level')` + stream — ΧΩΡΙΣ projection η query κατέβαζε ΟΛΟΚΛΗΡΑ
+ * τα (παχιά) product-intelligence docs μόνο για 2 πεδία: σε 88k SKUs (e-tennis) αυτό ήταν ~20+ λεπτά
+ * I/O και κόντευε το 30min hard cap του worker. Με projection: ίδια σημασιολογία, ~sec αντί λεπτά,
+ * και το stream αποφεύγει να υλοποιήσει όλο το QuerySnapshot στη μνήμη καθώς ο κατάλογος μεγαλώνει.
+ */
 async function readImportedStockBySku(db: Firestore, brandId: string): Promise<Map<string, number>> {
   const out = new Map<string, number>();
-  const snap = await db.collection('products').where('brandId', '==', brandId).get();
-  for (const doc of snap.docs) {
+  const query = db
+    .collection('products')
+    .where('brandId', '==', brandId)
+    .select('sku', 'stock_level');
+  for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
     const d = doc.data();
     const sku = String(d.sku || '').trim();
     if (!sku) continue;

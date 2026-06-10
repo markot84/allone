@@ -7,7 +7,7 @@
  */
 
 import * as admin from 'firebase-admin';
-import { type Firestore, FieldValue } from 'firebase-admin/firestore';
+import { type Firestore, type QueryDocumentSnapshot, FieldValue } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 import {
   aggregateOrderLinesForTopProducts,
@@ -220,8 +220,18 @@ export async function readPlatformStockBySku(
   const out = new Map<string, number>();
   if (!coll) return out;
 
-  const snap = await db.collection(coll).where('brandId', '==', brandId).get();
-  for (const doc of snap.docs) {
+  // PER-60 perf: projection per platform — only the stock-bearing fields, not whole product docs.
+  // Same fix as readImportedStockBySku: full-doc reads over a large catalog cost minutes of I/O.
+  const STOCK_FIELDS: Record<string, string[]> = {
+    shopify: ['variants'],
+    woocommerce: ['sku', 'stockQuantity'],
+    opencart: ['sku', 'model', 'quantity'],
+    magento: ['sku', 'stockQuantity'],
+  };
+  const fields = STOCK_FIELDS[platform];
+  let query = db.collection(coll).where('brandId', '==', brandId);
+  if (fields) query = query.select(...fields) as typeof query;
+  for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
     const d = doc.data();
     if (platform === 'shopify') {
       for (const v of (d.variants || []) as Array<{ sku?: string; inventoryQuantity?: number | null }>) {
