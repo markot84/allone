@@ -1070,7 +1070,13 @@ export const connectorAuth = onRequest(
           res.status(400).json({ error: 'Missing shopDomain for Shopify' });
           return;
         }
-        authUrl = getShopifyAuthUrl(brandId, shopDomain, redirectUri, returnOrigin);
+        // SEC-C1: normalizeShopDomain throws on non-myshopify hosts — user input error, not a 500.
+        try {
+          authUrl = getShopifyAuthUrl(brandId, shopDomain, redirectUri, returnOrigin);
+        } catch {
+          res.status(400).json({ error: 'Invalid shopDomain: expected {store}.myshopify.com' });
+          return;
+        }
       } else {
         res.status(400).json({ error: `Unknown provider: ${provider}` });
         return;

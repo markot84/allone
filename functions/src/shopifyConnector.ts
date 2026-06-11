@@ -20,6 +20,9 @@ import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { getCustomerEmailIdentity } from './customerIdentity';
 import { buildHistoricalOrIncrementalWindow, ECOMMERCE_INCREMENTAL_OVERLAP_HOURS, coerceSyncDate, subtractHours } from './syncPolicy';
+// SEC-C1: strict shop-domain allow-list (throws on non-myshopify hosts) + SSRF-guarded fetch.
+import { normalizeShopDomain } from './shopifyDomain';
+import { safeFetch } from './urlValidator';
 
 let _db: Firestore | null = null;
 
@@ -88,10 +91,17 @@ export async function handleShopifyCallback(
   shopDomain: string
 ): Promise<{ success: boolean; error?: string }> {
   const { apiKey, apiSecret } = getCredentials();
-  const normalizedDomain = normalizeShopDomain(shopDomain);
+  // SEC-C1: re-validate before the token exchange even though the signed state was
+  // normalized at auth-url time — this call POSTs the global API secret to the host.
+  let normalizedDomain: string;
+  try {
+    normalizedDomain = normalizeShopDomain(shopDomain);
+  } catch {
+    return { success: false, error: 'Invalid Shopify shop domain' };
+  }
 
   try {
-    const res = await fetch(
+    const res = await safeFetch(
       `https://${normalizedDomain}/admin/oauth/access_token`,
       {
         method: 'POST',
@@ -117,7 +127,7 @@ export async function handleShopifyCallback(
     // Fetch shop info for display
     let shopName = normalizedDomain;
     try {
-      const shopRes = await fetch(
+      const shopRes = await safeFetch(
         `https://${normalizedDomain}/admin/api/${SHOPIFY_API_VERSION}/shop.json`,
         { headers: { 'X-Shopify-Access-Token': accessToken } }
       );
@@ -181,7 +191,14 @@ export async function fetchShopifyData(brandId: string): Promise<{
     `[Shopify] ${brandId} orders=${orderWindow.mode} (${ordersSinceIso} → ${orderWindow.windowEnd.toISOString()}) products=${productsUpdatedSinceIso ? 'incremental' : 'full'}`
   );
 
-  const shopDomain = String(connector.shopDomain || '');
+  // SEC-C1: re-pin the STORED domain on every read — connectors/{brandId} is member-writable,
+  // so a tampered shopDomain must not receive the shop access token (or any request at all).
+  let shopDomain: string;
+  try {
+    shopDomain = normalizeShopDomain(String(connector.shopDomain || ''));
+  } catch {
+    return { success: false, imported: 0, error: 'Invalid Shopify shop domain — reconnect required' };
+  }
   const accessToken = decryptToken(String(connector.accessToken));
   if (!accessToken) {
     return { success: false, imported: 0, error: 'Shopify token unavailable — reconnect required' };
@@ -214,7 +231,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
         params.set('created_at_min', ordersSinceIso);
       }
 
-      const res = await fetch(`${baseUrl}/orders.json?${params}`, { headers });
+      const res = await safeFetch(`${baseUrl}/orders.json?${params}`, { headers });
       if (!res.ok) {
         const errText = await res.text();
         logger.error(`[Shopify] Orders fetch failed (${res.status}):`, { alertKey: ALERT.shopifySyncFailed, err: errText.slice(0, 300) });
@@ -314,7 +331,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
         params.set('updated_at_min', productsUpdatedSinceIso);
       }
 
-      const res = await fetch(`${baseUrl}/products.json?${params}`, { headers });
+      const res = await safeFetch(`${baseUrl}/products.json?${params}`, { headers });
       if (!res.ok) {
         productsAbort = true;
         break;
@@ -423,15 +440,3 @@ export async function fetchShopifyData(brandId: string): Promise<{
   }
 }
 
-/**
- * Normalize shop domain to {store}.myshopify.com format
- */
-function normalizeShopDomain(input: string): string {
-  let domain = input.trim().toLowerCase();
-  domain = domain.replace(/^https?:\/\//, '');
-  domain = domain.replace(/\/+$/, '');
-  if (!domain.includes('.')) {
-    domain = `${domain}.myshopify.com`;
-  }
-  return domain;
-}
