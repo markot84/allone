@@ -22,6 +22,7 @@ const OPENCART_EGRESS_OPTIONS: { vpcConnector?: string; vpcConnectorEgressSettin
   process.env.GCLOUD_PROJECT === PROD_PROJECT_ID
     ? { vpcConnector: 'pp-opencart-connector', vpcConnectorEgressSettings: 'ALL_TRAFFIC' }
     : {};
+import { nestDottedKeys } from './firestorePatch';
 import { sanitizeOAuthReturnOrigin } from './oauthRedirect';
 import { validateImportUrl, safeFetch } from './urlValidator';
 import { verifyState } from './oauthState';
@@ -1959,7 +1960,7 @@ export const processMegaventorySyncJobs = onSchedule(
     const claimToken = randomUUID();
     const job = await db.runTransaction(async (tx) => {
       const latest = await tx.get(jobRef);
-      const data = latest.data() as { brandId?: string; status?: string; continuationAttempts?: number } | undefined;
+      const data = latest.data() as { brandId?: string; status?: string; continuationAttempts?: number; mode?: string } | undefined;
       if (!latest.exists || data?.status !== 'pending' || !data.brandId) return null;
       tx.update(jobRef, {
         status: 'running',
@@ -1967,7 +1968,7 @@ export const processMegaventorySyncJobs = onSchedule(
         startedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return { brandId: data.brandId, continuationAttempts: Number(data.continuationAttempts ?? 0) };
+      return { brandId: data.brandId, continuationAttempts: Number(data.continuationAttempts ?? 0), mode: data.mode };
     });
 
     if (!job) return;
@@ -1987,6 +1988,38 @@ export const processMegaventorySyncJobs = onSchedule(
       });
 
     try {
+      // PER-60: the nightly ERP wave hands the PI refresh here instead of running it inline —
+      // refreshing the e-tennis aggregate (~220k SKUs) takes 7–11 min and pushed the wave past
+      // the 1800s onSchedule cap (killed mid-refresh on 2026-06-11). No sync work in this mode.
+      if (job.mode === 'post_refresh_only') {
+        logger.info(`[MegaventoryJob] Post-refresh-only job for ${job.brandId} (nightly wave handoff)`);
+        let piError: string | null = null;
+        try {
+          const piResult = await refreshProductIntelligenceAggregate(job.brandId);
+          logger.info(
+            `[MegaventoryJob] Product intelligence refreshed for ${job.brandId}: totalCount=${piResult.totalCount ?? 0}`
+          );
+        } catch (e) {
+          piError = e instanceof Error ? e.message : String(e);
+          logger.warnAlert(`[MegaventoryJob] post-refresh-only PI refresh failed for ${job.brandId}:`, { alertKey: ALERT.syncJobProcessingFailed, err: e });
+        }
+        // No resetMegaventoryResumableState here even on failure — no catalog state was touched.
+        const finalized = await updateJobIfOwned({
+          status: piError ? 'failed' : 'completed',
+          claimToken: FieldValue.delete(),
+          result: { success: !piError, postRefreshOnly: true },
+          error: piError ?? FieldValue.delete(),
+          completedAt: FieldValue.serverTimestamp(),
+          postRefreshCompletedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          continuationAttempts: FieldValue.delete(),
+        });
+        if (!finalized) {
+          logger.warn(`[MegaventoryJob] ${job.brandId} lost post-refresh-only job ownership before finalization — keeping the sweep's verdict`);
+        }
+        return;
+      }
+
       logger.info(`[MegaventoryJob] Starting Megaventory refresh for ${job.brandId}`);
       const result = await fetchMegaventoryData(job.brandId, { mode: 'manual' });
       // PER-60: if the run hit its soft budget before finishing (large catalog), re-enqueue so the
@@ -2439,7 +2472,17 @@ async function markNightlyJob(
     patch[`jobs.${job}.lastErrorAt`] = FieldValue.serverTimestamp();
   }
 
-  await db.doc('system_health/nightly_jobs').set(patch, { merge: true });
+  // set(..., {merge:true}) stores dotted keys as LITERAL field names ("jobs.x.status"), which
+  // healthWatch — reading the nested `jobs` map — can never see. Only update() treats the dots
+  // as field paths, but update() can't create the doc, hence the NOT_FOUND fallback.
+  const ref = db.doc('system_health/nightly_jobs');
+  try {
+    await ref.update(patch);
+  } catch (err) {
+    const code = (err as { code?: number | string }).code;
+    if (code !== 5 && code !== 'not-found') throw err;
+    await ref.set(nestDottedKeys(patch), { merge: true });
+  }
 }
 
 /**
@@ -2603,6 +2646,9 @@ async function executeBrandNightlyWave(
   };
 
   const phase = buildTasks();
+  // PER-60: set inside the erp case's then-handler (before Promise.all resolves), read after it —
+  // when true, the worker owns the rest of the sync AND runs the PI refresh on completion.
+  let megaventoryHandedOff = false;
 
   switch (wave) {
     case 'marketing':
@@ -2657,6 +2703,7 @@ async function executeBrandNightlyWave(
                 updatedAt: FieldValue.serverTimestamp(),
                 mode: 'scheduled_continuation',
               }, { merge: true });
+              megaventoryHandedOff = true;
               logger.info(`[ScheduledSync/erp] Megaventory needs continuation for ${brandId} — handed to processMegaventorySyncJobs worker`);
             }
             return r;
@@ -2678,11 +2725,37 @@ async function executeBrandNightlyWave(
     } catch (err) {
       logger.error(`[ScheduledSync/erp] ecommerce_summary refresh failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
     }
-    if (data.megaventory?.connected) {
+    if (data.megaventory?.connected && !megaventoryHandedOff) {
+      // PER-60: never refresh PI inline — the e-tennis aggregate (~220k SKUs) takes 7–11 min and
+      // pushed the wave past the 1800s onSchedule cap (killed mid-refresh on 2026-06-11, so
+      // markNightlyJob('success') never ran). Enqueue a post_refresh_only job for the every-1-min
+      // worker instead. Skipped when the sync itself was handed off (megaventoryHandedOff) or a
+      // job is already pending/running: the worker refreshes PI on completion in both cases.
       try {
-        await refreshProductIntelligenceAggregate(brandId);
+        const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+        const jobRef = admin.firestore().collection('connector_sync_jobs').doc(jobId);
+        const queued = await admin.firestore().runTransaction(async (tx) => {
+          const latest = await tx.get(jobRef);
+          const status = latest.data()?.status as string | undefined;
+          if (status === 'pending' || status === 'running') return false;
+          tx.set(jobRef, {
+            brandId,
+            provider: 'megaventory',
+            status: 'pending',
+            requestedBy: 'scheduled_post_refresh',
+            requestedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            mode: 'post_refresh_only',
+          }, { merge: true });
+          return true;
+        });
+        logger.info(
+          queued
+            ? `[ScheduledSync/erp] PI refresh for ${brandId} handed to processMegaventorySyncJobs worker (post_refresh_only)`
+            : `[ScheduledSync/erp] PI refresh handoff for ${brandId} skipped — a megaventory job is already active`
+        );
       } catch (err) {
-        logger.warnAlert(`[ScheduledSync/erp] product intelligence refresh failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
+        logger.warnAlert(`[ScheduledSync/erp] PI refresh handoff failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
       }
     }
   }
