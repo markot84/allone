@@ -4,13 +4,35 @@ import * as XLSX from 'xlsx';
 // a huge cell range that explodes memory when materialized. Reject before parsing.
 const MAX_XLSX_CELLS = 2_000_000;
 const MAX_XLSX_SHEETS = 100;
+// SEC-M6: the cell guard below runs after XLSX.read(), which already materializes the whole
+// workbook — so a <=50MB densely-packed file can exhaust memory during the read itself,
+// before any guard fires. Bound the read with `sheetRows` so the parser stops early, and
+// reject (rather than silently truncate) any sheet that actually reaches the cap.
+const MAX_XLSX_ROWS = 500_000;
 
-function assertSheetWithinLimits(sheet: XLSX.WorkSheet | undefined): void {
+/**
+ * SEC-M6: read a workbook with the row count bounded up-front. `sheetRows` caps how many
+ * rows SheetJS parses per sheet, bounding parse-time memory instead of only guarding the
+ * later sheet_to_json expansion. A file that exceeds the cap is rejected by
+ * assertSheetWithinLimits (the truncated !ref reports MAX_XLSX_ROWS + 1 rows).
+ */
+function readWorkbookBounded(buffer: Buffer): XLSX.WorkBook {
+  return XLSX.read(buffer, { type: 'buffer', sheetRows: MAX_XLSX_ROWS + 1 });
+}
+
+// Exported for unit tests — XLSX.write recomputes !ref from real cells, so the guard can't
+// be exercised through a written file; tests call it directly with crafted ranges.
+export function assertSheetWithinLimits(sheet: XLSX.WorkSheet | undefined): void {
   const ref = sheet?.['!ref'];
   if (!ref) return;
   const range = XLSX.utils.decode_range(ref);
   const rows = range.e.r - range.s.r + 1;
   const cols = range.e.c - range.s.c + 1;
+  // SEC-M6: a sheet that hit the sheetRows cap was truncated — reject instead of importing
+  // a silently-incomplete file.
+  if (rows > MAX_XLSX_ROWS) {
+    throw new Error(`Spreadsheet too large: ${rows} rows exceeds the ${MAX_XLSX_ROWS}-row limit`);
+  }
   if (rows * cols > MAX_XLSX_CELLS) {
     throw new Error(`Spreadsheet too large: ${rows}×${cols} cells exceeds the ${MAX_XLSX_CELLS}-cell limit`);
   }
@@ -58,7 +80,7 @@ export function parseCSV(csvText: string): string[][] {
 }
 
 export function parseXLSXBuffer(buffer: Buffer, type?: string): string[][] {
-  const wb = XLSX.read(buffer, { type: 'buffer' });
+  const wb = readWorkbookBounded(buffer);
 
   let sheetName = wb.SheetNames[0];
   if (type === 'campaigns') {
@@ -178,7 +200,7 @@ export function csvToObjects(csvRows: string[][], type?: string): Record<string,
  * Used for multi-sheet imports like PROCUREMENT_TEMPLATE.xlsx.
  */
 export function parseXLSXAllSheets(buffer: Buffer): Map<string, string[][]> {
-  const wb = XLSX.read(buffer, { type: 'buffer' });
+  const wb = readWorkbookBounded(buffer);
   const result = new Map<string, string[][]>();
   if (wb.SheetNames.length > MAX_XLSX_SHEETS) {
     throw new Error(`Workbook has too many sheets (${wb.SheetNames.length} > ${MAX_XLSX_SHEETS})`);
