@@ -9,7 +9,13 @@ export type CompositeScoreContext = {
 };
 
 /**
- * Calculate composite score for a product based on weights and strategy
+ * Calculate composite score for a product based on weights and strategy.
+ *
+ * @param segmentAffinities CODE-8: per-segment affinity values on the app-wide **0–1**
+ *   scale (the same scale produced by rfmFromOrders `category_affinity`, stored in
+ *   `data_analysis_rfm`, and rendered ×100 as a percentage in the UI). The average is
+ *   scaled to 0–100 below so `fitScore` lines up with the other 0–100 sub-scores; the
+ *   no-affinities default of 50 is the 0–100 neutral (= 0.5 × 100).
  */
 export function calculateCompositeScore(
   product: Product,
@@ -39,9 +45,12 @@ export function calculateCompositeScore(
   
   const revenueScore = Math.min(100, Math.max(0, ((product.price || 0) / 500) * 100));
   
-  const fitScore = segmentAffinities ? 
-    Object.values(segmentAffinities).reduce((sum, aff) => sum + aff, 0) / Object.keys(segmentAffinities).length :
-    50;
+  // CODE-8: affinities are 0–1 (app/RFM/production convention), so ×100 to put the average
+  // on the 0–100 scale of the other sub-scores; clamp for safety. No affinities → 50 neutral.
+  const fitScore = segmentAffinities && Object.keys(segmentAffinities).length > 0
+    ? Math.min(100, Math.max(0,
+        (Object.values(segmentAffinities).reduce((sum, aff) => sum + aff, 0) / Object.keys(segmentAffinities).length) * 100))
+    : 50;
 
   if (strategyId === 'sales_base') {
     const momentum = calculateSalesMomentumScore(product);
