@@ -111,6 +111,7 @@ import {
   computeEcommerceSummary,
   setDb as setEcommerceAggDb,
 } from './ecommerceAggregator';
+import { shouldRunPostSyncAggregations } from './syncPolicy';
 import {
   computeDataAnalysisRfmDiagnostic,
   refreshDataAnalysisRfmAggregate,
@@ -1597,9 +1598,12 @@ export const connectorSync = onRequest(
       }
 
       // ecommerce_summary (μόνο e-shop) + business_revenue_summary (ERP) μετά από sync connectors.
+      // PER-140: μόνο όταν το sync πέτυχε ή εισήγαγε κάτι — καθαρή αποτυχία δεν δικαιολογεί
+      // τα βαριά recomputes (και το φρέσκο syncedAt θα έκρυβε την αποτυχημένη εισαγωγή).
+      const runPostSyncAggregations = shouldRunPostSyncAggregations(result);
       if (
         ['shopify', 'woocommerce', 'opencart', 'magento', 'megaventory', 'softone'].includes(provider) &&
-        result.queued !== true
+        runPostSyncAggregations
       ) {
         try {
           await computeEcommerceSummary(brandId);
@@ -1608,7 +1612,7 @@ export const connectorSync = onRequest(
         }
       }
 
-      if (['shopify', 'woocommerce', 'opencart', 'magento'].includes(provider)) {
+      if (['shopify', 'woocommerce', 'opencart', 'magento'].includes(provider) && runPostSyncAggregations) {
         // Stock movement tracking (universal — δουλεύει και για non-connector brands)
         try {
           await refreshStockMovement(brandId);
@@ -1619,13 +1623,16 @@ export const connectorSync = onRequest(
 
       if (
         ['shopify', 'woocommerce', 'opencart', 'magento', 'megaventory', 'softone'].includes(provider) &&
-        result.queued !== true
+        runPostSyncAggregations
       ) {
         try {
           await refreshProductIntelligenceAggregate(brandId);
         } catch (e) {
           logger.warn(`[connectorSync] product intelligence refresh failed for ${brandId}:`, { err: e });
         }
+      }
+      if (!runPostSyncAggregations && result.queued !== true) {
+        logger.info(`[connectorSync] post-sync aggregations skipped for ${brandId} (${provider}): sync failed with nothing imported`);
       }
 
       res.status(200).json(result);
