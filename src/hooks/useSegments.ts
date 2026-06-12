@@ -131,6 +131,18 @@ function selectAggregateScope(
   return preferred ?? scopes.all ?? scopes.identified ?? null;
 }
 
+// Καθαρά predicates για τα `enabled` gates των queries — extracted ώστε τα unit tests
+// να ασκούν τον πραγματικό κώδικα του hook (όχι αντίγραφα των εκφράσεων).
+function ordersQueryGate(a: { isDataAnalysis: boolean; skipOrderHydration: boolean; brandId: string | null; connectedPlatformsCount: number }): boolean {
+  return !a.isDataAnalysis && !a.skipOrderHydration && !!a.brandId && a.connectedPlatformsCount > 0;
+}
+function aggregateQueryGate(a: { isDataAnalysis: boolean; useServerAggregate: boolean; brandId: string | null }): boolean {
+  return (a.isDataAnalysis || a.useServerAggregate) && !!a.brandId;
+}
+function catalogQueryGate(a: { ordersQueryEnabled: boolean; shouldUseAggregate: boolean; hasUsableSnapshot: boolean; ordersPending: boolean; rawOrdersCount: number }): boolean {
+  return a.ordersQueryEnabled && !a.shouldUseAggregate && !a.hasUsableSnapshot && !a.ordersPending && a.rawOrdersCount > 0;
+}
+
 export type UseSegmentsOptions = {
   /**
    * `data_analysis`: Data Analysis σελίδα — παραγγελίες πρώτα από ERP connectors, μετά e-shop·
@@ -200,11 +212,12 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     [rawSegmentCustomerSummaries]
   );
 
-  const ordersQueryEnabled =
-    !isDataAnalysis &&
-    !skipOrderHydration &&
-    !!brandId &&
-    ecomm.connectedPlatforms.length > 0;
+  const ordersQueryEnabled = ordersQueryGate({
+    isDataAnalysis,
+    skipOrderHydration,
+    brandId,
+    connectedPlatformsCount: ecomm.connectedPlatforms.length,
+  });
   const ordersSinceDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - RFM_ORDER_FETCH_WINDOW_DAYS);
@@ -218,7 +231,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const { data: dataAnalysisAggregate = null, isPending: dataAnalysisAggregatePending } = useQuery({
     queryKey: ['dataAnalysisRfmAggregate', brandId],
     queryFn: () => (brandId ? fetchDataAnalysisRfmAggregate(brandId, syncVersion) : Promise.resolve(null)),
-    enabled: (isDataAnalysis || useServerAggregate) && !!brandId,
+    enabled: aggregateQueryGate({ isDataAnalysis, useServerAggregate, brandId }),
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 7 * 24 * 60 * 60 * 1000,
     placeholderData: (previousData) => previousData,
@@ -305,7 +318,13 @@ export function useSegments(options: UseSegmentsOptions = {}) {
             ? fetchCatalogAlignmentDataForDataAnalysis(brandId, ecomm.connectedPlatforms, rawOrders)
             : fetchCatalogAlignmentData(brandId, ecomm.connectedPlatforms))
         : Promise.resolve(null),
-    enabled: ordersQueryEnabled && !shouldUseAggregate && !usableSnapshot && !ordersPending && rawOrders.length > 0,
+    enabled: catalogQueryGate({
+      ordersQueryEnabled,
+      shouldUseAggregate,
+      hasUsableSnapshot: !!usableSnapshot,
+      ordersPending,
+      rawOrdersCount: rawOrders.length,
+    }),
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -663,4 +682,4 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   };
 }
 
-export const __test = { selectAggregateScope };
+export const __test = { selectAggregateScope, ordersQueryGate, aggregateQueryGate, catalogQueryGate };
