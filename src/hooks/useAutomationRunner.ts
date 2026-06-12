@@ -8,7 +8,7 @@ import { usePlan } from './usePlan';
 import { usePriceBenchmarks } from './usePriceBenchmarks';
 import { useGA4Data } from './useGA4Data';
 import { runAutomationEvaluation } from '../services/automationEngine';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getCountFromServer, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { logger } from '../utils/logger';
 import type { Campaign, Product } from '../types';
@@ -22,10 +22,14 @@ const EMPTY_PRODUCTS: Product[] = [];
 
 async function getRecentNewAdsCount(brandId: string): Promise<number> {
   try {
+    // ΠΡΟΣΟΧΗ: το firstSeenAt γράφεται ως ISO string (competitorMonitor.ts → now.toISOString()),
+    // ΟΧΙ Timestamp — το range filter πρέπει να συγκρίνει string με string, αλλιώς δεν
+    // ταιριάζει τίποτα. Λεξικογραφική σύγκριση ISO-8601 == χρονολογική.
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const adsCol = collection(db, 'competitor_ads', brandId, 'ads');
-    const snap = await getDocs(adsCol);
-    return snap.docs.filter(d => (d.data().firstSeenAt || '') >= weekAgo).length;
+    const adsQ = query(collection(db, 'competitor_ads', brandId, 'ads'), where('firstSeenAt', '>=', weekAgo));
+    // Aggregation count: κανένα doc download — 1 read ανά ≤1000 index entries.
+    const snap = await getCountFromServer(adsQ);
+    return snap.data().count;
   } catch {
     return 0;
   }
