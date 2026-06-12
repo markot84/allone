@@ -415,6 +415,10 @@ async function readMegaventoryInvoiceOrderRows(db: Firestore, brandId: string): 
   const rows: OrderRow[] = [];
   for (const doc of snap.docs) {
     const d = doc.data();
+    // PER-137: τα πιστωτικά (kind 'credit_note', αρνητικό netAmount) ΔΕΝ είναι πωλήσεις —
+    // μπαίνουν στο netting ξεχωριστά (readMegaventoryCreditNoteRows). Το net>0 guard
+    // τα απέκλειε ήδη· το ρητό guard τεκμηριώνει την πρόθεση.
+    if (d.kind === 'credit_note') continue;
     const net = parseNumeric(d.netAmount);
     if (!(net > 0)) continue;
     const st = String(d.status || '');
@@ -432,6 +436,42 @@ async function readMegaventoryInvoiceOrderRows(db: Firestore, brandId: string): 
       shippingMethod: '',
       customerEmail: String(d.clientName ?? ''),
       lineItems: [],
+    });
+  }
+  return rows;
+}
+
+type MegaventoryCreditNoteRow = {
+  /** Αρνητικό ποσό (χωρίς ΦΠΑ) — όπως γράφεται από τον connector. */
+  net: number;
+  day: string;
+  /** DocumentId του γονικού παραστατικού στο MV — το κλειδί του netting join. */
+  parentDocumentId: string;
+};
+
+/**
+ * PER-137: πιστωτικά Megaventory για το netting του τζίρου. Generic ταξινόμηση: ένα πιστωτικό
+ * αφαιρείται από τον τζίρο ΜΟΝΟ αν ο γονέας του (`parentDocumentId`) είναι καταχωρημένο
+ * παραστατικό πώλησης — πιστωτικά προς προμηθευτές έχουν γονέα παραστατικό αγοράς (που δεν
+ * υπάρχει στη collection) και μένουν εκτός. Καμία per-brand λίστα τύπων.
+ */
+async function readMegaventoryCreditNoteRows(db: Firestore, brandId: string): Promise<MegaventoryCreditNoteRow[]> {
+  const snap = await db
+    .collection('megaventory_invoices')
+    .where('brandId', '==', brandId)
+    .where('kind', '==', 'credit_note')
+    .get();
+  const rows: MegaventoryCreditNoteRow[] = [];
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    const net = parseNumeric(d.netAmount);
+    if (!(net < 0)) continue;
+    const st = String(d.status || '');
+    if (/(cancel|void|ακυρ|reject)/i.test(st)) continue;
+    rows.push({
+      net,
+      day: typeof d.date === 'string' ? d.date.slice(0, 10) : '',
+      parentDocumentId: String(d.parentDocumentId || ''),
     });
   }
   return rows;
@@ -480,10 +520,12 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
   const erpBackend = resolveErpRevenueBackend(connPlain);
 
   let rawRows: OrderRow[] = [];
+  let creditRows: MegaventoryCreditNoteRow[] = [];
   let source: 'none' | 'megaventory_invoices' | 'softone_sales_documents' = 'none';
 
   if (erpBackend === 'megaventory_invoices') {
     rawRows = await readMegaventoryInvoiceOrderRows(db, brandId);
+    creditRows = await readMegaventoryCreditNoteRows(db, brandId);
     source = 'megaventory_invoices';
   } else if (erpBackend === 'softone_sales_documents') {
     rawRows = await readSoftOneSalesOrderRows(db, brandId);
@@ -505,16 +547,48 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
     }
   }
 
+  // PER-137 (commit 1 — παράλληλα πεδία, οι καταναλωτές δεν αλλάζουν ακόμα): καθαρός τζίρος
+  // μετά τα πιστωτικά. Πιστωτικό μετράει μόνο αν ο γονέας του είναι γνωστό παραστατικό
+  // πώλησης (rawRows.orderId = documentId) — βλ. readMegaventoryCreditNoteRows.
+  const salesDocumentIds = new Set(rawRows.map((o) => o.orderId));
+  const netRevenueByDay: Record<string, number> = { ...revenueByDay };
+  const netRevenueByMonth: Record<string, number> = { ...revenueByMonth };
+  let creditTotal = 0;
+  let creditNotesApplied = 0;
+  let unlinkedCreditTotal = 0;
+  for (const c of creditRows) {
+    if (!c.parentDocumentId || !salesDocumentIds.has(c.parentDocumentId)) {
+      unlinkedCreditTotal += c.net;
+      continue;
+    }
+    creditTotal += c.net;
+    creditNotesApplied += 1;
+    const day = c.day || 'unknown';
+    if (day !== 'unknown') {
+      netRevenueByDay[day] = (netRevenueByDay[day] || 0) + c.net;
+      const month = day.slice(0, 7);
+      netRevenueByMonth[month] = (netRevenueByMonth[month] || 0) + c.net;
+    }
+  }
+  const netTotalRevenue = totalRevenue + creditTotal;
+
   await db.doc(`business_revenue_summary/${brandId}`).set({
     source,
     totalRevenue,
     orderCount: rawRows.length,
     revenueByDay,
     revenueByMonth,
+    // PER-137: net-of-returns πεδία (negative-day τιμές επιτρεπτές σε μέρες με πολλές επιστροφές).
+    netTotalRevenue,
+    netRevenueByDay,
+    netRevenueByMonth,
+    creditTotal,
+    creditNotesApplied,
+    unlinkedCreditTotal,
     syncedAt: FieldValue.serverTimestamp(),
   });
   logger.info(
-    `[EcommerceAgg] Business revenue for ${brandId}: source=${source} docs=${rawRows.length} €${totalRevenue.toFixed(2)}`
+    `[EcommerceAgg] Business revenue for ${brandId}: source=${source} docs=${rawRows.length} €${totalRevenue.toFixed(2)} (net €${netTotalRevenue.toFixed(2)} after ${creditNotesApplied} credit notes; unlinked €${unlinkedCreditTotal.toFixed(2)})`
   );
 }
 

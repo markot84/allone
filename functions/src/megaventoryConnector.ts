@@ -764,7 +764,7 @@ function documentTypeInfo(row: Record<string, unknown>, typesById: Map<string, M
   };
 }
 
-function isLikelySalesInvoice(row: Record<string, unknown>, type: MvDocumentTypeInfo): boolean {
+export function isLikelySalesInvoice(row: Record<string, unknown>, type: MvDocumentTypeInfo): boolean {
   const abbr = type.abbreviation.toUpperCase();
   const desc = type.description.toLocaleLowerCase('el-GR');
   const text = `${abbr} ${desc}`;
@@ -777,6 +777,24 @@ function isLikelySalesInvoice(row: Record<string, unknown>, type: MvDocumentType
     ['SI', 'INV', 'SINV', 'SIV', 'RECEIPT', 'SR'].includes(abbr) ||
     /(sales?\s*invoice|invoice|receipt|τιμολ|απόδειξη|αποδειξη|λιανικ|πώλη|πωλη)/i.test(text)
   );
+}
+
+/**
+ * PER-137: πιστωτικά/επιστροφές (credit notes). Θετικό ποσό + τύπος που δηλώνει πιστωτικό.
+ * ΔΕΝ κρίνουμε εδώ αν το πιστωτικό μειώνει τον τζίρο (πελατειακή επιστροφή) ή το κόστος
+ * (επιστροφή σε προμηθευτή) — αυτό το αποφασίζει ο aggregator μέσω του `parentDocumentId`:
+ * πιστωτικό μετράει στον καθαρό τζίρο ΜΟΝΟ αν ο γονέας του είναι καταχωρημένο παραστατικό
+ * πώλησης. Έτσι η ταξινόμηση είναι generic — καμία per-brand λίστα τύπων (114 custom τύποι
+ * στο e-tennis account μόνο).
+ */
+export function isLikelyCreditDocument(row: Record<string, unknown>, type: MvDocumentTypeInfo): boolean {
+  const abbr = type.abbreviation.toUpperCase();
+  const desc = type.description.toLocaleLowerCase('el-GR');
+  const text = `${abbr} ${desc}`;
+  const amount = mvNum(row, 'DocumentAmountGrandTotal', 'DocumentTotalAmount', 'DocumentAmountTotal', 'DocumentTotal');
+  if (amount <= 0) return false;
+  if (/(quote|proforma|προσφορ|προτιμολ)/i.test(text)) return false;
+  return /(credit|return|refund|πιστωτ|επιστροφ)/i.test(text);
 }
 
 function documentTypeBreakdown(rows: Record<string, unknown>[], typesById: Map<string, MvDocumentTypeInfo>) {
@@ -1162,6 +1180,7 @@ export async function fetchMegaventoryData(
   let totalImported = 0;
   const counts = {
     invoices: 0,
+    creditNotes: 0,
     salesOrders: 0,
     purchaseOrders: 0,
     products: 0,
@@ -1304,6 +1323,9 @@ export async function fetchMegaventoryData(
     } else {
       const rawDocs = invRows as Record<string, unknown>[];
       const docs = rawDocs.filter((d) => isLikelySalesInvoice(d, documentTypeInfo(d, documentTypesById)));
+      // PER-137: τα πιστωτικά ρέουν από το ΙΔΙΟ DocumentGet stream (incremental & backfill) —
+      // μέχρι τώρα απορρίπτονταν σιωπηλά και ο τζίρος ERP έμενε μικτός (επιστροφές αόρατες).
+      const creditDocs = rawDocs.filter((d) => isLikelyCreditDocument(d, documentTypeInfo(d, documentTypesById)));
       documentDiagnostics = {
         invoiceBackfillMode: shouldStageInvoiceBackfill ? 'staged' : invoiceBackfillPending ? 'incremental_backfill_pending' : 'incremental',
         invoiceBackfillCursor: invoiceBackfillCursor ?? null,
@@ -1347,11 +1369,45 @@ export async function fetchMegaventoryData(
           clientId: mvText(d, 'DocumentSupplierClientId', 'DocumentSupplierClientID', 'SupplierClientId', 'SupplierClientID'),
           lineItems: mvDocumentLineItems(d),
           source: 'megaventory_api',
+          // PER-137: ρητό kind ώστε ο aggregator να ξεχωρίζει πωλήσεις από πιστωτικά.
+          // Παλιά docs χωρίς kind = πωλήσεις (back-compat).
+          kind: 'sales_invoice',
         },
       }));
-      if (items.length) await writeBatch(db, 'megaventory_invoices', brandId, items);
+      // PER-137: πιστωτικά → ίδια collection, αρνητικά totalAmount/netAmount (στο MV API
+      // αποθηκεύονται ως θετικά μεγέθη), kind: 'credit_note', + parentDocumentId για το
+      // generic netting join στον aggregator.
+      const creditItems = creditDocs.map((d) => {
+        const gross = mvNum(d, 'DocumentAmountGrandTotal', 'DocumentTotalAmount', 'DocumentAmountTotal', 'DocumentTotal');
+        const tax = mvNum(d, 'DocumentAmountTotalTax', 'DocumentTotalTaxAmount');
+        return {
+          id: `mv_inv_${mvText(d, 'DocumentId', 'DocumentID') || mvText(d, 'DocumentNo', 'DocumentSerialNo') || Math.random().toString(36).slice(2)}`,
+          data: {
+            documentId: mvText(d, 'DocumentId', 'DocumentID'),
+            documentNo: mvText(d, 'DocumentNo', 'DocumentSerialNo'),
+            documentType: documentTypeInfo(d, documentTypesById).abbreviation || documentTypeInfo(d, documentTypesById).description || 'credit_document',
+            documentTypeId: documentTypeInfo(d, documentTypesById).id,
+            documentTypeDescription: documentTypeInfo(d, documentTypesById).description,
+            date: isoDate(mvField(d, 'DocumentDate')),
+            status: mvText(d, 'DocumentStatus'),
+            totalAmount: -gross,
+            taxAmount: tax,
+            netAmount: -Math.max(0, gross - tax),
+            currency: mvText(d, 'DocumentCurrencyCode') || conn.currency || 'EUR',
+            clientName: mvText(d, 'DocumentSupplierClientName', 'SupplierClientName', 'ClientName'),
+            clientId: mvText(d, 'DocumentSupplierClientId', 'DocumentSupplierClientID', 'SupplierClientId', 'SupplierClientID'),
+            parentDocumentId: mvText(d, 'DocumentParentDocId', 'DocumentParentDocID', 'DocumentParentDocumentId'),
+            lineItems: mvDocumentLineItems(d),
+            source: 'megaventory_api',
+            kind: 'credit_note',
+          },
+        };
+      });
+      const allDocItems = [...items, ...creditItems];
+      if (allDocItems.length) await writeBatch(db, 'megaventory_invoices', brandId, allDocItems);
       counts.invoices = items.length;
-      totalImported += items.length;
+      counts.creditNotes = creditItems.length;
+      totalImported += allDocItems.length;
       if (shouldStageInvoiceBackfill) {
         invoiceBackfillProgress = {
           cursor: invoiceBackfillCursor ?? null,
@@ -1365,7 +1421,7 @@ export async function fetchMegaventoryData(
           maxRuntimeMs: MV_INVOICE_BACKFILL_RUNTIME_MS,
         };
       }
-      logger.info(`[Megaventory] Invoices: ${items.length}/${rawDocs.length} imported for brand ${brandId}`);
+      logger.info(`[Megaventory] Invoices: ${items.length} + ${creditItems.length} credit notes /${rawDocs.length} raw docs imported for brand ${brandId}`);
     }
 
     if (docsOk && shouldStageInvoiceBackfill && invoiceBackfillProgress) {
