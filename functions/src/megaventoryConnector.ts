@@ -941,7 +941,9 @@ async function mergeMegaventoryApiCatalogProducts(
   brandId: string,
   customReportSnapshotRows: Record<string, unknown>[],
 ): Promise<number> {
-  const snap = await db.collection('products').where('brandId', '==', brandId).get();
+  // Μόνο τα source/sku χρειάζεται αυτό το read — με projection, αλλιώς φορτώνονται ~221k
+  // ολόκληρα docs (μετά το deleted-products import) στη μνήμη του worker.
+  const snap = await db.collection('products').where('brandId', '==', brandId).select('source', 'sku').get();
   const apiCatalogDocs = snap.docs.filter((d) => d.data().source === PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE);
   for (let i = 0; i < apiCatalogDocs.length; i += 500) {
     const batch = db.batch();

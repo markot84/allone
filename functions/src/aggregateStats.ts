@@ -1,4 +1,4 @@
-import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getFirestore, type Firestore, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 import { ALERT } from './utils/alertKeys';
 
@@ -52,9 +52,25 @@ function classifyStock(p: Record<string, unknown>, supplierTod = 60): string {
 }
 
 async function aggregateProducts(brandId: string): Promise<ProductAggregates> {
-  const snap = await db().collection('products').where('brandId', '==', brandId).get();
+  // A full unprojected .get() holds every product doc in memory at once — at ERP-catalog scale
+  // (~221k docs for etennis after the deleted-products import) that exceeds the function's
+  // 512MiB and the OOM kills the run before any brand after this one is computed. Stream only
+  // the fields the aggregation reads; the numbers produced are identical.
+  const query = db()
+    .collection('products')
+    .where('brandId', '==', brandId)
+    .select(
+      'price',
+      'list_price',
+      'compare_at_price',
+      'available_stock',
+      'stock_level',
+      'margin_percentage',
+      'stock_age_days',
+      'avg_daily_sales',
+    );
   const result: ProductAggregates = {
-    totalSkus: snap.size,
+    totalSkus: 0,
     totalInventoryValue: 0,
     deadStock: { count: 0, value: 0 },
     lowStock: { count: 0 },
@@ -65,12 +81,11 @@ async function aggregateProducts(brandId: string): Promise<ProductAggregates> {
     withMargin: 0,
   };
 
-  if (snap.empty) return result;
-
   let marginSum = 0;
   let marginCount = 0;
 
-  for (const doc of snap.docs) {
+  for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
+    result.totalSkus++;
     const p = doc.data();
     const price = ((p.price as number) ?? (p.list_price as number) ?? (p.compare_at_price as number)) || 0;
     const stockLevel = ((p.available_stock as number) ?? (p.stock_level as number)) || 0;
