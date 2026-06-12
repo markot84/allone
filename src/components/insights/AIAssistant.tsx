@@ -46,7 +46,7 @@ import { useBusinessRevenueSummary } from '../../hooks/useBusinessRevenueSummary
 import { useSegments } from '../../hooks/useSegments';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useGA4Data } from '../../hooks/useGA4Data';
-import { useProductSource } from '../../hooks/useProductSource';
+import { useProducts } from '../../hooks/useProducts';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { calculateCampaignMetrics } from '../../utils/roiUtils';
 import { applyCampaignDateRangeToMetrics } from '../../utils/campaignDateRangeMetrics';
@@ -337,7 +337,10 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
   } = useSegments({ skipOrderHydration: true, useServerAggregate: true });
   const campaignsHook = useCampaigns();
   const ga4 = useGA4Data();
-  const productSrc = useProductSource();
+  // PER-130 (0.7): ΟΧΙ useProductSource — κατέβαζε ~220k products + 7 procurement sheets
+  // στο mount του Mark. Το count έρχεται από το PI aggregate· fallback = 1 doc + server
+  // count (≈221 reads αντί για ≈221k, μόνο σε Mark mount χωρίς aggregate).
+  const productsLite = useProducts({ maxDocs: 1 });
   const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 });
   const campaignMetrics = useMemo(
     () => calculateCampaignMetrics(campaignsHook.campaigns),
@@ -606,8 +609,10 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
         recent: recentCampaignWindows,
       },
       products: {
-        count: productSrc.count,
-        hasImported: productSrc.hasImported,
+        count: productIntelligence.aggregate?.totalCount ?? productsLite.totalCount,
+        // totalCount (server count) αντί για hasImported: το 1-doc fetch περνά από
+        // excludeDemoProducts και θα γύριζε false αν το πρώτο doc τύχαινε demo.
+        hasImported: !!productIntelligence.aggregate || productsLite.totalCount > 0,
       },
       ga4: {
         hasData: ga4.hasData,
@@ -646,8 +651,7 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
     campaignsHook.count,
     campaignsHook.hasImported,
     campaignsHook.isLoading,
-    productSrc.count,
-    productSrc.hasImported,
+    productsLite.totalCount,
     ga4.hasData,
     ga4.propertyName,
     ga4.totals.sessions,
