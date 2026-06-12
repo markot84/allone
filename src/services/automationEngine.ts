@@ -10,6 +10,14 @@ import { classifyStockHealth, getDaysOfStock, getProductTod } from '../utils/pro
 import { getUpcomingSeason, SEASONAL_PERIODS } from '../data/seasonalPeriods';
 import { deriveBehavioralProfile, derivePredictiveMetrics } from './behavioralEngine';
 
+/**
+ * PER-130: ομάδες triggers που αξιολογούνται αποκλειστικά server-side (scheduledAlerts,
+ * 07:15 καθημερινά, από το brands/{id}/aggregates/products). Ο client δεν έχει πια πλήρη
+ * λίστα προϊόντων (ctx.products = []), οπότε τα παρακάμπτουμε ΠΡΙΝ από οποιοδήποτε
+ * updateTrigger write (κάθε updateTrigger = read + full-map rewrite του automation_settings).
+ */
+const SERVER_ONLY_TRIGGER_GROUPS = new Set<string>(['inventory']);
+
 interface EvaluationContext {
   brandId: string;
   userId: string;
@@ -535,6 +543,10 @@ export async function runAutomationEvaluation(ctx: EvaluationContext): Promise<T
 
   for (const triggerDef of TRIGGERS_CATALOG) {
     if (triggerDef.planRequired === 'enterprise' && ctx.plan !== 'enterprise') continue;
+
+    // PER-130: τα inventory triggers αξιολογούνται μόνο από το nightly scheduledAlerts —
+    // skip πριν από κάθε settings write ώστε ο client να μην αγγίζει το κοινό state.
+    if (SERVER_ONLY_TRIGGER_GROUPS.has(triggerDef.group)) continue;
 
     const config = settings.triggers[triggerDef.id];
     if (!config?.enabled) continue;
