@@ -333,7 +333,8 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
     totalCustomers,
     dataSource: segmentsDataSource,
     orderRfmMeta,
-  } = useSegments();
+    // PER-130 (0.6): segments από το έτοιμο μηνιαίο RFM aggregate — όχι 400 ημέρες παραγγελιών
+  } = useSegments({ skipOrderHydration: true, useServerAggregate: true });
   const campaignsHook = useCampaigns();
   const ga4 = useGA4Data();
   const productSrc = useProductSource();
