@@ -316,9 +316,12 @@ const MarkMessageItem = memo(function MarkMessageItem({
 interface AIAssistantProps {
   isOpen: boolean;
   onClose: () => void;
+  /** PER-130 (0.5): voice intent από το πρώτο lazy mount — το gesture έγινε πριν υπάρξει listener. */
+  autoStartVoice?: boolean;
+  onVoiceStarted?: () => void;
 }
 
-export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
+export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: AIAssistantProps) {
   const { currentBrand } = useBrand();
   const commercialInfo = useCommercialInfo();
   // Light path: ο Mark χρειάζεται ΜΟΝΟ revenue/orders/platforms — όχι SKU stats / stock movement
@@ -1024,10 +1027,21 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     stt.start();
   }, [clearVoiceAutoSubmit, isTyping, savingInfo, stt, tts]);
 
+  // Once-ref ΥΠΟΧΡΕΩΤΙΚΟ: το stt object έχει νέο identity σε κάθε render ⇒ το effect
+  // ξανατρέχει συνεχώς (και StrictMode double-εκτελεί) — χωρίς ref το autoStartVoice θα
+  // έκανε επανειλημμένα stt.start() abort/restart. iOS caveat (τεκμηρίωση, όχι fix): στο
+  // πρώτο cold tap το tts.prime() γίνεται εκτός gesture — το STT ξεκινά, η φωνητική
+  // απάντηση μπορεί να μείνει σιωπηλή μία φορά.
+  const autoVoiceConsumedRef = useRef(false);
   useEffect(() => {
     window.addEventListener(MARK_START_VOICE_EVENT, startVoiceInput);
+    if (autoStartVoice && !autoVoiceConsumedRef.current) {
+      autoVoiceConsumedRef.current = true;
+      startVoiceInput();
+      onVoiceStarted?.();
+    }
     return () => window.removeEventListener(MARK_START_VOICE_EVENT, startVoiceInput);
-  }, [startVoiceInput]);
+  }, [startVoiceInput, autoStartVoice, onVoiceStarted]);
 
   useEffect(() => {
     if (!isOpen || !voiceRepliesEnabled || !tts.supported) return;
