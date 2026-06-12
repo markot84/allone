@@ -19,7 +19,9 @@ export function useAiInsightsData(options: { skipOrderHydration?: boolean; useSe
   });
   const { products } = useProducts();
   const { suppliers } = useSuppliers();
-  const ecomm = useEcommerceSummary();
+  // PER-130 (0.3): summary-only — χωρίς SKU details / stock movement sheets· μοιράζεται
+  // το cache entry του Dashboard (το queryKey διασπάται στα ίδια options).
+  const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const { activeStrategy } = useActiveStrategy();
 
   const supplierTodMap = useMemo(() => {
