@@ -1,11 +1,15 @@
 import { useMemo } from 'react';
 import { useSegments } from '../../hooks/useSegments';
-import { useProducts } from '../../hooks/useProducts';
-import { useSuppliers } from '../../hooks/useSuppliers';
+import { useProductIntelligenceAggregateDoc } from '../../hooks/useProductIntelligenceAggregate';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { scenarios } from '../../data';
-import { generateInsightsFromData } from '../../services/insights';
+import { generateInsightsFromData, type InsightInventoryAggregate } from '../../services/insights';
+import type { Product } from '../../types';
+
+// PER-130 (0.4): τα product cards τρέφονται από το PI aggregate — κανένα products read.
+// Module-level ώστε το reference να είναι σταθερό για το useMemo.
+const EMPTY_PRODUCTS: Product[] = [];
 
 /**
  * @param options.skipOrderHydration — Dashboard context: ΜΗΝ τραβάς 400ήμερο raw order history
@@ -17,18 +21,25 @@ export function useAiInsightsData(options: { skipOrderHydration?: boolean; useSe
     skipOrderHydration: options.skipOrderHydration,
     useServerAggregate: options.useServerAggregate,
   });
-  const { products } = useProducts();
-  const { suppliers } = useSuppliers();
+  const piAggregate = useProductIntelligenceAggregateDoc();
   // PER-130 (0.3): summary-only — χωρίς SKU details / stock movement sheets· μοιράζεται
   // το cache entry του Dashboard (το queryKey διασπάται στα ίδια options).
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const { activeStrategy } = useActiveStrategy();
 
-  const supplierTodMap = useMemo(() => {
-    const m = new Map<string, number>();
-    suppliers.forEach(s => m.set(s.name, s.tod));
-    return m;
-  }, [suppliers]);
+  // Import-only brands: aggregate null ⇒ inventory null ⇒ με products: [] τα product
+  // cards απουσιάζουν έντιμα (τα guards του insights.ts δεν περνούν με μηδενικά).
+  const inventory = useMemo<InsightInventoryAggregate | null>(
+    () =>
+      piAggregate.aggregate
+        ? {
+            summary: piAggregate.aggregate.summary,
+            categoriesCount: piAggregate.aggregate.categories?.length ?? 0,
+            totalCount: piAggregate.aggregate.totalCount,
+          }
+        : null,
+    [piAggregate.aggregate]
+  );
 
   // Εξάγουμε τα AI-επιλεγμένα segments από την ενεργή στρατηγική ώστε τα insights
   // να ευθυγραμμίζονται με το Channel Activation (single AI voice για τον χρήστη).
@@ -50,9 +61,9 @@ export function useAiInsightsData(options: { skipOrderHydration?: boolean; useSe
   const aiInsights = useMemo(
     () =>
       generateInsightsFromData(
-        products,
+        EMPTY_PRODUCTS,
         segments,
-        supplierTodMap,
+        undefined,
         {
           hasData: ecomm.orderCount > 0 || ecomm.totalRevenue > 0,
           hasConnector: ecomm.connectedPlatforms.length > 0,
@@ -62,11 +73,11 @@ export function useAiInsightsData(options: { skipOrderHydration?: boolean; useSe
           platformBreakdown: ecomm.platformBreakdown,
         },
         strategyContext,
+        inventory,
       ),
     [
-      products,
       segments,
-      supplierTodMap,
+      inventory,
       ecomm.orderCount > 0 || ecomm.totalRevenue > 0,
       ecomm.connectedPlatforms.length > 0,
       ecomm.totalRevenue,
