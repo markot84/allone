@@ -30,7 +30,8 @@ export function useAutomationRunner() {
   const { user } = useAuth();
   const { plan } = usePlan();
   const { products } = useProducts();
-  const { segments } = useSegments();
+  // PER-130 (0.1): segments από το έτοιμο μηνιαίο RFM aggregate — όχι 400 ημέρες παραγγελιών
+  const { segments } = useSegments({ skipOrderHydration: true, useServerAggregate: true });
   const { campaigns } = useCampaigns();
   const { suppliers } = useSuppliers();
   const { benchmarks } = usePriceBenchmarks();
