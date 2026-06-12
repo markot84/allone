@@ -199,7 +199,7 @@ interface DashboardOverviewProps {
 export function DashboardOverview({ onSectionChange, onOpenInsights }: DashboardOverviewProps = {}) {
   const { currentBrand } = useBrand();
   const { isB2B, enabledModules } = useModules();
-  const { segments: rfmSegments, hasImported: hasSegments, isLoading: segmentsLoading } = useSegments({
+  const { segments: rfmSegments, hasImported: hasSegments, isLoading: segmentsLoading, dataSource: segmentsDataSource, aggregateStatus } = useSegments({
     skipOrderHydration: true,
     // Τροφοδότηση από το έτοιμο server RFM aggregate (1 doc read) → πραγματικά segments γρήγορα,
     // χωρίς client-side υπολογισμό από 400ήμερες παραγγελίες.
@@ -250,6 +250,16 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     hasSegments ||
     dashboardRfmSegments.length > 0 ||
     (segmentStats?.totalCustomers ?? 0) > 0;
+
+  // PER-130 (0.9): κενό pie ⇒ καθοδήγηση αντί για άδειο 224px δαχτυλίδι. Κρίνεται σε ό,τι
+  // πραγματικά render-άρεται: με !segmentsLoading το dashboardRfmSegments ταυτίζεται πάντα
+  // με το rfmSegments (όλα τα μη-loading branches του memo το επιστρέφουν) — διαβάζουμε το
+  // δεύτερο ώστε ο έλεγχος να μην περνά από ref-derived τιμή (react-hooks/refs).
+  const showSegmentsEmptyState = !segmentsLoading && rfmSegments.length === 0;
+  // Προαιρετικό caption: γεμάτο pie από imported segments χωρίς πρόσφατο RFM aggregate —
+  // ήπια ένδειξη ΧΩΡΙΣ CTA (για import-only brands το refresh δεν παράγει αποτέλεσμα, BUG-7).
+  const showSegmentsStaleSourceNote =
+    !segmentsLoading && rfmSegments.length > 0 && segmentsDataSource !== 'ecommerce';
 
   const supplierTodMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -1818,15 +1828,29 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               subtitle="Μερίδιο πελατών ανά RFM segment."
               icon={<Users size={18} className="text-[var(--nts-medium-gray)]" />}
             />
-            <div 
+            <div
               ref={segmentContainerRef}
-              className="relative w-full min-w-0 max-w-full" 
-              style={{ 
-                height: '224px', 
-                minHeight: '224px', 
+              className="relative w-full min-w-0 max-w-full"
+              style={{
+                height: '224px',
+                minHeight: '224px',
               }}
             >
-              <PieChart width={chartDimensions.segment.width} height={chartDimensions.segment.height}>
+              {/* PER-130 (0.9): το div μένει mounted (ResizeObserver wiring) — εναλλάσσονται μόνο τα children. */}
+              {showSegmentsEmptyState ? (
+                <div className="w-full h-full flex items-center justify-center bg-[#F5F5F5] rounded-lg">
+                  <div className="text-center px-4">
+                    <Users size={32} className="text-[#9CA3AF] mx-auto mb-2" />
+                    <p className="text-sm text-[#4A4A4A] font-medium">Δεν υπάρχει πρόσφατη μηνιαία ανάλυση πελατών</p>
+                    <p className="text-xs text-[#9CA3AF] mt-1">
+                      {aggregateStatus === 'running'
+                        ? 'Η μηνιαία ανάλυση εκτελείται αυτή τη στιγμή…'
+                        : 'Η ανάλυση RFM εκτελείται αυτόματα κάθε μήνα. Πατήστε την κάρτα για το Data Analysis — η "Ανανέωση ανάλυσης" είναι διαθέσιμη σε διαχειριστές.'}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <PieChart width={chartDimensions.segment.width} height={chartDimensions.segment.height}>
                   <Pie
                     data={dashboardRfmSegments as any}
                     cx="50%"
@@ -1856,23 +1880,31 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     ]}
                   />
                 </PieChart>
+              )}
             </div>
-            <div className="space-y-2 mt-4">
-              {dashboardRfmSegments.map((segment) => (
-                <div key={segment.id} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: segment.color }}
-                    />
-                    <span className="text-[#4A4A4A]">{segment.name}</span>
+            {!showSegmentsEmptyState && (
+              <div className="space-y-2 mt-4">
+                {dashboardRfmSegments.map((segment) => (
+                  <div key={segment.id} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: segment.color }}
+                      />
+                      <span className="text-[#4A4A4A]">{segment.name}</span>
+                    </div>
+                    <span className="font-medium text-[#1A1A1A] font-mono" title="Μερίδιο επί του συνόλου πελατών RFM">
+                      {formatPercent(segment.percentage ?? 0, 1)}
+                    </span>
                   </div>
-                  <span className="font-medium text-[#1A1A1A] font-mono" title="Μερίδιο επί του συνόλου πελατών RFM">
-                    {formatPercent(segment.percentage ?? 0, 1)}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+                {showSegmentsStaleSourceNote && (
+                  <p className="text-xs text-[#9CA3AF] pt-1">
+                    Πηγή: εισαγωγή segments — δεν υπάρχει πρόσφατη μηνιαία ανάλυση RFM.
+                  </p>
+                )}
+              </div>
+            )}
           </Card>
         )}
       </div>
