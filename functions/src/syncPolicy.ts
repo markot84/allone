@@ -81,6 +81,24 @@ export function toMagentoDateTime(date: Date): string {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
+/**
+ * Αν αξίζει να τρέξουν τα βαριά post-sync aggregations (ecommerce summary, stock movement,
+ * product intelligence) μετά από ένα connector sync (PER-140).
+ *
+ * - Επιτυχία ή μερική εισαγωγή (imported > 0): ναι — άλλαξαν δεδομένα.
+ * - Καθαρή αποτυχία (success === false, τίποτα imported): όχι — τα aggregates θα ξαναϋπολόγιζαν
+ *   τα ίδια δεδομένα, και το φρέσκο syncedAt θα έκρυβε ότι η εισαγωγή απέτυχε.
+ * - Queued (background job): όχι εδώ — το aggregation το αναλαμβάνει ο worker όταν τελειώσει.
+ * - Providers χωρίς `success` στο result μένουν ανεπηρέαστοι (`!== false`).
+ */
+export function shouldRunPostSyncAggregations(
+  result: { success?: boolean; imported?: number; queued?: boolean } | null | undefined
+): boolean {
+  if (!result) return false;
+  if (result.queued === true) return false;
+  return result.success !== false || Number(result.imported ?? 0) > 0;
+}
+
 export function buildHistoricalOrIncrementalWindow(
   connector: Record<string, unknown>,
   lastSyncField: string,

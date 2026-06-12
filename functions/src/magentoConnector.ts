@@ -71,8 +71,30 @@ const MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE = 50;
 /** Full-catalog fallback (ERP-less brands): max σελίδες/run (×100 προϊόντα), resume με cursor. */
 const MAGENTO_FULL_CATALOG_PAGE_BUDGET = 150;
 
-/** fetch wrapper με AbortController — μετατρέπει κρεμάσματα σε καθαρά errors. */
-async function magentoFetch(url: string, init: RequestInit = {}, timeoutMs = MAGENTO_FETCH_TIMEOUT_MS): Promise<Response> {
+/**
+ * PER-139: bounded retries για παροδικά σφάλματα. Όλες οι κλήσεις Magento εδώ είναι
+ * idempotent GETs, οπότε το retry είναι ασφαλές. Retry ΜΟΝΟ σε timeout/δικτυακό σφάλμα,
+ * HTTP 5xx και 429 — ποτέ σε άλλα 4xx (το degraded catalog-401 path εξαρτάται από το
+ * να αναδύονται αμέσως).
+ */
+const MAGENTO_FETCH_MAX_RETRIES = 2;
+const MAGENTO_RETRY_BASE_DELAYS_MS = [2_000, 8_000];
+
+function isRetryableMagentoStatus(status: number): boolean {
+  return status >= 500 || status === 429;
+}
+
+/** Καθυστέρηση πριν το retry attempt (0-based) με ±25% jitter για αποσυγχρονισμό. */
+function magentoRetryDelayMs(attempt: number, random: () => number = Math.random): number {
+  const base = MAGENTO_RETRY_BASE_DELAYS_MS[Math.min(attempt, MAGENTO_RETRY_BASE_DELAYS_MS.length - 1)];
+  const jitter = 0.75 + random() * 0.5;
+  return Math.round(base * jitter);
+}
+
+const sleepMs = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Μία προσπάθεια fetch με AbortController — μετατρέπει κρεμάσματα σε καθαρά errors. */
+async function magentoFetchOnce(url: string, init: RequestInit = {}, timeoutMs = MAGENTO_FETCH_TIMEOUT_MS): Promise<Response> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -85,6 +107,40 @@ async function magentoFetch(url: string, init: RequestInit = {}, timeoutMs = MAG
   } finally {
     clearTimeout(t);
   }
+}
+
+/**
+ * fetch wrapper με timeout + bounded retries (PER-139). Ένα αργό page στα 300 του backfill
+ * δεν πρέπει να ακυρώνει ολόκληρο το νυχτερινό sync (παρατηρήθηκε live 2x στις 12-06-2026).
+ */
+async function magentoFetch(url: string, init: RequestInit = {}, timeoutMs = MAGENTO_FETCH_TIMEOUT_MS): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= MAGENTO_FETCH_MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delay = magentoRetryDelayMs(attempt - 1);
+      logger.warn(`[Magento] transient failure, retry ${attempt}/${MAGENTO_FETCH_MAX_RETRIES} in ${delay}ms: ${url}`);
+      await sleepMs(delay);
+    }
+    try {
+      const res = await magentoFetchOnce(url, init, timeoutMs);
+      if (isRetryableMagentoStatus(res.status) && attempt < MAGENTO_FETCH_MAX_RETRIES) {
+        // Σώμα αδιάφορο — καταναλώνεται για να μη μείνει ανοιχτό το stream, μετά retry.
+        await res.text().catch(() => '');
+        lastError = new Error(`Magento transient HTTP ${res.status}`);
+        continue;
+      }
+      return res;
+    } catch (e) {
+      // timeout (μετασχηματισμένο AbortError) ή δικτυακό σφάλμα → retryable· οτιδήποτε
+      // άλλο (π.χ. SSRF block από safeFetch) αναδύεται αμέσως.
+      const msg = e instanceof Error ? e.message : String(e);
+      const transient = /timeout|fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket|network/i.test(msg);
+      if (!transient || attempt >= MAGENTO_FETCH_MAX_RETRIES) throw e;
+      lastError = e;
+    }
+  }
+  // unreachable — το loop είτε επιστρέφει είτε κάνει throw· κρατάμε τον compiler ήσυχο.
+  throw lastError instanceof Error ? lastError : new Error(`Magento fetch failed: ${url}`);
 }
 
 type ProbeFail = { lastStatus: number; lastBody: string; lastUrl: string };
@@ -1549,4 +1605,7 @@ export const __test = {
   getApexDomain,
   normalizeComparableHost,
   normalizeComparableUrl,
+  magentoFetch,
+  isRetryableMagentoStatus,
+  magentoRetryDelayMs,
 };
