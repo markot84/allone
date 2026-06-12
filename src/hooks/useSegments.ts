@@ -22,7 +22,7 @@ import {
   type AnalysisSnapshotPayload,
   type AnalysisSnapshotScope,
 } from '../services/analysisSnapshotCache';
-import { fetchDataAnalysisRfmAggregate } from '../services/dataAnalysisRfm';
+import { fetchDataAnalysisRfmAggregate, type DataAnalysisRfmAggregate, type DataAnalysisRfmScope } from '../services/dataAnalysisRfm';
 import type { RFMSegment } from '../types';
 
 const STORAGE_KEY = (brandId: string) => `pp-rfm-data-source-${brandId}`;
@@ -105,6 +105,30 @@ function rebuildSegmentsFromCustomerSummaries(summariesBySegment: Map<string, Se
       icon: '',
     } as RFMSegment;
   });
+}
+
+/**
+ * Επιλογή aggregate scope ΧΩΡΙΣ gate στο status: τα 'running'/'failed' writes του server
+ * γίνονται με merge:true και διατηρούν σκόπιμα τα τελευταία καλά scopes
+ * (functions/src/dataAnalysisRfmAggregator.ts:1216-1223, 1271-1276 — η πρόθεση τεκμηριώνεται
+ * και στο services/dataAnalysisRfm.ts:51-54). Το παλιό gate `status === 'ready'` υποβάθμιζε
+ * σιωπηλά κάθε aggregate consumer σε import/empty για έως έναν μήνα (BUG-5).
+ *
+ * Auto-switch identified→all: αν το 'identified' υπάρχει με canCompute:false και το 'all'
+ * υπολογίζεται, σερβίρουμε το 'all'. Μονόδρομο σκόπιμα: το 'all' είναι υπερσύνολο του
+ * 'identified' (computeScope: canCompute = segments.length > 0) — η αντίστροφη μετάβαση
+ * δεν συμβαίνει ποτέ.
+ */
+function selectAggregateScope(
+  scopes: DataAnalysisRfmAggregate['scopes'] | undefined,
+  preferredKey: 'identified' | 'all',
+): DataAnalysisRfmScope | null {
+  if (!scopes) return null;
+  const preferred = scopes[preferredKey] ?? null;
+  if (preferredKey === 'identified' && preferred && !preferred.canCompute && scopes.all?.canCompute) {
+    return scopes.all;
+  }
+  return preferred ?? scopes.all ?? scopes.identified ?? null;
 }
 
 export type UseSegmentsOptions = {
@@ -203,14 +227,11 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     retry: 1,
   });
   const aggregateScopeKey = sourcePref === 'external' ? 'all' : 'identified';
+  // Default variant: scopes όποτε υπάρχουν, ανεξάρτητα από status (βλ. selectAggregateScope).
+  // Το data_analysis branch μένει ως έχει — η σελίδα RFM έχει δικό της fallback ladder.
   const aggregateScope = isDataAnalysis
     ? dataAnalysisAggregate?.scopes?.[aggregateScopeKey] ?? null
-    : dataAnalysisAggregate?.status === 'ready'
-      ? dataAnalysisAggregate.scopes?.[aggregateScopeKey]
-          ?? dataAnalysisAggregate.scopes?.all
-          ?? dataAnalysisAggregate.scopes?.identified
-          ?? null
-      : null;
+    : selectAggregateScope(dataAnalysisAggregate?.scopes, aggregateScopeKey);
   const aggregateIsBuilding = isDataAnalysis && dataAnalysisAggregate?.status === 'running';
   const isDataAnalysisAggregatePending = isDataAnalysis && dataAnalysisAggregatePending && !dataAnalysisAggregate;
   const shouldUseAggregate = !!aggregateScope?.canCompute;
@@ -632,6 +653,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     segmentMigration: displayedSegmentMigration,
     segmentPeriodComparison: displayedSegmentPeriodComparison,
     importSegmentsAvailable,
+    /** Status του server RFM aggregate — 'running' όσο ξαναχτίζεται (τα segments μένουν τα τελευταία καλά)· null χωρίς aggregate. */
+    aggregateStatus: dataAnalysisAggregate?.status ?? null,
     analysisSnapshotSavedAt: displayedSnapshot?.savedAt ?? null,
     analysisSnapshotIsStale: shouldUseStaleSnapshot,
     analysisLastAnalyzedAt:
@@ -639,3 +662,5 @@ export function useSegments(options: UseSegmentsOptions = {}) {
       (shouldUseAggregate && dataAnalysisAggregate ? dataAnalysisAggregate.latestSyncAt : null),
   };
 }
+
+export const __test = { selectAggregateScope };
