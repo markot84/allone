@@ -4,7 +4,7 @@ import { doc, getDoc, limit, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useBrand } from './useBrand';
 import { fetchBrandSyncVersion } from '../services/brandSyncVersion';
-import { FirestoreService, ProductsService, SuppliersService } from '../services/firestore';
+import { FirestoreService, SuppliersService } from '../services/firestore';
 import { AutomationAlertsService, AutomationSettingsService } from '../services/automationSettings';
 import { FeedSourcesService } from '../services/feedSources';
 import { fetchEcommerceSummary } from './useEcommerceSummary';
@@ -110,13 +110,22 @@ export function useAppWarmup() {
           staleTime: 10 * 60 * 1000,
         })
       );
-      prefetch(() =>
-        queryClient.prefetchQuery({
-          queryKey: ['business_revenue_summary', brandId],
+      // PER-130 (P3/BUG-6): ο πραγματικός consumer key φέρει το syncVersion
+      // (useBusinessRevenueSummary.ts:36) — το παλιό 2-μερές key ζέσταινε κάτι που κανείς
+      // δεν διάβαζε. Λύνουμε πρώτα το syncVersion (ίδιο key+staleTime με :73 ⇒ reuse του
+      // in-flight phase-1 fetch, χωρίς δεύτερο read) και μετά prefetch με το σωστό key.
+      prefetch(async () => {
+        const sync = await queryClient.fetchQuery({
+          queryKey: ['brandSyncVersion', brandId],
+          queryFn: () => fetchBrandSyncVersion(brandId),
+          staleTime: 60 * 1000,
+        });
+        await queryClient.prefetchQuery({
+          queryKey: ['business_revenue_summary', brandId, sync?.version ?? 'pending'],
           queryFn: () => fetchBusinessRevenueSummary(brandId),
           staleTime: 10 * 60 * 1000,
-        })
-      );
+        });
+      });
     }, 0);
 
     const phaseTwo = scheduleIdle(() => {
@@ -127,13 +136,10 @@ export function useAppWarmup() {
           staleTime: 5 * 60 * 1000,
         })
       );
-      prefetch(() =>
-        queryClient.prefetchQuery({
-          queryKey: ['products', brandId, 'count'],
-          queryFn: () => ProductsService.getCount(brandId),
-          staleTime: 5 * 60 * 1000,
-        })
-      );
+      // PER-130 (P7): διαγράφηκε το ['products', brandId, 'count'] prefetch — το key δεν
+      // ταίριαζε με κανέναν consumer (ο πραγματικός φέρει syncVersion), ~221 aggregation
+      // reads/boot στο κενό. Δεν το ξανα-key-άρουμε: το count είναι on-demand Mark query
+      // και το prewarm για κάθε χρήστη είναι η αντίστροφη ανταλλαγή (critic C4).
       prefetch(() =>
         queryClient.prefetchQuery({
           queryKey: ['automation_settings', brandId],
