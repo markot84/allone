@@ -1,10 +1,13 @@
 /**
  * PER-137 — computeBusinessRevenueSummary credit-note netting against the REAL module +
- * Firestore emulator. Contract (commit 1, parallel fields):
- *  - existing fields (totalRevenue, revenueByDay/Month) stay GROSS — consumers unchanged;
- *  - new net* fields subtract ONLY credits whose parentDocumentId is a known sales invoice
- *    (supplier-return credits have purchase-doc parents → unlinked → reported, not netted);
- *  - cancelled credits and legacy docs without `kind` keep today's semantics.
+ * Firestore emulator. Contract (commit 2, canonical net):
+ *  - canonical fields (totalRevenue, revenueByDay/Month) are now NET-of-returns, so every
+ *    consumer (Dashboard, digest) shows turnover after returns with no frontend change;
+ *  - gross* fields preserve sales-only totals for the gross→returns→net breakdown;
+ *  - only credits whose parentDocumentId is a known sales invoice are netted (supplier-return
+ *    credits have purchase-doc parents → unlinked → reported, not netted);
+ *  - cancelled credits and legacy docs without `kind` keep today's semantics;
+ *  - net days/months may go negative when returns exceed sales in a period.
  *
  * Run via `npm run test:integration` (firebase emulators:exec wraps this).
  */
@@ -42,7 +45,7 @@ beforeEach(async () => {
 });
 
 describe('computeBusinessRevenueSummary credit netting (PER-137)', () => {
-  it('nets linked customer credits, ignores supplier/unlinked and cancelled credits, keeps gross fields unchanged', async () => {
+  it('nets linked customer credits into canonical fields, ignores supplier/unlinked and cancelled credits, preserves gross', async () => {
     // sales — one new-style (kind set), one legacy (no kind → back-compat)
     await seedInvoice('mv_inv_D100', { documentId: 'D100', kind: 'sales_invoice', netAmount: 100, date: '2026-05-02', status: 'Approved' });
     await seedInvoice('mv_inv_D200', { documentId: 'D200', netAmount: 50, date: '2026-05-10', status: 'Approved' });
@@ -59,43 +62,43 @@ describe('computeBusinessRevenueSummary credit netting (PER-137)', () => {
     expect(snap.exists).toBe(true);
     const s = snap.data() as Record<string, unknown>;
 
-    // gross — unchanged semantics
-    expect(s.totalRevenue).toBe(150);
-    expect(s.orderCount).toBe(2);
-    expect((s.revenueByMonth as Record<string, number>)['2026-05']).toBe(150);
+    // canonical = NET (every consumer now sees net-of-returns)
+    expect(s.totalRevenue).toBe(130);
+    expect(s.orderCount).toBe(2); // returns are not orders
+    expect((s.revenueByMonth as Record<string, number>)['2026-05']).toBe(130);
+    expect((s.revenueByDay as Record<string, number>)['2026-05-15']).toBe(-20);
+    expect((s.revenueByDay as Record<string, number>)['2026-05-02']).toBe(100);
 
-    // net — parallel fields
-    expect(s.netTotalRevenue).toBe(130);
+    // gross preserved + credit diagnostics
+    expect(s.grossTotalRevenue).toBe(150);
+    expect((s.grossRevenueByMonth as Record<string, number>)['2026-05']).toBe(150);
     expect(s.creditTotal).toBe(-20);
     expect(s.creditNotesApplied).toBe(1);
     expect(s.unlinkedCreditTotal).toBe(-7);
-    expect((s.netRevenueByMonth as Record<string, number>)['2026-05']).toBe(130);
-    expect((s.netRevenueByDay as Record<string, number>)['2026-05-15']).toBe(-20);
-    expect((s.netRevenueByDay as Record<string, number>)['2026-05-02']).toBe(100);
   });
 
-  it('produces identical gross and net fields when no credit notes exist', async () => {
+  it('produces identical canonical and gross fields when no credit notes exist', async () => {
     await seedInvoice('mv_inv_D300', { documentId: 'D300', netAmount: 75.5, date: '2026-04-01', status: 'Approved' });
 
     await computeBusinessRevenueSummary(BRAND);
 
     const s = (await db.doc(`business_revenue_summary/${BRAND}`).get()).data() as Record<string, unknown>;
     expect(s.totalRevenue).toBe(75.5);
-    expect(s.netTotalRevenue).toBe(75.5);
+    expect(s.grossTotalRevenue).toBe(75.5);
     expect(s.creditNotesApplied).toBe(0);
     expect(s.unlinkedCreditTotal).toBe(0);
-    expect(s.netRevenueByMonth).toEqual(s.revenueByMonth);
+    expect(s.revenueByMonth).toEqual(s.grossRevenueByMonth);
   });
 
-  it('allows negative net days/months when returns exceed sales in a period', async () => {
+  it('allows negative canonical days/months when returns exceed sales in a period', async () => {
     await seedInvoice('mv_inv_D400', { documentId: 'D400', netAmount: 30, date: '2026-03-01', status: 'Approved' });
     await seedInvoice('mv_inv_C4', { documentId: 'C4', kind: 'credit_note', netAmount: -45, parentDocumentId: 'D400', date: '2026-04-02', status: 'Approved' });
 
     await computeBusinessRevenueSummary(BRAND);
 
     const s = (await db.doc(`business_revenue_summary/${BRAND}`).get()).data() as Record<string, unknown>;
-    expect(s.netTotalRevenue).toBe(-15);
-    expect((s.netRevenueByMonth as Record<string, number>)['2026-04']).toBe(-45);
-    expect((s.revenueByMonth as Record<string, number>)['2026-03']).toBe(30);
+    expect(s.totalRevenue).toBe(-15);
+    expect((s.revenueByMonth as Record<string, number>)['2026-04']).toBe(-45);
+    expect((s.grossRevenueByMonth as Record<string, number>)['2026-03']).toBe(30);
   });
 });

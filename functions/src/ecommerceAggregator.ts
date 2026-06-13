@@ -532,27 +532,32 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
     source = 'softone_sales_documents';
   }
 
-  const revenueByDay: Record<string, number> = {};
-  const revenueByMonth: Record<string, number> = {};
-  let totalRevenue = 0;
+  // Μικτός τζίρος (μόνο πωλήσεις) — διατηρείται για διαφάνεια ως gross*.
+  const grossRevenueByDay: Record<string, number> = {};
+  const grossRevenueByMonth: Record<string, number> = {};
+  let grossTotalRevenue = 0;
   for (const o of rawRows) {
-    totalRevenue += o.totalPrice;
+    grossTotalRevenue += o.totalPrice;
     const day = o.createdAt?.slice(0, 10) || 'unknown';
     if (day !== 'unknown') {
-      revenueByDay[day] = (revenueByDay[day] || 0) + o.totalPrice;
+      grossRevenueByDay[day] = (grossRevenueByDay[day] || 0) + o.totalPrice;
     }
     const month = o.createdAt?.slice(0, 7) || 'unknown';
     if (month !== 'unknown') {
-      revenueByMonth[month] = (revenueByMonth[month] || 0) + o.totalPrice;
+      grossRevenueByMonth[month] = (grossRevenueByMonth[month] || 0) + o.totalPrice;
     }
   }
 
-  // PER-137 (commit 1 — παράλληλα πεδία, οι καταναλωτές δεν αλλάζουν ακόμα): καθαρός τζίρος
-  // μετά τα πιστωτικά. Πιστωτικό μετράει μόνο αν ο γονέας του είναι γνωστό παραστατικό
-  // πώλησης (rawRows.orderId = documentId) — βλ. readMegaventoryCreditNoteRows.
+  // PER-137 (commit 2 — καθαρός τζίρος ΓΙΝΕΤΑΙ ΚΑΝΟΝΙΚΟΣ): τα canonical πεδία
+  // totalRevenue/revenueByDay/revenueByMonth αφαιρούν πλέον τα πιστωτικά, ώστε ΚΑΘΕ
+  // καταναλωτής (Dashboard, daily digest, useBusinessRevenueSummary) να δείχνει τον τζίρο
+  // μετά τις επιστροφές χωρίς αλλαγή στο frontend. Πιστωτικό μετράει μόνο αν ο γονέας του
+  // είναι γνωστό παραστατικό πώλησης (rawRows.orderId = documentId) — supplier-return
+  // πιστωτικά μένουν unlinked (αναφέρονται, δεν αφαιρούνται). Generic — καμία per-brand λογική.
+  // Οι μέρες/μήνες με πολλές επιστροφές μπορεί να βγουν αρνητικές (αναμενόμενο).
   const salesDocumentIds = new Set(rawRows.map((o) => o.orderId));
-  const netRevenueByDay: Record<string, number> = { ...revenueByDay };
-  const netRevenueByMonth: Record<string, number> = { ...revenueByMonth };
+  const revenueByDay: Record<string, number> = { ...grossRevenueByDay };
+  const revenueByMonth: Record<string, number> = { ...grossRevenueByMonth };
   let creditTotal = 0;
   let creditNotesApplied = 0;
   let unlinkedCreditTotal = 0;
@@ -565,30 +570,31 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
     creditNotesApplied += 1;
     const day = c.day || 'unknown';
     if (day !== 'unknown') {
-      netRevenueByDay[day] = (netRevenueByDay[day] || 0) + c.net;
+      revenueByDay[day] = (revenueByDay[day] || 0) + c.net;
       const month = day.slice(0, 7);
-      netRevenueByMonth[month] = (netRevenueByMonth[month] || 0) + c.net;
+      revenueByMonth[month] = (revenueByMonth[month] || 0) + c.net;
     }
   }
-  const netTotalRevenue = totalRevenue + creditTotal;
+  const totalRevenue = grossTotalRevenue + creditTotal;
 
   await db.doc(`business_revenue_summary/${brandId}`).set({
     source,
+    // canonical = net-of-returns (PER-137)
     totalRevenue,
     orderCount: rawRows.length,
     revenueByDay,
     revenueByMonth,
-    // PER-137: net-of-returns πεδία (negative-day τιμές επιτρεπτές σε μέρες με πολλές επιστροφές).
-    netTotalRevenue,
-    netRevenueByDay,
-    netRevenueByMonth,
+    // gross (sales only) — για breakdown «μικτός → επιστροφές → καθαρός»
+    grossTotalRevenue,
+    grossRevenueByDay,
+    grossRevenueByMonth,
     creditTotal,
     creditNotesApplied,
     unlinkedCreditTotal,
     syncedAt: FieldValue.serverTimestamp(),
   });
   logger.info(
-    `[EcommerceAgg] Business revenue for ${brandId}: source=${source} docs=${rawRows.length} €${totalRevenue.toFixed(2)} (net €${netTotalRevenue.toFixed(2)} after ${creditNotesApplied} credit notes; unlinked €${unlinkedCreditTotal.toFixed(2)})`
+    `[EcommerceAgg] Business revenue for ${brandId}: source=${source} docs=${rawRows.length} net €${totalRevenue.toFixed(2)} (gross €${grossTotalRevenue.toFixed(2)} − ${creditNotesApplied} credit notes €${(-creditTotal).toFixed(2)}; unlinked €${(-unlinkedCreditTotal).toFixed(2)})`
   );
 }
 
