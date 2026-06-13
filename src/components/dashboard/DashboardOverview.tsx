@@ -295,13 +295,17 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
    * Financial gate: μόνο στο πρώτο load χωρίς usable data.
    * Background refetches δεν πρέπει να κρύβουν όλο το Dashboard, γιατί δημιουργούν εκνευριστικό flicker.
    */
+  // PER-130 (P8): το procurement_costing sheet (~12k docs σε procurement Enterprise brands,
+  // persistence-denied ⇒ full network fetch κάθε boot) ΔΕΝ μπλοκάρει πλέον το financial paint.
+  // Το KPI τζίρου από costing (getCostingReal12mTurnover, ~525) ενυδατώνεται καθυστερημένα —
+  // η υπόλοιπη εικόνα εσόδων παίζει αμέσως. Το procurementSheets.hasData μένει στο
+  // hasUsableFinancialData παρακάτω (μόνο επιταχύνει το release όταν το costing είναι ήδη cached).
   const rawFinancialSourcesLoading =
     Boolean(currentBrand) &&
     (businessRevenue.isLoading ||
       ecomm.isLoading ||
       campaignsLoading ||
-      organicLoading ||
-      (enabledModules.procurement && procurementSheets.isLoading));
+      organicLoading);
   const hasUsableFinancialData =
     businessRevenue.hasErpRevenueData ||
     ecomm.hasData ||
