@@ -40,7 +40,8 @@ export function useBusinessRevenueSummary() {
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData,
-    enabled: !!brandId,
+    // PER-130 (P2): όχι fetch κάτω από το throwaway 'pending' syncVersion key.
+    enabled: !!brandId && syncVersion !== 'pending',
   });
 
   const source: BusinessRevenueSource = data?.source === 'none' || !data?.source ? 'none' : data.source;

@@ -125,7 +125,9 @@ export function useCampaigns() {
       // από τα write-site invalidations (ROIAttribution, CampaignsPage, DataImport, ConnectorsPanel).
       return CampaignsService.getAll(brandId) as Promise<Campaign[]>;
     },
-    enabled: !!brandId,
+    // PER-130 (P2): μην κάνεις fetch κάτω από το throwaway 'pending' syncVersion key — warm
+    // boots κλειδώνουν δωρεάν (το brandSyncVersion είναι persisted)· cold boots +≤1 RTT.
+    enabled: !!brandId && syncVersion !== 'pending',
     /** Bounded staleness: Infinity με πρώτο fetch `[]` κλείδωνε το ROI σε κενά δεδομένα χωρίς refetch. */
     staleTime: 5 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,

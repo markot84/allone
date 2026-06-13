@@ -21,7 +21,8 @@ export function useProductIntelligenceAggregateDoc() {
   const aggregateQuery = useQuery({
     queryKey: ['productIntelligenceAggregate', brandId, syncVersion],
     queryFn: () => (brandId ? fetchProductIntelligenceAggregate(brandId, syncVersion) : Promise.resolve(null)),
-    enabled: !!brandId,
+    // PER-130 (P2): όχι fetch κάτω από το throwaway 'pending' syncVersion key.
+    enabled: !!brandId && syncVersion !== 'pending',
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: false,
