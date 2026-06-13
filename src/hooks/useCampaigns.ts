@@ -119,7 +119,11 @@ export function useCampaigns() {
     queryKey,
     queryFn: async () => {
       if (!brandId) return [] as Campaign[];
-      return CampaignsService.getAll(brandId, { forceServer: true }) as Promise<Campaign[]>;
+      // PER-130 (P1): χωρίς forceServer — με memoryLocalCache (config/firebase.ts:75-78) το
+      // getDocs πάει ούτως ή άλλως στο δίκτυο όταν είμαστε online· αυτό απλώς προσθέτει
+      // offline/flaky fallback + latency-compensated own writes. Η φρεσκάδα εξασφαλίζεται
+      // από τα write-site invalidations (ROIAttribution, CampaignsPage, DataImport, ConnectorsPanel).
+      return CampaignsService.getAll(brandId) as Promise<Campaign[]>;
     },
     enabled: !!brandId,
     /** Bounded staleness: Infinity με πρώτο fetch `[]` κλείδωνε το ROI σε κενά δεδομένα χωρίς refetch. */
