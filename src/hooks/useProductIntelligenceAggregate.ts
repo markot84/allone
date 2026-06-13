@@ -4,9 +4,11 @@ import { useBrand } from './useBrand';
 import { useBrandSyncVersion } from './useBrandSyncVersion';
 import {
   fetchProductIntelligenceAggregate,
+  fetchProductIntelligencePage,
   queryProductIntelligencePage,
   type ProductIntelligenceBucket,
   type ProductIntelligenceQuery,
+  type ProductIntelligenceQueryResult,
 } from '../services/productIntelligenceAggregate';
 
 /**
@@ -35,7 +37,12 @@ export function useProductIntelligenceAggregateDoc() {
   };
 }
 
-export function useProductIntelligenceAggregate(bucket: ProductIntelligenceBucket, page: number, query: Omit<ProductIntelligenceQuery, 'bucket' | 'page'> = {}) {
+export function useProductIntelligenceAggregate(
+  bucket: ProductIntelligenceBucket,
+  page: number,
+  query: Omit<ProductIntelligenceQuery, 'bucket' | 'page'> = {},
+  opts?: { staticFirstPage?: boolean },
+) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const syncVersionQuery = useBrandSyncVersion(brandId);
@@ -47,10 +54,36 @@ export function useProductIntelligenceAggregate(bucket: ProductIntelligenceBucke
   const docHook = useProductIntelligenceAggregateDoc();
   const aggregate = docHook.aggregate;
   const safePage = useMemo(() => Math.max(1, page), [page]);
+  const useStaticFirstPage = opts?.staticFirstPage === true && safePage === 1;
 
   const pageQuery = useQuery({
-    queryKey: ['productIntelligencePage', brandId, bucket, safePage, queryKey, aggregate?.syncVersion ?? syncVersion],
-    queryFn: () => (brandId ? queryProductIntelligencePage(brandId, { ...query, bucket, page: safePage }) : Promise.resolve(null)),
+    // PER-130 (P5): discriminator 'static'|'cf' στο key — ξεχωρίζει το στατικό page doc
+    // από το CF αποτέλεσμα ώστε να μην αλληλο-overwrite-άρονται στο cache.
+    queryKey: ['productIntelligencePage', brandId, bucket, safePage, queryKey, aggregate?.syncVersion ?? syncVersion, useStaticFirstPage ? 'static' : 'cf'],
+    queryFn: async () => {
+      if (!brandId) return null;
+      if (useStaticFirstPage) {
+        // Στατικό page doc (1 read) — η CF υλοποιεί ΟΛΟ το bucket server-side (~1.5k reads/κλήση),
+        // περιττό για το αφιλτράριστο page 1. Synthesize το QueryResult από page doc + aggregate.
+        const pageDoc = await fetchProductIntelligencePage(brandId, bucket, 1);
+        if (!pageDoc || !aggregate) return null; // το enabled δεν narrow-άρει το closure type
+        const result: ProductIntelligenceQueryResult = {
+          brandId,
+          status: 'ready',
+          sourceLabel: aggregate.sourceLabel,
+          sourceKind: aggregate.sourceKind,
+          totalCount: aggregate.totalCount,
+          totalRows: pageDoc.totalRows,
+          page: 1,
+          pageSize: pageDoc.pageSize,
+          totalPages: aggregate.pagesByBucket?.[bucket] ?? 1,
+          bucket,
+          products: pageDoc.products,
+        };
+        return result;
+      }
+      return queryProductIntelligencePage(brandId, { ...query, bucket, page: safePage });
+    },
     enabled: !!brandId && !!aggregate,
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,

@@ -341,7 +341,7 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
   // στο mount του Mark. Το count έρχεται από το PI aggregate· fallback = 1 doc + server
   // count (≈221 reads αντί για ≈221k, μόνο σε Mark mount χωρίς aggregate).
   const productsLite = useProducts({ maxDocs: 1 });
-  const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 });
+  const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 }, { staticFirstPage: true });
   const campaignMetrics = useMemo(
     () => calculateCampaignMetrics(campaignsHook.campaigns),
     [campaignsHook.campaigns]

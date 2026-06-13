@@ -210,7 +210,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     brandId: null,
     segments: [],
   });
-  const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 });
+  const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 }, { staticFirstPage: true });
   const products = productIntelligence.page?.products ?? [];
   const { isEnterprise } = usePlan();
   const { signalsBySku: procurementSignals } = useProcurementSignals();

@@ -279,7 +279,9 @@ export function WeightConfigurator({
     sourceLabel: sourceProductDataSourceLabel,
     sourceKind: sourceProductSourceKind,
   } = useProductSource();
-  const serverProductIntelligence = useProductIntelligenceAggregate('all', 1);
+  // PER-130 (P5): staticFirstPage — το WeightConfigurator διαβάζει ΜΟΝΟ το .aggregate,
+  // αλλά το pageQuery πυροδοτούσε την unfiltered CF (~1.5k reads) σε κάθε strategy-page mount.
+  const serverProductIntelligence = useProductIntelligenceAggregate('all', 1, {}, { staticFirstPage: true });
   const products = sourceProducts;
   const hasImported = sourceHasImported || !!serverProductIntelligence.aggregate;
   const productDataSourceLabel = serverProductIntelligence.aggregate?.sourceLabel ?? sourceProductDataSourceLabel;
