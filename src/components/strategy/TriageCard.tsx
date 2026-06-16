@@ -263,10 +263,13 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
   const productScopeLabel = scopedProducts ? 'στο snapshot αξιολόγησης' : 'στον κατάλογο';
 
   // Data availability — για empty state checklist
-  const { connectedPlatforms, skuMovement, stockMovementBaselineDate } = useEcommerceSummary();
+  // PER-130/BUG-11: cheap tier — το TriageCard χρειάζεται μόνο presence του movement, όχι το map.
+  // Το stockMovementBaselineDate γράφεται και στο main ecommerce_summary doc (stockMovementTracker.ts:420),
+  // οπότε ο έλεγχος παρουσίας ισχύει χωρίς το βαρύ skuStats/skuMovement chunk load.
+  const { connectedPlatforms, stockMovementBaselineDate } = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const { hasData: hasProcurement } = useProcurement();
   const hasOrders = (connectedPlatforms?.length ?? 0) > 0;
-  const hasMovementData = !!stockMovementBaselineDate || Object.keys(skuMovement || {}).length > 0;
+  const hasMovementData = !!stockMovementBaselineDate;
 
   // Νέα/άγνωστο breakdown
   const unknownBreakdown = useMemo(() => {

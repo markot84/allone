@@ -63,6 +63,8 @@ interface EcommerceSummaryRaw {
   skuStatsCount?: number;
   /** Stock movement (καθολικό — δουλεύει για όλα τα brands ανεξάρτητα από connector) */
   skuMovementJson?: string;
+  /** PER-130/BUG-11: parsed movement map (client-only) — αποφεύγει το stringify→parse round-trip. */
+  skuMovement?: SkuMovementMap;
   skuMovementCount?: number;
   stockMovementBaselineDate?: string | null;
   stockMovementUpdatedAt?: any;
@@ -104,25 +106,34 @@ function parseSkuStats(raw: EcommerceSummaryRaw | null | undefined): SkuStatsMap
  * Συμβατό με legacy: αν το main summary έχει `skuStatsJson` (παλιά docs), επιστρέφεται κενό
  * εδώ — το `parseSkuStats` του summary κάνει fallback.
  */
+/** PER-130/BUG-11: macrotask yield ώστε το main thread να ανασαίνει ανάμεσα στα chunk parses. */
+const yieldToMain = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 async function fetchSkuStatsFromChunks(brandId: string): Promise<SkuStatsMap> {
   try {
     const chunksSnap = await getDocs(collection(db, 'sku_stats', brandId, 'chunks'));
     if (chunksSnap.empty) return {};
     const merged: SkuStatsMap = {};
-    chunksSnap.forEach((snap) => {
-      const data = snap.data() as { skuStatsJson?: string };
-      if (!data.skuStatsJson) return;
-      try {
-        const partial = JSON.parse(data.skuStatsJson);
-        if (!partial || typeof partial !== 'object') return;
-        for (const k of Object.keys(partial)) {
-          if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
-          merged[k] = (partial as SkuStatsMap)[k];
+    // PER-130/BUG-11: parse κάθε chunk (~900KB) σε ξεχωριστό task με yield ανάμεσα — ένα ενιαίο
+    // JSON.parse 2-5MB μπλόκαρε το main thread για δευτερόλεπτα· τώρα σπάει σε ~1 task/chunk.
+    const docs = chunksSnap.docs;
+    for (let i = 0; i < docs.length; i++) {
+      const data = docs[i].data() as { skuStatsJson?: string };
+      if (data.skuStatsJson) {
+        try {
+          const partial = JSON.parse(data.skuStatsJson);
+          if (partial && typeof partial === 'object') {
+            for (const k of Object.keys(partial)) {
+              if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+              merged[k] = (partial as SkuStatsMap)[k];
+            }
+          }
+        } catch {
+          // ignore corrupt chunk
         }
-      } catch {
-        // ignore corrupt chunk
       }
-    });
+      if (i < docs.length - 1) await yieldToMain();
+    }
     return merged;
   } catch {
     return {};
@@ -134,17 +145,19 @@ async function fetchSkuMovementFromChunks(brandId: string): Promise<SkuMovementM
     const chunksSnap = await getDocs(collection(db, 'stock_movement', brandId, 'chunks'));
     if (chunksSnap.empty) return {};
     const merged: SkuMovementMap = {};
-    chunksSnap.docs
-      .sort((a, b) => Number(a.id) - Number(b.id))
-      .forEach((snap) => {
-        const data = snap.data() as { skuMovementJson?: string };
-        if (!data.skuMovementJson) return;
+    // PER-130/BUG-11: yield ανάμεσα στα chunks (βλ. fetchSkuStatsFromChunks).
+    const docs = chunksSnap.docs.slice().sort((a, b) => Number(a.id) - Number(b.id));
+    for (let i = 0; i < docs.length; i++) {
+      const data = docs[i].data() as { skuMovementJson?: string };
+      if (data.skuMovementJson) {
         try {
           Object.assign(merged, JSON.parse(data.skuMovementJson) as SkuMovementMap);
         } catch {
           // ignore corrupt chunk
         }
-      });
+      }
+      if (i < docs.length - 1) await yieldToMain();
+    }
     return merged;
   } catch {
     return {};
@@ -152,6 +165,9 @@ async function fetchSkuMovementFromChunks(brandId: string): Promise<SkuMovementM
 }
 
 function parseSkuMovement(raw: EcommerceSummaryRaw | null | undefined): SkuMovementMap {
+  // PER-130/BUG-11: προτίμησε το ήδη-parsed map (από chunks) — απόφυγε το stringify (στο fetch)
+  // + parse (εδώ) round-trip πάνω σε έως ~44k entries. Legacy inline json μένει ως fallback.
+  if (raw?.skuMovement) return raw.skuMovement;
   if (!raw?.skuMovementJson) return {};
   try {
     return JSON.parse(raw.skuMovementJson) as SkuMovementMap;
@@ -191,10 +207,11 @@ export async function fetchEcommerceSummary(
   const movement = movementSnap.data() as StockMovementRaw;
   return {
     ...merged,
-    skuMovementJson:
-      Object.keys(chunkedSkuMovement).length > 0
-        ? JSON.stringify(chunkedSkuMovement)
-        : movement.skuMovementJson ?? merged.skuMovementJson,
+    // PER-130/BUG-11: κράτα το parsed map απευθείας όταν έρχεται από chunks — χωρίς stringify
+    // εδώ + parse στο hook. Legacy inline json μένει ως fallback για παλιά docs.
+    ...(Object.keys(chunkedSkuMovement).length > 0
+      ? { skuMovement: chunkedSkuMovement, skuMovementJson: undefined }
+      : { skuMovementJson: movement.skuMovementJson ?? merged.skuMovementJson }),
     skuMovementCount: movement.skuMovementCount ?? merged.skuMovementCount,
     stockMovementBaselineDate: movement.stockMovementBaselineDate ?? merged.stockMovementBaselineDate,
     stockMovementUpdatedAt: movement.stockMovementUpdatedAt ?? merged.stockMovementUpdatedAt,

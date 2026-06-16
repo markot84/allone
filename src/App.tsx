@@ -210,9 +210,10 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               ) {
                 return false;
               }
-              // ecommerce_summary: η compact 'summary' έκδοση επιτρέπεται· η 'sku' έκδοση κουβαλά
-              // ολόκληρο το skuStats map (βαρύ) → εκτός localStorage.
-              if (key === 'ecommerce_summary' && query.queryKey[2] === 'sku') return false;
+              // ecommerce_summary: η compact 'summary' έκδοση επιτρέπεται· οι 'sku'/'movement'
+              // εκδόσεις κουβαλούν ολόκληρα τα skuStats/skuMovement maps (βαρύ, PER-130/BUG-11
+              // parsed carrier) → εκτός localStorage.
+              if (key === 'ecommerce_summary' && (query.queryKey[2] === 'sku' || query.queryKey[3] === 'movement')) return false;
               // ga4_data_chunks: dailyTrafficByChannel (έως ~1 έτος ημερήσια×κανάλια) + organic fallback rows.
               // ΒΑΡΥ payload — αν έμπαινε στο localStorage φούσκωνε το quota → ο sync persister σιωπηλά
               // έσβηνε ΟΛΟ το persisted cache (incl. το compact `ga4_data`) → ο πίνακας GA4 στο Dashboard
