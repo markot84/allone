@@ -83,6 +83,24 @@ describe('aggregateStats (real module, projected streaming reads)', () => {
     expect(agg.avgMargin).toBe(20); // (30+10)/2
   });
 
+  it('excludes ERP-discontinued tombstones (PER-60/PER-130 8.1b): they no longer inflate totalSkus/lowStock', async () => {
+    // 1 live healthy product
+    await seedProduct('live1', {
+      price: 10, stock_level: 50, margin_percentage: 30, avg_daily_sales: 1, stock_age_days: 5,
+    });
+    // 3 discontinued tombstones: stock 0, no stock_age — at HEAD these would all classify 'low'
+    await seedProduct('tomb1', { price: 0, stock_level: 0, discontinued_at: '2026-06-10T00:00:00.000Z' });
+    await seedProduct('tomb2', { price: 0, stock_level: 0, discontinued_at: '2026-06-10T00:00:00.000Z' });
+    await seedProduct('tomb3', { price: 0, stock_level: 0, discontinued_at: '2026-06-10T00:00:00.000Z' });
+
+    await computeAggregatesForBrand(BRAND);
+    const agg = await readAggregate('products');
+
+    expect(agg.totalSkus).toBe(1); // tombstones skipped, not 4
+    expect((agg.lowStock as { count: number }).count).toBe(0); // would be 3 without the skip
+    expect((agg.healthyStock as { count: number }).count).toBe(1);
+  });
+
   it('handles a brand with no products (no NaN, zero counts)', async () => {
     await computeAggregatesForBrand(BRAND);
     const agg = await readAggregate('products');
