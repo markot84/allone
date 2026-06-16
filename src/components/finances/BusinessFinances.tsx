@@ -57,7 +57,8 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     totalOrganicRevenueFromChannels,
     dateRange: ga4DateRange,
   } = useGA4Data();
-  const ecomm = useEcommerceSummary();
+  // PER-130/BUG-11: revenue/platforms only — skip the heavy skuStats + stock_movement chunk load.
+  const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
   const businessRevenue = useBusinessRevenueSummary();
   const procurementSheets = useProcurement();

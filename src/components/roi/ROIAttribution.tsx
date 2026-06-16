@@ -168,7 +168,8 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const { campaigns, hasImported: hasCampaigns } = useCampaigns();
   const campaignsAll = campaigns as Campaign[];
   const { activeStrategy } = useActiveStrategy();
-  const ecomm = useEcommerceSummary();
+  // PER-130/BUG-11: revenue/platforms only — skip the heavy skuStats + stock_movement chunk load.
+  const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
   const {
     organicRevenueByDay: ga4OrganicByDay,

@@ -809,7 +809,8 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
   // εμφανίζονται όταν ανοίξει το αντίστοιχο tab → η σελίδα εμφανίζεται πολύ νωρίτερα.
   const criticalLoading = isSheetLoading('inventory') || isSheetLoading('costing') || isSheetLoading('item_evaluation');
   const { refresh: refreshProcurementSignals } = useRefreshProcurementSignals();
-  const { monthlyRevenue, totalRevenue, hasData: hasEcommerce } = useEcommerceSummary();
+  // PER-130/BUG-11: revenue only — skip the heavy skuStats + stock_movement chunk load.
+  const { monthlyRevenue, totalRevenue, hasData: hasEcommerce } = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const [viewMode, setViewMode] = useState<'overview' | 'detail'>('overview');
   const [activeTab, setActiveTab] = useState<ProcurementSheetType>('inventory');
   const [isSeeding, setIsSeeding] = useState(false);

@@ -122,7 +122,9 @@ function isActionableScenarioRow(row: WindowedScenarioRow): boolean {
 export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
-  const ecomm = useEcommerceSummary();
+  // PER-130/BUG-11: only revenue/platforms used here — skip the ~2-5MB skuStats + stock_movement
+  // chunk download + main-thread parse that froze Policy Impact on large catalogs (etennis 44k SKUs).
+  const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const { campaigns, isLoading: campaignsLoading } = useCampaigns();
   const procurement = useProcurement({ sheets: ['pricing_policy'] });
   const procurementSignals = useProcurementSignals();
