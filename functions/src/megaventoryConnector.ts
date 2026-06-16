@@ -788,13 +788,53 @@ export function isLikelySalesInvoice(row: Record<string, unknown>, type: MvDocum
  * στο e-tennis account μόνο).
  */
 export function isLikelyCreditDocument(row: Record<string, unknown>, type: MvDocumentTypeInfo): boolean {
-  const abbr = type.abbreviation.toUpperCase();
-  const desc = type.description.toLocaleLowerCase('el-GR');
-  const text = `${abbr} ${desc}`;
   const amount = mvNum(row, 'DocumentAmountGrandTotal', 'DocumentTotalAmount', 'DocumentAmountTotal', 'DocumentTotal');
   if (amount <= 0) return false;
+  return isLikelyCreditDocumentType(type);
+}
+
+/** Type-level credit check (no per-row amount) — used to pre-select credit DocumentTypeIds for the backfill. */
+function isLikelyCreditDocumentType(type: MvDocumentTypeInfo): boolean {
+  const text = `${type.abbreviation.toUpperCase()} ${type.description.toLocaleLowerCase('el-GR')}`;
   if (/(quote|proforma|προσφορ|προτιμολ)/i.test(text)) return false;
   return /(credit|return|refund|πιστωτ|επιστροφ)/i.test(text);
+}
+
+/**
+ * PER-137: map a raw MV credit document → Firestore credit_note row. Negative amounts (MV stores
+ * positive magnitudes), `parentDocumentId` for the aggregator's parent-is-sales-invoice netting join.
+ * Shared by the live sync (fetchMegaventoryData) and the one-time backfill so they never drift.
+ */
+function mapMvCreditDocument(
+  d: Record<string, unknown>,
+  documentTypesById: Map<string, MvDocumentTypeInfo>,
+  fallbackCurrency: string,
+): { id: string; data: Record<string, unknown> } {
+  const gross = mvNum(d, 'DocumentAmountGrandTotal', 'DocumentTotalAmount', 'DocumentAmountTotal', 'DocumentTotal');
+  const tax = mvNum(d, 'DocumentAmountTotalTax', 'DocumentTotalTaxAmount');
+  const info = documentTypeInfo(d, documentTypesById);
+  return {
+    id: `mv_inv_${mvText(d, 'DocumentId', 'DocumentID') || mvText(d, 'DocumentNo', 'DocumentSerialNo') || Math.random().toString(36).slice(2)}`,
+    data: {
+      documentId: mvText(d, 'DocumentId', 'DocumentID'),
+      documentNo: mvText(d, 'DocumentNo', 'DocumentSerialNo'),
+      documentType: info.abbreviation || info.description || 'credit_document',
+      documentTypeId: info.id,
+      documentTypeDescription: info.description,
+      date: isoDate(mvField(d, 'DocumentDate')),
+      status: mvText(d, 'DocumentStatus'),
+      totalAmount: -gross,
+      taxAmount: tax,
+      netAmount: -Math.max(0, gross - tax),
+      currency: mvText(d, 'DocumentCurrencyCode') || fallbackCurrency || 'EUR',
+      clientName: mvText(d, 'DocumentSupplierClientName', 'SupplierClientName', 'ClientName'),
+      clientId: mvText(d, 'DocumentSupplierClientId', 'DocumentSupplierClientID', 'SupplierClientId', 'SupplierClientID'),
+      parentDocumentId: mvText(d, 'DocumentParentDocId', 'DocumentParentDocID', 'DocumentParentDocumentId'),
+      lineItems: mvDocumentLineItems(d),
+      source: 'megaventory_api',
+      kind: 'credit_note',
+    },
+  };
 }
 
 function documentTypeBreakdown(rows: Record<string, unknown>[], typesById: Map<string, MvDocumentTypeInfo>) {
@@ -1089,6 +1129,93 @@ interface MegaventorySyncOptions {
 }
 
 /**
+ * PER-137 — ONE-TIME historical credit-note backfill (TEMPORARY; delete after prod is backfilled).
+ *
+ * Ongoing credits ingest automatically on every sync (fetchMegaventoryData). This only catches up
+ * credits that already existed when the credit fix shipped, for brands whose invoice backfill was
+ * ALREADY complete (so the DocumentGet walk won't re-read them). Brand-agnostic, idempotent
+ * (merge-by-doc-id). Cheap: walks only the credit DocumentTypeIds (not the whole document space).
+ */
+export async function backfillMegaventoryCreditNotes(
+  brandId: string,
+  opts?: { maxRuntimeMs?: number; maxPagesPerType?: number },
+): Promise<{
+  success: boolean;
+  error?: string;
+  creditTypesScanned: number;
+  creditsWritten: number;
+  perType: Record<string, number>;
+  complete: boolean;
+  durationMs: number;
+}> {
+  const start = Date.now();
+  const db = getDb();
+  const base = { creditTypesScanned: 0, creditsWritten: 0, perType: {} as Record<string, number>, complete: false, durationMs: 0 };
+  const snap = await db.doc(`connectors/${brandId}`).get();
+  const conn = snap.data()?.megaventory as Record<string, unknown> | undefined;
+  if (!conn?.connected || !conn?.apiKey) {
+    return { success: false, error: 'Megaventory not connected', ...base, durationMs: Date.now() - start };
+  }
+  const apiKey = decryptToken(conn.apiKey as string);
+  if (!apiKey) {
+    return { success: false, error: 'Megaventory apiKey unavailable — reconnect required', ...base, durationMs: Date.now() - start };
+  }
+  const fallbackCurrency = String(conn.currency || 'EUR');
+
+  const { types, error: typeErr } = await fetchDocumentTypes(apiKey);
+  if (typeErr) return { success: false, error: typeErr, ...base, durationMs: Date.now() - start };
+  const documentTypesById = new Map(types.map((t) => [t.id, t]));
+  const creditTypes = types.filter((t) => t.id && isLikelyCreditDocumentType(t));
+
+  const deadline = opts?.maxRuntimeMs ? Date.now() + opts.maxRuntimeMs : null;
+  const perType: Record<string, number> = {};
+  const errors: string[] = [];
+  let creditsWritten = 0;
+  let complete = true;
+
+  for (const ct of creditTypes) {
+    if (deadline && Date.now() >= deadline) { complete = false; break; }
+    const remaining = deadline ? Math.max(0, deadline - Date.now()) : undefined;
+    const { rows, error, exhausted } = await fetchAllMvPages(
+      'DocumentGet',
+      apiKey,
+      [{ FieldName: 'DocumentTypeId', SearchOperator: 'Equals', SearchValue: ct.id }],
+      {
+        responseArrayKey: 'mvDocuments',
+        cursorField: 'DocumentId',
+        idKeys: ['DocumentId', 'DocumentID'],
+        label: `DocumentGet credit type ${ct.id}`,
+        pageSize: MV_INVOICE_BACKFILL_PAGE_SIZE,
+        maxPages: opts?.maxPagesPerType ?? 300,
+        maxRuntimeMs: remaining,
+      },
+    );
+    if (error) { errors.push(error); complete = false; continue; }
+    if (!exhausted) complete = false;
+    const credits = (rows as Record<string, unknown>[]).filter((d) =>
+      isLikelyCreditDocument(d, documentTypeInfo(d, documentTypesById))
+    );
+    const items = credits.map((d) => mapMvCreditDocument(d, documentTypesById, fallbackCurrency));
+    if (items.length) await writeBatch(db, 'megaventory_invoices', brandId, items);
+    perType[ct.id] = (perType[ct.id] || 0) + items.length;
+    creditsWritten += items.length;
+  }
+
+  logger.info(
+    `[Megaventory] Credit backfill for ${brandId}: ${creditsWritten} credit notes across ${creditTypes.length} credit types (complete=${complete}${errors.length ? `, errors=${errors.length}` : ''})`
+  );
+  return {
+    success: errors.length === 0,
+    ...(errors.length ? { error: errors[0] } : {}),
+    creditTypesScanned: creditTypes.length,
+    creditsWritten,
+    perType,
+    complete,
+    durationMs: Date.now() - start,
+  };
+}
+
+/**
  * Πλήρες sync (last 90 days). Καλείται από manual button + nightly schedule.
  * Ο user έχει επιλέξει: revenue source = Invoices, Megaventory ως master.
  */
@@ -1377,32 +1504,9 @@ export async function fetchMegaventoryData(
       // PER-137: πιστωτικά → ίδια collection, αρνητικά totalAmount/netAmount (στο MV API
       // αποθηκεύονται ως θετικά μεγέθη), kind: 'credit_note', + parentDocumentId για το
       // generic netting join στον aggregator.
-      const creditItems = creditDocs.map((d) => {
-        const gross = mvNum(d, 'DocumentAmountGrandTotal', 'DocumentTotalAmount', 'DocumentAmountTotal', 'DocumentTotal');
-        const tax = mvNum(d, 'DocumentAmountTotalTax', 'DocumentTotalTaxAmount');
-        return {
-          id: `mv_inv_${mvText(d, 'DocumentId', 'DocumentID') || mvText(d, 'DocumentNo', 'DocumentSerialNo') || Math.random().toString(36).slice(2)}`,
-          data: {
-            documentId: mvText(d, 'DocumentId', 'DocumentID'),
-            documentNo: mvText(d, 'DocumentNo', 'DocumentSerialNo'),
-            documentType: documentTypeInfo(d, documentTypesById).abbreviation || documentTypeInfo(d, documentTypesById).description || 'credit_document',
-            documentTypeId: documentTypeInfo(d, documentTypesById).id,
-            documentTypeDescription: documentTypeInfo(d, documentTypesById).description,
-            date: isoDate(mvField(d, 'DocumentDate')),
-            status: mvText(d, 'DocumentStatus'),
-            totalAmount: -gross,
-            taxAmount: tax,
-            netAmount: -Math.max(0, gross - tax),
-            currency: mvText(d, 'DocumentCurrencyCode') || conn.currency || 'EUR',
-            clientName: mvText(d, 'DocumentSupplierClientName', 'SupplierClientName', 'ClientName'),
-            clientId: mvText(d, 'DocumentSupplierClientId', 'DocumentSupplierClientID', 'SupplierClientId', 'SupplierClientID'),
-            parentDocumentId: mvText(d, 'DocumentParentDocId', 'DocumentParentDocID', 'DocumentParentDocumentId'),
-            lineItems: mvDocumentLineItems(d),
-            source: 'megaventory_api',
-            kind: 'credit_note',
-          },
-        };
-      });
+      const creditItems = creditDocs.map((d) =>
+        mapMvCreditDocument(d, documentTypesById, String(conn.currency || 'EUR'))
+      );
       const allDocItems = [...items, ...creditItems];
       if (allDocItems.length) await writeBatch(db, 'megaventory_invoices', brandId, allDocItems);
       counts.invoices = items.length;
