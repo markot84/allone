@@ -28,7 +28,6 @@ export const createOrderBy = (field: string, direction: 'asc' | 'desc' = 'desc')
 };
 import { db } from '../config/firebase';
 import { logger } from '../utils/logger';
-import type { Product } from '../types';
 import type { MarketBrief } from './aiMarketBrief';
 import { marketBriefDocId } from './aiMarketBrief';
 
@@ -377,8 +376,6 @@ export const ProductsService = {
     
     return products;
   },
-  getPaginated: (brandId: string, pageSize: number, cursor?: QueryDocumentSnapshot<DocumentData> | null) =>
-    FirestoreService.getDocumentsPaginated<Product>('products', { brandId, pageSize, cursor }),
   getCount: async (brandId?: string | null) => {
     const constraints: QueryConstraint[] = [];
     if (brandId) constraints.push(where('brandId', '==', brandId));

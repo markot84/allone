@@ -18,6 +18,5 @@ export { useBrandMembers, useDecisions, useTasks, useComments, useActivity, useN
 export { usePlan } from './usePlan';
 export { useModules } from './useModules';
 export { useProductSource } from './useProductSource';
-export { useProductsPaginated } from './useProductsPaginated';
 export { useProductAggregates, useSegmentAggregates, useCampaignAggregates, useRefreshAggregates } from './useAggregates';
 export { useMagentoPopularSearches } from './useMagentoPopularSearches';
