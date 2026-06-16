@@ -252,6 +252,11 @@ function marginTier(marginPercentage: number): CompactProduct['margin_tier'] {
 }
 
 function productFromRow(docId: string, row: Record<string, unknown>, sourceKind: ProductSourceKind): CompactProduct | null {
+  // PER-60/PER-130 (8.1a): τα ERP-διαγραμμένα προϊόντα δεν μπαίνουν στο Product Intelligence.
+  // Δύο markers ανά πηγή: discontinued_at στα products tombstones (mv_api_cat_* gap-fill +
+  // patched normalized docs, megaventoryConnector.ts) και mvDeletedAt στα raw megaventory_products
+  // rows — το raw row μπαίνει ΠΡΩΤΟ στο bySku, οπότε ο έλεγχος μόνο του discontinued_at δεν αρκεί.
+  if (row.discontinued_at || row.mvDeletedAt) return null;
   let sku = text(row.sku ?? row.SKU ?? row.productSku ?? row.ProductSKU ?? row.model ?? row.Model);
   if (!sku) sku = text(row.productId ?? row.ProductID ?? row.ProductId);
   if (!sku && docId.startsWith('oc_')) sku = docId.slice(3);
@@ -1451,3 +1456,6 @@ export async function refreshCompetitiveInventoryLookup(brandId: string): Promis
   };
 }
 
+
+/** Test-only export — τα unit tests ασκούν τον πραγματικό κώδικα, όχι αντίγραφα. */
+export const __test = { productFromRow, stockBucket, summaryForProducts };

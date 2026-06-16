@@ -68,6 +68,7 @@ async function aggregateProducts(brandId: string): Promise<ProductAggregates> {
       'margin_percentage',
       'stock_age_days',
       'avg_daily_sales',
+      'discontinued_at',
     );
   const result: ProductAggregates = {
     totalSkus: 0,
@@ -85,8 +86,12 @@ async function aggregateProducts(brandId: string): Promise<ProductAggregates> {
   let marginCount = 0;
 
   for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
-    result.totalSkus++;
     const p = doc.data();
+    // PER-60/PER-130 (8.1b): τα 132.8k discontinued tombstones (ERP-διαγραμμένα, stock 0,
+    // χωρίς stock_age) κατέληγαν ΟΛΑ στο 'low' bucket (BUG-1) και φούσκωναν το totalSkus
+    // 221k αντί ~88k. Firestore ==null ΔΕΝ ταιριάζει absent fields — in-loop skip μόνο.
+    if (p.discontinued_at) continue;
+    result.totalSkus++;
     const price = ((p.price as number) ?? (p.list_price as number) ?? (p.compare_at_price as number)) || 0;
     const stockLevel = ((p.available_stock as number) ?? (p.stock_level as number)) || 0;
     const margin = (p.margin_percentage as number) || 0;
