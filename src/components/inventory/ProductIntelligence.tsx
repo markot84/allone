@@ -46,6 +46,7 @@ import { FirestoreService } from '../../services/firestore';
 import {
   getDaysOfStock,
   getEffectiveStockLevel,
+  hasPricePending,
   resolveStockHealth,
 } from '../../utils/productUtils';
 import { DateRangePicker } from '../ui/DateRangePicker';
@@ -64,11 +65,11 @@ const PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT = 5000;
 
 const EMPTY_CATEGORY_ID = '__EMPTY_CAT__';
 /** Fixed priority_tag values (inventory intelligence) — always shown in the filter even if the client catalog lacks the field. */
-const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead', 'no_stock'] as const;
+const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead', 'no_stock', 'price_pending'] as const;
 const productStockLevel = (product: Product): number =>
   Number(product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0) || 0;
 const productDisplayTag = (product: Product): string =>
-  productStockLevel(product) <= 0 ? 'no_stock' : String(product.priority_tag || '');
+  productStockLevel(product) <= 0 ? 'no_stock' : hasPricePending(product) ? 'price_pending' : String(product.priority_tag || '');
 const EMPTY_INVENTORY_SUMMARY: InventorySummary = {
   total_skus: 0,
   total_value: 0,
@@ -237,7 +238,11 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       ? stockCardFilter
       : tagStockBucket ?? 'all';
   const effectiveTagFilter = useMemo(() => {
-    if (tagInclude) return includeNoStock ? tagInclude : tagInclude.filter((tag) => tag !== 'no_stock');
+    if (tagInclude) {
+      let tags = includeNoStock ? tagInclude : tagInclude.filter((tag) => tag !== 'no_stock');
+      tags = tags.filter((tag) => tag !== 'price_pending');
+      return tags.length > 0 ? tags : undefined;
+    }
     return undefined;
   }, [includeNoStock, tagInclude]);
   const serverQuery = useMemo<Omit<ProductIntelligenceQuery, 'bucket' | 'page'>>(() => ({
@@ -363,8 +368,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   const filteredProducts = useMemo(() => {
     const rows = serverIntelligence.page?.products ?? [];
-    return includeNoStock ? rows : rows.filter((product) => productStockLevel(product) > 0);
-  }, [includeNoStock, serverIntelligence.page?.products]);
+    let result = includeNoStock ? rows : rows.filter((product) => productStockLevel(product) > 0);
+    if (tagInclude?.includes('price_pending')) {
+      result = result.filter((p) => hasPricePending(p));
+    }
+    return result;
+  }, [includeNoStock, serverIntelligence.page?.products, tagInclude]);
   const serverFilteredTotal = serverIntelligence.page?.totalRows ?? 0;
   const totalPages = serverIntelligence.page?.totalPages ?? 1;
   const paginatedProducts = filteredProducts;
@@ -1141,6 +1150,7 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
               productDisplayTag(product) === 'dead' ? 'danger' :
               productDisplayTag(product) === 'low' ? 'warning' :
               productDisplayTag(product) === 'no_stock' ? 'default' :
+              productDisplayTag(product) === 'price_pending' ? 'info' :
               productDisplayTag(product) === 'healthy' ? 'success' :
               productDisplayTag(product) === 'excess' ? 'orange' :
               productDisplayTag(product) === 'Brand Push' ? 'info' :

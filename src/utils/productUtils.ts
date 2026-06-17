@@ -161,14 +161,20 @@ export function resolveStockHealth(
   return classifyStockHealth(product, getProductTod(product, supplierTodMap));
 }
 
+/** Delivery-note-first products have stock but no cost price yet; true when stock > 0 and
+ * cost_price is missing/<=0 — shown as "price_pending" until the ERP invoice syncs. */
+export function hasPricePending(product: Product): boolean {
+  return getEffectiveStockLevel(product) > 0 && (product.cost_price == null || product.cost_price <= 0);
+}
+
 /** Same logic as `stockBucket` in `productIntelligenceAggregator` (Firebase); for
  * filters/tag when `priority_tag` is missing, to match aggregate & server pages. */
 export function getProductIntelligenceStockBucket(product: Product): StockHealth {
   const stockLevel = getEffectiveStockLevel(product);
-  const qtySoldPeriod = product.qty_sold_period ?? 0;
   if (stockLevel <= 0) return 'low';
-  if (qtySoldPeriod <= 0) return 'dead';
-  const daysOfStock = stockLevel / (qtySoldPeriod / SALES_PERIOD_DAYS);
+  if (product.qty_sold_period == null) return 'healthy';
+  if (product.qty_sold_period <= 0) return 'dead';
+  const daysOfStock = stockLevel / ((product.qty_sold_period as number) / SALES_PERIOD_DAYS);
   if (daysOfStock <= 30) return 'low';
   if (daysOfStock > 120) return 'excess';
   return 'healthy';
