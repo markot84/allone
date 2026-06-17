@@ -101,7 +101,7 @@ function integerToGreekWords(value: number): string {
   return [millionsText, rest ? integerToGreekWords(rest) : ''].filter(Boolean).join(' ');
 }
 
-/** Ημέρα μήνα στους σωστούς προφορικούς τύπους (1→«μία», 3→«τρεις», 23→«εικοσιτρείς»). */
+/** Day of month in the correct spoken Greek forms (1->"μία", 3->"τρεις", 23->"εικοσιτρείς"). */
 function dayToGreekWords(d: number): string {
   const units = ['', 'μία', 'δύο', 'τρεις', 'τέσσερις', 'πέντε', 'έξι', 'επτά', 'οκτώ', 'εννέα'];
   const teens = ['δέκα', 'έντεκα', 'δώδεκα', 'δεκατρείς', 'δεκατέσσερις', 'δεκαπέντε', 'δεκαέξι', 'δεκαεπτά', 'δεκαοκτώ', 'δεκαεννέα'];
@@ -117,7 +117,7 @@ const GREEK_MONTHS_GENITIVE = [
   'Ιουλίου', 'Αυγούστου', 'Σεπτεμβρίου', 'Οκτωβρίου', 'Νοεμβρίου', 'Δεκεμβρίου',
 ];
 
-/** Έτος: 4ψήφιο → «δύο χιλιάδες είκοσι έξι», 2ψήφιο → «είκοσι έξι». */
+/** Year: 4-digit -> "δύο χιλιάδες είκοσι έξι", 2-digit -> "είκοσι έξι". */
 function yearToGreekWords(raw: string): string {
   const num = Number(raw);
   if (!Number.isFinite(num)) return raw;
@@ -132,11 +132,8 @@ function buildSpokenDate(day: number, month: number, yearRaw?: string): string |
   return `${dayText} ${monthText}${yearText}`;
 }
 
-/**
- * Μετατροπή ημερομηνιών σε φυσιολογικά ελληνικά πριν την επεξεργασία αριθμών.
- * Υποστηρίζει: 23/4/26, 23/04/2026, 23/4 (slash, με προαιρετικό έτος),
- * 23-4-2026 / 23.4.2026 (με υποχρεωτικό έτος) και ISO 2026-04-23.
- */
+/** Convert dates to spoken Greek before number processing. Handles slash (optional year),
+ *  dot/dash (year required) and ISO forms. */
 function formatDatesForSpeech(text: string): string {
   return text
     // ISO: yyyy-mm-dd
@@ -144,12 +141,12 @@ function formatDatesForSpeech(text: string): string {
       const spoken = buildSpokenDate(Number(d), Number(mo), y);
       return spoken ?? m;
     })
-    // Slash: d/m με προαιρετικό έτος
+    // Slash: d/m with optional year
     .replace(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/g, (m, d: string, mo: string, y?: string) => {
       const spoken = buildSpokenDate(Number(d), Number(mo), y);
       return spoken ?? m;
     })
-    // Τελεία/παύλα: απαιτείται έτος ώστε να μη συγχέεται με δεκαδικά/εύρη
+    // Dot/dash: year required so it isn't confused with decimals/ranges
     .replace(/\b(\d{1,2})[.-](\d{1,2})[.-](\d{2,4})\b/g, (m, d: string, mo: string, y: string) => {
       const spoken = buildSpokenDate(Number(d), Number(mo), y);
       return spoken ?? m;
@@ -171,7 +168,7 @@ function replaceCurrencyAmount(raw: string): string {
 }
 
 function formatNumbersForSpeech(text: string): string {
-  // Ημερομηνίες πρώτα — αλλιώς ο μορφοποιητής αριθμών θα τις διέλυε.
+  // Dates first - otherwise the number formatter would break them apart.
   text = formatDatesForSpeech(text);
   const numberSource = String.raw`[+-]?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|[+-]?\d+(?:[.,]\d+)?`;
   const broadNumberSource = String.raw`[+-]?\d(?:[\d.,\u00A0 ]*\d)?`;

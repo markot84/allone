@@ -13,16 +13,13 @@ export interface GeminiProxyParams {
   userPrompt: string;
   model?: string;
   temperature?: number;
-  /** Ιστορικό συνομιλίας για multi-turn (ο Mark). Το πρώτο 'user' turn ορίζει την έναρξη. */
+  /** Conversation history for multi-turn (Mark). The first 'user' turn marks the start. */
   history?: GeminiChatTurn[];
-  /** Ενεργό brand — για per-brand λογιστική κόστους (ai_usage) στον server. */
+  /** Active brand — for per-brand cost accounting (ai_usage) on the server. */
   brandId?: string;
 }
 
-/**
- * Calls the server-side Gemini proxy Cloud Function.
- * The Gemini API key never leaves the server.
- */
+/** Calls the server-side Gemini proxy Cloud Function; the Gemini API key never leaves the server. */
 export async function callGemini(params: GeminiProxyParams): Promise<string> {
   const auth = getAuth();
   const user = auth.currentUser;

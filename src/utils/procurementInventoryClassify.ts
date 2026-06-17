@@ -1,14 +1,12 @@
-/**
- * Ενιαία ταξινόμηση γραμμής procurement inventory (ίδια για KPI κάρτες, alerts, priority_tag).
- * Πρέπει να ταιριάζει με το φύλλο «Διαχείριση αποθέματος» — βλ. ProductIntelligence.procInventorySummary.
- */
+/** Unified classification of a procurement inventory row (KPI cards, alerts, priority_tag);
+ * must match ProductIntelligence.procInventorySummary. */
 export type ProcurementStockTag = 'dead' | 'low' | 'healthy' | 'excess';
 
 export function classifyProcurementInventoryRow(params: {
   stock: number;
   evalGrade: string;
   needsRefill: boolean;
-  /** Τιμή από στήλη STATUS ΚΩΔΙΚΟΥ (uppercase trim). */
+  /** Value from the code STATUS column (uppercase trim). */
   statusUpper: string;
 }): ProcurementStockTag {
   const grade = params.evalGrade.trim().toUpperCase();

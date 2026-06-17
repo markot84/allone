@@ -10,9 +10,9 @@ type LandingVariant = 'ceo' | 'ops';
 interface MarketingIndexPageProps {
   variant?: LandingVariant;
   onVariantChange?: (variant: LandingVariant) => void;
-  /** Άνοιγμα οθόνης σύνδεσης (`?auth=1`) — για επισκέπτες landing */
+  /** Open the sign-in screen (`?auth=1`) — for landing visitors */
   onOpenAuth?: () => void;
-  /** Μόνο όταν ο χρήστης είναι ήδη συνδεδεμένος (π.χ. `?landing=1` preview) — ήπιο escape πίσω στο app */
+  /** Only when the user is already signed in (e.g. `?landing=1` preview) — gentle escape back to the app */
   onReturnToApp?: () => void;
 }
 
@@ -271,7 +271,7 @@ const variantCopy: Record<LandingVariant, { finalTitle: string; finalDescription
   },
 };
 
-// ─── Layout: σχεδόν full width / ~4–5 του viewport (κεντραρισμένο) ─────────────
+// ─── Layout: near full width / ~4–5 of the viewport (centered) ─────────────
 
 const LANDING_MAX =
   'mx-auto w-full max-w-[min(90rem,94vw)] px-4 sm:px-6 lg:px-10 xl:px-14';
@@ -365,7 +365,7 @@ export function MarketingIndexPage({
   const copy = variantCopy[variant];
   void _onVariantChange;
 
-  // Τα marketing tags φορτώνουν ΜΟΝΟ στη marketing/landing σελίδα — όχι στις σελίδες της εφαρμογής.
+  // Marketing tags load ONLY on the marketing/landing page — not on app pages.
   useMarketingTags();
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -380,7 +380,7 @@ export function MarketingIndexPage({
             <div className={`flex items-center gap-3 sm:gap-4 ${onReturnToApp || onOpenAuth ? 'justify-between' : ''}`}>
               <div className="flex min-w-0 flex-row items-center gap-3 sm:gap-4">
                 <PerformancePlusLogo height={52} className="shrink-0 max-w-[60vw] sm:max-w-none sm:h-auto" />
-                {/* Tagline: κρυφό στο mobile (επαναλαμβάνεται στο hero) ώστε να μη στριμώχνεται με το CTA */}
+                {/* Tagline: hidden on mobile (repeated in the hero) so it does not crowd the CTA */}
                 <p className="hidden min-w-0 flex-1 text-sm font-semibold leading-snug text-[var(--nts-charcoal)] sm:block sm:text-base">{MARKETING_TAGLINE_HEADER}</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -538,7 +538,7 @@ export function MarketingIndexPage({
         </div>
       </section>
 
-      {/* ── Από τα δεδομένα στη στρατηγική εικόνα ─────────────────────────── */}
+      {/* ── From data to the strategic picture ─────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
         <div className={PREMIUM_SECTION_CARD}>
           <div className="pointer-events-none absolute right-[-120px] top-[-120px] h-72 w-72 rounded-full bg-[var(--nts-accent)]/10 blur-3xl" />
@@ -660,7 +660,7 @@ export function MarketingIndexPage({
         </div>
       </section>
 
-      {/* ── Γιατί ξεχωρίζει ──────────────────────────────────────────────── */}
+      {/* ── Why it stands out ──────────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
         <div className="grid items-stretch gap-5 lg:grid-cols-[1fr_1fr] lg:gap-8">
           <div className="relative overflow-hidden rounded-[32px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_24px_56px_rgba(16,24,40,0.12)] md:p-8">
@@ -692,7 +692,7 @@ export function MarketingIndexPage({
         </div>
       </section>
 
-      {/* ── 7 σενάρια ───────────────────────────────────────────────────── */}
+      {/* ── 7 scenarios ───────────────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
         <div className={PREMIUM_SECTION_CARD}>
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -720,7 +720,7 @@ export function MarketingIndexPage({
         </div>
       </section>
 
-      {/* ── Ποια προβλήματα επιλύει ─────────────────────────────────────── */}
+      {/* ── Which problems it solves ─────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
         <div className={PREMIUM_SECTION_CARD}>
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)]">Commerce pain points</p>
@@ -782,7 +782,7 @@ export function MarketingIndexPage({
         </div>
       </section>
 
-      {/* ── 5 περιβάλλοντα ──────────────────────────────────────────────── */}
+      {/* ── 5 environments ──────────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
         <div className={PREMIUM_SECTION_CARD}>
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -807,7 +807,7 @@ export function MarketingIndexPage({
         </div>
       </section>
 
-      {/* ── Εκδήλωση ενδιαφέροντος ───────────────────────────────────────── */}
+      {/* ── Interest form ───────────────────────────────────────── */}
       <section id="interest" className={`${LANDING_MAX} pb-8`}>
         <InterestForm />
       </section>

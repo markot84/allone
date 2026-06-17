@@ -1,22 +1,19 @@
 import type { ReactNode } from 'react';
 
 export interface PageHeaderProps {
-  /** Κύριος τίτλος (π.χ. h2) */
+  /** Main title (e.g. h2) */
   title: ReactNode;
-  /** Υπότιτλος / περιγραφή */
+  /** Subtitle / description */
   description?: ReactNode;
-  /** Πρόσθετη γραμμή (π.χ. στατιστικά σε πράσινο) — ξεχωριστά από το description για καλύτερο wrap σε mobile */
+  /** Extra line (e.g. stats in green) — separate from description for better wrap on mobile */
   meta?: ReactNode;
-  /** Κουμπιά / εργαλεία δεξιά — τυλίγονται και στοιβάζονται responsive */
+  /** Buttons / tools on the right — wrap and stack responsively */
   actions?: ReactNode;
   toolbarAriaLabel?: string;
   className?: string;
 }
 
-/**
- * Τυπική κεφαλίδα σελίδας: τίτλος + ενέργειες.
- * Σε mobile/tablet στοιβάζεται (τίτλος πάνω, actions κάτω πλήρους πλάτους)· σε lg+ ίδια γραμμή.
- */
+/** Standard page header (title + actions): stacks on mobile/tablet, single row at lg+. */
 export function PageHeader({
   title,
   description,

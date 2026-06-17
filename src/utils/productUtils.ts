@@ -1,9 +1,7 @@
 import type { Product } from '../types';
 
-/**
- * Καμπάνιες demo/τεστ: αν το όνομα ή το SKU περιέχει `demo` (case-insensitive), αγνόησέ τα.
- * Χρησιμοποιείται κεντρικά πριν από κάθε aggregate (KPIs, RFM, reports, exports).
- */
+/** Ignore demo/test products (name or SKU contains `demo`, case-insensitive);
+ * used before every aggregate (KPIs, RFM, reports, exports). */
 export function isDemoProduct(p: Pick<Product, 'name' | 'sku'> | { name?: string; sku?: string }): boolean {
   const needle = 'demo';
   const name = (p?.name || '').toString().toLowerCase();
@@ -11,7 +9,7 @@ export function isDemoProduct(p: Pick<Product, 'name' | 'sku'> | { name?: string
   return name.includes(needle) || sku.includes(needle);
 }
 
-/** Φίλτρο που αφαιρεί τα demo προϊόντα από λίστα. */
+/** Filter that removes demo products from a list. */
 export function excludeDemoProducts<T extends Pick<Product, 'name' | 'sku'>>(items: T[]): T[] {
   return items.filter(p => !isDemoProduct(p));
 }
@@ -31,10 +29,8 @@ function daysFromDate(val: string): number | null {
   return Math.floor((Date.now() - date.getTime()) / 86400000);
 }
 
-/**
- * Κελί procurement / spreadsheet → `Product.first_available_date`.
- * Διαχωρίζει Excel serial από epoch-ms ώστε μεγάλοι αριθμοί να μην ερμηνεύονται ως serial.
- */
+/** Procurement/spreadsheet cell → `Product.first_available_date`; separates
+ * Excel serial from epoch-ms so large numbers are not read as serials. */
 export function normalizeSpreadsheetCellToFirstAvailableDate(raw: unknown): string | undefined {
   if (raw == null || raw === '') return undefined;
 
@@ -90,8 +86,8 @@ function toDate(val: Product['createdAt']): Date | null {
   return null;
 }
 
-/** Ηλικία καταλόγου σε ημέρες. Επιστρέφει -1 όταν δεν υπάρχει αξιόπιστη ημερομηνία
- * (όχι το ίδιο με «0 ημ.» = εισαγωγή σήμερα). */
+/** Catalog age in days. Returns -1 when no reliable date exists
+ * (not the same as "0 days" = imported today). */
 export function getStockAgeDays(product: Product): number {
   const stored = product.stock_age_days;
   if (typeof stored === 'number' && stored > 0) return stored;
@@ -114,11 +110,8 @@ export function getEffectiveStockLevel(product: Product): number {
   return product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
 }
 
-/**
- * Calculate how many days the current stock will last based on sell-through rate.
- * Returns Infinity when qty_sold is 0 (no sales = stock lasts forever).
- * Returns 0 when stock_level is 0.
- */
+/** Days the current stock lasts at sell-through rate; Infinity when qty_sold is 0,
+ * 0 when stock_level is 0. */
 export function getDaysOfStock(product: Product): number {
   const level = getEffectiveStockLevel(product);
   if (level <= 0) return 0;
@@ -130,14 +123,7 @@ export function getDaysOfStock(product: Product): number {
 
 export type StockHealth = 'healthy' | 'excess' | 'low' | 'dead';
 
-/**
- * Classify a product's stock health using TOD (Target Days of Stock).
- *
- * 1. Dead:    zero sales AND has stock (days_of_stock = Infinity)
- * 2. Low:     days_of_stock ≤ TOD / 2
- * 3. Excess:  days_of_stock > TOD × 2
- * 4. Healthy: TOD/2 < days_of_stock ≤ TOD × 2
- */
+/** Classify stock health via TOD: dead (∞ days), low (≤TOD/2), excess (>TOD×2), else healthy. */
 /** Resolve TOD for a product: supplier-specific if available, else default */
 export function getProductTod(product: Product, supplierTodMap?: Map<string, number>): number {
   if (supplierTodMap && product.supplier) {
@@ -159,12 +145,8 @@ export function classifyStockHealth(product: Product, tod: number = DEFAULT_TOD)
   return 'healthy';
 }
 
-/**
- * Για Enterprise procurement: τα KPI (κάρτες) βασίζονται σε αξιολόγηση/ανατροφοδότηση
- * και συμφωνούν με το `priority_tag` που χτίζει το `useProductSource`.
- * Το κλασικό `classifyStockHealth` χρησιμοποιεί μόνο DOS από πωλήσεις· χωρίς qty
- * επιστρέφει ∞ και τα εμφανίζει όλα ως dead — αποσυγχρονίζει τον πίνακα από τις κάρτες.
- */
+/** Enterprise procurement: aligns with `useProductSource`'s `priority_tag`, since
+ * `classifyStockHealth` (DOS-only) tags everything as dead without qty. */
 export function resolveStockHealth(
   product: Product,
   supplierTodMap?: Map<string, number>,
@@ -179,10 +161,8 @@ export function resolveStockHealth(
   return classifyStockHealth(product, getProductTod(product, supplierTodMap));
 }
 
-/**
- * Ίδια λογική με `stockBucket` στο `productIntelligenceAggregator` (Firebase).
- * Για φίλτρα πίνακα / tag όταν το import δεν φέρει `priority_tag`, ώστε να συμφωνούν με aggregate & server pages.
- */
+/** Same logic as `stockBucket` in `productIntelligenceAggregator` (Firebase); for
+ * filters/tag when `priority_tag` is missing, to match aggregate & server pages. */
 export function getProductIntelligenceStockBucket(product: Product): StockHealth {
   const stockLevel = getEffectiveStockLevel(product);
   const qtySoldPeriod = product.qty_sold_period ?? 0;
@@ -201,11 +181,8 @@ function ymdLocal(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-/**
- * YYYY-MM-DD για φίλτρο περιόδου στο Product Intelligence.
- * - imported: Firestore createdAt / import
- * - first_available: στήλη First Available (και Excel serial όπως στο stock age)
- */
+/** YYYY-MM-DD for period filter: imported = Firestore createdAt;
+ * first_available = First Available column (Excel serial, as in stock age). */
 export function getProductYmdForFilter(product: Product, mode: 'imported' | 'first_available'): string | null {
   if (mode === 'first_available') {
     const raw = product.first_available_date;

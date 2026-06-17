@@ -1,10 +1,8 @@
 import { Lightbulb, ArrowRight, TrendingUp, TrendingDown } from 'lucide-react';
 import { useCommercialInfo } from '../../hooks/useCommercialInfo';
 
-/**
- * Banner που συνδέει τις «Εμπορικές Πληροφορίες» με σελίδες απόφασης (Strategy, Channels).
- * Επιφανειακά εμφανίζει τα ενεργά σήματα ώστε ο χρήστης να τα λάβει υπόψη στις πολιτικές.
- */
+/** Banner linking Commercial Info to decision pages (Strategy, Channels),
+ * surfacing active signals so the user can factor them into policies. */
 export function CommercialInfoBanner({
   onOpen,
   context = 'policy',

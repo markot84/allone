@@ -88,10 +88,8 @@ export function analyzePriceChangeImpact(input: {
   return finalizePriceChangeRows(input, beforeBySku, afterBySku);
 }
 
-/**
- * Non-blocking εκδοχή: η βαριά αθροιστική επεξεργασία γίνεται chunked με yield στο main thread,
- * ώστε να μη «παγώνει» η σελίδα σε high-volume brands.
- */
+/** Non-blocking version: heavy aggregation runs chunked with yields to the main
+ * thread, so the page doesn't freeze for high-volume brands. */
 export async function analyzePriceChangeImpactAsync(
   input: {
     orders: EcommerceRawOrder[];

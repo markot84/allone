@@ -90,7 +90,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
     })).sort((a, b) => b.ltv - a.ltv),
   [enriched]);
 
-  /** x = churn %, y = LTV, z = αριθμός πελατών στο segment (ίδιο με `segment.count` στα imports) */
+  /** x = churn %, y = LTV, z = number of customers in the segment (same as `segment.count` in imports) */
   const scatterData = useMemo(() =>
     enriched.map(e => ({
       name: e.segment.name,

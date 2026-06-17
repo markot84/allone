@@ -12,7 +12,7 @@ interface FormattedProseProps {
   className?: string;
 }
 
-/** Καθαρό κείμενο χωρίς `**` (π.χ. για clipboard) */
+/** Plain text without `**` (e.g. for clipboard) */
 export function toPlainProseText(raw: string): string {
   return raw.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\n{3,}/g, '\n\n').trim();
 }
@@ -100,9 +100,7 @@ const spacing: Record<FormattedProseVariant, { block: string; section: string }>
   article: { block: 'space-y-4', section: 'mt-8 first:mt-0' },
 };
 
-/**
- * Εμφανίζει κείμενο από AI/help χωρίς ορατά `**`: labels, ενότητες, bullets, έμφαση.
- */
+/** Renders AI/help text without visible `**`: labels, sections, bullets, emphasis. */
 export function FormattedProse({ content, variant = 'default', className = '' }: FormattedProseProps) {
   const lines = content.split('\n');
   const sp = spacing[variant];

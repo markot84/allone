@@ -12,7 +12,7 @@ export function MyDepartmentCard() {
   const { currentBrand } = useBrand();
   const { members, isLoading } = useBrandMembers();
   const [department, setDepartment] = useState<BrandDepartment>('other');
-  /** Όταν true, το select αντιπροσωπεύει επιλογή χρήστη — δεν συγχρονίζουμε από Firestore (αποφεύγει «ένα βήμα πίσω» μετά από refetch). */
+  /** When true, the select reflects a user choice — don't sync from Firestore (avoids a "step back" after refetch). */
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);

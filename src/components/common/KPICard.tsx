@@ -14,10 +14,7 @@ export interface KPICardData {
   trend?: 'up' | 'down';
   sparklineData?: number[];
   tooltip?: string;
-  /**
-   * Subtle pulsing dot στο label δίπλα στο tooltip — ένδειξη ότι το KPI ανανεώνεται
-   * (π.χ. raw orders ακόμα φορτώνουν, summary fallback εμφανίζεται προσωρινά).
-   */
+  /** Pulsing dot next to the tooltip indicating the KPI is refreshing. */
   refreshing?: boolean;
 }
 
@@ -30,8 +27,8 @@ interface KPICardProps {
 
 export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
   const sparkGradientId = `kpi-spark-${useId().replace(/:/g, '')}`;
-  // Literal hex (όχι var()) από το ενεργό profile — το var(--nts-accent) δεν resolve-άρει αξιόπιστα
-  // μέσα σε SVG gradient stops / url(#id). Ακολουθεί το χρώμα του επιλεγμένου χρωματικού προφίλ.
+  // Literal hex from the active profile; var(--nts-accent) does not resolve reliably
+  // inside SVG gradient stops / url(#id).
   const { accent: accentColor } = useAccentColor();
 
   const isPlainLabel =

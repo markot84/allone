@@ -235,7 +235,7 @@ export const NotificationPrefsService = {
     return prefs.channels[type] ?? DEFAULT_NOTIFICATION_CHANNELS[type] ?? ['inApp'];
   },
 
-  /** Προτιμήσεις ειδοποιήσεων όλων των μελών του brand (για πίνακα διαχείρισης). */
+  /** Notification preferences of all brand members (for the management panel). */
   async listMemberPrefs(brandId: string, members: BrandMember[]): Promise<{ member: BrandMember; prefs: NotificationPreferences | null }[]> {
     return Promise.all(
       members.map(async (member) => ({
@@ -249,9 +249,9 @@ export const NotificationPrefsService = {
 // ── Helpers: broadcast notifications to relevant members ────────────────────
 
 export type BroadcastResult = {
-  /** Άλλα μέλη που έλαβαν in-app ειδοποίηση */
+  /** Other members that received an in-app notification */
   inAppRecipients: number;
-  /** Άλλα μέλη με ενεργό κανάλι email για αυτό το event */
+  /** Other members with the email channel enabled for this event */
   emailRecipients: number;
   emailSent: number;
   emailFailed: number;
@@ -262,7 +262,7 @@ export async function broadcastNotification(
   excludeUserId: string,
   data: Omit<UserNotification, 'id' | 'createdAt' | 'read'>,
   targetDepartments?: BrandDepartment[],
-  /** Αν δοθεί, αποφεύγεται δεύτερο getAll (π.χ. από BriefingDrawer με cached members). */
+  /** If provided, avoids a second getAll (e.g. from BriefingDrawer with cached members). */
   membersOverride?: BrandMember[]
 ): Promise<BroadcastResult> {
   const members = membersOverride ?? (await MembersService.getAll(brandId));
@@ -299,7 +299,7 @@ export async function broadcastNotification(
   let emailSent = 0;
   let emailFailed = 0;
   if (emailTargets.length > 0) {
-    // Περιμένουμε το αποτέλεσμα ώστε ο caller να γνωρίζει αν τα email όντως στάλθηκαν.
+    // Await the result so the caller knows whether the emails were actually sent.
     const emailResult = await sendEmailNotifications(emailTargets, data);
     emailSent = emailResult.sent;
     emailFailed = emailResult.failed;

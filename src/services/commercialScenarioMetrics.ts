@@ -186,11 +186,8 @@ export function aggregateSkuWindows(input: {
   return { beforeBySku, afterBySku };
 }
 
-/**
- * Async/chunked εκδοχή του aggregateSkuWindows: επεξεργάζεται τις παραγγελίες σε batches και
- * παραχωρεί τον έλεγχο στο main thread (yieldFn) ανάμεσα στα chunks, ώστε σε high-volume brands
- * ο υπολογισμός να μην «παγώνει» το UI («page not responding»).
- */
+/** Chunked aggregateSkuWindows: processes orders in batches, yielding to the main
+ * thread (yieldFn) between chunks so high-volume brands don't freeze the UI. */
 export async function aggregateSkuWindowsChunked(
   input: {
     orders: EcommerceRawOrder[];

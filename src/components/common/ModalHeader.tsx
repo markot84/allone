@@ -9,9 +9,7 @@ export interface ModalHeaderProps {
   toolbarAriaLabel?: string;
 }
 
-/**
- * Κεφαλίδα modal/drawer: ίδιο responsive pattern με PageHeader (στοίβα σε narrow, μία γραμμή σε lg).
- */
+/** Modal/drawer header: same responsive pattern as PageHeader (stacked when narrow, single row at lg). */
 export function ModalHeader({
   title,
   description,

@@ -1,18 +1,5 @@
-/**
- * Firestore security-rules suite — locks in this session's PP-01..16 + FN-A/F
- * fixes against the Firestore emulator (`@firebase/rules-unit-testing` v5).
- *
- * Every collection in PerformancePlus is brand-scoped by a `brandId`; access is
- * gated through the `firestore.rules` helpers `isBrandMember` /
- * `isBrandOwnerOrAdmin` / `canManageBrandConnectors` / `isSuperAdmin` /
- * `roleRank`. The membership model is a per-brand subcollection:
- *   brands/{brandId}/members/{uid} = { userId, role: 'owner'|'admin'|'member' }
- *
- * This file is arrange-act-assert: fixtures (memberships, existing docs) are
- * seeded with rules DISABLED, then reads/writes are probed through authed/unauth
- * handles that ARE rule-checked. It exists to make a future regression (e.g. the
- * 53 stripped `resource==null` guards) turn a test red.
- */
+/** Firestore security-rules suite vs the emulator. Brand-scoped by `brandId` via `isBrandMember`/`isBrandOwnerOrAdmin`/`canManageBrandConnectors`/`isSuperAdmin`/`roleRank`;
+ * fixtures seeded rules-disabled, then probed rule-checked. */
 import { describe, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import {
   doc,
@@ -49,9 +36,8 @@ const MEMBER_B = 'memberB'; // plain member of BRAND_B
 const OUTSIDER = 'outsider'; // belongs to no brand
 const SUPER_ADMIN = 'superUid'; // listed in appConfig/superAdmins.uids
 
-// PP-NEW-1: field-keyed (brandId in body) collections added with the merge that
-// originally shipped a collapsed `allow update, delete` WITHOUT brandIdUnchanged()
-// — i.e. cross-tenant re-homing (PP-04 class). [coll, seededDocId].
+// Field-keyed (brandId in body) collections whose `update, delete` must enforce
+// brandIdUnchanged() against cross-tenant re-homing. [coll, seededDocId].
 const PP_NEW1_COLLECTIONS: ReadonlyArray<readonly [string, string]> = [
   ['offers', 'offerA'],
   ['commercial_actions', 'caA'],
@@ -76,13 +62,10 @@ async function seedMember(
   });
 }
 
-/**
- * Common world: two brands with their members, a couple of brand-scoped docs in
- * each, the super-admin allowlist, and the appConfig docs.
- */
+/** Common world: two brands with members, brand-scoped docs, super-admin allowlist, appConfig. */
 async function seedBaseWorld(db: Firestore): Promise<void> {
-  // Brands. createdBy is set to the owner so canManageBrandConnectors's
-  // creator-branch is exercised by the same uid that is also the 'owner' member.
+  // Brands. createdBy = owner so canManageBrandConnectors's creator-branch is
+  // exercised by the same uid that is also the 'owner' member.
   await setDoc(doc(db, `brands/${BRAND_A}`), { name: 'Brand A', createdBy: OWNER_A });
   await setDoc(doc(db, `brands/${BRAND_B}`), { name: 'Brand B', createdBy: MEMBER_B });
 
@@ -100,7 +83,7 @@ async function seedBaseWorld(db: Firestore): Promise<void> {
   await setDoc(doc(db, `connectors/${BRAND_A}`), { brandId: BRAND_A, shopify: { token: 'x' } });
   await setDoc(doc(db, `connectors/${BRAND_B}`), { brandId: BRAND_B, shopify: { token: 'y' } });
 
-  // PP-NEW-1 collections (field-keyed by brandId) — one existing doc each in BRAND_A.
+  // Field-keyed (by brandId) collections — one existing doc each in BRAND_A.
   for (const [coll, id] of PP_NEW1_COLLECTIONS) {
     await setDoc(doc(db, `${coll}/${id}`), { brandId: BRAND_A, payload: 'A' });
   }
@@ -129,11 +112,9 @@ beforeEach(async () => {
   await seed(seedBaseWorld);
 });
 
-// ===========================================================================================
-// A. resource==null guard (the regression this session restored)
-// ===========================================================================================
+// A. resource==null guard (restored regression)
 
-describe('A. resource==null read guard (restored 53 guards)', () => {
+describe('A. resource==null read guard (restored guards)', () => {
   it('lets an authed user read a NON-existent connector_sync_jobs doc (returns null, not denied)', async () => {
     const db = authed(MEMBER_A);
     // connector_sync_jobs read rule: resource == null || isBrandMember(...).
@@ -167,9 +148,7 @@ describe('A. resource==null read guard (restored 53 guards)', () => {
   });
 });
 
-// ===========================================================================================
 // B. Core tenant isolation
-// ===========================================================================================
 
 describe('B. core tenant isolation by brandId', () => {
   it('lets a BRAND_A member read BRAND_A products / campaigns / segments', async () => {
@@ -200,11 +179,9 @@ describe('B. core tenant isolation by brandId', () => {
   });
 });
 
-// ===========================================================================================
-// C. PP-01 — invites are not enumerable
-// ===========================================================================================
+// C. invites are not enumerable
 
-describe('C. PP-01 invites: no enumeration', () => {
+describe('C. invites: no enumeration', () => {
   beforeEach(async () => {
     await seed(async (db) => {
       await setDoc(doc(db, 'invites/inv_token123'), {
@@ -232,11 +209,9 @@ describe('C. PP-01 invites: no enumeration', () => {
   });
 });
 
-// ===========================================================================================
-// D. PP-06 — shared_packages are not enumerable
-// ===========================================================================================
+// D. shared_packages are not enumerable
 
-describe('D. PP-06 shared_packages: no enumeration', () => {
+describe('D. shared_packages: no enumeration', () => {
   beforeEach(async () => {
     await seed(async (db) => {
       await setDoc(doc(db, 'shared_packages/pkg_abc'), {
@@ -262,11 +237,9 @@ describe('D. PP-06 shared_packages: no enumeration', () => {
   });
 });
 
-// ===========================================================================================
-// E. PP-09 — appConfig/superAdmins is super-admin-read-only
-// ===========================================================================================
+// E. appConfig/superAdmins is super-admin-read-only
 
-describe('E. PP-09 appConfig/superAdmins read lock', () => {
+describe('E. appConfig/superAdmins read lock', () => {
   it('denies a NON-superadmin authenticated user reading appConfig/superAdmins', async () => {
     const db = authed(MEMBER_A);
     await assertFails(getDoc(doc(db, 'appConfig/superAdmins')));
@@ -285,12 +258,8 @@ describe('E. PP-09 appConfig/superAdmins read lock', () => {
   });
 });
 
-// ===========================================================================================
-// E2. appConfig/superAdmins WRITE lock — only a super-admin may grant/revoke super-admin.
-// Locks the privilege-escalation gate behind the "make a user superadmin in UI" feature
-// (e0755a9): the UI writes this doc directly, so the rule is the only thing stopping a
-// normal user from self-granting. Verified live (non-super write -> 403); pinned here.
-// ===========================================================================================
+// E2. appConfig/superAdmins WRITE lock — only a super-admin may grant/revoke super-admin
+// (the UI writes this doc directly, so the rule is the only block on self-granting).
 
 describe('E2. appConfig/superAdmins write lock (privilege-escalation gate)', () => {
   it('denies a non-super-admin writing appConfig/superAdmins (self-grant blocked)', async () => {
@@ -315,12 +284,8 @@ describe('E2. appConfig/superAdmins write lock (privilege-escalation gate)', () 
   });
 });
 
-// ===========================================================================================
-// E3. users read + enumeration lock — own profile only; cross-user read and full-collection
-// enumeration are super-admin-only. Locks the user-listing gate behind the new admin panel
-// (e0755a9): a normal user must not be able to harvest the user directory. Verified live
-// (non-super list -> 403); pinned here.
-// ===========================================================================================
+// E3. users read + enumeration lock — own profile only; cross-user read and
+// full-collection enumeration are super-admin-only (no harvesting the user directory).
 
 describe('E3. users read + enumeration lock', () => {
   it('allows a user to read their OWN users/{uid} doc', async () => {
@@ -345,15 +310,13 @@ describe('E3. users read + enumeration lock', () => {
   });
 });
 
-// ===========================================================================================
-// F. PP-02 / PP-03 — self-join & invite-forge are blocked
-// ===========================================================================================
+// F. self-join & invite-forge are blocked
 
-describe('F. PP-02/03 self-join and invite forging', () => {
+describe('F. self-join and invite forging', () => {
   it('denies an outsider self-creating a member doc to join a brand', async () => {
     const db = authed(OUTSIDER);
     // create allowed only for the brand CREATOR claiming their own 'owner' doc
-    // (or super-admin). OUTSIDER is neither.
+    // (or super-admin); OUTSIDER is neither.
     await assertFails(
       setDoc(doc(db, `brands/${BRAND_A}/members/${OUTSIDER}`), {
         userId: OUTSIDER,
@@ -395,11 +358,9 @@ describe('F. PP-02/03 self-join and invite forging', () => {
   });
 });
 
-// ===========================================================================================
-// G. PP-04 — brandId is immutable on update
-// ===========================================================================================
+// G. brandId is immutable on update
 
-describe('G. PP-04 brandId immutability on update', () => {
+describe('G. brandId immutability on update', () => {
   it('denies a member re-homing a doc to another brand by changing brandId', async () => {
     const db = authed(MEMBER_A);
     // brandIdUnchanged() pins request.resource.data.brandId == resource.data.brandId.
@@ -427,12 +388,10 @@ describe('G. PP-04 brandId immutability on update', () => {
   });
 });
 
-// ===========================================================================================
-// G2. PP-NEW-1 — brandId immutability on the merge-added commercial_*/offers/marketing_plans
-// collections (regression: they shipped a collapsed `update, delete` without brandIdUnchanged).
-// ===========================================================================================
+// G2. brandId immutability on the merge-added commercial_*/offers/marketing_plans
+// collections — `update, delete` must enforce brandIdUnchanged().
 
-describe('G2. PP-NEW-1 brandId immutability on merge-added collections', () => {
+describe('G2. brandId immutability on merge-added collections', () => {
   for (const [coll, id] of PP_NEW1_COLLECTIONS) {
     it(`${coll}: denies a member re-homing a doc to another brand`, async () => {
       const db = authed(MEMBER_A);
@@ -450,11 +409,9 @@ describe('G2. PP-NEW-1 brandId immutability on merge-added collections', () => {
   }
 });
 
-// ===========================================================================================
-// H. PP-05 + FN-A — member role-change rules (escalation / demotion / cross-member)
-// ===========================================================================================
+// H. member role-change rules (escalation / demotion / cross-member)
 
-describe('H. PP-05 / FN-A member role mutation', () => {
+describe('H. member role mutation', () => {
   it('denies an admin self-escalating to owner (admin -> owner)', async () => {
     const db = authed(ADMIN_A);
     await assertFails(
@@ -500,11 +457,9 @@ describe('H. PP-05 / FN-A member role mutation', () => {
   });
 });
 
-// ===========================================================================================
-// I. FN-F — invite create gating (membership + role escalation)
-// ===========================================================================================
+// I. invite create gating (membership + role escalation)
 
-describe('I. FN-F invite create gating', () => {
+describe('I. invite create gating', () => {
   it('denies a NON-member creating an invite for a brand', async () => {
     const db = authed(OUTSIDER);
     await assertFails(
@@ -561,9 +516,7 @@ describe('I. FN-F invite create gating', () => {
   });
 });
 
-// ===========================================================================================
 // J. Collection-group members query (sign-in brand discovery) — sanity that isolation holds
-// ===========================================================================================
 
 describe('J. collectionGroup(members) self-scoped query', () => {
   it('lets a user run the sign-in CG query scoped to their OWN uid', async () => {
@@ -594,14 +547,10 @@ describe('J. collectionGroup(members) self-scoped query', () => {
   });
 });
 
-// ===========================================================================================
-// K. SEC-M2 — brand.createdBy is immutable on update (persistent-backdoor block)
-//    createdBy is trusted as a membership/ownership signal (isBrandMember / isBrandOwnerOrAdmin
-//    / Storage rules). It was mutable on update, letting an owner/admin re-point it and keep
-//    access after removal. The update rule now pins createdBy == resource.data.createdBy.
-// ===========================================================================================
+// K. brand.createdBy immutable on update — trusted membership/ownership signal
+//    (isBrandMember / isBrandOwnerOrAdmin / Storage), pinned == resource.data.createdBy.
 
-describe('K. SEC-M2 brand.createdBy immutable on update', () => {
+describe('K. brand.createdBy immutable on update', () => {
   it('lets an owner update a brand field without touching createdBy', async () => {
     const db = authed(OWNER_A);
     await assertSucceeds(updateDoc(doc(db, `brands/${BRAND_A}`), { name: 'Brand A renamed' }));
@@ -618,14 +567,10 @@ describe('K. SEC-M2 brand.createdBy immutable on update', () => {
   });
 });
 
-// ===========================================================================================
-// L. SEC-M10 — member create pins request.resource.data.userId == auth.uid
-//    The create rule pinned the doc id (memberId == auth.uid) but not the userId FIELD, so a
-//    brand creator could mint a member doc carrying another user's userId — which the
-//    collection-group `where userId == X` query then surfaces in the victim's brand list.
-// ===========================================================================================
+// L. member create pins request.resource.data.userId == auth.uid — else a brand
+//    creator could mint a doc carrying another user's userId, surfaced by the CG query.
 
-describe('L. SEC-M10 member create userId pin', () => {
+describe('L. member create userId pin', () => {
   const BRAND_C = 'brandC';
   const CREATOR_C = 'creatorC';
 

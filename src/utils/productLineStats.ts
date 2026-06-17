@@ -1,8 +1,5 @@
-/**
- * Ποσοστά top products / sold-by-SKU: Magento δίνει ξεχωριστές γραμμές γονέα (configurable/bundle/grouped)
- * και παιδιά (simple). Αν αθροίσουμε και τα δύο, ποσότητα/έσοδα φουσκώνουν (~2x).
- * Έσοδα γραμμής: προτιμάμε `row_total` (μετά εκπτώσεις) αντί για price×qty.
- */
+/** Top products: Magento emits parent + child lines; counting both ~2x inflates qty/revenue.
+ * Prefer `row_total` (post-discount) over price×qty. */
 export type ProductLineItemLike = {
   sku?: string;
   title?: string;
@@ -10,7 +7,7 @@ export type ProductLineItemLike = {
   quantity?: number;
   price?: number;
   productType?: string;
-  /** Magento order item_id — χρησιμοποιείται για απόρριψη γονικής γραμμής */
+  /** Magento order item_id — used to drop the parent line */
   itemId?: string | number | null;
   parentItemId?: string | number | null;
   rowTotal?: number;
@@ -25,10 +22,7 @@ function lineHasParentItemId(line: ProductLineItemLike): boolean {
   return Number.isFinite(n) && n > 0;
 }
 
-/**
- * true = μην μετρήσεις αυτή τη γραμμή στα top products (Magento γονική γραμμή).
- * Παλιά documents χωρίς productType: false (συνεχίζουμε· χρειάζεται νέο sync για διόρθωση).
- */
+/** true = skip this line (Magento parent line). Old docs without productType return false. */
 export function shouldSkipMagentoLineForTopProducts(line: ProductLineItemLike): boolean {
   const t = String(line.productType || '')
     .trim()
@@ -38,7 +32,7 @@ export function shouldSkipMagentoLineForTopProducts(line: ProductLineItemLike): 
   return MAGENTO_PARENT_LINE_TYPES.has(t);
 }
 
-/** Αφαιρεί τη γραμμή γονέα που φέρει `item_id` σαν `parent_item_id` σε άλλη γραμμή (αρχεία χωρίς product_type). */
+/** Removes the parent line whose `item_id` appears as `parent_item_id` on another line (records without product_type). */
 export function filterMagentoLineItemsForTopProducts(
   platform: string,
   lines: ProductLineItemLike[] | undefined | null
@@ -93,19 +87,8 @@ function lineSkuName(line: ProductLineItemLike): { sku: string; name: string } {
   return { sku, name: String(line.title || line.name || sku) };
 }
 
-/**
- * Συγκεντρώνει τις γραμμές μιας παραγγελίας σε οικονομικές γραμμές προϊόντος για Top Products.
- *
- * Magento: configurable/bundle/grouped δίνουν γονική + παιδικές γραμμές. Το έσοδο (`row_total`)
- * μπορεί να κάθεται είτε στη γονική (Safeblock) είτε στο παιδί. Ενοποιούμε ανά γονική:
- *   - quantity = qty της γονικής (== παιδιού στα configurable)
- *   - revenue  = parent.row_total αν > 0, αλλιώς άθροισμα row_total των παιδιών, αλλιώς price×qty
- *   - SKU/όνομα = της γονικής γραμμής
- * Έτσι δεν διπλομετριέται η ποσότητα και δεν χάνεται το έσοδο.
- *
- * Legacy documents χωρίς `item_id` structure → fallback στην ανά-γραμμή λογική (skip γονικής).
- * Non-magento → ανά γραμμή (price×qty ή row_total).
- */
+/** Aggregates order lines into Top Products revenue. Magento: consolidate per parent (qty from parent,
+ * revenue = parent.row_total || sum child row_total || price×qty); no item_id or non-magento → per line. */
 export function aggregateOrderLinesForTopProducts(
   platform: string,
   lines: ProductLineItemLike[] | undefined | null
@@ -153,7 +136,7 @@ export function aggregateOrderLinesForTopProducts(
 
   const out: AggregatedProductLine[] = [];
   for (const li of arr) {
-    // Παιδί του οποίου η γονική υπάρχει στην παραγγελία → καταναλώνεται από τη γονική.
+    // Child whose parent exists in the order → consumed by the parent.
     if (lineHasParentItemId(li) && byItemId.has(String(li.parentItemId))) continue;
 
     const qty = Math.max(0, Number(li.quantity) || 0);

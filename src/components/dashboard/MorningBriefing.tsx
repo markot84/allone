@@ -45,18 +45,16 @@ interface MorningBriefingProps {
   hasAnyData: boolean;
   /** Selected dashboard period key (e.g. 'current_month'). Scopes cache & prompt. */
   period?: string;
-  /** Human-readable label for the period (e.g. 'Τελευταίες 30ημ.'). */
+  /** Human-readable label for the period (e.g. 'Last 30 days'). */
   periodLabel?: string;
-  /**
-   * Μόλις true τα KPI του dashboard (είδη e-shop από summary → raw ιστορικό) έχουν «στεγνώσει».
-   * Γλιτώνει AI briefing που μιλά για μηδενικά έσοδα όσο τα orders ακόμη φορτώνουν.
-   */
+  /** True once dashboard KPIs have settled (e-shop items from summary → raw history);
+   * avoids an AI briefing reporting zero revenue while orders are still loading. */
   metricsReady?: boolean;
-  /** Fingerprint τιμών που τροφοδοτούν το briefing — όταν αλλάζει, ελέγχουται dataHash και ανα δημιουργία αν χρειάζεται. */
+  /** Fingerprint of the values feeding the briefing — when it changes, dataHash is checked and regeneration happens if needed. */
   financeKey?: string;
 }
 
-/** Πραγματικές ενότητες εφαρμογής — όχι `inventory` (δεν υπάρχει route). */
+/** Real app sections — not `inventory` (no such route). */
 type GuessResult = { section: string; hashQuery?: string };
 
 function guessRoute(action: string): GuessResult {
@@ -96,7 +94,7 @@ function guessRoute(action: string): GuessResult {
 }
 
 const SIGNIFICANCE_CHECK_INTERVAL = 15 * 60 * 1000; // 15 minutes
-/** Μικρή καθυστέρηση μετά τα σταθερά KPI· το βαρύ work περιμένει `metricsReady`. */
+/** Small delay after stable KPIs; the heavy work waits on `metricsReady`. */
 const INIT_DELAY_MS = 150;
 
 function briefingStorageKey(brandId: string, period = 'current_month') {
@@ -137,7 +135,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
   const period = props.period ?? 'current_month';
   const periodLabel = props.periodLabel ?? 'Τρέχων Μήνας';
   const metricsReady = props.metricsReady ?? true;
-  // financeKey prop διατηρείται για backward compat αλλά δεν χρησιμοποιείται πλέον εσωτερικά
+  // financeKey prop kept for backward compat but no longer used internally
   void props.financeKey;
 
   const [briefing, setBriefing] = useState<BriefingResult | null>(() =>
@@ -146,7 +144,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
   const [collapsed, setCollapsed] = useState(() => (brandId ? loadCollapsedPref(brandId) : false));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** Ref: παρακολουθεί αν έγινε ήδη auto-regen για τη συγκεκριμένη metricsReady→true μετάβαση. */
+  /** Ref: tracks whether auto-regen already ran for this metricsReady→true transition. */
   const metricsReadyRegenRef = useRef(false);
   const initRef = useRef<string | null>(null);
   const checkInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -201,7 +199,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
     metricsReadyRegenRef.current = false;
   }, [brandId, period]);
 
-  // Firestore: sync με server — per brand + period
+  // Firestore: sync with server — per brand + period
   useEffect(() => {
     if (!brandId) return;
 
@@ -225,13 +223,13 @@ export function MorningBriefing(props: MorningBriefingProps) {
     })();
   }, [brandId, period]);
 
-  // Αποθήκευση τοπικά ανά ημερολογιακή ημέρα + period
+  // Persist locally per calendar day + period
   useEffect(() => {
     if (!brandId || !briefing) return;
     saveBriefingToStorage(brandId, briefing, period);
   }, [brandId, briefing, period]);
 
-  // Πρώτη γεννήτρια μόνο αν δεν υπάρχει briefing για σήμερα + period
+  // First generation only if no briefing exists for today + period
   const hasSubstantiveData =
     props.products.length > 0 ||
     props.campaigns.length > 0 ||
@@ -271,28 +269,27 @@ export function MorningBriefing(props: MorningBriefingProps) {
     return () => clearTimeout(timer);
   }, [brandId, hasAnyData, hasSubstantiveData, metricsReady, briefing, period]);
 
-  // Αυτόματη αναγέννηση όταν τα metrics σταθεροποιηθούν (metricsReady → true).
-  // Πυροδοτεί μία φορά ανά brand/period/metricsReady-transition, αφού σταθεροποιηθούν τα δεδομένα.
+  // Auto-regenerate once metrics settle (metricsReady → true); once per brand/period/transition.
   useEffect(() => {
     if (!brandId || !metricsReady) {
       metricsReadyRegenRef.current = false;
       return;
     }
-    if (metricsReadyRegenRef.current) return; // ήδη έγινε regen για αυτή τη μετάβαση
+    if (metricsReadyRegenRef.current) return; // regen already done for this transition
     metricsReadyRegenRef.current = true;
 
     const live = briefingLatestRef.current;
-    if (!live) return; // δεν υπάρχει briefing — η αρχική γεννήτρια το χειρίζεται
+    if (!live) return; // no briefing — the initial generation handles it
 
     let cancelled = false;
-    // Μικρή αναμονή για να σταθεροποιηθούν οι τελευταίες αλλαγές στα KPI
+    // Brief wait to let the latest KPI changes settle
     const t = window.setTimeout(() => {
       if (cancelled) return;
       const b = briefingLatestRef.current;
       if (!b) return;
       const d = buildDataRef.current();
       const expected = computeBriefingDataHash(d);
-      if (expected === b.dataHash) return; // δεδομένα αμετάβλητα — δεν χρειάζεται αναγέννηση
+      if (expected === b.dataHash) return; // data unchanged — no regeneration needed
 
       void (async () => {
         setLoading(true);
@@ -309,7 +306,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
           if (!cancelled) setLoading(false);
         }
       })();
-    }, 500); // σύντομο debounce: το readiness gate έχει ήδη κρατήσει τα κρίσιμα inputs
+    }, 500); // short debounce: the readiness gate already held the critical inputs
 
     return () => {
       cancelled = true;
@@ -317,7 +314,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
     };
   }, [brandId, metricsReady, period]);
 
-  // Έλεγχος σημαντικής αλλαγής (κανόνες) — μόνο όταν το tab είναι ορατό
+  // Significant-change check (rules) — only while the tab is visible
   useEffect(() => {
     if (!brandId || !hasAnyData || !briefing) return;
 
@@ -352,7 +349,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
     });
   }, [brandId]);
 
-  /** Χρησιμοποιείται μόνο σε retry μετά από σφάλμα. */
+  /** Used only on retry after an error. */
   const handleRetry = useCallback(async () => {
     if (!brandId || loading) return;
     setError(null);
@@ -370,7 +367,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
     setLoading(false);
   }, [brandId, loading]);
 
-  /** Φόρτωση πλήρους ιστορικού παραγγελιών — τα KPI ανεβαίνουν αλλά το κείμενο δεν πρέπει να προηγείται. */
+  /** Loading the full order history — KPIs climb but the text must not run ahead. */
   const awaitingEcommMetrics =
     !metricsReady && ((props.ecommerce?.connectedPlatforms?.length ?? 0) > 0);
   const briefingPending = !briefing && !loading && !error;

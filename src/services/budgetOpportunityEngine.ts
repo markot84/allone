@@ -1,7 +1,4 @@
-/**
- * Υπολογισμός προτάσεων budget από `Campaign.dailyMetrics`.
- * Σύγκριση recent vs baseline παραθύρου — κανόνες v1 (κλιμάκωση / δοκιμή / μείωση / έλεγχος).
- */
+/** Budget suggestions from `Campaign.dailyMetrics`: recent vs baseline window (scale up/test/reduce/review). */
 
 import type { Campaign } from '../types';
 import type {
@@ -220,9 +217,7 @@ function deltaForKind(kind: BudgetSuggestionKind): { min: number; max: number } 
   }
 }
 
-/**
- * Κύρια είσοδος: λίστα campaigns (ίδια brand), επιλογές engine.
- */
+/** Main entry: a list of campaigns (same brand) and engine options. */
 export function computeBudgetOpportunities(
   campaigns: Campaign[],
   partialOptions?: Partial<BudgetOpportunityEngineOptions>

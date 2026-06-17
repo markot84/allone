@@ -33,18 +33,18 @@ function strategy(overrides: Partial<ActiveStrategy> = {}): ActiveStrategy {
 }
 
 describe('getProductStrategyLabels', () => {
-  it('επιστρέφει κενά labels χωρίς active strategy', () => {
+  it('returns empty labels without an active strategy', () => {
     const r = getProductStrategyLabels(product(), null);
     expect(r.custom_label_0).toBe('');
     expect(r.all).toEqual([]);
   });
 
-  it('label_0 = όνομα active scenario', () => {
+  it('label_0 = active scenario name', () => {
     const r = getProductStrategyLabels(product(), strategy({ scenarioId: 'sales_base' }));
     expect(r.custom_label_0).toBe('Sales Optimization');
   });
 
-  it('Mixed scenario: τα 2 sub-scenarios στο 0 και 1', () => {
+  it('Mixed scenario: the 2 sub-scenarios at 0 and 1', () => {
     const r = getProductStrategyLabels(
       product(),
       strategy({
@@ -56,7 +56,7 @@ describe('getProductStrategyLabels', () => {
     expect(r.custom_label_1).toBe('Stock Clearance');
   });
 
-  it('Triage origin: προσθέτει label αν το SKU συμμετέχει', () => {
+  it('Triage origin: adds a label if the SKU participates', () => {
     const r = getProductStrategyLabels(
       product({ sku: 'TUCKER' }),
       strategy({
@@ -68,7 +68,7 @@ describe('getProductStrategyLabels', () => {
     expect(r.all).toContain('Νεκρά κεφάλαια');
   });
 
-  it('Seasonal discount (scope=all) προστίθεται για κάθε προϊόν', () => {
+  it('Seasonal discount (scope=all) is added for every product', () => {
     const r = getProductStrategyLabels(
       product(),
       strategy({
@@ -85,7 +85,7 @@ describe('getProductStrategyLabels', () => {
     expect(r.all).toContain('Seasonal: Black Friday');
   });
 
-  it('μέγιστα 5 labels (truncation)', () => {
+  it('max 5 labels (truncation)', () => {
     const r = getProductStrategyLabels(
       product({ sku: 'X', category: 'Cat' }),
       strategy({
@@ -114,6 +114,6 @@ describe('getProductStrategyLabels', () => {
     // Profit Max, Stock Clearance, Price Benchmarking, Seasonal: P1, Seasonal: P2, Triage → max 5 truncated
     expect(r.all.length).toBeGreaterThan(5);
     expect(r.custom_label_4).not.toBe('');
-    // 6ο και πέρα δεν εκπροσωπείται στο ζευγάρι 0..4
+    // The 6th and beyond are not represented in the 0..4 pair
   });
 });

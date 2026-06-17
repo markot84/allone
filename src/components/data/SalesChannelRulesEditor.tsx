@@ -71,7 +71,7 @@ function editableToRule(r: EditableRule): EcommerceSalesChannelRule {
   };
 }
 
-/** Ταξινόμηση ώστε η σύγκριση dirty να μην εξαρτάται από τη σειρά στο UI/Firestore. */
+/** Sort so the dirty comparison does not depend on order in UI/Firestore. */
 function normalizedPatternList(patterns: string[] | undefined): string[] {
   return [...(patterns || [])]
     .map((p) => p.trim())
@@ -125,7 +125,7 @@ async function fetchRulesFromConnector(brandId: string): Promise<EcommerceSalesC
   return merged;
 }
 
-/** Stable σύγκριση για sync από server χωρίς να σβήνουμε drafts που γράφει ο χρήστης. */
+/** Stable comparison for server sync without discarding drafts the user is editing. */
 function persistedSignature(rules: EcommerceSalesChannelRule[]): string {
   try {
     return JSON.stringify(
@@ -159,7 +159,7 @@ export function SalesChannelRulesEditor() {
   const [drafts, setDrafts] = useState<EditableRule[]>([]);
   const [saving, setSaving] = useState(false);
   const lastServerSigApplied = useRef<string>('');
-  /** Μόνο μετά από επεξεργασία χρήστη μπλοκάρουμε overwrite από refetch — όχι στην πρώτη φόρτωση από Firestore. */
+  /** Only block overwrite from refetch after a user edit — not on the first load from Firestore. */
   const userEditedDraftsRef = useRef(false);
 
   const dirty = useMemo(() => {
@@ -167,7 +167,7 @@ export function SalesChannelRulesEditor() {
     return drafts.some((d, i) => !draftMatchesPersistedRule(d, persisted[i]));
   }, [drafts, persisted]);
 
-  /** Αλλαγή brand: μη δείξουμε κανόνες προηγούμενου brand μέχρι να φτάσουν τα δεδομένα. */
+  /** Brand change: don't show the previous brand's rules until data arrives. */
   useEffect(() => {
     lastServerSigApplied.current = '';
     userEditedDraftsRef.current = false;
@@ -175,11 +175,7 @@ export function SalesChannelRulesEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandId]);
 
-  /**
-   * Συγχρονισμός από Firestore. Παλιό bug: όταν τα persisted έφταναν μετά το κενό query, dirty=true
-   * (μήκος drafts≠persisted) και κάναμε skip — τα drafts δεν γέμιζαν ποτέ, οπότε το Save έμενε ανενεργό.
-   * Αν έχει επεξεργαστεί ο χρήστης και υπάρχει dirty, δεν αντικαθιστούμε από refetch.
-   */
+  /** Sync from Firestore into drafts; if the user has dirty edits, don't overwrite from refetch. */
   useEffect(() => {
     const sig = persistedSignature(persisted);
     if (sig === lastServerSigApplied.current) return;

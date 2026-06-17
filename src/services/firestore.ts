@@ -31,10 +31,8 @@ import { logger } from '../utils/logger';
 import type { MarketBrief } from './aiMarketBrief';
 import { marketBriefDocId } from './aiMarketBrief';
 
-/**
- * Firestore rejects `undefined` anywhere in the payload (including nested objects in arrays).
- * Recursively omit undefined; preserve null, Timestamp, Date, and non-plain objects (e.g. FieldValue).
- */
+/** Firestore rejects `undefined` anywhere; recursively omit it, preserving null, Timestamp,
+ *  Date, and non-plain objects (e.g. FieldValue). */
 function stripUndefinedDeep(value: unknown): unknown {
   if (value === undefined) return undefined;
   if (value === null) return null;
@@ -76,10 +74,8 @@ export class FirestoreService {
     }
   }
 
-  /**
-   * Ίδιο με getDocument αλλά με ανώτατο χρόνο — αποφεύγει ατέρμονο spinner όταν το Firestore client
-   * «κολλάει» (δίκτυο, offline persistence, σπάνια race του SDK).
-   */
+  /** Same as getDocument but with a timeout to avoid an endless spinner when the Firestore
+   *  client hangs (network, offline persistence, rare SDK race). */
   static async getDocumentWithTimeout<T>(
     collectionName: string,
     docId: string,
@@ -109,15 +105,12 @@ export class FirestoreService {
     });
   }
 
-  /**
-   * Brand IDs όπου ο χρήστης έχει έγγραφο `brands/{brandId}/members/{userId}`.
-   * Χρησιμοποιείται όταν το `users/{uid}.brandIds` είναι άδειο ή ξεπερασμένο.
-   */
+  /** Brand IDs where the user has a `brands/{brandId}/members/{userId}` document;
+   *  used when `users/{uid}.brandIds` is empty or stale. */
   static async getBrandIdsFromMembershipDocuments(userId: string): Promise<string[]> {
     if (!userId?.trim()) return [];
     try {
-      // Σε collection group το documentId() θέλει *πλήρες* path (ζυγό # segments), όχι μόνο το uid.
-      // Τα `brands/{brandId}/members/{uid}` έχουν πάντα `userId` στο data (βλ. MembersService.set).
+      // `brands/{brandId}/members/{uid}` docs always carry `userId` in the data (see MembersService.set).
       const q = query(collectionGroup(db, 'members'), where('userId', '==', userId));
       const snap = await getDocs(q);
       const ids: string[] = [];
@@ -134,8 +127,7 @@ export class FirestoreService {
     }
   }
 
-  // Get all documents from collection. When brandId is provided, filters by brandId.
-  // `forceServer`: skip local cache so new connector writes show up immediately after sync.
+  // Get all documents (filtered by brandId when provided). `forceServer` skips local cache so new connector writes show up immediately after sync.
   static async getDocuments<T>(
     collectionName: string,
     constraints: QueryConstraint[] = [],
@@ -172,8 +164,8 @@ export class FirestoreService {
       pageSize: number;
       cursor?: QueryDocumentSnapshot<DocumentData> | null;
       constraints?: QueryConstraint[];
-      /** Παράλειψη του getCountFromServer (server round-trip). Χρήσιμο στις επόμενες σελίδες ενός
-       *  pagination loop όπου το total υπολογίστηκε ήδη στην πρώτη σελίδα. Επιστρέφει totalCount: -1. */
+      /** Skip getCountFromServer (a server round-trip). Useful on later pages of a pagination loop
+       *  where the total was already computed on the first page. Returns totalCount: -1. */
       skipCount?: boolean;
     },
   ): Promise<{ items: T[]; lastDoc: QueryDocumentSnapshot<DocumentData> | null; totalCount: number }> {

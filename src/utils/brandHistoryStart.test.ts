@@ -11,14 +11,14 @@ const safeblock = { historyStartDate: '2025-09-01' };
 const noCutoff = { historyStartDate: undefined };
 
 describe('brandHistoryStart', () => {
-  it('parsing: επιστρέφει ISO/Date όταν είναι έγκυρο', () => {
+  it('parsing: returns ISO/Date when valid', () => {
     expect(getBrandHistoryStartISO(safeblock)).toBe('2025-09-01');
     expect(getBrandHistoryStartDate(safeblock)?.toISOString()).toBe('2025-09-01T00:00:00.000Z');
     expect(getBrandHistoryStartISO({ historyStartDate: 'garbage' })).toBeNull();
     expect(getBrandHistoryStartISO(noCutoff)).toBeNull();
   });
 
-  it('clamp: ανεβάζει παλαιότερες ημερομηνίες στο cutoff', () => {
+  it('clamp: raises earlier dates up to the cutoff', () => {
     expect(clampDateByBrandHistory('2025-01-01', safeblock)).toBe('2025-09-01');
     expect(clampDateByBrandHistory('2025-09-01', safeblock)).toBe('2025-09-01');
     expect(clampDateByBrandHistory('2025-09-15', safeblock)).toBe('2025-09-15');
@@ -27,17 +27,17 @@ describe('brandHistoryStart', () => {
     expect(clampDateByBrandHistory(null, noCutoff)).toBeNull();
   });
 
-  it('passes: σωστό true/false για διάφορες πηγές ημερομηνίας', () => {
+  it('passes: correct true/false for various date sources', () => {
     expect(passesBrandHistory('2025-08-31', safeblock)).toBe(false);
     expect(passesBrandHistory('2025-09-01', safeblock)).toBe(true);
     expect(passesBrandHistory(new Date('2025-09-15'), safeblock)).toBe(true);
     expect(passesBrandHistory(new Date('2024-01-01'), safeblock)).toBe(false);
     expect(passesBrandHistory('2025-01-01T12:00:00Z', safeblock)).toBe(false);
     expect(passesBrandHistory(null, safeblock)).toBe(false);
-    expect(passesBrandHistory(null, noCutoff)).toBe(true); // χωρίς cutoff
+    expect(passesBrandHistory(null, noCutoff)).toBe(true); // no cutoff
   });
 
-  it('filter: αφαιρεί προ-cutoff records, κρατάει >= cutoff', () => {
+  it('filter: removes pre-cutoff records, keeps >= cutoff', () => {
     const orders = [
       { id: 'o1', createdAt: '2025-08-15' },
       { id: 'o2', createdAt: '2025-09-01' },
@@ -45,7 +45,7 @@ describe('brandHistoryStart', () => {
     ];
     const out = filterByBrandHistory(orders, (o) => o.createdAt, safeblock);
     expect(out.map((o) => o.id)).toEqual(['o2', 'o3']);
-    // χωρίς cutoff → no-op
+    // no cutoff → no-op
     expect(filterByBrandHistory(orders, (o) => o.createdAt, noCutoff)).toEqual(orders);
   });
 });

@@ -27,11 +27,8 @@ export function useProcurement(options?: { sheets?: readonly SheetKey[] }) {
   const queryClient = useQueryClient();
   const requestedSheets = options?.sheets?.length ? options.sheets : KEYS;
 
-  // Per-sheet queries: κάθε sheet έχει ΔΙΚΟ του cache key → (α) όταν άλλη σελίδα ζητά ένα μόνο
-  // sheet (π.χ. Dashboard → 'costing') δεν ξανακατεβαίνει στο Procurement page, (β) τα μεγάλα
-  // sheets (inventory/costing για safeblock ~12k SKU) φορτώνονται ανεξάρτητα/παράλληλα και δεν
-  // μπλοκάρουν το ένα το άλλο. `cacheFirst` → instant επαναφόρτωση από το persistent IndexedDB
-  // cache σε κάθε επόμενη επίσκεψη (ο χρήστης μπαινοβγαίνει συχνά στη σελίδα).
+  // Per-sheet cache keys so single-sheet requests aren't re-fetched and large sheets load in
+  // parallel; `cacheFirst` gives instant reload from the persistent IndexedDB cache.
   const results = useQueries({
     queries: requestedSheets.map((key) => ({
       queryKey: ['procurement-sheet', brandId, key],
@@ -64,7 +61,7 @@ export function useProcurement(options?: { sheets?: readonly SheetKey[] }) {
     isLoading: anyPending,
     isRefreshing: !anyPending && anyFetching,
     hasData: Object.values(data).some((arr) => (arr?.length ?? 0) > 0),
-    /** Επιστρέφει true όσο το συγκεκριμένο sheet δεν έχει φορτώσει ακόμη (per-tab loading). */
+    /** Returns true while the given sheet has not yet loaded (per-tab loading). */
     isSheetLoading: (key: SheetKey) => loadingSheets.has(key),
     invalidate: () => queryClient.invalidateQueries({ queryKey: ['procurement-sheet'] }),
   };

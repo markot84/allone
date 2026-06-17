@@ -4,8 +4,8 @@ import { callGemini } from './geminiProxy';
 import { buildFallbackCoreMessage, type MarketingPlanCoreMessage } from './marketingPlanEngine';
 import type { MarketingPlanInsight } from './marketingPlanInsights';
 
-// Flash: το core message είναι σύντομο (headline + παράγραφος)· το flash είναι αρκετό και
-// πολύ ταχύτερο/φθηνότερο από το pro. Είναι non-blocking με deterministic fallback.
+// Flash: the core message is short (headline + paragraph), so flash is enough and much
+// faster/cheaper than pro. Non-blocking with a deterministic fallback.
 const MODEL_NAME = 'gemini-2.5-flash';
 
 const SYSTEM_PROMPT = `You are a senior retail marketing strategist.
@@ -66,9 +66,9 @@ function buildUserPrompt(
     lastYearEvidence: insight.evidence,
     dataQuality: insight.dataQuality,
     topGroups,
-    // Εμπορική γνώση/ένστικτο επιχειρηματία (από τη σελίδα «Εμπορικές Πληροφορίες»).
+    // Merchant's commercial knowledge/intuition (from the Commercial Info page).
     commercialContext: commercialInfoText && commercialInfoText.trim() ? commercialInfoText : undefined,
-    // Brand identity context: tone/archetype/ICPs. Δεν αντικαθιστά τα evidence metrics.
+    // Brand identity context: tone/archetype/ICPs. Does not override the evidence metrics.
     brandProfileContext: brandProfileText && brandProfileText.trim() ? brandProfileText : undefined,
     instruction:
       'Γράψε το βασικό μήνυμα της περιόδου για marketing plan. Να συνδέεται με περσινή ζήτηση, τρέχον απόθεμα και εμπορική προτεραιότητα. Αν υπάρχει commercialContext, ενσωμάτωσέ τον ως ισχυρό σήμα για την κατεύθυνση/χρονισμό της καμπάνιας. Αν υπάρχει brandProfileContext, κράτησε το μήνυμα συμβατό με το archetype, tone of voice και ICPs, χωρίς να επινοήσεις νέα νούμερα.',
@@ -78,14 +78,14 @@ function buildUserPrompt(
 export async function generateMarketingPlanMessage(input: {
   insight: MarketingPlanInsight;
   brandName?: string;
-  /** Συμπυκνωμένες ενεργές εμπορικές πληροφορίες (formatCommercialInfoForPrompt). */
+  /** Condensed active commercial info (formatCommercialInfoForPrompt). */
   commercialInfoText?: string;
-  /** Συμπυκνωμένο Brand Profile context (formatBrandProfileForPrompt). */
+  /** Condensed Brand Profile context (formatBrandProfileForPrompt). */
   brandProfileText?: string;
 }): Promise<MarketingPlanCoreMessage> {
   const fallback = buildFallbackCoreMessage(input.insight);
   const hasContext = !!(input.commercialInfoText && input.commercialInfoText.trim());
-  // Με εμπορικές πληροφορίες αξίζει AND να παράγουμε μήνυμα ακόμη κι αν τα data είναι μέτρια.
+  // With commercial info it's worth generating a message even if the data is mediocre.
   if (!hasContext && (input.insight.dataQuality.level === 'weak' || input.insight.reorderPlan.length === 0)) {
     return fallback;
   }

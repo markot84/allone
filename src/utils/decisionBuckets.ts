@@ -1,23 +1,5 @@
-/**
- * Decision Buckets — Triage layer για merchant-centric ταξινόμηση SKUs.
- *
- * Αντί για raw σενάρια "0 πωλήσεις 7 ημερών", δουλεύουμε σε εμπορικά νοήματα:
- *   - Dead Capital   → στάσιμα κεφάλαια
- *   - Stockout Risk  → επικείμενη έλλειψη
- *   - Hot Seller     → bestsellers
- *   - Margin Bleeder → πουλάει αλλά χωρίς κέρδος
- *   - Slow Mover     → χαμηλή κίνηση + κρατημένο stock
- *   - Discontinue    → υποψήφιο για κατάργηση
- *   - Replenish Now  → χρειάζεται άμεση παραγγελία
- *   - New / Unknown  → δεν έχουμε αρκετά δεδομένα
- *
- * Pure & deterministic — δεν εξαρτάται από hooks. Δίνει εξήγηση ανά SKU
- * (`reasons`) ώστε το UI να τη δείξει στον χρήστη και τα AI prompts να
- * έχουν context.
- *
- * Κάθε bucket έχει `recommendedPolicy` που δείχνει σε ένα από τα 8 υπάρχοντα
- * commercial policies — έτσι το triage card μπορεί να γίνει router.
- */
+/** Decision Buckets — pure, deterministic triage layer classifying SKUs in commercial terms,
+ * with per-SKU `reasons` and a `recommendedPolicy` routing each bucket to a commercial policy. */
 
 import type { Product } from '../types';
 import type { ProductSignal } from '../hooks/useProductSignals';
@@ -49,10 +31,10 @@ export interface BucketDef {
   label: string;
   shortLabel: string;
   description: string;
-  /** Tailwind text/badge color suffix (π.χ. 'rose', 'amber', 'emerald'). */
+  /** Tailwind text/badge color suffix (e.g. 'rose', 'amber', 'emerald'). */
   color: 'rose' | 'amber' | 'emerald' | 'sky' | 'violet' | 'slate' | 'orange' | 'indigo';
   recommendedPolicy: RecommendedPolicy;
-  /** CTA που εμφανίζει το triage card. */
+  /** CTA shown by the triage card. */
   cta: string;
 }
 
@@ -148,13 +130,8 @@ export const BUCKET_ORDER: BucketId[] = [
   'new_or_unknown',
 ];
 
-/**
- * Thematic groups για το UI — ομαδοποιούν τα 8 buckets σε νοηματικές
- * κατηγορίες ώστε ο merchant να βλέπει το «τι κατάσταση είναι» πριν τη
- * δράση. Σχεδιαστική επιλογή: Επείγον = χάνεις χρήμα/πωλήσεις τώρα,
- * Ευκαιρίες = προς ανάπτυξη, Παρακολούθηση = γνωστό αλλά μη επείγον,
- * Διερεύνηση = δεν ξέρουμε ακόμα.
- */
+/** Thematic UI groups: Critical = losing money/sales now, Opportunity = to grow,
+ * Watch = known but not urgent, Investigate = not known yet. */
 export type BucketGroupId = 'critical' | 'opportunity' | 'watch' | 'investigate';
 
 export interface BucketGroup {
@@ -198,17 +175,15 @@ export const BUCKET_GROUPS: BucketGroup[] = [
   },
 ];
 
-/**
- * Tunable thresholds. Defaults βασισμένα σε εμπορικά benchmarks του domain
- * (B2C retail). Θα γίνουν per-brand overrides σε επόμενο sprint.
- */
+/** Tunable thresholds. Defaults based on B2C retail commercial benchmarks;
+ * will become per-brand overrides later. */
 export interface BucketThresholds {
   deadCapitalMinTied: number; // €
   deadCapitalMinAgeDays: number;
   stockoutMaxDaysOfCover: number;
   stockoutMin30dQty: number;
   hotSellerMinMarginPct: number;
-  hotSellerTopPercentile: number; // 0..1 (π.χ. 0.2 = top 20% qty30d)
+  hotSellerTopPercentile: number; // 0..1 (e.g. 0.2 = top 20% qty30d)
   marginBleederMaxPct: number;
   slowMoverMax90dQty: number;
   slowMoverMinTied: number;
@@ -234,11 +209,8 @@ export const DEFAULT_THRESHOLDS: BucketThresholds = {
   newSkuMaxAgeDays: 30,
 };
 
-/**
- * Sub-categorization για το «Νέα / άγνωστο» bucket. Αναγκαίο γιατί το bucket
- * πιάνει ΟΥΣΙΑΣΤΙΚΑ διαφορετικά cases (π.χ. ένα νέο SKU vs ένα gift card vs
- * ένα παλιό SKU χωρίς integrations) και ο merchant πρέπει να ξεχωρίσει.
- */
+/** Sub-categorization for the "New / Unknown" bucket — it catches distinct cases
+ * (new SKU vs gift card vs old SKU without integrations) the merchant must tell apart. */
 export type UnknownReason = 'new_sku' | 'no_signals' | 'virtual_sku';
 
 export interface BucketAssignment {
@@ -247,11 +219,11 @@ export interface BucketAssignment {
   productName: string;
   buckets: BucketId[];
   reasons: Partial<Record<BucketId, string>>;
-  /** Severity για ranking μέσα στο bucket (μεγαλύτερο = πιο επείγον). */
+  /** Severity for ranking within the bucket (higher = more urgent). */
   severity: number;
-  /** Tied capital (€) — βασικό KPI για prioritization. */
+  /** Tied capital (€) — key KPI for prioritization. */
   tiedCapital: number;
-  /** Επιπλέον context για το UI (rich SKU rows). */
+  /** Extra context for the UI (rich SKU rows). */
   meta: {
     stock?: number;
     qty30d?: number;
@@ -260,18 +232,18 @@ export interface BucketAssignment {
     ageDays?: number;
     marginPct?: number;
     lastSaleAt?: string | null;
-    /** Συμπληρωματικός λόγος για new_or_unknown classification. */
+    /** Supplementary reason for new_or_unknown classification. */
     unknownReason?: UnknownReason;
   };
 }
 
 interface ClassifierContext {
   thresholds: BucketThresholds;
-  /** Κατώφλι qty30d για top percentile (Hot Seller). Pre-computed στο classifyAll. */
+  /** qty30d threshold for top percentile (Hot Seller). Pre-computed in classifyAll. */
   hotSellerQty30dCutoff: number;
 }
 
-/** Κλασικό status normalization — πιάνει ελληνικά + αγγλικά. */
+/** Status normalization — matches Greek + English. */
 function statusMatchesDiscontinue(status: string | undefined): boolean {
   if (!status) return false;
   const s = status.toLowerCase();
@@ -282,7 +254,7 @@ function fmtEur(n: number): string {
   return `${n.toLocaleString('el-GR', { maximumFractionDigits: 0 })}€`;
 }
 
-/** Classify ένα SKU. Επιστρέφει buckets + per-bucket reason text. */
+/** Classify one SKU. Returns buckets + per-bucket reason text. */
 function classifyOne(
   product: Product,
   signal: ProductSignal | undefined,
@@ -306,7 +278,7 @@ function classifyOne(
   const reasons: Partial<Record<BucketId, string>> = {};
   const t = ctx.thresholds;
 
-  // 1) Dead Capital — έχει προτεραιότητα
+  // 1) Dead Capital — takes priority
   if (
     tied >= t.deadCapitalMinTied &&
     ageDays >= t.deadCapitalMinAgeDays &&
@@ -318,7 +290,7 @@ function classifyOne(
     reasons.dead_capital = `${fmtEur(tied)} δεσμευμένα, 0 κίνηση 90 ημερών, ${ageDays} ημέρες stock.`;
   }
 
-  // 2) Discontinue — status match ή lifetime=0 με παλιό stock
+  // 2) Discontinue — status match or lifetime=0 with old stock
   if (
     statusMatchesDiscontinue(status) ||
     (typeof qtyLifetime === 'number' &&
@@ -332,7 +304,7 @@ function classifyOne(
       : `0 πωλήσεις lifetime, ${ageDays} ημέρες stock.`;
   }
 
-  // 3) Stockout Risk — γρήγορη κίνηση + λίγες ημέρες επάρκειας
+  // 3) Stockout Risk — fast movement + few days of cover
   if (
     typeof dco === 'number' &&
     dco <= t.stockoutMaxDaysOfCover &&
@@ -344,7 +316,7 @@ function classifyOne(
     reasons.stockout_risk = `${dco} ημέρες επάρκειας, ${qty30d} τμχ τον τελ. μήνα.`;
   }
 
-  // 4) Replenish Now — procurement signal ή πολύ μικρή επάρκεια
+  // 4) Replenish Now — procurement signal or very low days of cover
   if (
     (signal?.resolved && typeof dco === 'number' && dco < t.replenishMaxDaysOfCover && (qty30d ?? 0) > 0)
   ) {
@@ -352,10 +324,8 @@ function classifyOne(
     reasons.replenish_now = `${dco} ημέρες επάρκειας — προτείνεται άμεση παραγγελία.`;
   }
 
-  // 5) Hot Seller — top percentile qty30d + υγιές margin
-  // LOGIC-11: the cutoff is computed only from hasWindowSource products, so gate the
-  // classification on it too — otherwise import-only SKUs (no real velocity window) get
-  // mis-bucketed as hot_seller in mixed-source brands.
+  // 5) Hot Seller — top percentile qty30d + healthy margin. Cutoff comes only from
+  // hasWindowSource products, so gate on it too or import-only SKUs get mis-bucketed.
   if (
     hasWindowSource &&
     typeof qty30d === 'number' &&
@@ -368,7 +338,7 @@ function classifyOne(
     reasons.hot_seller = `${qty30d} τμχ/30d (top ${Math.round(t.hotSellerTopPercentile * 100)}%), μικτό περιθώριο ${margin.toFixed(0)}%.`;
   }
 
-  // 6) Margin Bleeder — πουλάει αλλά margin πολύ χαμηλό
+  // 6) Margin Bleeder — sells but margin very low
   if (
     typeof qty30d === 'number' &&
     qty30d > 0 &&
@@ -379,7 +349,7 @@ function classifyOne(
     reasons.margin_bleeder = `${qty30d} τμχ/30d με μικτό περιθώριο ${margin.toFixed(1)}% (επί πώλησης).`;
   }
 
-  // 7) Slow Mover — όχι Dead Capital αλλά αξίζει προσοχή
+  // 7) Slow Mover — not Dead Capital but worth attention
   if (
     !buckets.includes('dead_capital') &&
     !buckets.includes('discontinue') &&
@@ -393,10 +363,10 @@ function classifyOne(
     reasons.slow_mover = `${qty90d} τμχ/90d, ${fmtEur(tied)} δεσμευμένα.`;
   }
 
-  // 8) New / Unknown — fallback όταν δεν έχουμε classification ή πολύ νέο SKU
+  // 8) New / Unknown — fallback when there's no classification or a very new SKU
   let unknownReason: UnknownReason | undefined;
   if (buckets.length === 0) {
-    // Προτεραιότητα: virtual SKU (gift cards κλπ) → νέο με γνωστή ηλικία → χωρίς παράθυρο ζήτησης
+    // Priority: virtual SKU (gift cards etc.) → new with known age → no demand window
     const isVirtual = (stock <= 0 && (cost === undefined || cost === 0));
     if (isVirtual) {
       buckets.push('new_or_unknown');
@@ -407,7 +377,7 @@ function classifyOne(
       unknownReason = 'new_sku';
       reasons.new_or_unknown = `Νέο SKU — μόλις ${ageDays} ${ageDays === 1 ? 'ημέρα' : 'ημέρες'} στον κατάλογο.`;
     } else if (!hasWindowSource) {
-      // Χωρίς orders/movement windows: ισχύει ακόμη κι αν υπάρχει procurement (ασύμφωνα SKU / μορφή κωδικού).
+      // No orders/movement windows: applies even if procurement exists (mismatched SKU / code format).
       buckets.push('new_or_unknown');
       unknownReason = 'no_signals';
       reasons.new_or_unknown = signal?.hasProcurement
@@ -421,8 +391,7 @@ function classifyOne(
     }
   }
 
-  // Severity heuristic — Dead Capital weighted by tied; Stockout by velocity gap;
-  // Hot Seller by qty30d; default tied.
+  // Severity heuristic — Dead Capital by tied; Stockout by velocity gap; Hot Seller by qty30d.
   let severity = tied;
   if (buckets.includes('stockout_risk') && typeof qty30d === 'number') {
     severity = Math.max(severity, qty30d * 50); // velocity proxy
@@ -430,7 +399,7 @@ function classifyOne(
   if (buckets.includes('hot_seller') && typeof qty30d === 'number') {
     severity = Math.max(severity, qty30d * 100);
   }
-  // Suppress 7d/lifetime warnings: τις χρησιμοποιούν reasons
+  // Suppress 7d/lifetime warnings: reasons use them
   void qty7d;
   void qtyLifetime;
 
@@ -456,21 +425,19 @@ function classifyOne(
 }
 
 export interface ClassifyResult {
-  /** Όλες οι αναθέσεις, ανεξαρτήτως bucket. */
+  /** All assignments, regardless of bucket. */
   assignments: BucketAssignment[];
-  /** Counts ανά bucket. */
+  /** Counts per bucket. */
   counts: Record<BucketId, number>;
-  /** Top SKUs ανά bucket (sorted by severity desc). */
+  /** Top SKUs per bucket (sorted by severity desc). */
   topByBucket: Record<BucketId, BucketAssignment[]>;
-  /** Συνολικό tied capital ανά bucket — χρήσιμο για prioritization στο UI. */
+  /** Total tied capital per bucket — useful for UI prioritization. */
   tiedByBucket: Record<BucketId, number>;
-  /** SKUs χωρίς καμία ανάθεση (debug). */
+  /** SKUs with no assignment (debug). */
   unclassified: number;
 }
 
-/**
- * Classify όλα τα products. Pre-computes top-percentile cutoff για Hot Seller.
- */
+/** Classify all products. Pre-computes the top-percentile cutoff for Hot Seller. */
 export function classifyAll(
   products: Product[],
   getSignal: (sku: string) => ProductSignal | undefined,

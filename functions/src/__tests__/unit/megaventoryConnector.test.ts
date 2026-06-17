@@ -1,20 +1,9 @@
-/**
- * Unit tests for functions/src/megaventoryConnector.ts.
- *
- * 1) extractMvCategory (PER-60) — ProductGet returned an empty
- *    `ProductCategoryDescription` on every e-tennis product; the real name lives
- *    in `ProductCategoryName` (and, with includeReferencedObjects, a nested
- *    `ProductCategory` object). Preference: ProductCategoryName → nested → Description.
- *
- * 2) normalizeMvCustomReportRow (SEC-L13) — turns Megaventory `ColumnName` values
- *    (untrusted, from the API) into Firestore field keys. It must sanitize
- *    characters field keys can't hold, cap key length + column count, and never
- *    let a column overwrite the reserved keys.
- */
+/** extractMvCategory prefers `ProductCategoryName` (flat → nested ProductCategory → Description);
+ * normalizeMvCustomReportRow sanitizes `ColumnName` into Firestore keys (caps + reserved-key guard). */
 import { describe, it, expect } from 'vitest';
 import { extractMvCategory, normalizeMvCustomReportRow } from '../../megaventoryConnector';
 
-describe('extractMvCategory (PER-60)', () => {
+describe('extractMvCategory', () => {
   it('prefers flat ProductCategoryName (the real human-readable name)', () => {
     expect(extractMvCategory({ ProductCategoryName: 'Ανδρικά Ρούχα' })).toBe('Ανδρικά Ρούχα');
   });
@@ -41,7 +30,7 @@ describe('extractMvCategory (PER-60)', () => {
     expect(extractMvCategory({ ProductCategoryDescription: 'Legacy Cat' })).toBe('Legacy Cat');
   });
 
-  it('returns empty string when no category data is present (the old e-tennis case)', () => {
+  it('returns empty string when no category data is present', () => {
     expect(extractMvCategory({ ProductSKU: 'ABC', ProductCategoryDescription: '' })).toBe('');
     expect(extractMvCategory({})).toBe('');
   });
@@ -54,7 +43,7 @@ describe('extractMvCategory (PER-60)', () => {
     expect(extractMvCategory({ ProductCategory: 42, ProductCategoryDescription: 'D' })).toBe('D');
   });
 
-  // PER-60 (live-confirmed): includeReferencedObjects embeds the category as `mvProductCategory`
+  // includeReferencedObjects embeds the category as `mvProductCategory`
   // (mv prefix), with the name as a full path. The product itself carries only ProductCategoryID.
   it('reads the real includeReferencedObjects shape mvProductCategory.ProductCategoryName (leaf of the path)', () => {
     expect(
@@ -87,7 +76,7 @@ describe('extractMvCategory (PER-60)', () => {
   });
 });
 
-describe('normalizeMvCustomReportRow (SEC-L13)', () => {
+describe('normalizeMvCustomReportRow', () => {
   it('sanitizes characters Firestore field keys cannot hold (~ * / [ ] ( ) .)', () => {
     const out = normalizeMvCustomReportRow({
       Index: 7,

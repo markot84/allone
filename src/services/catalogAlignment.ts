@@ -35,9 +35,7 @@ function coerceErpSkuDims(v: unknown): ErpSkuDims {
   };
 }
 
-/**
- * React Query persist (localStorage) serializes Map → `{}`. RFM catalog code calls `.has()` — revive Maps from Map or plain record.
- */
+/** React Query persist serializes Map → `{}`; RFM catalog calls `.has()`, so revive Maps from Map or plain record. */
 export function coerceToSkuDimsMap(raw: unknown): Map<string, ErpSkuDims> {
   if (raw instanceof Map) {
     const out = new Map<string, ErpSkuDims>();
@@ -419,9 +417,7 @@ function buildErpSkuMapFromMegaventoryProducts(rows: Record<string, unknown>[]):
   return out;
 }
 
-/**
- * Loads connector product collections + unified `products` for the brand.
- */
+/** Loads connector product collections + unified `products` for the brand. */
 export async function fetchCatalogAlignmentData(
   brandId: string,
   platforms: string[]
@@ -448,10 +444,8 @@ export async function fetchCatalogAlignmentData(
   return { indexes, erpBySku };
 }
 
-/**
- * Data Analysis (RFM catalog tabs): e-shop *_products + Megaventory `megaventory_products` μόνο·
- * χωρίς unified `products` (Enterprise / Procurement import).
- */
+/** Data Analysis (RFM catalog tabs): e-shop *_products + Megaventory `megaventory_products`,
+ *  without the unified `products` collection (Enterprise / Procurement import). */
 export async function fetchCatalogAlignmentDataForDataAnalysis(
   brandId: string,
   platforms: string[],

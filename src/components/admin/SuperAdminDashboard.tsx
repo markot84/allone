@@ -31,7 +31,7 @@ import buildInfoJson from '../../generated/buildInfo.json';
 import type { BuildInfo } from '../../types/buildInfo';
 import { logger } from '../../utils/logger';
 
-// CODE-B1: cast so empty commits/changes arrays don't infer as never[] under `tsc -b`.
+// Cast so empty commits/changes arrays don't infer as never[] under `tsc -b`.
 const buildInfo = buildInfoJson as BuildInfo;
 
 type AdminTab = 'brands' | 'users' | 'leads' | 'api' | 'changelog' | 'system';
@@ -187,7 +187,7 @@ function BrandsTab() {
     if (!valid) return;
     setUpdatingHistory(brandId);
     try {
-      // Άδεια τιμή = remove cutoff (επιστροφή σε full history). Firestore: τίποτα να μην σταλεί ως undefined.
+      // Empty value = remove cutoff (back to full history). Firestore: never send undefined.
       const payload: Partial<Brand> = trimmed
         ? { historyStartDate: trimmed }
         : { historyStartDate: '' };
@@ -521,11 +521,8 @@ function UsersTab() {
       ]);
       setSuperAdmins(sa);
 
-      // Map each user → the brands they belong to by reading every brand's
-      // `members` subcollection via direct path. The collection-group rule for
-      // `members` only authorizes a user's OWN memberships, but the nested
-      // brands/{id}/members rule grants super admins read on each doc — so we
-      // walk the brands (same batched pattern as BrandsTab) instead of one CG query.
+      // Map each user → their brands by walking every brand's `members` subcollection (batched, like BrandsTab) rather than a collection-group query.
+      // The CG `members` rule only authorizes a user's OWN memberships; the nested brands/{id}/members rule grants super admins per-doc read.
       const byUser: Record<string, UserMembership[]> = {};
       const BATCH = 5;
       for (let i = 0; i < brandsList.length; i += BATCH) {

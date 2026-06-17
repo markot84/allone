@@ -67,7 +67,7 @@ export function useAnalytics() {
       return {
         month: date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
         total: ((r as any).total_revenue ?? 0) / 1000,
-        /** Έσοδα καμπανιών (Firestore: `attributed_revenue` — legacy όνομα στήλης στο import). */
+        /** Campaign revenue (Firestore: `attributed_revenue` — legacy column name from the import). */
         campaignsRevenue: ((r as any).attributed_revenue ?? 0) / 1000,
       };
     });

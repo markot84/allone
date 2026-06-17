@@ -1,13 +1,13 @@
 /** Procurement analysis types — mapped from PROCUREMENT_TEMPLATE.xlsx 7 sheets */
 
 export type ProcurementSheetType =
-  | 'inventory'      // ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ
-  | 'costing'        // ΚΟΣΤΟΛΟΓΗΣΗ
-  | 'item_evaluation'     // ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΩΝ
-  | 'customer_evaluation' // ΑΞΙΟΛΟΓΗΣΗ ΠΕΛΑΤΩΝ
-  | 'pricing_policy'      // ΤΙΜΟΛΟΓΙΑΚΗ ΠΟΛΙΤΙΚΗ
-  | 'fiscal_year'        // ΑΠΟΛΟΓΙΣΤΙΚΟ ΕΤΟΣ
-  | 'statistics';        // ΣΤΑΤΙΣΤΙΚΑ
+  | 'inventory'      // Inventory management
+  | 'costing'        // Costing
+  | 'item_evaluation'     // Item evaluation
+  | 'customer_evaluation' // Customer evaluation
+  | 'pricing_policy'      // Pricing policy
+  | 'fiscal_year'        // Fiscal year
+  | 'statistics';        // Statistics
 
 export interface ProcurementInventory {
   id: string;
@@ -42,7 +42,7 @@ export interface ProcurementCosting {
   ΔΕΥΤΕΡΟΓΕΝΕΣ_ΚΟΣΤΟΣ?: string;
   ΑΝΑΛΥΣΗ_ΚΟΣΤΟΥΣ_ΑΝΑ_ΔΡΑΣΤΗΡΙΟΤΗΤΑ?: string;
   ΜΕΣΟ_ΚΟΣΤΟΣ_ΚΑΤΗΓΟΡΙΑΣ?: string;
-  /** Στήλη Η στο PROCUREMENT_TEMPLATE · κύκλος εργασιών 12 μηνών ανά κωδικό (άθροισμα = συνολικός πραγματικός τζίρος στο overview) */
+  /** Column H in PROCUREMENT_TEMPLATE · 12-month turnover per code (sum = total actual turnover in the overview) */
   ΠΡΑΓΜΑΤΙΚΟΣ_ΤΖΙΡΟΣ_12ΜΗΝΟΥ?: string;
   [key: string]: string | undefined;
 }
@@ -103,13 +103,13 @@ export interface ProcurementFiscalYear {
   [key: string]: string | undefined;
 }
 
-/** ΣΤΑΤΙΣΤΙΚΑ: matrix structure (metric name → period values) */
+/** Statistics: matrix structure (metric name → period values) */
 export interface ProcurementStatistics {
   id: string;
   brandId?: string;
   /** First column: metric/label name */
   metric?: string;
-  /** Flexible period columns (e.g. Ιαν, Φεβ, Μαρ...) */
+  /** Flexible period columns (e.g. Jan, Feb, Mar...) */
   [key: string]: string | undefined;
 }
 

@@ -48,7 +48,7 @@ type ProductStockFields = {
 const ERP_SCENARIO_CACHE_MS = SCENARIO_CACHE_TTL_MS;
 const MAX_AUTO_ANALYSIS_DAYS = 120;
 
-/** Παραχωρεί τον έλεγχο στο main thread (επόμενο macrotask) ώστε να γίνει paint και να μην «παγώνει» το UI. */
+/** Yields to the main thread (next macrotask) so the UI can paint and not freeze. */
 function yieldToMain(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -122,8 +122,8 @@ function isActionableScenarioRow(row: WindowedScenarioRow): boolean {
 export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
-  // PER-130/BUG-11: only revenue/platforms used here — skip the ~2-5MB skuStats + stock_movement
-  // chunk download + main-thread parse that froze Policy Impact on large catalogs (etennis 44k SKUs).
+  // Only revenue/platforms used here — skip the skuStats + stock_movement download/parse
+  // that froze Policy Impact on large catalogs (~44k SKUs).
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const { campaigns, isLoading: campaignsLoading } = useCampaigns();
   const procurement = useProcurement({ sheets: ['pricing_policy'] });
@@ -187,10 +187,8 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
   type ScenarioPayload = ReturnType<typeof emptyPayload>;
 
   const query = useQuery({
-    // ΣΤΑΘΕΡΟ key: μόνο brand + περίοδος + manual refresh. ΔΕΝ βάζουμε volatile derived τιμές
-    // (costBySku.size, connectedPlatforms) που ξεκινούν «άδειες» σε κάθε mount και αλλάζουν όταν
-    // φορτώνουν τα dependent hooks — αυτό προκαλούσε αλλαγή key → χάσιμο in-memory cache → επανα-loading.
-    // Η αναλυτική επανυπολογισμός γίνεται μόνο με αλλαγή περιόδου ή με το κουμπί «Ανανέωση» (sync).
+    // STABLE key: only brand + period + manual refresh. Excludes volatile derived values
+    // (costBySku.size, connectedPlatforms) whose changes used to lose the in-memory cache.
     queryKey: [
       'commercial_scenario_impacts',
       brandId,
@@ -203,8 +201,8 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
         return emptyPayload();
       }
 
-      // Use cache unless forced refresh: πρώτα localStorage (instant), μετά Firestore (durable
-      // cross-reload/συσκευή). Αν βρεθεί remote, ξαναγράφεται στο localStorage για επόμενη φορά.
+      // Use cache unless forced refresh: localStorage first, then Firestore (durable);
+      // remote hits get written back to localStorage.
       if (forceRefreshKey === 0) {
         const cached = readScenarioCache<ScenarioPayload>(brandId, period.fromDate, period.toDate);
         if (cached) return cached.data;
@@ -220,8 +218,8 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       const analysisFrom = shouldUseQuickInitialAnalysis ? quickAnalysisFromDate(period.fromDate, period.toDate) : period.fromDate;
       const lookbackFrom = shiftIsoDate(analysisFrom, -30);
       setProgress({ loaded: 0, total: 0 });
-      // Platform-only (e-shop) orders με line items — όχι το ακριβό ERP-invoice διπλό fetch.
-      // Σε μεγάλο initial range αποφεύγουμε full client-side scan. Το πλήρες fetchAll τρέχει με manual refresh.
+      // Platform-only (e-shop) orders with line items — not the ERP-invoice double fetch.
+      // Large initial range skips a full scan; full fetchAll runs on manual refresh.
       const orders = await fetchEcommercePlatformOrders(brandId, scenarioPlatforms, {
         sinceDate: lookbackFrom,
         untilDate: period.toDate,
@@ -233,8 +231,8 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
 
       const priceRows = [];
 
-      // Chunked & non-blocking: η ανάλυση τρέχει σε batches με yield στο main thread ανάμεσα στα
-      // windows/chunks, ώστε σε high-volume brands να μη «παγώνει» η σελίδα (page not responding).
+      // Chunked & non-blocking: runs in batches, yielding to the main thread between
+      // windows/chunks so high-volume brands don't freeze the page.
       for (const window of monthWindows(analysisFrom, period.toDate)) {
         const res = await analyzePriceChangeImpactAsync(
           { orders, periodFrom: window.startDate, periodTo: window.endDate, costBySku, priceBySku, skuNames },
@@ -247,18 +245,15 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       priceRows.sort((a, b) => Math.abs(b.after.revenue - b.before.revenue) - Math.abs(a.after.revenue - a.before.revenue));
       await yieldToMain();
 
-      // Summary υπολογίζεται από ΟΛΕΣ τις rows (σωστά counts). Ο πίνακας όμως δείχνει μόνο τις
-      // ΕΜΦΑΝΙΣΙΜΕΣ: actionable (pos/neg, όχι low-confidence) + neutral. Οι `insufficient` και τα
-      // low-confidence pos/neg δεν εμφανίζονται σε κανένα φίλτρο/chip → τις πετάμε ώστε (α) το cap
-      // να μη «λιμοκτονεί» τα neutral (που λόγω μικρής μεταβολής πέφτουν στο τέλος του sort) και
-      // (β) το KPI count να ταιριάζει πάντα με τον αριθμό γραμμών του πίνακα.
+      // Summary uses ALL rows (correct counts); table shows only displayable ones (actionable
+      // pos/neg not low-confidence, + neutral) so the cap can't starve neutrals and KPI count matches rows.
       const priceSummary = summarizeRows(priceRows);
       const displayablePriceRows = priceRows.filter(
         (r) => r.verdict === 'neutral' || ((r.verdict === 'positive' || r.verdict === 'negative') && r.confidence !== 'low')
       );
       const price = { rows: displayablePriceRows, summary: priceSummary };
       await yieldToMain();
-      // Marketing: ανίχνευση αποφάσεων (before = προηγούμενο ισόποσο διάστημα, υπολογίζεται στο service).
+      // Marketing: decision detection (before = the preceding equal-length window, computed in the service).
       const marketing = analyzeMarketingDecisions({
         campaigns: campaigns as Campaign[],
         orders,
@@ -280,10 +275,8 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
         },
       };
 
-      // Cap rows before caching. Πλέον το scenario ΔΕΝ μπαίνει στο shared persist blob, οπότε το
-      // dedicated localStorage key χωράει άνετα όλες τις rows τυπικού brand (π.χ. e-tennis ~577) →
-      // σωστά totals στο footer. Cap αρκετά ψηλά αλλά κάτω από το Firestore 1MiB doc limit για πολύ
-      // μεγάλα catalogs (sort είναι ήδη κατά revenue impact, κρατάμε τις σημαντικότερες).
+      // Cap rows before caching: high enough for typical brands' footer totals but below the
+      // Firestore 1MiB doc limit; already sorted by revenue impact so we keep the most significant.
       const MAX_PRICE_CACHE = 1200;
       const MAX_MKT_CACHE = 400;
       const cachePayload = {
@@ -291,11 +284,10 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
         price: { ...result.price, rows: result.price.rows.slice(0, MAX_PRICE_CACHE) },
         marketing: { ...result.marketing, rows: result.marketing.rows.slice(0, MAX_MKT_CACHE) },
       };
-      // Γράφουμε και το quick result στο localStorage με `analysisScope.isQuickSample`,
-      // ώστε page switch / back να μη ξανατρέχει τον ίδιο υπολογισμό.
+      // Write the quick result to localStorage with `analysisScope.isQuickSample` so a page switch/back doesn't re-run it.
       writeScenarioCache(brandId, period.fromDate, period.toDate, cachePayload);
       if (!shouldUseQuickInitialAnalysis) {
-        // Durable Firestore cache (fire-and-forget): ώστε ο βαρύς υπολογισμός να μη ξανατρέξει σε reload.
+        // Durable Firestore cache (fire-and-forget): so the heavy computation doesn't re-run on reload.
         void writeScenarioCacheRemote(brandId, period.fromDate, period.toDate, cachePayload);
       }
       setProgress(null);

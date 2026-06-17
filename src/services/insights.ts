@@ -2,10 +2,8 @@ import type { Product, RFMSegment, AIInsight, InventorySummary } from '../types'
 import { classifyStockHealth, getProductTod } from '../utils/productUtils';
 import { groupProductsForDecisionExport, isActionableStockProduct } from '../utils/actionableProducts';
 
-/**
- * Συγκεντρωτικά αποθέματος από το PI aggregate (`product_intelligence/{brandId}`, 1 read) —
- * τα product insight cards τρέφονται από εδώ αντί για την πλήρη λίστα προϊόντων (PER-130).
- */
+/** Inventory aggregate from PI (`product_intelligence/{brandId}`, 1 read); feeds
+ *  product insight cards instead of the full product list. */
 export interface InsightInventoryAggregate {
   summary: InventorySummary;
   categoriesCount: number;
@@ -18,7 +16,7 @@ export function generateInsightsFromData(
   segments: RFMSegment[],
   supplierTodMap?: Map<string, number>,
   ecommerce?: {
-    /** Πραγματικός τζίρος/παραγγελίες — όχι απλά «υπάρχει connector». */
+    /** Real revenue/orders — not merely "a connector exists". */
     hasData: boolean;
     hasConnector?: boolean;
     totalRevenue: number;
@@ -26,15 +24,12 @@ export function generateInsightsFromData(
     aov: number;
     platformBreakdown: { platform: string; revenue: number; orders: number }[];
   },
-  /**
-   * Αν υπάρχει ενεργή στρατηγική με AI-επιλεγμένα segments, τα περνάμε εδώ
-   * ώστε τα segment insights να ευθυγραμμιστούν με τη στρατηγική.
-   */
+  /** Active strategy with AI-selected segments, so segment insights align with it. */
   activeStrategy?: {
     name?: string;
-    targetSegmentNames?: string[]; // π.χ. ['Potential Loyalists', 'At Risk', 'Promising']
+    targetSegmentNames?: string[]; // e.g. ['Potential Loyalists', 'At Risk', 'Promising']
   } | null,
-  /** Όταν δίνεται, τα product cards υπολογίζονται από το aggregate (κανένα products read). */
+  /** When provided, product cards are computed from the aggregate (no products read). */
   inventory?: InsightInventoryAggregate | null
 ): AIInsight[] {
   const insights: AIInsight[] = [];
@@ -53,11 +48,9 @@ export function generateInsightsFromData(
   }
 
   if (inventory) {
-    // PER-130 (0.4): product cards από το PI aggregate summary — ίδια εμφάνιση, ίδια
-    // insightKeys, μόνο η πηγή των αριθμών αλλάζει (κανένα products read στον client).
+    // Product cards from the PI aggregate summary — same insightKeys, only the number source changes.
     const s = inventory.summary;
-    // stockedCount από counts — ΠΟΤΕ από summary.*.percentage: ο παρονομαστής τους
-    // (total_skus) είναι φουσκωμένος ~6× από tombstones, τα counts μετρούν stocked SKUs.
+    // stockedCount from counts — NEVER summary.*.percentage: its total_skus denominator is inflated ~6x by tombstones.
     const stockedCount = s.healthy_stock.count + s.low_stock.count + s.dead_stock.count + s.excess_stock.count;
 
     if (s.dead_stock.count > 0) {
@@ -84,8 +77,7 @@ export function generateInsightsFromData(
       });
     }
 
-    // high_margin_low_stock: δεν υπάρχει αντίστοιχο πεδίο στο aggregate — data-driven
-    // απουσία (ίδιο conditional render με σήμερα όταν δεν υπάρχουν matches)· αναβιώνει στο §8.9.
+    // high_margin_low_stock: no aggregate field — same conditional render as when there are no matches.
 
     if (s.low_stock.count > 5) {
       insights.push({
@@ -171,9 +163,8 @@ export function generateInsightsFromData(
   const hasActiveStrategy = strategySegments.length > 0;
 
   if (hasActiveStrategy) {
-    // Ενεργή στρατηγική: ένα ενοποιημένο insight που ευθυγραμμίζεται με το Channel Activation.
-    // Αντικαθιστά τα ανεξάρτητα champions/at_risk/top_segment insights ώστε ο χρήστης
-    // να βλέπει παντού τα ίδια segments με προτεραιότητα.
+    // Active strategy: one unified insight aligned with Channel Activation, replacing the
+    // independent champions/at_risk/top_segment insights so segments are prioritized consistently.
     const segmentList = strategySegments.join(', ');
     const strategyName = activeStrategy?.name ? `«${activeStrategy.name}»` : 'την ενεργή στρατηγική';
     insights.push({
@@ -186,7 +177,7 @@ export function generateInsightsFromData(
       impact: 'high',
     });
   } else {
-    // Χωρίς ενεργή στρατηγική: data-driven segment insights
+    // No active strategy: data-driven segment insights
     const atRisk = segments.find((s) => s.id === 'at_risk' || s.name?.toLowerCase().includes('at risk'));
     const champions = segments.find((s) => s.id === 'champions' || s.name?.toLowerCase().includes('champion'));
 

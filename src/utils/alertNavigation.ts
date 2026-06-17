@@ -1,9 +1,9 @@
 import type { AutomationAlert } from '../types';
 
-/** Τμήμα εφαρμογής για πλοήγηση από ειδοποίηση */
+/** App section to navigate to from an alert */
 export interface AlertNavTarget {
   section: string;
-  /** Query string χωρίς `?`, π.χ. `stock=low` για `#products?stock=low` */
+  /** Query string without `?`, e.g. `stock=low` for `#products?stock=low` */
   hashQuery?: string;
 }
 
@@ -17,10 +17,8 @@ const TRIGGER_SECTION: Record<string, string> = {
   procurement: 'procurement',
 };
 
-/**
- * Πλοήγηση από automation alert — κλικ στην κάρτα ανοίγει τη σωστή ενότητα
- * και όπου υπάρχει φίλτρο (π.χ. απόθεμα) περνάει στο hash.
- */
+/** Navigation from an automation alert — opens the right section, passing any
+ * filter (e.g. stock) in the hash. */
 export function getAlertNavigation(alert: AutomationAlert): AlertNavTarget {
   const id = alert.triggerId;
   const group = alert.triggerGroup || '';

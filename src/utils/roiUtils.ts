@@ -2,10 +2,8 @@ import type { Campaign } from '../types';
 import { eachDateInclusive, eachDateInclusiveLocal } from './marketingCostPeriod';
 
 export type BucketOverlapOptions = {
-  /**
-   * Legacy Meta imports stored one row per month (key `YYYY-MM-01` = entire month). Spread overlap by calendar days.
-   * When `dailyMetrics` includes any day other than the 1st, pass false — each key is a real calendar day.
-   */
+  /** Legacy Meta imports keyed `YYYY-MM-01` = whole month; spread overlap by calendar days.
+   * Pass false when `dailyMetrics` has any day other than the 1st (real calendar days). */
   metaMonthBuckets?: boolean;
 };
 
@@ -20,9 +18,7 @@ export function metaUsesLegacyMonthBuckets(c: {
   return !Object.keys(dm).some(k => k.slice(8, 10) !== '01');
 }
 
-/**
- * Returns the fraction [0,1] of a dailyMetrics bucket that overlaps [fromDate, toDate].
- */
+/** Returns the fraction [0,1] of a dailyMetrics bucket that overlaps [fromDate, toDate]. */
 export function bucketOverlapFraction(
   date: string,
   fromDate: string,
@@ -42,10 +38,8 @@ export function bucketOverlapFraction(
   return date >= fromDate && date <= toDate ? 1 : 0;
 }
 
-// Purchase labels trusted for Meta — in priority order.
-// Prefer standard `purchase` first: aligns with Meta Ads Manager «Purchases» (Pixel+CAPI deduped).
-// Pixel-only row can under-count when CAPI attributes conversions the UI shows as purchase.
-// omni_purchase is excluded: it's a Meta-modeled superset that inflates counts.
+// Trusted Meta purchase labels in priority order; standard `purchase` aligns with Ads Manager (Pixel+CAPI deduped).
+// omni_purchase is excluded as a Meta-modeled superset that inflates counts.
 export const META_PURCHASE_LABEL_ORDER = ['Purchase', 'Purchase (Pixel)'] as const;
 const EXCLUDED_ACTION_LABELS = new Set(['omni_purchase']);
 
@@ -53,10 +47,8 @@ export function isMetaChannel(channel: string | undefined): boolean {
   return (channel || '').trim().toLowerCase() === 'meta';
 }
 
-/**
- * Single Meta "purchase" row for display and filters: first trusted label with any data.
- * Keeps conversions and value from the same action row.
- */
+/** Single Meta "purchase" row for display/filters: first trusted label with any data,
+ * keeping conversions and value from the same action row. */
 export function getMetaPrimaryPurchaseFromActions(
   ca: Record<string, { conversions?: number; value?: number }> | undefined
 ): { conversions: number; value: number } | null {
@@ -71,13 +63,8 @@ export function getMetaPrimaryPurchaseFromActions(
   return null;
 }
 
-/**
- * Returns the reliable conversion value for a campaign.
- *
- * For Meta: reads only from trusted conversionActions labels ("Purchase" ≈ Ads Manager, then "Purchase (Pixel)")
- * to avoid stale Firestore documents that stored omni_purchase as the primary metric.
- * For all other channels: uses c.conversion_value directly, falling back to conversionActions sum.
- */
+/** Reliable conversion value: Meta reads only trusted conversionActions ("Purchase", then "Purchase (Pixel)")
+ * to avoid stale omni_purchase docs; other channels use c.conversion_value, falling back to conversionActions sum. */
 export function getEffectiveConversionValue(c: Campaign): number {
   if (isMetaChannel(c.channel)) {
     const row = getMetaPrimaryPurchaseFromActions(
@@ -85,12 +72,8 @@ export function getEffectiveConversionValue(c: Campaign): number {
     );
     return row?.value ?? 0;
   }
-  /**
-   * ΜΗΝ προτιμάς `purchase_conversion_value` από το parent campaign doc εδώ: στο ROI/Dashboard τα
-   * campaigns περνούν από date-filter σε `dailyMetrics` — το `conversion_value` είναι άθροισμα περιόδου,
-   * ενώ το purchase_* στο doc είναι συχνά lifetime ή πλήρες sync → ROAS πλασματικά υψηλό.
-   * Η σελίδα Campaigns χρησιμοποιεί ξεχωριστή λογική εμφάνισης (getDisplayConversionValue).
-   */
+  // Do NOT prefer doc-level `purchase_conversion_value` here: ROI/Dashboard date-filter on `dailyMetrics` so
+  // `conversion_value` is a period sum, whereas doc `purchase_*` is often lifetime/full-sync and inflates ROAS.
   const v = c.conversion_value || 0;
   if (v > 0) return v;
   if (c.conversionActions) {
@@ -103,9 +86,7 @@ export function getEffectiveConversionValue(c: Campaign): number {
   return 0;
 }
 
-/**
- * Returns the reliable conversion count for a campaign (same logic as getEffectiveConversionValue).
- */
+/** Reliable conversion count for a campaign (same logic as getEffectiveConversionValue). */
 export function getEffectiveConversions(c: Campaign): number {
   if (isMetaChannel(c.channel)) {
     const row = getMetaPrimaryPurchaseFromActions(
@@ -143,10 +124,8 @@ export function isGoogleAdsLikeChannel(channel: string | undefined): boolean {
   return ch === 'google ads' || ch === 'google shopping' || /^google\s*ads\b/.test(ch);
 }
 
-/**
- * Ίδια λογική με το summary της σελίδας Campaigns (Purchase/Sales όταν δεν υπάρχει φίλτρο conversion action).
- * Αν τα `purchase_*` στο slice είναι 0 λόγω κενών ημερών/ετικετών αλλά υπάρχουν `conversions` από τα insights → μην επιστρέφεις 0 («χάνεις» την κονσόλα και το ROAS chart πέφτει σε 0 μέρα).
- */
+/** Campaigns-page summary logic (Purchase/Sales when no conversion-action filter). If slice `purchase_*` is 0
+ * but insights `conversions` exist, don't return 0 (else the ROAS chart drops to 0 for that day). */
 export function getDisplayConversions(c: Campaign, convFilterActive: boolean): number {
   const raw = c.conversions;
   const n = raw != null ? (typeof raw === 'number' ? raw : parseFloat(String(raw))) : NaN;
@@ -248,9 +227,7 @@ export function monthKeyFromDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-/**
- * Normalize organic `period` (ISO date, YYYY-MM, or "Month YYYY") to `YYYY-MM`.
- */
+/** Normalize organic `period` (ISO date, YYYY-MM, or "Month YYYY") to `YYYY-MM`. */
 export function normalizeOrganicPeriodToYm(period: string | undefined): string | null {
   if (!period?.trim()) return null;
   const p = period.trim();
@@ -265,7 +242,7 @@ export function normalizeOrganicPeriodToYm(period: string | undefined): string |
   return null;
 }
 
-/** Short axis label e.g. `Apr 2026` — full year (όχι 2 ψηφία έτους που μπερδεύονται με ημέρα). */
+/** Short axis label e.g. `Apr 2026` — full year (avoid 2-digit year being confused with a day). */
 export function formatMonthKeyShort(ym: string): string {
   const [y, mo] = ym.split('-').map(Number);
   if (!y || !mo || mo < 1 || mo > 12) return ym;
@@ -285,7 +262,7 @@ function dateStrMin(a: string, b: string): string {
   return a <= b ? a : b;
 }
 
-/** Ετικέτα ημέρας για άξονα τάσης (ελληνικό short date). */
+/** Day label for the trend axis (Greek-locale short date). */
 export function formatTrendDayLabel(ymd: string): string {
   const [y, m, d] = ymd.split('-').map(Number);
   if (!y || !m || !d) return ymd;
@@ -299,7 +276,7 @@ export function formatTrendDayLabel(ymd: string): string {
   }
 }
 
-/** Συμβατό με `applyCampaignDateRangeToMetrics`: αν κάποιο daily row έχει purchase fields, χρησιμοποιούμε purchase ανά ημέρα. */
+/** Compatible with `applyCampaignDateRangeToMetrics`: if any daily row has purchase fields, use purchase per day. */
 function dailyMetricsHasPurchaseSlice(dm: Record<string, unknown>): boolean {
   for (const raw of Object.values(dm)) {
     const m = raw as { purchase_conversions?: unknown; purchase_conversion_value?: unknown };
@@ -334,10 +311,8 @@ function attributedConversionsFromDailyRow(raw: unknown, usePurchaseSlice: boole
   return conv;
 }
 
-/**
- * Ημερήσιο conversion value (έσοδα που αναφέρει η πλατφόρμα διαφημίσεων) ανά YYYY-MM-DD μέσα στο [fromDate, toDate].
- * Κανονικές σειρές: μία γραμμή ανά ημέρα. Meta legacy (ένα bucket ανά μήνα): ισοκατανομή στις ημέρες που τέμνουν την περίοδο.
- */
+/** Daily conversion value (ad-platform revenue) per YYYY-MM-DD within [fromDate, toDate]. Normal rows are one per day;
+ * Meta legacy month buckets spread evenly over the days overlapping the period. */
 export function getCampaignDailyAttributedValueInPeriod(
   c: Campaign,
   fromDate: string,
@@ -403,10 +378,8 @@ export function getCampaignDailyAttributedValueInPeriod(
   return out;
 }
 
-/**
- * Ημερήσια δαπάνη διαφήμισης (`amount_spent`) ανά YYYY-MM-DD μέσα στο [fromDate, toDate].
- * Ίδια δομή κουβακιών με {@link getCampaignDailyAttributedValueInPeriod} για συνεπές ROAS ανά ημέρα.
- */
+/** Daily ad spend (`amount_spent`) per YYYY-MM-DD within [fromDate, toDate]; same bucketing as
+ * {@link getCampaignDailyAttributedValueInPeriod} for consistent per-day ROAS. */
 export function getCampaignDailyAttributedSpendInPeriod(
   c: Campaign,
   fromDate: string,
@@ -473,10 +446,8 @@ export function getCampaignDailyAttributedSpendInPeriod(
   return out;
 }
 
-/**
- * Ημερήσιες μετατροπές (conversions) ανά YYYY-MM-DD μέσα στο [fromDate, toDate].
- * Ίδια κουβάκια με {@link getCampaignDailyAttributedSpendInPeriod} (για AOV / τάση ανά ημέρα).
- */
+/** Daily conversions per YYYY-MM-DD within [fromDate, toDate]; same bucketing as
+ * {@link getCampaignDailyAttributedSpendInPeriod} (for AOV / per-day trend). */
 export function getCampaignDailyAttributedConversionsInPeriod(
   c: Campaign,
   fromDate: string,
@@ -550,7 +521,7 @@ export type RoiTrendDailyRow = {
   storeRevenue: number;
 };
 
-/** Άθροισμα `revenueByDay[day]` για κλειστό [fromDate, toDate]. */
+/** Sum of `revenueByDay[day]` over the closed interval [fromDate, toDate]. */
 export function sumDailyRevenueInPeriod(
   revenueByDay: Record<string, number> | undefined,
   fromDate: string,
@@ -564,9 +535,7 @@ export function sumDailyRevenueInPeriod(
   return Math.round(s);
 }
 
-/**
- * Ίδια λογική με `buildRoiTrendSeriesDaily` για μία ημέρα (import spread vs GA4).
- */
+/** Same logic as `buildRoiTrendSeriesDaily` for a single day (import spread vs GA4). */
 export function organicRevenueForSingleDay(
   day: string,
   organicByMonth: Map<string, number>,
@@ -581,7 +550,7 @@ export function organicRevenueForSingleDay(
   return Math.round(monthTotal > 0 ? importSpread : ga4Day);
 }
 
-/** Για μηνιαίο chart: αν δεν υπάρχει import για YYYY-MM, συμπληρώνει από ημερήσιο GA4 (ανά μήνα). */
+/** For the monthly chart: if no import exists for YYYY-MM, fill it from daily GA4 (aggregated per month). */
 export function mergeOrganicByMonthWithGa4(
   organicByMonth: Map<string, number>,
   ga4OrganicByDay: Record<string, number> | undefined
@@ -600,11 +569,8 @@ export function mergeOrganicByMonthWithGa4(
   return out;
 }
 
-/**
- * Όταν λείπει το `organicRevenueByDay` στο Firestore (ή το άθροισμα στην περίοδο είναι ~0), εκτιμούμε
- * ημερήσιο organic από το συνολικό organic των καναλιών GA4 (`trafficSources`, ίδιο με τον πίνακα «Ανάλυση καναλιών»),
- * με ομοιόμορφη κατανομή στο [syncStart–syncEnd] και κλιμάκωση στο τομή με την επιλεγμένη περίοδο.
- */
+/** When `organicRevenueByDay` is missing/~0, estimate daily organic from total GA4 channel organic
+ * (`trafficSources`), spread over [syncStart–syncEnd] and scaled to the overlap with the selected period. */
 export function mergeGa4OrganicDailyWithChannelFallback(
   ga4OrganicByDay: Record<string, number> | undefined,
   channelOrganicTotal: number,
@@ -659,11 +625,8 @@ export function mergeGa4OrganicDailyWithChannelFallback(
   return base;
 }
 
-/**
- * Συγχώνευση organic (ισοκατανομή μηνιαίων imports ανά ημέρα), campaigns (ημερήσια metrics), e-shop revenueByDay.
- * Αν για κάποιον μήνα δεν υπάρχει μηνιαίο import (`organicByMonth`), χρησιμοποιείται προαιρετικά
- * `ga4OrganicByDay` (ημερήσιο organic revenue από GA4 ανά default channel group).
- */
+/** Merge organic (monthly imports spread per day), campaigns (daily metrics), and e-shop revenueByDay; months with
+ * no `organicByMonth` import optionally fall back to `ga4OrganicByDay` (daily GA4 organic, default channel group). */
 export function buildRoiTrendSeriesDaily(
   organicByMonth: Map<string, number>,
   allCampaigns: Campaign[],
@@ -720,7 +683,7 @@ export function eachCalendarMonthInclusive(fromYm: string, toYm: string): string
   return out;
 }
 
-/** Ημέρες του ημερολογιακού μήνα YYYY-MM που intersect-άρουν [fromYmd, toYmd] (ISO). */
+/** Number of days of calendar month YYYY-MM that intersect [fromYmd, toYmd] (ISO). */
 export function daysInMonthIntersectingRange(ym: string, fromYmd: string, toYmd: string): number {
   const parts = ym.split('-').map(Number);
   const y = parts[0];
@@ -735,7 +698,7 @@ export function daysInMonthIntersectingRange(ym: string, fromYmd: string, toYmd:
   return eachDateInclusive(start, end).length;
 }
 
-/** Μηνιαία σειρά e-shop από ημερήσιο map (π.χ. από full-history raw orders). */
+/** Monthly e-shop series from a daily map (e.g. from full-history raw orders). */
 export function monthlyRevenueFromDailyRecord(revenueByDay: Record<string, number>): { month: string; revenue: number }[] {
   const byMonth: Record<string, number> = {};
   for (const [day, rev] of Object.entries(revenueByDay)) {
@@ -748,10 +711,8 @@ export function monthlyRevenueFromDailyRecord(revenueByDay: Record<string, numbe
     .sort((a, b) => a.month.localeCompare(b.month));
 }
 
-/**
- * Conversion value ανά ημερολογιακό μήνα (για trend charts).
- * Prefers summing `dailyMetrics` by month; otherwise one bucket from campaign-level metrics.
- */
+/** Conversion value per calendar month (trend charts): prefers summing `dailyMetrics` by month,
+ * otherwise one bucket from campaign-level metrics. */
 export function getCampaignMonthlyAttributedValue(c: Campaign): Map<string, number> {
   const out = new Map<string, number>();
   const dm = c.dailyMetrics;
@@ -784,10 +745,8 @@ export function getCampaignMonthlyAttributedValue(c: Campaign): Map<string, numb
   return out;
 }
 
-/**
- * Like {@link getCampaignMonthlyAttributedValue}, but only counts `dailyMetrics` days overlapping
- * `[fromDate, toDate]` (with Meta month-bucket overlap). For dashboard charts scoped to the period selector.
- */
+/** Like {@link getCampaignMonthlyAttributedValue}, but only counts `dailyMetrics` days overlapping `[fromDate, toDate]`
+ * (with Meta month-bucket overlap). For dashboard charts scoped to the period selector. */
 export function getCampaignMonthlyAttributedValueInPeriod(
   c: Campaign,
   fromDate: string,
@@ -835,10 +794,8 @@ export type RoiTrendRow = {
   storeRevenue: number;
 };
 
-/**
- * Merge organic, campaign (per-month from dailyMetrics), and e-shop revenue on `YYYY-MM`,
- * fill every month in [fromYm, toYm], sort chronologically.
- */
+/** Merge organic, campaign (per-month from dailyMetrics), and e-shop revenue on `YYYY-MM`;
+ * fill every month in [fromYm, toYm], sort chronologically. */
 export type BuildRoiTrendOptions = {
   /** When set, campaign revenue per month respects the date range (dashboard period selector). */
   periodClip?: { fromDate: string; toDate: string };
@@ -902,9 +859,7 @@ export function buildRoiTrendSeries(
   });
 }
 
-/**
- * Calculate real campaign metrics summary.
- */
+/** Calculate real campaign metrics summary. */
 export function calculateCampaignMetrics(campaigns: Campaign[]) {
   const totalSpend = campaigns.reduce((sum, c) => sum + (c.amount_spent || 0), 0);
   const totalRevenue = campaigns.reduce((sum, c) => sum + getDisplayConversionValue(c, false), 0);
@@ -918,9 +873,7 @@ export function calculateCampaignMetrics(campaigns: Campaign[]) {
   return { totalSpend, totalRevenue, totalConversions, roas, cpa, ctr };
 }
 
-/**
- * Group campaigns by channel and calculate per-channel metrics.
- */
+/** Group campaigns by channel and calculate per-channel metrics. */
 export function calculateChannelPerformance(campaigns: Campaign[]) {
   const channelStats: Record<string, {
     spent: number; revenue: number; conversions: number;
@@ -955,7 +908,7 @@ export function calculateChannelPerformance(campaigns: Campaign[]) {
     .sort((a, b) => b.spent - a.spent);
 }
 
-/** Κείμενο tooltip (Dashboard + ROI): πώς διαβάζεται το ROI σε multiplier μορφή. */
+/** Tooltip text (Dashboard + ROI): how to read ROI in multiplier form. */
 export const ROI_PERCENT_CALC_TOOLTIP =
   `Υπολογισμός ROI σε multiplier μορφή
 

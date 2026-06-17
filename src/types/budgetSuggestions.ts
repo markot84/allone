@@ -1,12 +1,7 @@
-/**
- * Προτάσεις ευκαιριών budget — σχεδιασμός v1
- *
- * Πηγή δεδομένων: `Campaign.dailyMetrics` (ημερήσια spend/revenue/conversions).
- * Σύγκριση δύο χρονικών παραθύρων (π.χ. τελευταίες 7 ημέρες vs προηγούμενες 7).
- * Οι προτάσεις είναι **υποστηρικτικές** — όχι αυτόματη εφαρμογή budget στις πλατφόρμες.
- */
+/** Budget opportunity suggestions from `Campaign.dailyMetrics`, comparing two time
+ *  windows (e.g. last 7 days vs previous 7). Advisory only — never auto-applied. */
 
-/** Τι είδους ενέργεια προτείνεται (για UI / φίλτρα). */
+/** Kind of suggested action (for UI / filters). */
 export type BudgetSuggestionKind =
   | 'scale_up'
   | 'scale_test'
@@ -14,12 +9,12 @@ export type BudgetSuggestionKind =
   | 'reduce'
   | 'review';
 
-/** Εμβέλεια: ανά καμπάνια ή συγκεντρωτικά ανά κανάλι. */
+/** Scope: per campaign or aggregated per channel. */
 export type BudgetSuggestionScope = 'campaign' | 'channel';
 
 export interface BudgetMetricWindow {
   label: 'recent' | 'baseline';
-  /** ISO ημερομηνία (ημέρα) */
+  /** ISO date (day) */
   startDate: string;
   endDate: string;
   spend: number;
@@ -28,13 +23,13 @@ export interface BudgetMetricWindow {
   conversions: number;
   clicks: number;
   impressions: number;
-  /** Πόσες ημερομηνίες είχαν ουσιαστικό spend > 0 */
+  /** Number of dates with meaningful spend > 0 */
   activeDays: number;
 }
 
-/** Μία δομημένη πρόταση προς εμφάνιση στο UI. */
+/** A structured suggestion to display in the UI. */
 export interface BudgetOpportunitySuggestion {
-  /** Σταθερό κλειδί για λίστες / React keys */
+  /** Stable key for lists / React keys */
   id: string;
   scope: BudgetSuggestionScope;
   campaignId?: string;
@@ -48,10 +43,7 @@ export interface BudgetOpportunitySuggestion {
     recent: BudgetMetricWindow;
     baseline: BudgetMetricWindow;
   };
-  /**
-   * Προτεινόμενη μεταβολή μηνιαίου/ημερήσιου budget ως εύρος %.
-   * Δεν συνδέεται με API — μόνο οδηγός.
-   */
+  /** Suggested budget change as a % range; guidance only, not wired to any API. */
   suggestedBudgetDeltaPercent?: { min: number; max: number };
   generatedAt: string;
 }
@@ -69,23 +61,23 @@ export interface BudgetOpportunityResult {
   meta: BudgetOpportunityEngineMeta;
 }
 
-/** Παράμετροι κανόνων — ρυθμίσιμα (μετέπειτα από brand settings). */
+/** Rule parameters - configurable (later via brand settings). */
 export interface BudgetOpportunityEngineOptions {
-  /** Ημέρες «πρόσφατου» παραθύρου (προς σήμερα). */
+  /** Days in the "recent" window (toward today). */
   recentDays: number;
-  /** Ημέρες «βασικής» περιόδου αμέσως πριν το recent. */
+  /** Days in the "baseline" period immediately before recent. */
   baselineDays: number;
-  /** Ελάχιστο spend ανά παράθυρο για να εκδοθεί πρόταση (νόμισμα brand). */
+  /** Minimum spend per window to emit a suggestion (brand currency). */
   minSpendPerWindow: number;
-  /** ROAS πρόσφατα ≥ baseline × factor → κλιμάκωση */
+  /** Recent ROAS >= baseline x factor -> scale up */
   scaleRoasImprovementFactor: number;
-  /** ROAS πρόσφατα ≤ baseline × factor → μείωση */
+  /** Recent ROAS <= baseline x factor -> reduce */
   reduceRoasDeclineFactor: number;
-  /** Ελάχιστες ενεργές ημέρες ανά παράθυρο για confidence high */
+  /** Minimum active days per window for high confidence */
   minActiveDaysHighConfidence: number;
-  /** Αναφοράς «σήμερα» — default τώρα (για tests περνάτε σταθερή ημερομηνία). */
+  /** Reference "today" - defaults to now (pass a fixed date for tests). */
   referenceDate?: Date;
-  /** Να παραχθούν και συγκεντρωτικές προτάσεις ανά κανάλι */
+  /** Also produce aggregated per-channel suggestions */
   includeChannelRollups: boolean;
 }
 
@@ -96,6 +88,6 @@ export const DEFAULT_BUDGET_OPPORTUNITY_OPTIONS: BudgetOpportunityEngineOptions 
   scaleRoasImprovementFactor: 1.08,
   reduceRoasDeclineFactor: 0.85,
   minActiveDaysHighConfidence: 4,
-  /** Default false — αποφεύγει διπλές εμφανίσεις με campaign-level (ενεργοποιήστε για executive view ανά κανάλι). */
+  /** Default false - avoids duplicate display with campaign-level (enable for a per-channel executive view). */
   includeChannelRollups: false,
 };

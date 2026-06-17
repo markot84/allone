@@ -1,16 +1,5 @@
-/**
- * Meta (Facebook/Instagram) Marketing API Connector
- *
- * Flow:
- * 1. User clicks "Connect Meta" → redirected to Facebook Login
- * 2. Facebook redirects back with auth code → exchanged for long-lived token
- * 3. Token stored in Firestore (connectors/{brandId}/meta)
- * 4. Scheduled function uses token to pull campaign insights daily
- *
- * Required secrets:
- * - META_APP_ID
- * - META_APP_SECRET
- */
+/** Meta (Facebook/Instagram) Marketing API connector: OAuth → long-lived token in Firestore
+ * connectors/{brandId}/meta → daily campaign insights pull. Secrets: META_APP_ID, META_APP_SECRET. */
 
 import * as admin from 'firebase-admin';
 import { signState } from './oauthState';
@@ -28,10 +17,7 @@ let _db: Firestore | null = null;
 
 const META_HISTORY_YEARS = 3;
 
-/**
- * Generate array of { since, until } for each calendar month in the range.
- * Uses string manipulation to avoid timezone issues.
- */
+/** Array of { since, until } per calendar month in range; string math avoids timezone issues. */
 function generateMonthRanges(sinceStr: string, untilStr: string): Array<{ since: string; until: string }> {
   const ranges: Array<{ since: string; until: string }> = [];
   const [sy, sm] = sinceStr.split('-').map(Number);
@@ -65,11 +51,8 @@ export function setDb(db: Firestore) {
 const META_GRAPH_URL = 'https://graph.facebook.com/v21.0';
 const META_AUTH_URL = 'https://www.facebook.com/v21.0/dialog/oauth';
 
-/**
- * Attribution windows που ζητάμε από Meta για να υπολογιστούν ξεχωριστά counts/values
- * των purchase events ανά window. Ο χρήστης μπορεί να επιλέξει window στο UI.
- * Η `default` τιμή ("value") ήδη εξαρτάται από το account-level setting.
- */
+/** Attribution windows requested from Meta for per-window purchase counts/values; user picks one
+ * in UI. The `default` ("value") already depends on the account-level setting. */
 const META_ATTRIBUTION_WINDOWS = ['1d_click', '7d_click', '28d_click', '1d_view', '7d_view', '28d_view'] as const;
 type MetaAttribWindow = typeof META_ATTRIBUTION_WINDOWS[number];
 
@@ -353,9 +336,7 @@ function getCredentials() {
   };
 }
 
-/**
- * Generate the OAuth consent URL for Meta
- */
+/** Generate the OAuth consent URL for Meta. */
 export function getMetaAuthUrl(
   brandId: string,
   redirectUri: string,
@@ -388,9 +369,7 @@ export interface MetaCallbackData {
   needsSelection: boolean;
 }
 
-/**
- * Exchange authorization code for tokens and return data (caller handles Firestore write)
- */
+/** Exchange authorization code for tokens and return data (caller handles Firestore write). */
 export async function handleMetaCallback(
   code: string,
   redirectUri: string
@@ -463,9 +442,7 @@ export async function handleMetaCallback(
   }
 }
 
-/**
- * Confirm the selected ad account for this brand
- */
+/** Confirm the selected ad account for this brand. */
 export async function selectMetaAccount(
   brandId: string,
   accountId: string,
@@ -493,9 +470,7 @@ export async function selectMetaAccount(
   }
 }
 
-/**
- * List ad accounts accessible with the token
- */
+/** List ad accounts accessible with the token. */
 async function listAdAccounts(accessToken: string): Promise<{ id: string; name: string }[]> {
   try {
     const res = await fetch(
@@ -514,9 +489,7 @@ async function listAdAccounts(accessToken: string): Promise<{ id: string; name: 
   }
 }
 
-/**
- * Fetch campaign insights from Meta Marketing API
- */
+/** Fetch campaign insights from Meta Marketing API. */
 export async function fetchMetaCampaigns(brandId: string): Promise<{
   success: boolean;
   imported: number;
@@ -548,15 +521,14 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
   }
   const now = new Date();
   const currentYear = now.getUTCFullYear();
-  /** Μετά το history import: rolling ~πέντε εβδομάδες (όχι μόνο χθες/σήμερα). */
+  /** After the history import: rolling ~five weeks (not just yesterday/today). */
   const incrementalWindow = buildRollingUtcDayWindow(DEFAULT_INCREMENTAL_ROLLING_LOOKBACK_DAYS, now);
   const today = toYmd(now);
   const currentYearStart = `${currentYear}-01-01`;
   const historyStartYear = currentYear - META_HISTORY_YEARS;
   const historyStart = `${historyStartYear}-01-01`;
   const historyEnd = `${currentYear - 1}-12-31`;
-  // Auto-rebackfill: το flag κρατάει τον παλαιότερο χρόνο που έχει φορτωθεί.
-  // Αν αυξήσουμε το META_HISTORY_YEARS, ξανατραβάμε το ιστορικό για να καλύψουμε τα νέα παλαιότερα έτη.
+  // Auto-rebackfill: flag holds oldest year loaded; if META_HISTORY_YEARS grows, re-pull older years.
   const historyLoaded =
     Boolean(connector.historyLoadedUntilYear) &&
     Number(connector.historyLoadedUntilYear) <= historyStartYear;
@@ -581,8 +553,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
     try {
       const actAccountId = normalizeAdAccountId(accountId);
 
-      // One API call per calendar month (keeps responses bounded; avoids long sync timeouts).
-      // time_increment=1 returns one row per campaign per day; use API date_start (do not override).
+      // One API call per calendar month (bounded responses); time_increment=1 gives one row per
+      // campaign per day; use API date_start (do not override).
       const allRows: any[] = [];
       const monthRanges: Array<{ since: string; until: string }> = [];
       for (const w of syncWindows) {
@@ -608,8 +580,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           let monthPageCount = 0;
           const MAX_PAGES = 200;
           while (monthUrl && monthPageCount < MAX_PAGES) {
-            // SEC-L8: monthUrl is reassigned to the response's paging.next each iteration —
-            // safeFetch blocks a next-page URL that points at an internal/private address.
+            // monthUrl follows paging.next each iteration; safeFetch blocks a next-page URL
+            // pointing at an internal/private address.
             const monthRes: Response = await safeFetch(monthUrl);
             if (!monthRes.ok) {
               if (monthPageCount === 0) {
@@ -634,8 +606,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
 
       logger.info(`[Meta] Fetched ${allRows.length} total rows across ${monthRanges.length} months for ${actAccountId}`);
 
-      // ── Geographic breakdown (country-level) ────────────────────────────
-      // Δεύτερο call χωρίς time_increment (aggregate ανά χώρα για ολόκληρο το εύρος history+current).
+      // ── Geographic breakdown (country-level): second call without time_increment,
+      // aggregate per country over the whole history+current range. ──
       const geoByCampaign = new Map<string, Record<string, {
         impressions: number; clicks: number; conversions: number;
         conversion_value: number; amount_spent: number;
@@ -654,7 +626,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           let geoUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/insights?${geoParams}`;
           let geoPages = 0;
           while (geoUrl && geoPages < 100) {
-            const geoRes: Response = await safeFetch(geoUrl); // SEC-L8: paging.next follow
+            const geoRes: Response = await safeFetch(geoUrl); // paging.next follow
             if (!geoRes.ok) {
               logger.warn(`[Meta] Geo breakdown failed (${w.tag}) for ${actAccountId}: ${await geoRes.text()}`);
               break;
@@ -667,7 +639,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
               const imp = parseInt(row.impressions || '0', 10);
               const clk = parseInt(row.clicks || '0', 10);
               const spd = parseFloat(row.spend || '0');
-              // Purchase conversions/value (ίδια προτεραιότητα με insights: purchase πριν pixel)
+              // Purchase conversions/value (same priority as insights: purchase before pixel)
               let convs = 0;
               let convVal = 0;
               const actions = row.actions || [];
@@ -703,7 +675,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         logger.warn(`[Meta] Geo breakdown call failed: ${e}`);
       }
 
-      // ── Geographic sub-country: country + region (Meta naming: «region» ≈ περιοχή, όχι πάντα πόλη) ──
+      // ── Geographic sub-country: country + region (Meta naming: "region" ≈ area, not always a city) ──
       const geoCityByCampaign = new Map<string, Record<string, {
         impressions: number; clicks: number; conversions: number;
         conversion_value: number; amount_spent: number;
@@ -722,7 +694,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           let regUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/insights?${regParams}`;
           let regPages = 0;
           while (regUrl && regPages < 100) {
-            const regRes: Response = await safeFetch(regUrl); // SEC-L8: paging.next follow
+            const regRes: Response = await safeFetch(regUrl); // paging.next follow
             if (!regRes.ok) {
               logger.warn(`[Meta] Geo country+region breakdown failed (${w.tag}) for ${actAccountId}: ${await regRes.text()}`);
               break;
@@ -778,7 +750,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       try {
         let statusUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/campaigns?fields=id,name,effective_status&limit=500&access_token=${accessToken}`;
         while (statusUrl) {
-          const statusRes: Response = await safeFetch(statusUrl); // SEC-L8: paging.next follow
+          const statusRes: Response = await safeFetch(statusUrl); // paging.next follow
           if (!statusRes.ok) break;
           const statusData: any = await statusRes.json();
           for (const c of (statusData.data || [])) {
@@ -811,7 +783,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           let fallbackUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/insights?${fallbackParams}`;
           let pageCount = 0;
           while (fallbackUrl && pageCount < 100) {
-            const fallbackRes: Response = await safeFetch(fallbackUrl); // SEC-L8: paging.next follow
+            const fallbackRes: Response = await safeFetch(fallbackUrl); // paging.next follow
             if (!fallbackRes.ok) {
               logger.warn(`[Meta] Fallback insights failed for ${actAccountId}: ${await fallbackRes.text()}`);
               break;
@@ -838,16 +810,15 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         const rowDate: string = row.date_start || '';
         if (!campaignId) continue;
 
-        // Use only pixel-tracked and standard purchase events.
-        // omni_purchase is excluded because it includes Meta-modeled (estimated) conversions
-        // that massively inflate counts — e.g. 1600% click-to-conversion on Advantage+ campaigns.
+        // Only pixel-tracked and standard purchase events; omni_purchase excluded since its
+        // Meta-modeled (estimated) conversions massively inflate counts.
         const actions = row.actions || [];
         const actionValues = row.action_values || [];
         /** Standard `purchase` first — same priority as metaPrimaryPurchaseFromCa / Ads Manager totals. */
         const purchaseTypes = ['purchase', 'offsite_conversion.fb_pixel_purchase'];
         let rowConversions = 0;
         let rowConvValue = 0;
-        // Purchase counts/value ανά attribution window (default + 6 επιλογές)
+        // Purchase counts/value per attribution window (default + 6 options)
         const rowWindowPurchases: Record<string, { conversions: number; value: number }> = {};
         for (const t of purchaseTypes) {
           const a = actions.find((x: any) => x.action_type === t);
@@ -857,7 +828,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           const av = actionValues.find((x: any) => x.action_type === t);
           rowConversions = cv;
           rowConvValue = parseFloat(av?.value || '0');
-          // Per-window: Meta επιστρέφει π.χ. a['1d_click'] = "3", av['1d_click'] = "45.00"
+          // Per-window: Meta returns e.g. a['1d_click'] = "3", av['1d_click'] = "45.00"
           for (const win of META_ATTRIBUTION_WINDOWS) {
             const cw = parseFloat(a[win] || '0');
             const vw = parseFloat(av?.[win] || '0');
@@ -929,7 +900,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           period: `${historyStart} – ${today}`,
           dailyMetrics: {} as Record<string, any>,
           conversionActions: {} as Record<string, { conversions: number; value: number }>,
-          // Purchase metrics ανά Meta attribution window (π.χ. '1d_click', '7d_click', '28d_click', ...)
+          // Purchase metrics per Meta attribution window (e.g. '1d_click', '7d_click', '28d_click', ...)
           metaWindows: {} as Record<MetaAttribWindow, { conversions: number; value: number }>,
           brandId,
           createdAt: FieldValue.serverTimestamp(),
@@ -958,7 +929,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           existing.metaWindows[win].value += vals.value;
         }
 
-        // One entry per calendar day per campaign. Fallback insights (χωρίς time_increment) εξακολουθούν να έχουν date_start — χωρίς daily ο χάρτης ROAS καταλήγει σε τζίρο μόνο σε μία μέρα + μηδενικά αλλού.
+        // One entry per calendar day per campaign. Fallback insights (without time_increment) still have date_start — without daily, the ROAS map ends up with revenue on a single day + zeros elsewhere.
         if (rowDate && /^\d{4}-\d{2}-\d{2}$/.test(rowDate)) {
           existing.dailyMetrics[rowDate] = {
             impressions: rowImpressions,
@@ -973,8 +944,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         campaignMap.set(campaignId, existing);
       }
 
-      // If insights still returned no rows, at least sync campaign shells from Campaigns API
-      // so users can verify connection/account selection in UI.
+      // If insights returned no rows, sync campaign shells from Campaigns API so users can
+      // verify connection/account selection in UI.
       if (campaignMap.size === 0 && campaignStatusMap.size > 0) {
         for (const [campaignId, status] of campaignStatusMap.entries()) {
           const normalizedStatus = status === 'active' ? 'active'
@@ -1010,9 +981,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
 
       const allCampaigns = Array.from(campaignMap.values());
 
-      // IMPORTANT:
-      // Historical load writes a complete window. Incremental load reads only the existing campaign docs,
-      // merges yesterday/today dailyMetrics, then recomputes totals from the merged map.
+      // History load writes a complete window; incremental reads existing campaign docs, merges
+      // recent dailyMetrics, then recomputes totals from the merged map.
       if (historyLoaded && allCampaigns.length > 0) {
         const refs = allCampaigns.map((c) => getDb().collection('campaigns').doc(c.id));
         const existingDocs = await getDb().getAll(...refs);
@@ -1036,7 +1006,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         }
       }
 
-      // Attach geo breakdown per-campaign (μόνο για όσες έχουν δεδομένα)
+      // Attach geo breakdown per-campaign (only for those with data)
       for (const c of allCampaigns) {
         if (historyLoaded) continue;
         const short = String(c.id).startsWith('meta_') ? String(c.id).split('_').pop() : String(c.id);

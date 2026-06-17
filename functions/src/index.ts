@@ -6,17 +6,15 @@ import { logger } from './utils/logger';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Busboy from 'busboy';
-// build: 1451841 — conversions=metrics.conversions only, untilStr=yesterday, no REMOVED filter
+// conversions=metrics.conversions only, untilStr=yesterday, no REMOVED filter
 
 const GEMINI_SECRET = defineSecret('GEMINI_API_KEY');
-/** SMTP: mailbox που κάνει login (συχνά ίδιο με noreply ή service account Gmail) */
+/** SMTP: login mailbox (often the same as noreply or a service-account Gmail) */
 const SMTP_EMAIL_SECRET = defineSecret('SMTP_EMAIL');
-/** SMTP: κωδικός ή App Password */
+/** SMTP: password or App Password */
 const SMTP_PASSWORD_SECRET = defineSecret('SMTP_PASSWORD');
-// OpenCart sync egresses through a fixed-IP VPC connector (pp-opencart-connector)
-// so the store firewall can allowlist the source IP. That connector only exists in
-// the production project, so gate it on GCLOUD_PROJECT (same convention as security.ts):
-// non-prod environments (e.g. staging) deploy these functions without VPC binding.
+// OpenCart sync egresses through fixed-IP VPC connector pp-opencart-connector (store firewall
+// allowlist); it exists only in prod, so gate on GCLOUD_PROJECT — non-prod deploys without VPC.
 const PROD_PROJECT_ID = 'performance-plus-4a5b2';
 const OPENCART_EGRESS_OPTIONS: { vpcConnector?: string; vpcConnectorEgressSettings?: 'ALL_TRAFFIC' } =
   process.env.GCLOUD_PROJECT === PROD_PROJECT_ID
@@ -161,7 +159,7 @@ import { ALERT } from './utils/alertKeys';
 import { runWithLogContext } from './utils/logContext';
 import { getRequestId } from './utils/requestContext';
 
-/** Mirror of CLIENT_ALERT.unkeyed (src/utils/alertKeys.ts) for the client error sink fallback. */
+// Mirror of CLIENT_ALERT.unkeyed (src/utils/alertKeys.ts) for the client error sink fallback.
 const ALERT_CLIENT_UNKEYED = 'client_unkeyed';
 import { encryptToken } from './tokenCrypto';
 
@@ -191,11 +189,7 @@ setTikTokDb(db);
 
 const BATCH_SIZE = 500;
 
-/**
- * Super-admin allowlist (UIDs + emails) lives in Firestore at appConfig/superAdmins.
- * Doc shape: { uids: string[], emails: string[] }. Seeded once via .tmp/seed-super-admins.mjs.
- * Cached per cold-start to avoid hitting Firestore on every auth check.
- */
+/** Super-admin allowlist at appConfig/superAdmins ({ uids, emails }); cached per cold-start. */
 let superAdminCache: { uids: Set<string>; emails: Set<string>; fetchedAt: number } | null = null;
 const SUPER_ADMIN_CACHE_TTL_MS = 5 * 60_000;
 
@@ -244,19 +238,14 @@ async function verifyBrandMembership(uid: string, brandId: string): Promise<bool
   return brandDoc.data()?.createdBy === uid;
 }
 
-/**
- * "Belongs to ANY brand?" — authoritative check against the membership docs,
- * mirroring the client's getBrandIdsFromMembershipDocuments. Used as a fallback
- * when the cached `users/{uid}.brandIds` array is empty/stale (FN-B): a real
- * member can have a valid `brands/{b}/members/{uid}` doc while the profile cache
- * lags. Same query the client already runs, so the index is live.
- */
+/** Authoritative "belongs to ANY brand?" check against membership docs — fallback for
+ * when the cached `users/{uid}.brandIds` is empty/stale. */
 async function userHasAnyBrandMembership(uid: string): Promise<boolean> {
   const snap = await db.collectionGroup('members').where('userId', '==', uid).limit(1).get();
   return !snap.empty;
 }
 
-/** Σύνδεση/αποσύνδεση/sync connectors: ιδιοκτήτης, διαχειριστής, δημιουργός brand, super admin */
+/** Connect/disconnect/sync connectors: owner, admin, brand creator, or super admin */
 async function verifyBrandConnectorManagement(uid: string, brandId: string): Promise<boolean> {
   if (await isUidSuperAdmin(uid)) return true;
   const brandDoc = await db.doc(`brands/${brandId}`).get();
@@ -461,8 +450,8 @@ async function importProducts(
 
   if (items.length > 0) {
     await batchWrite('products', items, brandId);
-    // Stock snapshot μετά από product import — ξεκινά/ανανεώνει το tracking
-    // για brands χωρίς connector (e-tennis, και άλλα όπου το stock έρχεται από imports).
+    // Stock snapshot after product import — starts/refreshes tracking for brands
+    // without a connector (where stock comes from imports).
     try {
       await refreshStockMovement(brandId);
     } catch (e) {
@@ -540,21 +529,8 @@ async function logImportJob(
   });
 }
 
-/**
- * HTTP Import Endpoint
- *
- * POST /importData
- * Headers: Authorization: Bearer {API_KEY}
- * Body: multipart/form-data
- *   - file: CSV/XLSX file
- *   - type: "products" | "campaigns" | "segments"
- *   - channel: (optional) force campaign channel e.g. "Google Ads", "Meta"
- *
- * OR Body: application/json
- *   - fileUrl: URL to download the file
- *   - type: "products" | "campaigns"
- *   - channel: (optional)
- */
+/** POST /importData (Bearer API_KEY) — multipart file or JSON fileUrl; type=products|campaigns|
+ * segments|procurement, optional channel override. */
 export const importData = onRequest(
   {
     region: 'europe-west1',
@@ -608,7 +584,7 @@ export const importData = onRequest(
         }
 
         // safeFetch re-validates the host via DNS + blocks private ranges and
-        // re-checks every redirect hop (SSRF, PP-11).
+        // re-checks every redirect hop (SSRF guard).
         let response: Response;
         try {
           response = await safeFetch(fileUrl);
@@ -621,7 +597,7 @@ export const importData = onRequest(
           return;
         }
 
-        // Cap the download size (PP-16) — refuse oversized bodies before buffering.
+        // Cap the download size — refuse oversized bodies before buffering.
         const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
         const declaredLen = Number(response.headers.get('content-length') || 0);
         if (declaredLen && declaredLen > MAX_IMPORT_BYTES) {
@@ -723,21 +699,8 @@ export const importData = onRequest(
   }
 );
 
-/**
- * fetchImportUrl — server-side fetch of an import/feed URL for the import UI.
- *
- * Browsers can't fetch most feed hosts (the hosts send no CORS headers); the
- * server isn't subject to CORS, so the SPA posts the URL here and we return the
- * raw bytes for the existing client-side parser. This is a generic outbound
- * fetcher (an SSRF surface), so every request goes through validateImportUrl +
- * safeFetch (DNS re-check, private/link-local/metadata ranges blocked, redirects
- * re-validated). ID-token auth + per-user rate limit keep it from being abused
- * as an open relay.
- *
- * Headers: Authorization: Bearer {FIREBASE_ID_TOKEN}
- * Body: { url: string }
- * Returns: raw bytes (upstream Content-Type passed through), or { error }.
- */
+/** Server-side fetch of an import/feed URL for the import UI (CORS workaround). Generic outbound
+ * fetcher → validateImportUrl + safeFetch SSRF guard, ID-token auth + per-user rate limit. */
 export const fetchImportUrl = onRequest(
   { region: 'europe-west1', timeoutSeconds: 60, memory: '256MiB' },
   async (req, res) => {
@@ -803,12 +766,7 @@ export const fetchImportUrl = onRequest(
   }
 );
 
-/**
- * Generate API Key endpoint
- * POST /generateApiKey
- * Headers: Authorization: Bearer {FIREBASE_ID_TOKEN}
- * Body: { brandId: string }
- */
+/** POST /generateApiKey (Bearer FIREBASE_ID_TOKEN) — Body: { brandId }. */
 export const generateApiKey = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
@@ -862,13 +820,8 @@ export const generateApiKey = onRequest(
   }
 );
 
-// ─── Client error sink (observability) ─────────────────────────
-//
-// Browser errors forwarded by src/utils/logger.ts land here and are re-emitted through the
-// structured backend logger so they flow into the same Cloud Monitoring → Slack alert pipeline
-// (see docs/manual-actions.md). Flood-capped per uid as a cost guard — a buggy client loop
-// can't blow up log ingestion. Auth is best-effort: unauthenticated reports are accepted but
-// keyed by IP so anonymous floods are still capped.
+// Client error sink: browser errors re-emitted to the logger (Cloud Monitoring → Slack);
+// flood-capped per identity (uid, else IP), best-effort auth (unauthenticated reports accepted).
 
 const CLIENT_ERROR_FLOOD_CAP = 60; // reports/min/identity
 const CLIENT_ERROR_WINDOW_MS = 60_000;
@@ -943,13 +896,9 @@ export const logClientError = onRequest(
 
 // ─── Connector: Get OAuth URLs ─────────────────────────────────
 
-/**
- * POST /connectorAuth
- * Body: { brandId, provider: "google_ads" | "meta" | "tiktok", redirectUri }
- * Returns: { authUrl }
- */
+/** POST /connectorAuth — Body: { brandId, provider, redirectUri } → { authUrl }. */
 export const connectorAuth = onRequest(
-  // CONNECTOR_TOKEN_KEY: used by signState() to HMAC-sign the OAuth state (PP-12).
+  // CONNECTOR_TOKEN_KEY: used by signState() to HMAC-sign the OAuth state.
   { region: 'europe-west1', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
     if (applyStrictCors(req, res)) return;
@@ -1073,7 +1022,7 @@ export const connectorAuth = onRequest(
           res.status(400).json({ error: 'Missing shopDomain for Shopify' });
           return;
         }
-        // SEC-C1: normalizeShopDomain throws on non-myshopify hosts — user input error, not a 500.
+        // normalizeShopDomain throws on non-myshopify hosts — user input error, not a 500.
         try {
           authUrl = getShopifyAuthUrl(brandId, shopDomain, redirectUri, returnOrigin);
         } catch {
@@ -1097,10 +1046,7 @@ export const connectorAuth = onRequest(
 
 // ─── Connector: OAuth Callback ─────────────────────────────────
 
-/**
- * GET /connectorCallback?code=xxx&state=base64({brandId, provider})
- * Handles OAuth redirect from Google/Meta
- */
+/** GET /connectorCallback?code=xxx&state=base64({brandId, provider}) — OAuth redirect handler. */
 export const connectorCallback = onRequest(
   { region: 'europe-west1', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
@@ -1130,9 +1076,8 @@ export const connectorCallback = onRequest(
     }
 
     try {
-      // PP-12: verify the HMAC signature + expiry. A forged/tampered state (e.g.
-      // one carrying a victim's brandId) fails verification and is rejected, so
-      // connector tokens can only be written to the brand the signer intended.
+      // Verify HMAC signature + expiry — a forged/tampered state (e.g. carrying a victim's brandId)
+      // is rejected, so tokens only land on the brand the signer intended.
       const parsed = verifyState<{
         brandId: string;
         provider: string;
@@ -1249,7 +1194,7 @@ export const connectorCallback = onRequest(
     } catch (error) {
       const cid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
       logger.error(`[ConnectorCallback] Error (cid=${cid}):`, { alertKey: ALERT.connectorCallbackFailed, err: error });
-      // SEC-L3: don't leak internal error detail to the browser; reference the log via cid.
+      // Don't leak internal error detail to the browser; reference the log via cid.
       res.status(500).send(`Callback error (ref: ${cid}). Please try reconnecting.`);
     }
   }
@@ -1257,10 +1202,7 @@ export const connectorCallback = onRequest(
 
 // ─── Connector: Disconnect ─────────────────────────────────────
 
-/**
- * POST /connectorDisconnect
- * Body: { brandId, provider }
- */
+/** POST /connectorDisconnect — Body: { brandId, provider }. */
 export const connectorDisconnect = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
@@ -1306,8 +1248,8 @@ export const connectorDisconnect = onRequest(
         clearPayload.password = '';
       }
       if (provider === 'magento') {
-        // Full wipe: αλλιώς μένουν stale shopName/storeUrl/storeWebUrl και μπορεί να εμφανιστεί
-        // λάθος store (π.χ. "e-tennis" αντί για "safeblock") στο connector card μετά από disconnect.
+        // Full wipe: otherwise stale shopName/storeUrl/storeWebUrl remain and the wrong store
+        // can show on the connector card after disconnect.
         clearPayload.accessToken = '';
         clearPayload.storeUrl = '';
         clearPayload.shopName = '';
@@ -1383,10 +1325,7 @@ export const connectorDisconnect = onRequest(
 
 // ─── Connector: Select Ad Account ──────────────────────────────
 
-/**
- * POST /connectorSelectAccount
- * Body: { brandId, provider, accountId, accountName }
- */
+/** POST /connectorSelectAccount — Body: { brandId, provider, accountId, accountName }. */
 export const connectorSelectAccount = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
@@ -1485,10 +1424,7 @@ export const connectorSelectAccount = onRequest(
 
 // ─── Connector: Manual Sync ────────────────────────────────────
 
-/**
- * POST /connectorSync
- * Body: { brandId, provider }
- */
+/** POST /connectorSync — Body: { brandId, provider }. */
 export const connectorSync = onRequest(
   { region: 'europe-west1', timeoutSeconds: 1200, memory: '4GiB', cpu: 2, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
   async (req, res) => {
@@ -1599,9 +1535,8 @@ export const connectorSync = onRequest(
         return;
       }
 
-      // ecommerce_summary (μόνο e-shop) + business_revenue_summary (ERP) μετά από sync connectors.
-      // PER-140: μόνο όταν το sync πέτυχε ή εισήγαγε κάτι — καθαρή αποτυχία δεν δικαιολογεί
-      // τα βαριά recomputes (και το φρέσκο syncedAt θα έκρυβε την αποτυχημένη εισαγωγή).
+      // ecommerce_summary + business_revenue_summary post-sync, only on success/import — a clean
+      // failure doesn't justify the heavy recomputes (a fresh syncedAt would hide the failed import).
       const runPostSyncAggregations = shouldRunPostSyncAggregations(result);
       if (
         ['shopify', 'woocommerce', 'opencart', 'magento', 'megaventory', 'softone'].includes(provider) &&
@@ -1615,7 +1550,7 @@ export const connectorSync = onRequest(
       }
 
       if (['shopify', 'woocommerce', 'opencart', 'magento'].includes(provider) && runPostSyncAggregations) {
-        // Stock movement tracking (universal — δουλεύει και για non-connector brands)
+        // Stock movement tracking (universal — works for non-connector brands too)
         try {
           await refreshStockMovement(brandId);
         } catch (e) {
@@ -1647,15 +1582,10 @@ export const connectorSync = onRequest(
   }
 );
 
-/**
- * GA4-deduplicated σύνολα περιόδου (Χρήστες/Νέοι χρήστες κ.λπ.) για ΣΥΓΚΕΚΡΙΜΕΝΟ εύρος.
- * Τα ημερήσια totalUsers/newUsers ΔΕΝ αθροίζονται σωστά (dedup ανά περίοδο στο GA4). Εδώ ζητάμε
- * το ίδιο σύνολο που δείχνει το GA4 UI. Firestore cache (TTL 3h) ώστε να μη χτυπάμε το GA4 σε κάθε
- * αλλαγή ημερομηνίας. Το cache γράφεται ΜΟΝΟ server-side (admin) → δεν χρειάζεται client rule.
- */
+/** GA4-deduplicated period totals for a specific range (daily totalUsers/newUsers don't sum — GA4
+ * dedups per period). Firestore cache TTL 3h, written server-side only. */
 export const ga4PeriodTotals = onRequest(
-  // CONNECTOR_TOKEN_KEY: απαραίτητο — το decryptToken το χρειάζεται για να αποκρυπτογραφήσει το GA4
-  // refresh token. Χωρίς αυτό η αποκρυπτογράφηση αποτυγχάνει → «GA4 token unavailable» → fallback.
+  // CONNECTOR_TOKEN_KEY: decryptToken needs it for the GA4 refresh token, else "GA4 token unavailable".
   { region: 'europe-west1', secrets: ['GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
     if (applyStrictCors(req, res)) return;
@@ -1709,7 +1639,7 @@ export const ga4PeriodTotals = onRequest(
     } catch (error) {
       const cid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
       logger.error(`[ga4PeriodTotals] failed (cid=${cid}):`, { alertKey: ALERT.ga4PeriodTotalsFailed, err: error });
-      // SEC-L3: generic error to the client + correlation id for support; detail stays in logs.
+      // Generic error to the client + correlation id for support; detail stays in logs.
       res.status(500).json({ error: 'Internal error', correlationId: cid });
     }
   }
@@ -1892,10 +1822,8 @@ export const processOpenCartSyncJobs = onSchedule(
   })
 );
 
-/**
- * PER-60: clear the resumable catalog state so a brand isn't livelocked in "processing-only" mode
- * (productCatalogComplete=true) after a failure/timeout. Best-effort; next sync re-ingests fresh.
- */
+/** Clear resumable catalog state so a brand isn't livelocked in processing-only mode
+ * (productCatalogComplete=true) after a failure/timeout; best-effort, next sync re-ingests fresh. */
 async function resetMegaventoryResumableState(db: admin.firestore.Firestore, brandId: string): Promise<void> {
   try {
     await db.doc(`connectors/${brandId}`).update({
@@ -1903,9 +1831,8 @@ async function resetMegaventoryResumableState(db: admin.firestore.Firestore, bra
       'megaventory.productCatalogComplete': FieldValue.delete(),
       'megaventory.productCatalogCursor': FieldValue.delete(),
       'megaventory.processingStage': FieldValue.delete(),
-      // PER-60: clear the per-cycle ancillary done flags too so a failed pass re-ingests them cleanly.
-      // NOTE: manualInvoiceCursor/Complete are intentionally NOT reset — they're resume-friendly, so a
-      // retry continues the (expensive) invoice walk from its checkpoint instead of re-walking from scratch.
+      // Clear per-cycle ancillary done flags so a failed pass re-ingests them. manualInvoiceCursor/
+      // Complete are NOT reset — resume-friendly, so a retry continues the invoice walk from checkpoint.
       'megaventory.ordersIngestComplete': FieldValue.delete(),
       'megaventory.stockIngestComplete': FieldValue.delete(),
       'megaventory.suppliersIngestComplete': FieldValue.delete(),
@@ -1928,7 +1855,7 @@ export const processMegaventorySyncJobs = onSchedule(
   },
   async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
     const db = admin.firestore();
-    // PER-60: > the 1800s (30min) run ceiling so the stale-sweep can't mark a legitimately-running job failed mid-flight.
+    // > the 1800s (30min) run ceiling so the stale-sweep can't mark a legitimately-running job failed mid-flight.
     const STALE_RUNNING_MS = 40 * 60 * 1000;
 
     const staleRunning = await db
@@ -1941,9 +1868,8 @@ export const processMegaventorySyncJobs = onSchedule(
       const data = doc.data();
       const updatedAt = data.updatedAt?.toDate?.() as Date | undefined;
       if (!updatedAt || Date.now() - updatedAt.getTime() <= STALE_RUNNING_MS) continue;
-      // PER-60 FIX: a stale-recovered job timed out before finalizing — it is ALWAYS a failure.
-      // Never inherit data.result.success from a prior (deferred) pass: that masked failures as
-      // 'completed' and, combined with productCatalogComplete=true, livelocked the brand.
+      // A stale-recovered job that timed out before finalizing is ALWAYS a failure — never inherit
+      // data.result.success from a prior pass (that masked failures and livelocked the brand).
       const recovery = decideStaleRecovery();
       logger.warn(`[MegaventoryJob] Recovering stale running job ${doc.id} → failed (timed out)`);
       await doc.ref.update({
@@ -1968,10 +1894,8 @@ export const processMegaventorySyncJobs = onSchedule(
     if (snap.empty) return;
 
     const jobRef = snap.docs[0].ref;
-    // PER-60 FIX (zombie-finalization race): each claim gets a unique token. A pass may finalize the
-    // job only while the token still matches — a stale-swept or re-claimed job rejects the write, so
-    // an invocation that outlived its 30min request can't overwrite the sweep's `failed` (observed
-    // live) or stomp a newer pass's `running` state.
+    // Zombie-finalization guard: each claim gets a unique token; a pass may finalize only while its
+    // token still matches, so an outlived invocation can't overwrite a sweep/re-claim's state.
     const claimToken = randomUUID();
     const job = await db.runTransaction(async (tx) => {
       const latest = await tx.get(jobRef);
@@ -2003,9 +1927,8 @@ export const processMegaventorySyncJobs = onSchedule(
       });
 
     try {
-      // PER-60: the nightly ERP wave hands the PI refresh here instead of running it inline —
-      // refreshing the e-tennis aggregate (~220k SKUs) takes 7–11 min and pushed the wave past
-      // the 1800s onSchedule cap (killed mid-refresh on 2026-06-11). No sync work in this mode.
+      // post_refresh_only: the nightly ERP wave hands PI refresh here (a ~220k-SKU aggregate takes
+      // 7–11 min and overran the 1800s cap inline). No sync work in this mode.
       if (job.mode === 'post_refresh_only') {
         logger.info(`[MegaventoryJob] Post-refresh-only job for ${job.brandId} (nightly wave handoff)`);
         let piError: string | null = null;
@@ -2037,9 +1960,8 @@ export const processMegaventorySyncJobs = onSchedule(
 
       logger.info(`[MegaventoryJob] Starting Megaventory refresh for ${job.brandId}`);
       const result = await fetchMegaventoryData(job.brandId, { mode: 'manual' });
-      // PER-60: if the run hit its soft budget before finishing (large catalog), re-enqueue so the
-      // every-1-min scheduler continues it on a fresh invocation. Bounded to avoid a livelock; the
-      // expensive post-steps (below) are intentionally skipped until the sync fully completes.
+      // Soft-budget exhausted before finishing → re-enqueue for the every-1-min scheduler to
+      // continue. Bounded to avoid livelock; post-steps below are skipped until the sync completes.
       const MAX_CONTINUATIONS = 8;
       if (result.success && result.needsContinuation && job.continuationAttempts < MAX_CONTINUATIONS) {
         const reEnqueued = await updateJobIfOwned({
@@ -2107,7 +2029,7 @@ export const processMegaventorySyncJobs = onSchedule(
         continuationAttempts: FieldValue.delete(),
       });
       if (failedWritten) {
-        // PER-60 FIX: clear resumable state on failure so the brand re-ingests fresh next time
+        // Clear resumable state on failure so the brand re-ingests fresh next time
         // instead of being stuck with productCatalogComplete=true.
         await resetMegaventoryResumableState(db, job.brandId);
       } else {
@@ -2121,10 +2043,7 @@ export const processMegaventorySyncJobs = onSchedule(
 
 // ─── Connector: Save Credentials (WooCommerce) ────────────────
 
-/**
- * POST /connectorSaveCredentials
- * Body: { brandId, provider: "woocommerce", storeUrl, consumerKey, consumerSecret }
- */
+/** POST /connectorSaveCredentials — Body: { brandId, provider, ...provider-specific credentials }. */
 export const connectorSaveCredentials = onRequest(
   { region: 'europe-west1', secrets: ['CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
   async (req, res) => {
@@ -2369,10 +2288,7 @@ export const connectorSaveCredentials = onRequest(
 
 // ─── Magento: Import Admin Search Terms ─────────────────────────
 
-/**
- * POST /importMagentoSearchTerms
- * Body: { brandId, terms: [{ term, hits, results? }], uploadedFileName? }
- */
+/** POST /importMagentoSearchTerms — Body: { brandId, terms: [{ term, hits, results? }], uploadedFileName? }. */
 export const importMagentoSearchTerms = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
@@ -2487,9 +2403,8 @@ async function markNightlyJob(
     patch[`jobs.${job}.lastErrorAt`] = FieldValue.serverTimestamp();
   }
 
-  // set(..., {merge:true}) stores dotted keys as LITERAL field names ("jobs.x.status"), which
-  // healthWatch — reading the nested `jobs` map — can never see. Only update() treats the dots
-  // as field paths, but update() can't create the doc, hence the NOT_FOUND fallback.
+  // set(...,{merge}) stores dotted keys as LITERAL field names healthWatch's nested `jobs` map can't
+  // see; only update() treats dots as field paths but can't create the doc → NOT_FOUND fallback.
   const ref = db.doc('system_health/nightly_jobs');
   try {
     await ref.update(patch);
@@ -2500,15 +2415,8 @@ async function markNightlyJob(
   }
 }
 
-/**
- * Health watchdog — reads `system_health/nightly_jobs` and pages (via the alert pipeline)
- * any nightly job that did not finish cleanly. The `markNightlyJob` writes above are silent on
- * their own; this is what turns a `failed`/stale status into an actual Slack alert.
- *
- * Runs at 08:30 Athens, after the last nightly wave (scheduledProductIntelligence ~07:40 /
- * scheduledDigest). Alerts when a job is: status `failed`, stuck `running` (started but never
- * finished — likely timed out/crashed), or hasn't succeeded within the staleness window.
- */
+/** Health watchdog — reads `system_health/nightly_jobs` and alerts (Slack) any nightly job that's
+ * `failed`, stuck `running`, or stale (no success in the window). Runs 08:30 Athens. */
 const NIGHTLY_JOB_KEYS: NightlyJobKey[] = [
   'scheduledSyncMarketing',
   'scheduledSyncEcommerce',
@@ -2594,7 +2502,7 @@ export const healthWatch = onSchedule(
     })
 );
 
-/** Περιορισμένη παραλληλία (χαμηλότερο σφάξιμο API της Google σε νυχτερινό batch). */
+/** Bounded concurrency (lighter Google API hammering during the nightly batch). */
 async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>): Promise<void> {
   if (items.length === 0) return;
   const n = Math.max(1, Math.min(concurrency, items.length));
@@ -2609,12 +2517,10 @@ async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Prom
   await Promise.all(Array.from({ length: n }, () => worker()));
 }
 
-/**
- * Cloud Functions Gen 2 onSchedule (Pub/Sub-triggered) έχει σκληρό όριο 1800s. Κάθε «κύμα» connectors έχει δικό του
- * invocation ώστε Magento/ERP να μην κόβουν GA4/GSC μέσα στο ίδιο timeout με τα Ads.
- */
+/** onSchedule has a hard 1800s cap, so each connector wave gets its own invocation — Magento/ERP
+ * don't cut off GA4/GSC within the same timeout as Ads. */
 const SCHEDULED_SYNC_TIMEOUT_SECONDS = 1800;
-/** Παράλληλη επεξεργασία brands μέσα σε ένα κύμα. */
+/** Parallel processing of brands within a wave. */
 const NIGHTLY_CONNECTOR_SYNC_CONCURRENCY = 3;
 
 const CONNECTOR_NIGHTLY_SECRETS = [
@@ -2661,7 +2567,7 @@ async function executeBrandNightlyWave(
   };
 
   const phase = buildTasks();
-  // PER-60: set inside the erp case's then-handler (before Promise.all resolves), read after it —
+  // Set inside the erp case's then-handler (before Promise.all resolves), read after it —
   // when true, the worker owns the rest of the sync AND runs the PI refresh on completion.
   let megaventoryHandedOff = false;
 
@@ -2701,12 +2607,8 @@ async function executeBrandNightlyWave(
         phase.wrap(
           'Megaventory',
           fetchMegaventoryData(brandId, { mode: 'scheduled' }).then(async (r) => {
-            // PER-60: a large brand (e-tennis ~87k SKUs) returns needsContinuation because the
-            // catalog/downstream can't finish in one budgeted pass. The nightly wave doesn't loop,
-            // so hand the rest off to the every-1-min processMegaventorySyncJobs worker — it drives
-            // the resumable continuation (from the persisted cursor) to completion the same day,
-            // instead of inching one pass per night. The scheduled-only invoice backfill already ran
-            // in this first pass; the worker continuation only finishes catalog + downstream.
+            // Large brands return needsContinuation; the wave doesn't loop, so hand off to the
+            // every-1-min processMegaventorySyncJobs worker to finish catalog + downstream same-day.
             if (r?.needsContinuation) {
               const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
               await admin.firestore().collection('connector_sync_jobs').doc(jobId).set({
@@ -2741,11 +2643,8 @@ async function executeBrandNightlyWave(
       logger.error(`[ScheduledSync/erp] ecommerce_summary refresh failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
     }
     if (data.megaventory?.connected && !megaventoryHandedOff) {
-      // PER-60: never refresh PI inline — the e-tennis aggregate (~220k SKUs) takes 7–11 min and
-      // pushed the wave past the 1800s onSchedule cap (killed mid-refresh on 2026-06-11, so
-      // markNightlyJob('success') never ran). Enqueue a post_refresh_only job for the every-1-min
-      // worker instead. Skipped when the sync itself was handed off (megaventoryHandedOff) or a
-      // job is already pending/running: the worker refreshes PI on completion in both cases.
+      // Never refresh PI inline (~220k SKUs / 7–11 min overran the 1800s cap) — enqueue a
+      // post_refresh_only job for the worker, unless the sync was handed off or a job is already active.
       try {
         const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
         const jobRef = admin.firestore().collection('connector_sync_jobs').doc(jobId);
@@ -2904,9 +2803,9 @@ const nightlyConnectorScheduleBase = {
   secrets: CONNECTOR_NIGHTLY_SECRETS,
 };
 
-// ─── Scheduled: Connector waves (πρωινό παράθυρο → το "χθες" έχει κλείσει πλήρως) ──
+// ─── Scheduled: Connector waves (morning window → "yesterday" has fully closed) ──
 
-/** Διαφήμιση & Merchant — 05:00 */
+/** Advertising & Merchant — 05:00 */
 export const scheduledSyncMarketing = onSchedule(
   { ...nightlyConnectorScheduleBase, schedule: 'every day 05:00' },
   async () => runNightlyConnectorWaveJob('marketing', 'scheduledSyncMarketing')
@@ -2924,20 +2823,14 @@ export const scheduledSyncWebAnalytics = onSchedule(
   async () => runNightlyConnectorWaveJob('analytics', 'scheduledSyncWebAnalytics')
 );
 
-/**
- * ERP connectors — 06:00.
- * Μεγάλα e-shops (π.χ. e-tennis: 87k products + 15k invoices) είναι αργά. Το scheduled timeout
- * έχει σκληρό όριο 1800s (30′) από την πλατφόρμα — δεν αυξάνεται. Αντ' αυτού δίνουμε περισσότερη
- * RAM/CPU για ταχύτερο import ώστε να προλαβαίνει τα completion markers, και επιπλέον γράφουμε
- * early `megaventory.lastSyncAt` (στον connector) αμέσως μετά το core import (βλ. megaventoryConnector)
- * ώστε το UI να δείχνει φρέσκο sync ακόμη κι αν τα αργά post-processing βήματα (gap-fill/RFM) δεν προλάβουν.
- */
+/** ERP connectors — 06:00. The 1800s cap can't be raised, so large e-shops get more RAM/CPU and
+ * `megaventory.lastSyncAt` is written early (post-import) so the UI shows fresh even if post-steps lag. */
 export const scheduledSyncErp = onSchedule(
   { ...nightlyConnectorScheduleBase, schedule: 'every day 06:00', memory: '2GiB' as const, cpu: 2 },
   async () => runNightlyConnectorWaveJob('erp', 'scheduledSyncErp')
 );
 
-/** Απόθεμα / ανταγωνισμός — 06:40 (μετά το ERP κύμα 06:00 + έως 30′ timeout) */
+/** Stock / competition — 06:40 (after the 06:00 ERP wave + up to a 30min timeout) */
 export const scheduledSyncFollowups = onSchedule(
   { ...nightlyConnectorScheduleBase, schedule: 'every day 06:40' },
   async () => runNightlyFollowupsJob()
@@ -2973,33 +2866,11 @@ export const scheduledProductIntelligence = onSchedule(
   })
 );
 
-/**
- * Gemini Proxy
- * POST /geminiProxy
- * Headers: Authorization: Bearer {FIREBASE_ID_TOKEN}
- * Body: { systemPrompt: string, userPrompt: string, model?: string, temperature?: number }
- * Returns: { text: string }
- *
- * The API key never leaves the server — stored as Firebase Secret.
- */
+/** POST /geminiProxy (Bearer FIREBASE_ID_TOKEN) — { systemPrompt, userPrompt, model?, temperature? }
+ * → { text }. The API key stays server-side (Firebase Secret). */
 
-/**
- * Accept a brand invite — SERVER-SIDE join.
- *
- * Previously the SPA read the invite by token and wrote the member doc itself,
- * which forced firestore.rules to let any authenticated user self-create a
- * `brands/{b}/members/{uid}` doc with any role (PP-02) and write `invites`
- * (PP-03) — a full cross-tenant takeover. Membership is now provisioned here
- * via the Admin SDK (which bypasses rules), so those rules are locked down.
- *
- * The invite's `role` is the single source of truth — the caller cannot pick
- * their own role. If the invite was addressed to a specific email, the signed-in
- * account must match it. The invite is consumed atomically (single-use).
- *
- * Headers: Authorization: Bearer {FIREBASE_ID_TOKEN}
- * Body: { token: string }
- * Returns: { ok: true, brandId, role }
- */
+/** Server-side brand-invite join (Bearer token, Body { token } → { ok, brandId, role }). Membership
+ * is provisioned via Admin SDK; the invite's `role`/email are authoritative, consumed single-use. */
 export const acceptInvite = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
@@ -3121,11 +2992,8 @@ export const acceptInvite = onRequest(
 );
 
 export const geminiProxy = onRequest(
-  /**
-   * 120s timeout (διπλάσιο του default 60s): το Gemini API σπάνια κρατά τόσο, αλλά cold-start
-   * + αργή Firestore initialization (όπως το «metadata filters: 8.5s» που είδαμε σε production
-   * trace) μπορούσαν να μηδενίσουν τον διαθέσιμο χρόνο για το LLM call → DEADLINE_EXCEEDED.
-   */
+  /** 120s timeout: cold-start + slow Firestore init can eat the budget before the LLM call,
+   * causing DEADLINE_EXCEEDED. */
   { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB', secrets: [GEMINI_SECRET] },
   async (req, res) => {
     if (applyStrictCors(req, res)) return;
@@ -3150,22 +3018,15 @@ export const geminiProxy = onRequest(
       return;
     }
 
-    // PP-08: the paid Gemini key must not be usable by arbitrary signed-up
-    // accounts. Require brand membership. If the caller pins a specific brandId in
-    // the body, verify membership of THAT brand (tighter, per-call scope);
-    // otherwise require membership of at least one brand. Backward-compatible —
-    // clients that don't send brandId keep working via the any-brand check, so a
-    // future client can start sending brandId to make scoping mandatory without a
-    // breaking server change. Super admins are always allowed. Server-only.
+    // Gate the paid Gemini key on brand membership: a pinned brandId verifies THAT brand,
+    // else require any brand. Super admins always allowed. Server-only.
     try {
       const requestedBrandId =
         typeof (req.body as { brandId?: unknown })?.brandId === 'string'
           ? (req.body as { brandId: string }).brandId
           : '';
-      // FN-B: the profile `brandIds` array is a lossy cache (the client unions it
-      // with the membership docs and writes back fire-and-forget). Trust the
-      // authoritative membership docs so a real member with a stale/empty profile
-      // is not wrongly rejected, while a brandless account is still blocked.
+      // Profile `brandIds` is a lossy cache — trust the authoritative membership docs so a real
+      // member with a stale/empty profile isn't rejected, while a brandless account stays blocked.
       let hasBrandAccess = await isUidSuperAdmin(decodedUid);
       if (!hasBrandAccess && requestedBrandId) {
         // Per-call scope: verify membership of THAT brand (real member doc / creator).
@@ -3191,10 +3052,8 @@ export const geminiProxy = onRequest(
       return;
     }
 
-    // Rate limit: 30 Gemini calls / 5 λεπτά ανά χρήστη — αποτρέπει κατάχρηση/κόστος.
-    // PP-13a: fail CLOSED στο cost path — αν ο limiter δεν μπορεί να επιβεβαιώσει
-    // το όριο (Firestore outage/timeout), μπλοκάρουμε αντί να αφήσουμε ανοιχτό το
-    // paid Gemini key. (Τα non-cost endpoints παραμένουν fail-open by default.)
+    // Rate limit: 30 Gemini calls / 5 min per user. Fail CLOSED on this cost path — if the limiter
+    // can't confirm, block rather than leave the paid key open (non-cost endpoints stay fail-open).
     const rl = await enforceRateLimit({
       key: `gemini:${decodedUid}`,
       limit: 30,
@@ -3212,9 +3071,9 @@ export const geminiProxy = onRequest(
       userPrompt?: string;
       model?: string;
       temperature?: number;
-      /** Προαιρετικό ιστορικό συνομιλίας (multi-turn). Το API απαιτεί η αλληλουχία να ξεκινά από 'user'. */
+      /** Optional conversation history (multi-turn). The API requires the sequence to start with 'user'. */
       history?: Array<{ role?: string; text?: string }>;
-      /** Για per-brand λογιστική κόστους (ai_usage). */
+      /** For per-brand cost accounting (ai_usage). */
       brandId?: string;
     };
 
@@ -3236,7 +3095,7 @@ export const geminiProxy = onRequest(
         generationConfig: { temperature },
       });
 
-      // Multi-turn: χτίζουμε contents από το ιστορικό + το τρέχον μήνυμα.
+      // Multi-turn: build contents from the history + the current message.
       const cleanedHistory = Array.isArray(history)
         ? history
             .filter(
@@ -3248,8 +3107,8 @@ export const geminiProxy = onRequest(
             )
             .map((h) => ({ role: h.role, parts: [{ text: h.text }] }))
         : [];
-      // Το Gemini απαιτεί το πρώτο content να έχει role 'user' — αφαιρούμε leading 'model' turns
-      // (π.χ. proactive καλωσόρισμα του Mark).
+      // Gemini requires the first content to have role 'user' — strip leading 'model' turns
+      // (e.g. Mark's proactive welcome).
       while (cleanedHistory.length > 0 && cleanedHistory[0].role === 'model') cleanedHistory.shift();
 
       const result =
@@ -3260,7 +3119,7 @@ export const geminiProxy = onRequest(
           : await geminiModel.generateContent(userPrompt);
       const text = result.response.text();
 
-      // Token/cost logging (per user + brand) — καλύπτει το κενό του AI_COST_MODEL.
+      // Token/cost logging (per user + brand) — fills the AI_COST_MODEL gap.
       try {
         const usage = result.response.usageMetadata;
         if (usage) {
@@ -3288,13 +3147,8 @@ export const geminiProxy = onRequest(
   }
 );
 
-// ── Web Search Proxy (AI Assistant) ─────────────────────────────────────────
-// The AI Assistant grounds general-marketing answers with a DuckDuckGo Instant
-// Answer lookup. That was a direct browser fetch in the original code; the
-// hosting CSP (connect-src) now blocks it. This proxy performs the lookup
-// server-side so the feature keeps working WITHOUT loosening the CSP (FN-D) —
-// same approach as fetchImportUrl. The upstream host is fixed (no SSRF; only the
-// query param is caller-controlled), and the call is auth-gated + rate-limited.
+// Web Search Proxy (AI Assistant): server-side DuckDuckGo Instant Answer lookup so the CSP isn't
+// loosened. Upstream host fixed (no SSRF; only the query param is caller-controlled); auth-gated + rate-limited.
 export const webSearch = onRequest(
   { region: 'europe-west1', timeoutSeconds: 30, memory: '256MiB' },
   async (req, res) => {
@@ -3311,7 +3165,7 @@ export const webSearch = onRequest(
       return;
     }
 
-    // 60 searches / 5 min ανά χρήστη — αποτρέπει κατάχρηση του proxy egress.
+    // 60 searches / 5 min per user — prevents abuse of the proxy egress.
     const rl = await enforceRateLimit({ key: `webSearch:${uid}`, limit: 60, windowSeconds: 300 });
     if (!rl.allowed) { sendRateLimitExceeded(res, rl.resetInSeconds, 'webSearch'); return; }
 
@@ -3618,19 +3472,19 @@ export const refreshAggregates = onRequest(
       }
 
       await computeAggregatesForBrand(brandId);
-      // Refresh e-commerce summary (skuStats, revenueByDay, topProducts) — χωρίς re-sync platforms.
+      // Refresh e-commerce summary (skuStats, revenueByDay, topProducts) — without re-syncing platforms.
       try {
         await computeEcommerceSummary(brandId);
       } catch (e) {
         logger.warn('[refreshAggregates] ecommerce summary refresh failed (non-fatal):', { err: e });
       }
-      // Stock movement: capture σημερινό snapshot + recompute deltas (universal)
+      // Stock movement: capture today's snapshot + recompute deltas (universal)
       try {
         await refreshStockMovement(brandId);
       } catch (e) {
         logger.warn('[refreshAggregates] stock movement refresh failed (non-fatal):', { err: e });
       }
-      // Procurement signals: re-aggregate (status, tied capital, margin, lifetime κλπ)
+      // Procurement signals: re-aggregate (status, tied capital, margin, lifetime, etc.)
       try {
         await refreshProcurementSignals(brandId);
       } catch (e) {
@@ -3686,11 +3540,8 @@ export const refreshDataAnalysisRfm = onRequest(
   }
 );
 
-/**
- * PER-137 — TEMPORARY one-time MV credit-note backfill (owner/admin only). Catches up historical
- * credits for brands whose invoice backfill already completed before the credit fix shipped, then
- * recomputes business revenue so net-of-returns reflects immediately. DELETE after prod is backfilled.
- */
+/** TEMPORARY one-time MV credit-note backfill (owner/admin only): catches up historical credits then
+ * recomputes business revenue so net-of-returns reflects immediately. DELETE after prod is backfilled. */
 export const backfillCreditNotes = onRequest(
   { region: 'europe-west1', timeoutSeconds: 1200, memory: '1GiB' },
   async (req, res) => {
@@ -3823,12 +3674,8 @@ export const refreshCompetitiveInventory = onRequest(
 
 // ── Stock Movement: Manual Capture (callable) ───────────────────────────────
 
-/**
- * POST /captureStock
- * Body: { brandId }
- * Καταγράφει σημερινό stock snapshot και υπολογίζει deltas (7d/30d/90d).
- * Δουλεύει για κάθε brand — connector ή import-only.
- */
+/** POST /captureStock — Body: { brandId }. Captures today's stock snapshot and computes deltas
+ * (7d/30d/90d); works for any brand (connector or import-only). */
 export const captureStock = onRequest(
   { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB' },
   async (req, res) => {
@@ -3863,12 +3710,8 @@ export const captureStock = onRequest(
 
 // ── Procurement Signals: Manual Refresh (after upload) ─────────────────────
 
-/**
- * POST /refreshSignals
- * Body: { brandId }
- * Re-aggregates procurement_inventory + pricing_policy + fiscal_year + item_evaluation
- * σε procurement_signals/{brandId}.skuSignalsJson. Καλείται μετά από procurement upload.
- */
+/** POST /refreshSignals — Body: { brandId }. Re-aggregates procurement_inventory + pricing_policy +
+ * fiscal_year + item_evaluation into procurement_signals/{brandId}.skuSignalsJson after upload. */
 export const refreshSignals = onRequest(
   { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB' },
   async (req, res) => {
@@ -3900,7 +3743,7 @@ export const refreshSignals = onRequest(
   }
 );
 
-// ── Aggregate Stats (μετά τα πρωινά connector waves και follow-ups ~06:40) ────────
+// ── Aggregate Stats (after the morning connector waves and follow-ups ~06:40) ────────
 
 export const scheduledAggregates = onSchedule(
   {
@@ -4000,19 +3843,19 @@ export const scheduledDigest = onSchedule(
   })
 );
 
-// ── Public: εκδήλωση ενδιαφέροντος (landing, χωρίς auth) ─────────────────────
+// ── Public: interest lead submission (landing, no auth) ─────────────────────
 
 export const submitInterestLead = onRequest(
   { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
-    // Strict CORS (whitelisted origins only) — αποτρέπει scraping/abuse από τυχαία domains
+    // Strict CORS (whitelisted origins only) — prevents scraping/abuse from arbitrary domains
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'POST only' });
       return;
     }
 
-    // Rate limit: 5 υποβολές / 15 λεπτά ανά IP — αποτρέπει spam submissions
+    // Rate limit: 5 submissions / 15 min per IP — prevents spam submissions
     const ip = getClientIp(req);
     const rl = await enforceRateLimit({
       key: `lead:${ip}`,

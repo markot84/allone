@@ -1,13 +1,5 @@
-/**
- * useDecisionBuckets — συνδυάζει useProductSource + useProductSignals με τον classifier
- * για να επιστρέψει triage data έτοιμα για UI και AI prompts.
- *
- * Χρησιμοποιείται το ίδιο product feed με το WeightConfigurator (Firestore import ή,
- * σε Enterprise, procurement inventory) — όχι μόνο `products` collection.
- *
- * Έξοδος είναι deterministic memoized — επανυπολογίζεται μόνο όταν αλλάξουν
- * products/signals/thresholds.
- */
+/** Combines useProductSource + useProductSignals with the classifier into memoized triage data;
+ * uses the same product feed as WeightConfigurator (Firestore import or procurement inventory). */
 
 import { useMemo } from 'react';
 import { useProductSource } from './useProductSource';
@@ -23,23 +15,20 @@ import {
   type BucketId,
 } from '../utils/decisionBuckets';
 
-/**
- * Μετρήσεις για ρητή ενημέρωση του χρήστη — τι είναι επιβεβαιωμένο από πηγές
- * έναντι τι είναι εκτίμηση (κόστος × απόθεμα).
- */
+/** Metrics for the user: what is confirmed from sources vs estimated (cost × stock). */
 export interface TriageDataQuality {
   skuCount: number;
-  /** % SKU με αξιόπιστο παράθυρο ζήτησης (σύνδεση e-shop ή κίνηση αποθέματος). */
+  /** % of SKUs with a reliable demand window (e-shop connection or stock movement). */
   demandVerifiedPct: number;
-  /** SKU με έστω ένα πεδίο από procurement. */
+  /** SKUs with at least one field from procurement. */
   skusWithProcurement: number;
-  /** Άθροισμα € όπου το tied_capital προέρχεται από procurement export. */
+  /** Sum of € where tied_capital comes from a procurement export. */
   tiedEurFromProcurement: number;
-  /** Άθροισμα € όπου το tied_capital υπολογίστηκε ως κόστος × απόθεμα. */
+  /** Sum of € where tied_capital was computed as cost × stock. */
   tiedEurComputed: number;
-  /** Λοιπά θετικά € (σπάνια). */
+  /** Other positive € (rare). */
   tiedEurOther: number;
-  /** SKU με απόθεμα > 0 αλλά μηδενική εκτίμηση δεσμευμένων (συνήθως λείπει κόστος). */
+  /** SKUs with stock > 0 but zero tied-capital estimate (usually missing cost). */
   skusStockWithoutCost: number;
 }
 
@@ -98,13 +87,13 @@ function computeTriageDataQuality(
 
 export interface UseDecisionBucketsResult extends ClassifyResult {
   isLoading: boolean;
-  /** Total products που τρέξαμε (εξαιρώντας demo). */
+  /** Total products processed (excluding demo). */
   totalProducts: number;
-  /** Συνολικό tied capital σε όλο το catalog (€). */
+  /** Total tied capital across the whole catalog (€). */
   totalTiedCapital: number;
-  /** Μετρήσεις ποιότητας δεδομένων για ρητή εμφάνιση περιορισμών. */
+  /** Data-quality metrics for explicitly surfacing limitations. */
   dataQuality: TriageDataQuality | null;
-  /** Buckets ταξινομημένα με προτεραιότητα urgent → review → opportunity. */
+  /** Buckets ordered by priority: urgent → review → opportunity. */
   bucketOrder: BucketId[];
   defs: typeof BUCKET_DEFS;
 }

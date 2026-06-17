@@ -12,11 +12,11 @@ export interface CommercialLearning {
 }
 
 export interface CommercialLearnings {
-  /** Επιτυχημένες αποφάσεις marketing — «επανέλαβε». */
+  /** Successful marketing decisions — "repeat". */
   wins: CommercialLearning[];
-  /** Αποτυχημένες αποφάσεις marketing — «απόφυγε/διόρθωσε». */
+  /** Failed marketing decisions — "avoid/fix". */
   misses: CommercialLearning[];
-  /** Αλλαγές τιμών με θετική επίδραση τζίρου. */
+  /** Price changes with positive revenue impact. */
   priceWins: CommercialLearning[];
 }
 
@@ -28,10 +28,8 @@ function pricedirectionLabel(direction: 'increase' | 'decrease'): string {
   return direction === 'decrease' ? 'Μείωση τιμής' : 'Αύξηση τιμής';
 }
 
-/**
- * Συγκεντρώνει «μαθήματα» από προηγούμενες εμπορικές αποφάσεις (marketing budget + τιμές) σε ένα
- * trailing παράθυρο, για να τροφοδοτήσει το Marketing Plan με actionable ιδέες για μελλοντικά πλάνα.
- */
+/** Aggregates "learnings" from past commercial decisions (marketing budget + prices) over a
+ * trailing window, to feed the Marketing Plan with actionable ideas. */
 export function buildCommercialLearnings(input: {
   campaigns: Campaign[];
   orders: EcommerceRawOrder[];

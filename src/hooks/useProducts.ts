@@ -52,12 +52,11 @@ export function useProducts(options: UseProductsOptions = {}) {
     placeholderData: (previousData) => previousData,
   });
 
-  /** Αγνόησε demo products από όλες τις λίστες (όνομα/SKU περιέχει "demo"). */
+  /** Ignore demo products in all lists (name/SKU contains "demo"). */
   const productRows = Array.isArray(firestoreProducts) ? firestoreProducts : [];
   const products = excludeDemoProducts((brandId ? productRows : []) as Product[])
-    // PER-60/PER-130 (1B): τα ERP-διαγραμμένα προϊόντα κρατούνται μόνο για ιστορικό/στατιστικά
-    // (απόφαση Makis 12-06) — εξαιρούνται από ΟΛΕΣ τις client λίστες (Ads feed, charts, automation,
-    // procurement) ώστε client & server να συμφωνούν με το 8.1a/8.1b. Single-point filter εδώ.
+    // ERP-deleted products are kept only for history/stats; single-point filter excludes them
+    // from ALL client lists (Ads feed, charts, automation, procurement) so client & server agree.
     .filter((p) => !(p as { discontinued_at?: unknown }).discontinued_at)
     .filter((p) => !inStockOnly || ((p.stock_level ?? p.available_stock ?? p.stock_on_hand ?? 0) > 0));
 

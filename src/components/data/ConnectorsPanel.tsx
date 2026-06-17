@@ -138,7 +138,7 @@ function normalizeLastSyncQuery(data: unknown): {
   return { dates, meta: {} };
 }
 
-/** Όλες οι ομάδες: ίδια διακριτική πράσινη παλέτα (χωρίς μπλε/πορτοκαλί ανά section). */
+/** All groups share the same green palette (no per-section blue/orange). */
 const CONNECTOR_GROUP_VISUAL = {
   blobA: 'bg-emerald-400/14',
   blobB: 'bg-green-300/10',
@@ -267,7 +267,7 @@ interface ConnectorConfig {
   readOnlyNotice?: string;
   comingSoon?: boolean;
   moduleId?: ModuleId;
-  /** Ομαδοποίηση στη σελίδα συνδέσεων */
+  /** Grouping on the connectors page */
   group: ConnectorGroupId;
 }
 
@@ -424,14 +424,10 @@ const CONNECTORS: ConnectorConfig[] = [
   },
 ];
 
-/** Απευθείας cloudfunctions.net ώστε μεγάλα sync (Megaventory) να μην κόβονται από όριο Hosting ~60s. */
+/** Hit cloudfunctions.net directly so large syncs (Megaventory) aren't cut off by the ~60s Hosting limit. */
 const FUNCTIONS_BASE = FUNCTIONS_BASE_URL.replace(/\/$/, '');
-// Canonical, project-derived endpoint. 2nd-gen functions are reachable (with their
-// full timeout) via *.cloudfunctions.net when called directly, and it's correct on
-// every serving context — staging/prod *.web.app and the performanceplus.gr custom
-// domain — because it's built from the project id, not the domain. The previous
-// hardcoded *.a.run.app fallback was a single-project Cloud Run hash (wrong for the
-// other project) and CSP-blocked; dropped (FN-E).
+// Canonical, project-derived endpoint: 2nd-gen functions get their full timeout via
+// *.cloudfunctions.net when called directly, and it's built from the project id, not the domain.
 const CONNECTOR_SYNC_URLS = [
   `${FUNCTIONS_BASE}/connectorSync`,
 ];
@@ -1697,7 +1693,7 @@ function EntersoftCredentialsModal({ brandId, onSuccess, onCancel }: { brandId: 
   );
 }
 
-/** Ρυθμίσεις saved custom report χωρίς επανείσοδο API key · γράφει στο connectors doc. */
+/** Edit saved custom-report settings without re-entering the API key; writes to the connectors doc. */
 function MegaventoryCustomReportSettingsInline({
   brandId,
   initialReportId,
@@ -1992,7 +1988,7 @@ export function ConnectorsPanel() {
     myRole === 'admin';
 
   const [syncingProviders, setSyncingProviders] = useState<Set<ConnectorConfig['id']>>(new Set());
-  /** Τελευταία χειροκίνητη προσπάθεια sync ανά connector (ξεχωριστά από import_jobs). */
+  /** Last manual sync attempt per connector (separate from import_jobs). */
   const [syncAttempts, setSyncAttempts] = useState<
     Partial<Record<ConnectorId, { at: Date; success: boolean; error?: string }>>
   >({});
@@ -2128,8 +2124,7 @@ export function ConnectorsPanel() {
     enabled: !!brandId,
     staleTime: 5 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
-    // Ανανέωση όταν ανοίγει η σελίδα: μετά από βραδινό auto-sync ο χρήστης πρέπει να βλέπει το
-    // φρέσκο timestamp, όχι το persisted cache της προηγούμενης μέρας.
+    // Refetch on page open so the user sees the fresh post-nightly-sync timestamp, not stale cache.
     refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
@@ -2148,10 +2143,8 @@ export function ConnectorsPanel() {
     },
     enabled: !!brandId && !!user?.uid,
     staleTime: 5_000,
-    // Poll only while a Megaventory sync is actually in flight; stop once the job is
-    // terminal or absent (the doc usually doesn't exist). Previously this polled every
-    // 10s unconditionally → ~8.6k reads/day per open tab. The sync trigger invalidates
-    // this query (provider==='megaventory' && result.queued), so polling restarts on demand.
+    // Poll only while a Megaventory sync is in flight (stop when terminal/absent); the sync
+    // trigger invalidates this query (provider==='megaventory' && result.queued) to restart polling.
     refetchInterval: (query) => {
       const job = query.state.data as ConnectorSyncJobDoc | null | undefined;
       return job && (job.status === 'pending' || job.status === 'running') ? 10_000 : false;
@@ -2318,7 +2311,7 @@ export function ConnectorsPanel() {
     [brandId, fetchStates, queryClient, toast]
   );
 
-  // OAuth payload αποθηκεύεται στο App (useLayoutEffect + oauthSession) πριν χαθεί το hash.
+  // The OAuth payload is stored in App (useLayoutEffect + oauthSession) before the hash is lost.
   useEffect(() => {
     const payload = readOAuthSessionPayload();
     if (!payload) return;
@@ -2345,7 +2338,7 @@ export function ConnectorsPanel() {
     }
   }, [brandId, toast, runOAuthSuccessFlow]);
 
-  // Drop dismiss flags when server clears pending (επιτυχής επιλογή / αποσύνδεση αλλού)
+  // Drop dismiss flags when server clears pending (successful selection / disconnect elsewhere)
   useEffect(() => {
     for (const id of [...dismissedAccountPickerRef.current]) {
       if (!states[id]?.pendingAccountSelection) {
@@ -2354,7 +2347,7 @@ export function ConnectorsPanel() {
     }
   }, [states]);
 
-  // Auto-open picker μόνο αν το pending OAuth ανήκει στον τρέχοντα χρήστη (όχι άλλου admin / παλιά δεδομένα)
+  // Auto-open picker only if the pending OAuth belongs to the current user (not another admin / stale data)
   useEffect(() => {
     const uid = user?.uid;
     const pendingProvider = Object.entries(states).find(
@@ -2625,7 +2618,7 @@ export function ConnectorsPanel() {
               `OpenCart: εισήχθησαν ${result.imported ?? 0} εγγραφές — συνεχίζει στο background.`
           );
         } else if (result.warning) {
-          // Degraded αλλά επιτυχές (π.χ. orders OK, product-catalog ACL denied) — info, όχι error.
+          // Degraded but successful (e.g. orders OK, product-catalog ACL denied) — info, not error.
           toast.info(result.warning);
         } else {
           toast.success(`Εισήχθησαν ${result.imported} ${label}`);

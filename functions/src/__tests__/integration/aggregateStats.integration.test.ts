@@ -1,15 +1,5 @@
-/**
- * scheduledAggregates OOM fix — aggregateStats against the REAL module + Firestore emulator.
- *
- * aggregateProducts used to hold every product doc in memory via an unprojected .get();
- * at ERP-catalog scale (~221k docs post deleted-products import) that exceeded 512MiB and the
- * OOM killed the whole multi-brand run. This pins the field-projection + stream refactor:
- * products are seeded FAT (big descriptive fields the projection must not download) and the
- * computed aggregates must come out identical to the old full-read semantics — counts,
- * inventory value, stock-health buckets, margins.
- *
- * Run via `npm run test:integration` (firebase emulators:exec wraps this).
- */
+/** aggregateStats against the REAL module + Firestore emulator: pins the field-projection + stream
+ * refactor by seeding FAT docs and asserting aggregates match the old full-read semantics. */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as admin from 'firebase-admin';
 
@@ -83,7 +73,7 @@ describe('aggregateStats (real module, projected streaming reads)', () => {
     expect(agg.avgMargin).toBe(20); // (30+10)/2
   });
 
-  it('excludes ERP-discontinued tombstones (PER-60/PER-130 8.1b): they no longer inflate totalSkus/lowStock', async () => {
+  it('excludes ERP-discontinued tombstones: they no longer inflate totalSkus/lowStock', async () => {
     // 1 live healthy product
     await seedProduct('live1', {
       price: 10, stock_level: 50, margin_percentage: 30, avg_daily_sales: 1, stock_age_days: 5,

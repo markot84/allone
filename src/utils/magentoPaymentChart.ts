@@ -1,7 +1,5 @@
-/**
- * Ομαδοποίηση τρόπου πληρωμής για Magento + Viva (Stonewave): συγχωνεύει `payment.method`,
- * `payment.additional_information` και ετικέτες τύπου «Viva Payment Method» / «Sub-Payment Method».
- */
+/** Payment-method grouping for Magento + Viva: merges `payment.method`,
+ *  `payment.additional_information` and labels like "Viva Payment Method" / "Sub-Payment Method". */
 
 function stripInstructionNoise(s: string): string {
   let t = s.trim();
@@ -12,7 +10,7 @@ function stripInstructionNoise(s: string): string {
   return t;
 }
 
-/** Εξαγωγή τιμής από «Label: value» σε additional_information */
+/** Extract the value from "Label: value" in additional_information */
 function extractLabeledValue(text: string, re: RegExp): string {
   const m = text.match(re);
   return m?.[1]?.trim() || '';
@@ -22,9 +20,7 @@ function normalizeBlob(raw: string, methodCode: string): string {
   return `${raw}\n${methodCode}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
-/**
- * Ετικέτα για pie chart (ελληνικές κατηγορίες όπου είναι δυνατό).
- */
+/** Label for the pie chart (Greek categories where possible). */
 export function paymentChartLabelForEcommerceOrder(order: {
   platform: string;
   paymentMethod?: string;

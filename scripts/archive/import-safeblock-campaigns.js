@@ -182,7 +182,7 @@ async function readCampaignsFromExcel(filePath, channel, brandId) {
 
 // Main import function
 async function importSafeblockCampaigns() {
-  const brandId = 'safeblock'; // Update with actual Safeblock brand ID
+  const brandId = 'safeblock'; // Update with the actual brand ID
   
   console.log('Starting import for Safeblock campaigns...');
   

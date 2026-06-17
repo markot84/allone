@@ -57,7 +57,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     totalOrganicRevenueFromChannels,
     dateRange: ga4DateRange,
   } = useGA4Data();
-  // PER-130/BUG-11: revenue/platforms only — skip the heavy skuStats + stock_movement chunk load.
+  // Revenue/platforms only — skip the heavy skuStats + stock_movement chunk load.
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
   const businessRevenue = useBusinessRevenueSummary();
@@ -102,7 +102,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
 
   const ecommRevenueByDayRecord = ecommHist.revenueByDayRecord;
 
-  /** Ίδια λογική με Dashboard/ROI: ημερήσια σειρά για την επιλεγμένη περίοδο. */
+  /** Same logic as Dashboard/ROI: daily series for the selected period. */
   const periodFinanceSeries = useMemo(() => {
     const { fromDate, toDate } = periodDates;
     if (!fromDate || !toDate || fromDate > toDate) return null;
@@ -322,7 +322,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         }
       />
 
-      {/* Period controls — ξεχωριστό bar για σωστό responsive */}
+      {/* Period controls — separate bar for correct responsive layout */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-1 flex-wrap gap-1 rounded-lg bg-gray-100 p-1 sm:flex-none">
           {GLOBAL_PERIOD_OPTIONS.map((opt) => (
@@ -475,7 +475,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         />
       )}
 
-      {/* ── Κόστη & P&L ───────────────────────────────────────────────── */}
+      {/* ── Costs & P&L ───────────────────────────────────────────────── */}
       {activeStrategy && !activeStrategy.id.startsWith('default_') && (
         <section className="space-y-4">
           <PLCostEditor

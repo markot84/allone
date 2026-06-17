@@ -5,18 +5,15 @@ import type {
   CommercialConfidence,
 } from './commercialInfo';
 
-/**
- * Πρόβλεψη πωλήσεων σε επίπεδο Κατηγορίας / Parent SKU.
- * Baseline = ιστορικό συγκρίσιμης περιόδου· προσαρμογή (uplift) από τις ενεργές «Εμπορικές Πληροφορίες».
- * Καθαρές συναρτήσεις (testable) — η σύνδεση δεδομένων γίνεται από το Marketing Plan.
- */
+/** Sales forecast at Category / Parent SKU level: baseline = comparable-period history, uplift from active commercial info.
+ * Pure (testable) functions; data wiring is done by the Marketing Plan. */
 
 export interface ForecastGroupInput {
   category: string;
   parentSku?: string;
-  /** Τζίρος συγκρίσιμης περιόδου (baseline). */
+  /** Revenue of the comparable period (baseline). */
   pastRevenue: number;
-  /** Τεμάχια συγκρίσιμης περιόδου (baseline). */
+  /** Units of the comparable period (baseline). */
   pastUnits: number;
 }
 
@@ -27,13 +24,13 @@ export interface ForecastRow {
   parentSku?: string;
   baselineRevenue: number;
   baselineUnits: number;
-  /** Εφαρμοσμένο ποσοστό προσαρμογής (π.χ. +0.18 = +18%). */
+  /** Applied uplift percentage (e.g. +0.18 = +18%). */
   upliftPct: number;
   forecastRevenue: number;
   forecastUnits: number;
-  /** Συνοπτικές εμπορικές πληροφορίες που οδήγησαν στην προσαρμογή. */
+  /** Summary commercial info that drove the uplift. */
   drivers: string[];
-  /** LOGIC-19: ids των infos που οδήγησαν την προσαρμογή — για σωστό unique count (όχι ανά κείμενο). */
+  /** ids of the infos that drove the uplift — for correct unique count (not per text). */
   driverIds: string[];
   confidence: CommercialConfidence;
 }
@@ -43,7 +40,7 @@ export interface SalesForecast {
   parentSkus: ForecastRow[];
   totalBaselineRevenue: number;
   totalForecastRevenue: number;
-  /** Πλήθος πληροφοριών που εφαρμόστηκαν τουλάχιστον σε μία ομάδα. */
+  /** Count of infos applied to at least one group. */
   appliedInfoCount: number;
 }
 
@@ -65,7 +62,7 @@ function norm(s: string): string {
   return s.trim().toLowerCase();
 }
 
-/** Ελέγχει αν μια πληροφορία αφορά μια ομάδα (κατηγορία/parentSku/επωνυμία). */
+/** Checks whether an info applies to a group (category/parentSku/brand). */
 function infoMatchesGroup(info: CommercialInfo, category: string, parentSku?: string): boolean {
   const cat = norm(category);
   const psk = parentSku ? norm(parentSku) : '';
@@ -79,7 +76,7 @@ function infoMatchesGroup(info: CommercialInfo, category: string, parentSku?: st
 
   if (info.categories.length && inList(info.categories)) return true;
   if (info.parentSkus.length && inList(info.parentSkus)) return true;
-  // Επωνυμίες (π.χ. Adidas) αναζητούνται μέσα στο όνομα κατηγορίας/parent SKU.
+  // Brands (e.g. Adidas) are searched within the category/parent SKU name.
   if (info.brands.length && info.brands.some((b) => norm(b).length > 1 && hay.includes(norm(b)))) return true;
   return false;
 }
@@ -127,10 +124,7 @@ function buildRow(
   };
 }
 
-/**
- * Χτίζει την πρόβλεψη. Τα `categoryGroups` και `parentSkuGroups` περιέχουν baseline aggregates
- * (ίδιο μήκος περιόδου με τον στόχο). Το `activeInfo` είναι οι ενεργές εμπορικές πληροφορίες.
- */
+/** Builds the forecast: `categoryGroups`/`parentSkuGroups` hold baseline aggregates; `activeInfo` is the active commercial info. */
 export function buildSalesForecast(input: {
   categoryGroups: ForecastGroupInput[];
   parentSkuGroups?: ForecastGroupInput[];
@@ -148,7 +142,7 @@ export function buildSalesForecast(input: {
 
   const appliedIds = new Set<string>();
   for (const row of [...categories, ...parentSkus]) {
-    for (const id of row.driverIds) appliedIds.add(id); // LOGIC-19: dedup by info.id, not summary text
+    for (const id of row.driverIds) appliedIds.add(id); // dedup by info.id, not summary text
   }
 
   return {

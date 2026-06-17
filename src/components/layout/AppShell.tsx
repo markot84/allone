@@ -517,7 +517,7 @@ function AccountMenu({
   );
 }
 
-/** Πάντα ορατό κουμπί παλέτας στην πάνω μπάρα → popover με τα accent χρώματα (per-user). */
+/** Always-visible palette button in the top bar that opens a popover of accent colors (per-user). */
 function AccentMenu() {
   const btnRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -642,10 +642,10 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
   const { activeStrategy } = useActiveStrategy();
   useBrandMembers();
 
-  /** Σε οθόνες <1024px το καρφιτσωμένο μενού ΔΕΝ μένει στήλη (καταστρέφει το layout) — χρησιμοποιείται μόνο overlay drawer. */
+  /** On screens <1024px the pinned menu does NOT stay as a column (it breaks the layout) — only the overlay drawer is used. */
   const showPinnedColumn = sidebarPinned && isWideLayout;
 
-  /** Το κύριο scroll είναι εδώ (όχι το window) — ώστε νέα σελίδα από το μενού να ξεκινά από πάνω. */
+  /** Main scroll lives here (not the window) so a new page from the menu starts at the top. */
   const mainContentScrollRef = useRef<HTMLDivElement>(null);
   const [nowMs] = useState(() => Date.now());
   useEffect(() => {

@@ -223,12 +223,8 @@ export interface ImportResult {
 
 export interface ImportJob {
   id: string;
-  /**
-   * Owning brand. REQUIRED: firestore.rules gates import_jobs writes on
-   * isBrandMember(brandId). Without it the create is denied for everyone except
-   * super-admins (isSuperAdmin short-circuits the check), which silently broke
-   * CSV import for regular brand members/owners.
-   */
+  /** Owning brand. REQUIRED: firestore.rules gates import_jobs writes on
+   * isBrandMember(brandId); without it non-super-admin creates are denied. */
   brandId: string;
   type: ImportType;
   fileName: string;
@@ -626,14 +622,8 @@ function sanitizeDocId(value: string): string {
   return value.replace(/[/\\]/g, '_').trim() || `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-// Brand-scope a product document id. Products live at the GLOBAL path
-// `products/{docId}`, but a SKU is only unique WITHIN a brand — two tenants can
-// legitimately sell the same manufacturer SKU. Because firestore.rules pins
-// `brandId` immutable on update (brandIdUnchanged(), NOT bypassed by super-admin),
-// a bare-SKU id that already exists under another brand turns the import write
-// into a cross-brand `brandId` change → PERMISSION_DENIED ("Missing or insufficient
-// permissions"), silently breaking CSV import of shared SKUs. Prefixing the id with
-// the brand makes it unique per tenant so every import is a clean same-brand write.
+// Brand-scope the global `products/{docId}` id: SKUs are unique only within a brand and
+// firestore.rules pins `brandId` immutable, so a cross-brand id collision → PERMISSION_DENIED.
 function brandScopedProductId(brandId: string | null | undefined, rawId: string): string {
   if (!brandId) return rawId;
   const prefix = `${brandId}__`;
@@ -729,9 +719,8 @@ function parseLooseNumber(value: string | number | null | undefined): number {
 // Validate and transform Products
 // Primary schema: FINAL_Unified_Production_Schema (SKU_ID, Product_Name, Category, Sell_Price, Cost_Price, Stock_On_Hand, Qty_Sold_Period, Revenue_Period, Supplier, Brand, First_Available_Date, Last_Sale_Date, Priority_Flag, Stock_Age_Days, Gross_Profit, Gross_Margin_%, Margin_Tier)
 function validateProduct(row: Record<string, string>, index: number): { valid: boolean; data?: Product; error?: string } {
-  // Debug: Log available keys for first few rows.
-  // CODE-4: gate behind DEV — these logs include commercial values (price/cost/margin/SKU)
-  // and must not run in production.
+  // Debug: log keys for first rows. DEV-gated — logs include commercial values
+  // (price/cost/margin/SKU) and must not run in production.
   if (import.meta.env.DEV && index < 3) {
     logger.debug('[Product Row] Available keys:', { row: index, count: Object.keys(row).length, keys: Object.keys(row) });
     const relevantKeys = Object.keys(row).filter(k =>
@@ -743,10 +732,8 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
     logger.debug('[Product Row] Relevant values:', { row: index, values: Object.fromEntries(relevantKeys.map(k => [k, row[k]])) });
   }
   
-  // Headers are normalized: "Title" -> "title", "Item ID" -> "item_id"
-  // Greek headers: "Κωδικός" -> "κωδικός", "Περιγραφή" -> "περιγραφή"
-  // Note: Normalize converts spaces to underscores and lowercases, so "Τιμή αγοράς" -> "τιμή_αγοράς"
-  // Greek headers FIRST for priority (normalized: "Κωδικός" -> "κωδικός", "Περιγραφή" -> "περιγραφή")
+  // Headers normalized (lowercase, spaces→underscores): "Item ID" -> "item_id",
+  // "Τιμή αγοράς" -> "τιμή_αγοράς". Greek headers listed FIRST for priority.
   const name = pick(row, 'περιγραφή', 'title', 'name', 'product_name', 'product', 'Title', 'item', 'item_name', 'description', 'product_title', 'όνομα', 'προϊόν');
   const sku = pick(row, 'κωδικός', 'item_id', 'sku', 'sku_id', 'id', 'product_id', 'Item ID', 'item id', 'Item_ID', 'code', 'barcode', 'ean');
   const category = pick(row, 'ομάδα', 'category', 'product_category', 'product_type', 'group', 'κατηγορία', 'type', 'department');
@@ -970,11 +957,8 @@ export function isCustomerLevelData(objects: Record<string, string>[]): boolean 
   if (objects.length === 0) return false;
   const first = objects[0];
 
-  // Detect columns by EXACT (normalized) name. The shared pick() helper does fuzzy substring
-  // matching, which mis-classifies a segment-summary file (one row per segment) as customer-level:
-  // a bare `id` column matches `customer_id` ("customer_id".includes("id")) and `purchase_frequency`
-  // matches `frequency`. That flips the file into the per-customer branch, where every row counts as
-  // one customer → each segment gets count 1 → a flat 1/N split (e.g. 20% across 5 segments).
+  // Detect columns by EXACT (normalized) name: pick()'s fuzzy substring match would treat a
+  // segment-summary file as customer-level (bare `id` matches `customer_id`), giving each segment count 1.
   const normCols = new Set(
     Object.keys(first).map((k) => k.toLowerCase().replace(/\s+/g, '_').replace(/[()]/g, ''))
   );
@@ -986,7 +970,7 @@ export function isCustomerLevelData(objects: Record<string, string>[]): boolean 
   const hasCustomerCol = hasCol('customerid', 'customer_id', 'user_id', 'client_id', 'email');
   if (!hasSegmentCol || !hasCustomerCol) return false;
 
-  // Σύνοψη segments (π.χ. 9 γραμμές, μία ανά segment, διαφορετικά ονόματα): όχι customer-level
+  // Segment summary (e.g. 9 rows, one per segment, distinct names): not customer-level
   if (objects.length <= 64 && objects.length > 1) {
     const names = objects.map((r) => segmentCol(r).toLowerCase().trim()).filter(Boolean);
     const unique = new Set(names);
@@ -1158,7 +1142,7 @@ function validateAnalyticsRow(row: Record<string, string>, index: number): { val
   };
 }
 
-// Validate organic revenue row (οργανικά έσοδα - τζίρος χωρίς campaigns)
+// Validate organic revenue row (organic revenue - turnover without campaigns)
 function validateOrganicRow(row: Record<string, string>, index: number): { valid: boolean; data?: { id: string; period: string; organic_revenue: number }; error?: string } {
   const period = pick(row, 'period', 'periodo', 'month', 'μήνας', 'date', 'ημερομηνία', 'year_month');
   const revenue = pick(row, 'organic_revenue', 'organic revenue', 'revenue', 'έσοδα', 'total_revenue', 'total revenue', 'τζίρος', 'organic');
@@ -1681,14 +1665,8 @@ const KNOWN_PROCUREMENT_HEADERS = new Set([
   'ΣΤΑΤΙΣΤΙΚΑ ΑΝΑ ΠΕΡΙΟΔΟ', 'ΣΤΑΤΙΣΤΙΚΑ ΑΝΑ ΠΕΡΙΟΔΟ (ΜΗΝΑΣ)',
 ]);
 
-/**
- * Detects which row in the cleaned array contains the actual column headers.
- * Handles common XLSX variations:
- *  - Row 0 = headers (standard)
- *  - Row 0 = numeric column IDs → Row 1 = headers
- *  - Row 0 = title/blank → Row 1 = headers
- *  - Scans up to the first 5 rows to find the best header candidate
- */
+/** Detects the column-header row, scanning the first 5 rows to handle XLSX variants
+ * (standard row 0, or row 0 being numeric IDs / title / blank). */
 function detectHeaderRow(cleaned: string[][]): number {
   const MAX_SCAN = Math.min(5, cleaned.length - 1);
 
@@ -1706,9 +1684,8 @@ function detectHeaderRow(cleaned: string[][]): number {
     // Count how many cells are purely text (not numbers)
     const textCells = cells.filter(c => isNaN(Number(c)));
 
-    // Heuristic score: known header matches are worth 10 points each,
-    // text cells (non-numeric) are worth 1 point each.
-    // A row with many known headers wins. A text-heavy row beats a numeric row.
+    // Heuristic score: 10 points per known header, 1 per non-numeric cell —
+    // header-rich rows win, and a text-heavy row beats a numeric row.
     const score = knownHits * 10 + textCells.length;
 
     if (score > bestScore) {
@@ -1757,16 +1734,12 @@ async function importProcurementFile(
     const parsedSheets: { sheetType: ProcurementSheetType; coll: string; headers: string[]; objects: Record<string, string>[] }[] = [];
     let grandTotalRows = 0;
 
-    // Ανεκτική αντιστοίχιση ονόματος φύλλου: αγνοεί τόνους, διπλά κενά και πεζά/κεφαλαία ώστε
-    // μικρές αποκλίσεις (π.χ. «ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ » με κενό) να ΜΗΝ ρίχνουν σιωπηλά ένα φύλλο.
+    // Tolerant sheet-name matching: ignores accents, double spaces and case so small
+    // deviations (e.g. "ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ " with a trailing space) don't silently drop a sheet.
     const normalizeSheetName = (s: string) =>
       String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
-    // Κανόνες αντιστοίχισης ανά sheet για νεότερα templates. Π.χ. το «ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ» έχει
-    // σπάσει σε «… MASTER» (συγκεντρωτικό με στήλες ανατροφοδοσίας — αυτό περιμένει η εφαρμογή) +
-    // «… ΑΝΑΛΥΤΙΚΟ» (ανά variant). Χρησιμοποιούμε prefix-match στο ΚΑΘΑΡΑ ελληνικό «ΔΙΑΧΕΙΡΙΣΗ
-    // ΑΠΟΘΕΜΑΤΟΣ» γιατί το suffix «MASTER» σε ελληνικά Excel γράφεται συχνά με μεικτούς λατινο-
-    // ελληνικούς χαρακτήρες (Μ/Α/Ε lookalikes) → exact string match αποτυγχάνει. Με `deprefer`
-    // αποκλείουμε το «ΑΝΑΛΥΤΙΚΟ» ώστε να επιλεγεί το MASTER.
+    // Per-sheet rules for newer templates: prefix-match "ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ" (MASTER suffix
+    // often uses mixed Latin/Greek lookalikes so exact match fails); `deprefer` excludes "ΑΝΑΛΥΤΙΚΟ".
     const SHEET_MATCH: Partial<Record<ProcurementSheetType, { prefix?: string; deprefer?: string[] }>> = {
       inventory: { prefix: 'ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ', deprefer: ['ΑΝΑΛΥΤΙΚΟ'] },
     };
@@ -1776,7 +1749,7 @@ async function importProcurementFile(
       const target = normalizeSheetName(expected);
       const exactNorm = normNames.find(([, nn]) => nn === target);
       if (exactNorm) return wb.Sheets[exactNorm[0]];
-      // Prefix fallback: ανθεκτικό σε suffix («MASTER»/«ΑΝΑΛΥΤΙΚΟ») ακόμη και με μεικτούς χαρακτήρες.
+      // Prefix fallback: robust to suffix ("MASTER"/"ΑΝΑΛΥΤΙΚΟ") even with mixed characters.
       if (rule.prefix) {
         const p = normalizeSheetName(rule.prefix);
         const matches = normNames.filter(([, nn]) => nn.startsWith(p));
@@ -1814,9 +1787,8 @@ async function importProcurementFile(
       const headers = cleaned[headerRowIdx].map(h => String(h || '').trim());
       const dataRows = cleaned.slice(headerRowIdx + 1).filter(r => r.some(c => c !== ''));
 
-      // Κανονικοποίηση headers: κενά/τελείες → underscore ώστε όλα τα downstream (signals,
-      // useProductSource) να βλέπουν σταθερά κλειδιά (π.χ. «ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ» →
-      // «ΔΙΑΘΕΣΙΜΟ_ΥΠΟΛΟΙΠΟ»). Idempotent για ήδη κανονικά headers.
+      // Normalize headers: spaces/dots → underscore for stable downstream keys
+      // (e.g. "ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ" → "ΔΙΑΘΕΣΙΜΟ_ΥΠΟΛΟΙΠΟ"). Idempotent.
       const normalizeKey = (h: string) => h.trim().replace(/[.\s]+/g, '_').replace(/^_+|_+$/g, '');
       const objects: Record<string, string>[] = dataRows.map(row => {
         const obj: Record<string, string> = {};
@@ -1824,7 +1796,7 @@ async function importProcurementFile(
           if (!h) return;
           obj[normalizeKey(h)] = row[idx] != null ? String(row[idx]).trim() : '';
         });
-        // Το inventory sheet κάποιων templates έχει κωδικό στη στήλη «MASTER» αντί «ΚΩΔΙΚΟΣ».
+        // The inventory sheet of some templates has the code in the "MASTER" column instead of "ΚΩΔΙΚΟΣ".
         if ((!obj['ΚΩΔΙΚΟΣ'] || obj['ΚΩΔΙΚΟΣ'].trim() === '') && obj['MASTER'] && obj['MASTER'].trim() !== '') {
           obj['ΚΩΔΙΚΟΣ'] = obj['MASTER'];
         }
@@ -1984,9 +1956,7 @@ export async function importFile(
             // Calculate stock age from createdAt if stock_age_days is 0 or missing
             let finalStockAgeDays = p.stock_age_days ?? 0;
             if (finalStockAgeDays === 0) {
-              // Stock age = days from import date (createdAt) to today
-              // Since we're importing now, stock age starts at 0 (today - today = 0)
-              // But if we want to track from import date, we set it to 0 and let getStockAgeDays calculate it
+              // Leave at 0 on import; getStockAgeDays computes it later from createdAt.
               finalStockAgeDays = 0; // Will be calculated by getStockAgeDays from createdAt
             }
             
@@ -2385,7 +2355,7 @@ export async function getImportJobs(brandId?: string | null): Promise<ImportJob[
   }));
 }
 
-/** Πρόσφατα jobs για υπολογισμό «τελευταίας εισαγωγής» — όχι πλήρες ιστορικό (αποφυγή αργής φόρτωσης). */
+/** Recent jobs for computing "last import" — not the full history (avoids slow loading). */
 const IMPORT_JOBS_LOOKBACK_FOR_LAST_DATES = 300;
 const IMPORT_JOBS_LOOKBACK_FOR_SYNC_VERSION = 50;
 

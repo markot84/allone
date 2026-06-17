@@ -1,8 +1,7 @@
 import { FirestoreService } from './firestore';
 
 const CACHE_PREFIX = 'pp-erp-scenario-v9';
-// 7 ημέρες: ο χρήστης μπαινοβγαίνει στη σελίδα όλη την εβδομάδα — τα δεδομένα παραμένουν αποθηκευμένα
-// (μνήμη + localStorage + Firestore) και ξαναϋπολογίζονται μόνο σε αλλαγή περιόδου ή «Ανανέωση».
+// 7 days: cached across the week (memory + localStorage + Firestore); recomputed only on period change/"Refresh".
 export const SCENARIO_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const REMOTE_COLLECTION = 'commercial_scenario_cache';
 
@@ -11,13 +10,11 @@ interface CacheEntry<T> {
   data: T;
 }
 
-// Bump όταν αλλάζει το σχήμα/φιλτράρισμα των cached rows (π.χ. v9: ERP-first prices
-// με fallback σε e-shop line item prices),
-// ώστε τα παλιά Firestore cache docs να μη σερβίρουν stale payload.
+// Bump when cached-row schema/filtering changes so old Firestore docs don't serve stale payload.
 const REMOTE_CACHE_VERSION = 'v9';
 
 function remoteDocId(brandId: string, fromDate: string, toDate: string): string {
-  // Firestore doc id: χωρίς '/'· οι ISO ημερομηνίες είναι ασφαλείς.
+  // Firestore doc id: no '/'; ISO dates are safe.
   return `${brandId}__${fromDate}__${toDate}__${REMOTE_CACHE_VERSION}`;
 }
 
@@ -67,24 +64,20 @@ export function writeScenarioCache<T>(
   try {
     s.setItem(key, payload);
   } catch {
-    // Quota exceeded: καθάρισε ΟΛΑ τα παλιά scenario entries (κάθε brand/period) και ξαναδοκίμασε,
-    // ώστε να επιβιώνει το cache του τρέχοντος period μεταξύ reloads αντί να χάνεται σιωπηλά.
+    // Quota exceeded: clear ALL old scenario entries (every brand/period) and retry.
     try {
       Object.keys(s)
         .filter((k) => k.startsWith(`${CACHE_PREFIX}:`) && k !== key)
         .forEach((k) => s.removeItem(k));
       s.setItem(key, payload);
     } catch {
-      // Private-mode ή ακόμη πάνω από quota — αγνόησε.
+      // Private-mode or still over quota - ignore.
     }
   }
   return savedAt;
 }
 
-/**
- * Firestore-backed cache (durable across reloads/συσκευές, χωρίς localStorage quota).
- * Κρατά το ίδιο μικρό payload με το localStorage. Δεν είναι server compute — απλό cache doc.
- */
+/** Firestore-backed cache (durable, no localStorage quota); same small payload, just a cache doc. */
 export async function readScenarioCacheRemote<T>(
   brandId: string,
   fromDate: string,
@@ -118,7 +111,7 @@ export async function writeScenarioCacheRemote<T>(
       data,
     });
   } catch {
-    // Μη-κρίσιμο: αν αποτύχει (π.χ. >1MB doc), μένει το localStorage.
+    // Non-critical: if it fails (e.g. >1MB doc), localStorage remains.
   }
 }
 

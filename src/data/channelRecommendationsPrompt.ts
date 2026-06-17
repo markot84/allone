@@ -1,17 +1,7 @@
 import { buildAdvisorySystemPrompt } from './aiAdvisoryFramework';
 
-/**
- * Prompt template για AI Channel Recommendations.
- * Μπορείς να τροποποιήσεις το systemPrompt ή το userPrompt για να προσαρμόσεις τη συμπεριφορά.
- *
- * Μεταβλητές που αντικαθίστανται:
- * - {{scenarioName}}: όνομα στρατηγικής (π.χ. Profit Maximization, Stock Clearance)
- * - {{scenarioDescription}}: περιγραφή στρατηγικής
- * - {{segmentName}}: όνομα RFM segment (π.χ. Champions, At Risk)
- * - {{segmentDescription}}: περιγραφή segment
- * - {{segmentCount}}: αριθμός πελατών στο segment
- * - {{revenueShare}}: % revenue share του segment
- */
+/** Prompt template for AI Channel Recommendations. Replaced variables: {{scenarioName}},
+ * {{scenarioDescription}}, {{segmentName}}, {{segmentDescription}}, {{segmentCount}}, {{revenueShare}}. */
 const CHANNEL_RECOMMENDATIONS_TASK_PROMPT = `Είσαι ανώτατο εμπορικό στέλεχος με βαθιά εμπειρία σε performance marketing, e-commerce ανάπτυξη και πολυκαναλική στρατηγική. Οι συστάσεις σου απευθύνονται σε έμπειρα στελέχη, ιδιοκτήτες επιχειρήσεων και εξωτερικούς συνεργάτες.
 
 Σκέψου στρατηγικά, σε βάθος. Κάθε σύσταση πρέπει να αντικατοπτρίζει:
@@ -239,11 +229,8 @@ export interface CampaignPerformanceData {
 
 export type PromptContext = 'strategy' | 'activation';
 
-/**
- * Triage origin context — αν η στρατηγική προέκυψε από Decision Bucket triage, μεταφέρουμε
- * τη διαγνωστική ρίζα στο prompt ώστε το AI να ευθυγραμμίσει tone/CTA/budget με το πρόβλημα
- * που εντοπίστηκε (π.χ. dead capital → urgency clearance, hot seller → scale-up).
- */
+/** Triage origin context — passes the Decision Bucket diagnostic root into the prompt so the AI
+ * aligns tone/CTA/budget with the problem (e.g. dead capital → clearance, hot seller → scale-up). */
 export interface TriagePromptContext {
   bucketLabel: string;
   bucketDescription?: string;
@@ -252,11 +239,8 @@ export interface TriagePromptContext {
   topSkus?: string[];
 }
 
-/**
- * Provenance snapshot — επιγραμματικά από ποιες πηγές προέρχεται το dataset (connector,
- * stock movement, procurement, import). Βοηθά το AI να καλιμπράρει τη βεβαιότητα του
- * rationale (π.χ. αν δεν υπάρχει connector, αποφεύγει υπεσχέσεις real-time ROAS).
- */
+/** Provenance snapshot of dataset sources (connector, stock movement, procurement, import) so the AI
+ * calibrates rationale confidence (e.g. no connector → avoids promising real-time ROAS). */
 export interface ProvenancePromptContext {
   connectorPct: number;
   movementPct: number;

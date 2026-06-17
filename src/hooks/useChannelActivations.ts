@@ -63,7 +63,7 @@ export function useChannelActivations(strategyId: string | null) {
     return currentActivations.find(a => a.channel === channel)?.note ?? '';
   }
 
-  /** Default true για backward compat με παλιά docs χωρίς included flag. */
+  /** Default true for backward compat with old docs lacking the included flag. */
   function isIncluded(channel: string): boolean {
     const found = currentActivations.find(a => a.channel === channel);
     return found?.included ?? true;

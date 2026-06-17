@@ -1,10 +1,4 @@
-/**
- * E-commerce Aggregator
- *
- * Reads order collections from all connected e-commerce platforms,
- * computes summary metrics, and writes to ecommerce_summary/{brandId}.
- * Called after each e-commerce connector sync and in scheduledSyncEcommerce (nightly).
- */
+/** Reads platform order collections and writes summary metrics to ecommerce_summary/{brandId}. */
 
 import * as admin from 'firebase-admin';
 import { type Firestore, type QueryDocumentSnapshot, FieldValue } from 'firebase-admin/firestore';
@@ -32,17 +26,8 @@ function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
 }
 
-/**
- * SKU stats writer με αυτόματο chunking για να μην ξεπερνά το Firestore 1 MiB όριο/document.
- *
- * - Αν το serialized JSON < ~900KB → 1 chunk doc + parent metadata.
- * - Αλλιώς σπάει το map σε ομάδες SKUs ώστε κάθε chunk doc να μένει < 900KB.
- * - Παλιότερα chunks που πλέον δεν χρειάζονται διαγράφονται για να μη μένει stale data.
- *
- * Storage layout:
- *   sku_stats/{brandId}                       → { chunkCount, skuStatsCount, updatedAt }
- *   sku_stats/{brandId}/chunks/{idx}          → { skuStatsJson, skuCount }
- */
+/** Writes SKU stats in <900KB chunks under sku_stats/{brandId}/chunks/{idx} (parent holds metadata)
+ * to stay under the Firestore 1 MiB/doc limit; stale chunks are deleted. */
 const SKU_STATS_CHUNK_BYTES = 900_000;
 
 type SkuStatsRow = {
@@ -66,7 +51,7 @@ async function writeSkuStatsChunked(
   if (fullJson.length <= SKU_STATS_CHUNK_BYTES) {
     chunkPayloads.push({ json: fullJson, count: skuCount });
   } else {
-    /** Split αλφαβητικά για να είναι deterministic ανά run. Κάθε chunk όσο πιο κοντά γίνεται στο όριο. */
+    /** Split alphabetically to stay deterministic per run. Each chunk as close to the limit as possible. */
     const skus = Object.keys(skuStats).sort();
     let bucket: Record<string, SkuStatsRow> = {};
     let bucketBytes = 2;
@@ -99,7 +84,7 @@ async function writeSkuStatsChunked(
   );
   await Promise.all(writes);
 
-  /** Σβήσε παλιά chunks (αν προηγούμενο run είχε περισσότερα chunks). */
+  /** Delete old chunks (if a previous run had more chunks). */
   const existing = await chunksColl.listDocuments();
   const stale = existing.filter((d) => {
     const idx = Number.parseInt(d.id, 10);
@@ -166,18 +151,18 @@ function isOmittedFromRecentOrderList(status: string | null | undefined): boolea
   return OMIT_FROM_RECENT_ORDER_LIST.has(String(status || '').trim().toLowerCase());
 }
 
-/** Demo products (όνομα/SKU περιέχει "demo") εξαιρούνται από κάθε aggregate. */
+/** Demo products (name/SKU contains "demo") are excluded from every aggregate. */
 function isDemoLineItem(li: { sku?: string; title?: string; name?: string }): boolean {
   const needle = 'demo';
   const s = `${li.sku || ''} ${li.title || ''} ${li.name || ''}`.toLowerCase();
   return s.includes(needle);
 }
 
-/** Καθαρό revenue μιας παραγγελίας μετά την αφαίρεση των demo line items. */
+/** Net revenue of an order after removing demo line items. */
 function nonDemoRevenue(o: OrderRow): { revenue: number; isAllDemo: boolean } {
   const items = o.lineItems || [];
   if (items.length === 0) {
-    // Fallback: δεν ξέρουμε lineItems → κράτα την παραγγελία
+    // Fallback: lineItems unknown -> keep the order
     return { revenue: o.totalPrice, isAllDemo: false };
   }
   let demoTotal = 0;
@@ -207,10 +192,8 @@ const PRODUCT_COLLECTION_MAP: Record<string, string> = {
   magento: 'magento_products',
 };
 
-/**
- * Reads product collections από κάθε platform και επιστρέφει map SKU → stock.
- * Χρησιμοποιείται για τον πίνακα Price Benchmarking (στήλη «Στοκ»).
- */
+/** Reads product collections from each platform and returns a map SKU -> stock.
+ * Used for the Price Benchmarking table (Stock column). */
 export async function readPlatformStockBySku(
   db: Firestore,
   brandId: string,
@@ -220,8 +203,7 @@ export async function readPlatformStockBySku(
   const out = new Map<string, number>();
   if (!coll) return out;
 
-  // PER-60 perf: projection per platform — only the stock-bearing fields, not whole product docs.
-  // Same fix as readImportedStockBySku: full-doc reads over a large catalog cost minutes of I/O.
+  // Perf: project only stock-bearing fields per platform; full-doc reads over a large catalog cost minutes of I/O.
   const STOCK_FIELDS: Record<string, string[]> = {
     shopify: ['variants'],
     woocommerce: ['sku', 'stockQuantity'],
@@ -280,16 +262,8 @@ function parseNumeric(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/**
- * Net products revenue ex-VAT (όπως καταγράφεται στα λογιστικά «Total Income χωρίς ΦΠΑ»).
- *
- * **Magento (multi-store aware):** `baseSubtotal − |baseDiscountAmount|` = items ex-tax σε base
- * currency (EUR), χωρίς μεταφορικά. Magento REST API subtotal = items ex-tax always.
- * Fallback αν λείπουν base_*: `subtotal − |discountAmount|` (EUR orders only).
- * Non-EUR orders χωρίς base_* → 0 (αναμένεται re-sync).
- *
- * **Shopify/WooCommerce:** `totalPrice − totalTax`.
- */
+/** Net products revenue ex-VAT. Magento: `baseSubtotal − |baseDiscountAmount|` (EUR fallback
+ * `subtotal − |discountAmount|`; non-EUR without base_* → 0). Else `total − tax`. */
 function computeOrderExVatRevenue(platform: string, d: Record<string, unknown>): number {
   if (platform === 'magento') {
     const baseSubtotal = parseNumeric(d.baseSubtotal);
@@ -317,9 +291,7 @@ function computeOrderExVatRevenue(platform: string, d: Record<string, unknown>):
   return Math.max(0, gross - tax);
 }
 
-/**
- * Read orders from a single platform collection for the given brand (full history in Firestore).
- */
+/** Read orders from a single platform collection for the brand (full history in Firestore). */
 async function readPlatformOrders(db: Firestore, brandId: string, platform: string): Promise<OrderRow[]> {
   const collection = COLLECTION_MAP[platform];
   if (!collection) return [];
@@ -415,9 +387,7 @@ async function readMegaventoryInvoiceOrderRows(db: Firestore, brandId: string): 
   const rows: OrderRow[] = [];
   for (const doc of snap.docs) {
     const d = doc.data();
-    // PER-137: τα πιστωτικά (kind 'credit_note', αρνητικό netAmount) ΔΕΝ είναι πωλήσεις —
-    // μπαίνουν στο netting ξεχωριστά (readMegaventoryCreditNoteRows). Το net>0 guard
-    // τα απέκλειε ήδη· το ρητό guard τεκμηριώνει την πρόθεση.
+    // Credit notes are not sales — netted separately via readMegaventoryCreditNoteRows.
     if (d.kind === 'credit_note') continue;
     const net = parseNumeric(d.netAmount);
     if (!(net > 0)) continue;
@@ -442,19 +412,15 @@ async function readMegaventoryInvoiceOrderRows(db: Firestore, brandId: string): 
 }
 
 type MegaventoryCreditNoteRow = {
-  /** Αρνητικό ποσό (χωρίς ΦΠΑ) — όπως γράφεται από τον connector. */
+  /** Negative amount (ex-VAT) — as written by the connector. */
   net: number;
   day: string;
-  /** DocumentId του γονικού παραστατικού στο MV — το κλειδί του netting join. */
+  /** DocumentId of the parent document in MV — the key for the netting join. */
   parentDocumentId: string;
 };
 
-/**
- * PER-137: πιστωτικά Megaventory για το netting του τζίρου. Generic ταξινόμηση: ένα πιστωτικό
- * αφαιρείται από τον τζίρο ΜΟΝΟ αν ο γονέας του (`parentDocumentId`) είναι καταχωρημένο
- * παραστατικό πώλησης — πιστωτικά προς προμηθευτές έχουν γονέα παραστατικό αγοράς (που δεν
- * υπάρχει στη collection) και μένουν εκτός. Καμία per-brand λίστα τύπων.
- */
+/** Megaventory credit notes for netting: subtracted only when `parentDocumentId` is a recorded
+ * sales document; supplier credit notes (purchase-doc parent) are left out. */
 async function readMegaventoryCreditNoteRows(db: Firestore, brandId: string): Promise<MegaventoryCreditNoteRow[]> {
   const snap = await db
     .collection('megaventory_invoices')
@@ -509,10 +475,8 @@ async function readSoftOneSalesOrderRows(db: Firestore, brandId: string): Promis
   return rows;
 }
 
-/**
- * Συνολικός τζίρος επιχείρησης από ERP (Megaventory τιμολόγια / SoftOne SALDOC).
- * Ξεχωριστό από `ecommerce_summary`, που παραμένει αυστηρά για e-shop connectors.
- */
+/** Total business revenue from ERP (Megaventory invoices / SoftOne SALDOC); separate from
+ * `ecommerce_summary`, which stays strictly for e-shop connectors. */
 export async function computeBusinessRevenueSummary(brandId: string): Promise<void> {
   const db = getDb();
   const connDoc = await db.doc(`connectors/${brandId}`).get();
@@ -532,7 +496,7 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
     source = 'softone_sales_documents';
   }
 
-  // Μικτός τζίρος (μόνο πωλήσεις) — διατηρείται για διαφάνεια ως gross*.
+  // Gross revenue (sales only) — kept for transparency as gross*.
   const grossRevenueByDay: Record<string, number> = {};
   const grossRevenueByMonth: Record<string, number> = {};
   let grossTotalRevenue = 0;
@@ -548,13 +512,8 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
     }
   }
 
-  // PER-137 (commit 2 — καθαρός τζίρος ΓΙΝΕΤΑΙ ΚΑΝΟΝΙΚΟΣ): τα canonical πεδία
-  // totalRevenue/revenueByDay/revenueByMonth αφαιρούν πλέον τα πιστωτικά, ώστε ΚΑΘΕ
-  // καταναλωτής (Dashboard, daily digest, useBusinessRevenueSummary) να δείχνει τον τζίρο
-  // μετά τις επιστροφές χωρίς αλλαγή στο frontend. Πιστωτικό μετράει μόνο αν ο γονέας του
-  // είναι γνωστό παραστατικό πώλησης (rawRows.orderId = documentId) — supplier-return
-  // πιστωτικά μένουν unlinked (αναφέρονται, δεν αφαιρούνται). Generic — καμία per-brand λογική.
-  // Οι μέρες/μήνες με πολλές επιστροφές μπορεί να βγουν αρνητικές (αναμενόμενο).
+  // Canonical net revenue: totalRevenue/revenueByDay/revenueByMonth subtract credit notes whose
+  // parent is a known sales document (orderId = documentId); unlinked ones reported, not subtracted.
   const salesDocumentIds = new Set(rawRows.map((o) => o.orderId));
   const revenueByDay: Record<string, number> = { ...grossRevenueByDay };
   const revenueByMonth: Record<string, number> = { ...grossRevenueByMonth };
@@ -579,12 +538,12 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
 
   await db.doc(`business_revenue_summary/${brandId}`).set({
     source,
-    // canonical = net-of-returns (PER-137)
+    // canonical = net-of-returns
     totalRevenue,
     orderCount: rawRows.length,
     revenueByDay,
     revenueByMonth,
-    // gross (sales only) — για breakdown «μικτός → επιστροφές → καθαρός»
+    // gross (sales only) — for the "gross -> returns -> net" breakdown
     grossTotalRevenue,
     grossRevenueByDay,
     grossRevenueByMonth,
@@ -598,10 +557,7 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
   );
 }
 
-/**
- * Compute and write the e-commerce summary for a brand.
- * Call after any e-commerce connector sync.
- */
+/** Compute and write the e-commerce summary for a brand; call after any connector sync. */
 export async function computeEcommerceSummary(brandId: string): Promise<void> {
   const db = getDb();
 
@@ -643,7 +599,7 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     : [connPlain.ecommerceSalesChannelRules, connPlain.salesChannelRules, (connPlain.magento as Record<string, unknown> | undefined)?.salesChannelRules];
   const salesChannelRules = mergeSalesChannelRulesForBrand(rulesSource, revenueSourceMode);
 
-  // Demo cleanup + classification (μόνο e-shop παραγγελίες)
+  // Demo cleanup + classification (e-shop orders only)
   const visibleOrders: OrderRow[] = [];
   const revenueOrders: OrderRow[] = [];
   for (const o of rawOrders) {
@@ -706,7 +662,7 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     }
   }
 
-  // Top products: αγνοεί εντελώς τα demo line items + ενοποίηση γονικής/παιδικής γραμμής Magento
+  // Top products: ignores demo line items entirely + merges Magento parent/child line
   const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
   for (const o of revenueOrders) {
     const demoFiltered = (o.lineItems || []).filter((li) => !isDemoLineItem(li));
@@ -725,9 +681,8 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     .slice(0, 20)
     .map(([sku, data]) => ({ sku, name: data.name, revenue: data.revenue, quantity: data.quantity }));
 
-  // SKU stats (stock + sold) — τροφοδοτεί τον πίνακα Price Benchmarking.
-  // Stock: από τα product docs κάθε platform.
-  // Sold:  sum qty από όλα τα line items (ίδιο 90-day window με τα orders).
+  // SKU stats for the Price Benchmarking table: stock from product docs, sold = qty summed
+  // across line items (same 90-day window as orders).
   const stockArrays = await Promise.all(
     stockPlatforms.map((p) => readPlatformStockBySku(db, brandId, p))
   );
@@ -797,21 +752,15 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
       lastSaleAt: lastTs ? new Date(lastTs).toISOString() : null,
     };
   }
-  // Αποθήκευση ως serialized JSON για να ΜΗΝ indexed κάθε subfield
-  // (απέφυγε Firestore "too many index entries" όριο των 40k για μεγάλα catalogs).
+  // Store as serialized JSON so each subfield is NOT indexed
+  // (avoids the Firestore "too many index entries" 40k limit for large catalogs).
   const skuStatsJson = JSON.stringify(skuStats);
   logger.info(
     `[EcommerceAgg] skuStats populated: ${allSkus.size} SKUs for brand ${brandId} (windowed, ${(skuStatsJson.length / 1024).toFixed(1)}KB)`
   );
 
-  /**
-   * Το skuStatsJson για brands με >10K SKUs (e-tennis, safeblock) ξεπερνά το Firestore όριο
-   * των 1 MiB ανά document. Αν παραμείνει στο `ecommerce_summary` doc → ολόκληρο το set fails
-   * → χάνεται κάθε ενημέρωση revenueByDay/orderCount → Dashboard δείχνει €0.
-   *
-   * Λύση: γράφεται σε ξεχωριστό `sku_stats/{brandId}` (όπως ήδη το `stock_movement`). Αν είναι
-   * > 900KB, σπάει σε chunks σε subcollection `sku_stats/{brandId}/chunks/{i}`.
-   */
+  // Large catalogs exceed the 1 MiB/doc limit, which would fail the whole ecommerce_summary set;
+  // write SKU stats to a separate sku_stats/{brandId}, chunked under chunks/{i} when >900KB.
   await writeSkuStatsChunked(db, brandId, skuStats, allSkus.size);
 
   // Orders by day (count) for core revenue only.
@@ -866,14 +815,14 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     allOrdersByDay,
     recentOrders,
     connectedPlatforms: revenueSummaryPlatforms,
-    // Μόνο metadata — το βαρύ skuStatsJson γράφεται σε `sku_stats/{brandId}` (βλ. writeSkuStatsChunked).
+    // Metadata only — the heavy skuStatsJson is written to `sku_stats/{brandId}` (see writeSkuStatsChunked).
     skuStatsCount: allSkus.size,
     syncedAt: FieldValue.serverTimestamp(),
   };
 
   const ref = db.doc(`ecommerce_summary/${brandId}`);
   await ref.set(summary);
-  // Καθάρισμα παλιού indexed map field & legacy inline JSON (μη fatal αν δεν υπάρχουν).
+  // Clean up old indexed map field & legacy inline JSON (non-fatal if absent).
   try {
     await ref.update({
       skuStats: FieldValue.delete(),

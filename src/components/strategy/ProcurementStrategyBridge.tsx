@@ -1,7 +1,5 @@
-/**
- * Συνδέει τις ειδοποιήσεις Product Intelligence (dead / excess από ERP)
- * με τις εμπορικές πολιτικές στη Στρατηγική — ίδια λογική priority_tag με useProductSource.
- */
+/** Connects Product Intelligence alerts (dead / excess from ERP) with the commercial policies in
+ * Strategy — same priority_tag logic as useProductSource. */
 import { useMemo, useState } from 'react';
 import { AlertCircle, AlertTriangle, ArrowRight, ChevronDown, ChevronRight, ExternalLink, Package } from 'lucide-react';
 import { scenarios } from '../../data';
@@ -13,12 +11,10 @@ const stockClearanceTitle = stockClearanceScenario?.name ?? 'Stock Clearance';
 
 export interface ProcurementStrategyBridgeProps {
   products: Product[];
-  /** Enterprise feed από procurement inventory */
+  /** Enterprise feed from procurement inventory */
   enabled: boolean;
-  /**
-   * Resolved signals από useProductSignals (procurement, connector, movement, import).
-   * Χρησιμοποιείται για ακριβή tied_capital υπολογισμό όταν το product doc δεν έχει cost_price.
-   */
+  /** Resolved signals from useProductSignals; used for accurate tied_capital when the product doc
+   * lacks cost_price. */
   signalsBySku?: Map<string, ProductSignal>;
   onDeadToStockClearance: (args: {
     productIds: string[];
@@ -32,18 +28,12 @@ export interface ProcurementStrategyBridgeProps {
     tiedCapital: number;
     count: number;
   }) => void;
-  /** Άνοιγμα #products (ίδιο feed) */
+  /** Open #products (same feed) */
   onOpenProductIntelligence?: () => void;
 }
 
-/**
- * Tied capital ανά προϊόν με ιεραρχία:
- *  1. signal.resolved.tied_capital (ground truth από procurement, ή computed cost×stock στο signals layer)
- *  2. product.cost_price * product.stock_level (raw fallback)
- *
- * Χωρίς signals layer χάνουμε όλο το procurement-based tied capital — γι' αυτό
- * περνάμε από useProductSignals.
- */
+/** Tied capital per product: signal.resolved.tied_capital (procurement ground truth or signals-layer
+ * cost×stock) preferred, else product.cost_price * product.stock_level fallback. */
 function tiedFromProducts(
   list: Product[],
   signalsBySku?: Map<string, ProductSignal>

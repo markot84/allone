@@ -1,11 +1,5 @@
-/**
- * SEC-M6 — parseXLSXBuffer must bound the parse so a workbook that declares a huge cell
- * range can't exhaust memory. The read is capped with sheetRows, and assertSheetWithinLimits
- * rejects oversized/truncated sheets instead of importing a silently-incomplete file.
- *
- * The guard is tested directly: XLSX.write recomputes !ref from the actual cells, so a
- * crafted "zip-bomb" !ref can't survive a real write/read round-trip.
- */
+/** parseXLSXBuffer caps the parse via sheetRows; assertSheetWithinLimits rejects
+ * oversized/truncated sheets. Tested directly since XLSX.write recomputes !ref. */
 import { describe, it, expect } from 'vitest';
 import * as XLSX from 'xlsx';
 import { parseXLSXBuffer, assertSheetWithinLimits } from '../../parseFile';
@@ -16,7 +10,7 @@ function workbookBuffer(rows: string[][]): Buffer {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
 }
 
-describe('parseXLSXBuffer (SEC-M6)', () => {
+describe('parseXLSXBuffer', () => {
   it('parses a normal workbook', () => {
     const rows = parseXLSXBuffer(workbookBuffer([
       ['sku', 'name', 'price'],
@@ -29,7 +23,7 @@ describe('parseXLSXBuffer (SEC-M6)', () => {
   });
 });
 
-describe('assertSheetWithinLimits (SEC-M6 guard)', () => {
+describe('assertSheetWithinLimits guard', () => {
   it('allows a small sheet', () => {
     expect(() => assertSheetWithinLimits({ A1: { t: 's', v: 'x' }, '!ref': 'A1:C100' })).not.toThrow();
   });

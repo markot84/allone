@@ -1,11 +1,5 @@
-/**
- * Epsilon Net — Epsilon Smart e-Shop API connector
- *
- * Τεκμηρίωση: Manual E-shop API (myaccount.epsilonnet.gr + smartUrl από LoginToSubscription).
- * - POST https://myaccount.epsilonnet.gr/api/Account/LoginToSubscription
- * - GET  {url2}api/Eshop/GetItems?RevisionNumber=...
- * - GET  {url2}api/Eshop/GetItemsBalances
- */
+/** Epsilon Net — Epsilon Smart e-Shop API connector (myaccount.epsilonnet.gr + smartUrl from
+ * LoginToSubscription): POST LoginToSubscription, GET {url2}api/Eshop/GetItems & GetItemsBalances. */
 
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
@@ -34,9 +28,8 @@ export function normalizeSmartUrl(url2: string): string {
   if (!s) return '';
   if (!/^https?:\/\//i.test(s)) s = `https://${s}`;
   if (!s.endsWith('/')) s = `${s}/`;
-  // SEC-M9: every smartBase request carries the bearer JWT, so pin the host to EpsilonNet
-  // (https only) before trusting the API-supplied url2 — a compromised/MITM upstream can't
-  // redirect the token to an attacker host. Reject anything that isn't *.epsilonnet.gr.
+  // smartBase requests carry the bearer JWT, so pin url2 to https *.epsilonnet.gr only —
+  // a MITM/compromised upstream can't redirect the token to an attacker host.
   try {
     const u = new URL(s);
     if (u.protocol !== 'https:') return '';
@@ -82,7 +75,7 @@ async function epsilonGetJson(url: string, bearer: string): Promise<{ ok: boolea
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), EPS_TIMEOUT_MS);
   try {
-    // SEC-M9: safeFetch re-validates every redirect hop, so even a *.epsilonnet.gr base
+    // safeFetch re-validates every redirect hop, so even a *.epsilonnet.gr base
     // can't 30x-bounce the bearer token to an internal/private address.
     const res = await safeFetch(url, {
       method: 'GET',

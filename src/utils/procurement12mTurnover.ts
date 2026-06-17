@@ -1,7 +1,4 @@
-/**
- * Άθροισμα στήλης «Πραγματικός τζίρος 12μήνου» στο φύλλο Κοστολόγηση (Procurement).
- * Αντιγραφή λογικής από ProcurementPage ώστε το Dashboard/Οικονομικά να μην εξαρτώνται από το component.
- */
+/** Sum of the "real 12-month turnover" column in the Costing (Procurement) sheet. */
 
 function parseNum(v: unknown): number {
   if (v == null || v === '') return 0;
@@ -35,7 +32,7 @@ function isNumericColName(k: string): boolean {
 /** Metadata keys added by Firestore / the import pipeline — excluded from positional lookup. */
 const METADATA_KEYS = new Set(['id', 'brandId', 'rowIndex', 'sheetType', 'createdAt', 'updatedAt']);
 
-// Στη Firestore το header αποθηκεύεται ως 'ΤΖΙΡΟΣ' (το ακριβές Excel column header)
+// In Firestore the header is stored as 'ΤΖΙΡΟΣ' (the exact Excel column header)
 const COL_ALIASES: Record<string, string[]> = {
   'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ': [
     'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ',
@@ -52,13 +49,8 @@ const COL_ALIASES: Record<string, string[]> = {
   ],
 };
 
-/** Normalises whitespace, newlines and underscores before comparing — handles Excel headers
- *  that contain line-breaks, extra spaces, or underscore-separated Firestore keys.
- *
- *  Two-pass strategy:
- *   1. Exact normalised match (===) — prevents "ΤΖΙΡΟΣ 12ΜΗΝΟΥ ΑΛΥΣΙΔΑ" matching before
- *      "ΤΖΙΡΟΣ 12ΜΗΝΟΥ" when there are qualifier columns in the same sheet.
- *   2. Substring/includes fallback for short/partial aliases. */
+/** Matches columns by normalised (whitespace/newline/underscore) comparison:
+ *  pass 1 exact match, pass 2 substring fallback for short/partial aliases. */
 function findCol(rows: Record<string, unknown>[], keyword: string): string {
   if (rows.length === 0) return keyword;
   const keys = Object.keys(rows[0]).filter((k) => !isNumericColName(k));
@@ -86,19 +78,16 @@ const COSTING_CANONICAL_ORDER = [
   'ΜΕΣΟ ΚΟΣΤΟΣ ΚΑΤΗΓΟΡΙΑΣ', 'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ',
 ];
 
-/** Άθροισμα στήλης «Πραγματικός τζίρος 12μήνου» στο φύλλο Κοστολόγηση (στήλη Η).
- *  Falls back to positional lookup (column index 7 = H) when named matching fails.
- *  The positional fallback sorts dataKeys by canonical costing template order so that
- *  alphabetical / underscore-keyed Firestore docs still resolve to the correct column. */
+/** Sum of the "real 12-month turnover" column (column H) in the Costing sheet; falls back to
+ *  positional lookup (index 7) sorted by canonical template order when named matching fails. */
 export function getCostingReal12mTurnover(rows: Record<string, unknown>[]): { sum: number; hasColumn: boolean } {
   if (rows.length === 0) return { sum: 0, hasColumn: false };
   let col = findCol(rows, 'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ');
   const first = rows[0];
   let hasColumn = col in first && first[col] !== undefined;
 
-  // Positional fallback: column H = index 7 of data columns (after stripping metadata keys).
-  // Sort by canonical costing column order so the correct column is at position 7
-  // regardless of Firestore key ordering or underscore vs. space key format.
+  // Positional fallback: column H = index 7 of data columns (metadata stripped), sorted by
+  // canonical costing order so it resolves regardless of Firestore key order/format.
   if (!hasColumn) {
     const normK = (s: string) => s.toUpperCase().replace(/[\s\n\r_]+/g, ' ').trim();
     const canonicalNorm = COSTING_CANONICAL_ORDER.map(normK);

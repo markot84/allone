@@ -4,17 +4,15 @@ import { Button } from '../common';
 import { BriefingDrawer } from './BriefingDrawer';
 
 interface StrategyBriefingQuickStripProps {
-  /** Όνομα ενεργού σεναρίου ή fallback (π.χ. «Εμπορική πολιτική») για κείμενα στο drawer */
+  /** Active scenario name or fallback, used for drawer text. */
   strategyDisplayName: string;
-  /** Αν false, δεν υπάρχει ενεργή στρατηγική — εμφανίζεται βοηθητικό κείμενο και άλλος προεπιλεγμένος τίτλος */
+  /** If false, no active strategy — shows helper text and a different default title. */
   hasActiveStrategy?: boolean;
-  /** Κλήση μετά επιτυχή αποστολή (π.χ. toast από parent) */
+  /** Called after a successful send (e.g. toast from parent). */
   onSent?: () => void;
 }
 
-/**
- * Γρήγορη ενέργεια από Dashboard: ίδιο briefing flow με τη σελίδα Στρατηγικής (BriefingDrawer).
- */
+/** Quick action from the Dashboard: same briefing flow as the Strategy page (BriefingDrawer). */
 export function StrategyBriefingQuickStrip({
   strategyDisplayName,
   hasActiveStrategy = true,

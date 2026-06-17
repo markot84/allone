@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { ACCENT_CHANGE_EVENT } from '../theme/accentTheme';
 
 export interface AccentColors {
-  /** Κύριο χρώμα του ενεργού profile (--nts-accent). */
+  /** Primary color of the active profile (--nts-accent). */
   accent: string;
-  /** Ανοιχτή απόχρωση (--nts-accent-light) — για gradients/fills. */
+  /** Light shade (--nts-accent-light) — for gradients/fills. */
   accentLight: string;
-  /** Δευτερεύον χρώμα γραφημάτων (--nts-chart-secondary) — οδηγείται από τριχρωμίες. */
+  /** Secondary chart color (--nts-chart-secondary) — derived from tri-color schemes. */
   chartSecondary: string;
 }
 
@@ -30,11 +30,8 @@ function readAccentColors(): AccentColors {
   };
 }
 
-/**
- * Επιστρέφει το χρώμα του ενεργού accent profile ως literal hex, ώστε components με SVG
- * (sparklines/charts) — όπου το `var(--nts-accent)` δεν resolve-άρει αξιόπιστα μέσα σε `url(#id)`
- * ή σε gradient stops — να ακολουθούν το ίδιο βασικό χρώμα. Ενημερώνεται όταν αλλάζει το profile.
- */
+/** Active accent profile color as a literal hex for SVG (sparklines/charts) where
+ * `var(--nts-accent)` doesn't resolve inside `url(#id)`/gradients. Updates on profile change. */
 export function useAccentColor(): AccentColors {
   const [colors, setColors] = useState<AccentColors>(() => readAccentColors());
 

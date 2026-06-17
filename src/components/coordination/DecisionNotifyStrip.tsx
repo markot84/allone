@@ -14,7 +14,7 @@ import type { BroadcastResult } from '../../services/coordination';
 
 interface DecisionNotifyStripProps {
   decision: Decision;
-  /** Στο συρτάρι λεπτομερειών: χωρίς μεγάλη κεφαλίδα / διπλότυπα τμήματα */
+  /** In the details drawer: no large header / duplicate departments */
   variant?: 'default' | 'embedded';
 }
 

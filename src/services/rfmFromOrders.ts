@@ -16,9 +16,9 @@ function itemAffinityKey(item: EcommerceRawOrder['lineItems'][number]): string {
 export type RfmFromOrdersResult = {
   segments: RFMSegment[];
   totalCustomers: number;
-  /** Παραγγελίες με σταθερό customer key (αποκλ. guests). */
+  /** Orders with a stable customer key (excludes guests). */
   ordersAttributed: number;
-  /** Παραγγελίες χωρίς key (συνήθως guest). */
+  /** Orders without a key (usually guest). */
   guestOrdersSkipped: number;
   canCompute: boolean;
 };
@@ -128,7 +128,7 @@ type CustomerSegmentAssignment = {
 const DAY_LABELS = ['Κυριακή', 'Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'];
 const RFM_LOOKBACK_DAYS = 365;
 
-/** Ανάθεση βαθμίδων 1–5: lowIsHighScore = true όταν μικρότερη τιμή = καλύτερο (recency days). */
+/** Assign quintile scores 1–5: lowIsHighScore = true when a smaller value is better (recency days). */
 function assignQuintileScores(values: number[], lowIsHighScore: boolean): number[] {
   const n = values.length;
   if (n === 0) return [];
@@ -146,10 +146,8 @@ function assignQuintileScores(values: number[], lowIsHighScore: boolean): number
   return out;
 }
 
-/**
- * Χάρτης R-F-M scores → id που υπάρχει στο SEGMENT_BEHAVIORAL_MAP / segmentCategoryMatrix.
- * Κανόνες βασισμένοι σε κλασικό RFM business interpretation.
- */
+/** Map R-F-M scores → an id in SEGMENT_BEHAVIORAL_MAP / segmentCategoryMatrix,
+ *  using classic RFM business interpretation. */
 function segmentFromRfmScores(r: number, f: number, m: number): { id: string; name: string; rfm_score: string } {
   const label = `${r}-${f}-${m}`;
 
@@ -359,9 +357,8 @@ function buildBehavioralProfile(g: SegmentAgg, totalRevenue: number, globalAov: 
     .sort((a, b) => b[1].revenue - a[1].revenue)
     .slice(0, 6);
   const maxCategoryRevenue = categoryRows[0]?.[1].revenue || 1;
-  // LOGIC-7: the denominator must be GROSS — the sum of the same gross line revenues held in
-  // g.affinity — not the NET order revenue g.revenue. On discounted orders Σ(gross lines) > net
-  // total, so dividing a gross numerator by g.revenue let revenue_share_pct exceed 100%.
+  // Denominator must be GROSS (Σ gross lines in g.affinity), not NET g.revenue: on discounted
+  // orders Σ(gross lines) > net, so a gross numerator over g.revenue let revenue_share_pct exceed 100%.
   const affinityGrossRevenue = Math.max(
     [...g.affinity.values()].reduce((sum, r) => sum + r.revenue, 0),
     1e-6,
@@ -399,8 +396,7 @@ function buildBehavioralProfile(g: SegmentAgg, totalRevenue: number, globalAov: 
       lines_total: g.catalogLineCount,
       lines_matched: g.catalogMatchedLineCount,
     };
-    // LOGIC-7: catalog maps hold GROSS line revenue, so the share denominator must be the
-    // gross catalog line total (g.catalogLineRev), not the net order revenue (g.revenue).
+    // Catalog maps hold GROSS line revenue, so the share denominator is the gross catalog line total (g.catalogLineRev), not net g.revenue.
     catalogExtras.brand_affinity = catalogMapToAffinity(g.catalogBrand, g.catalogLineRev, 10);
     catalogExtras.category_affinity_catalog = catalogMapToAffinity(g.catalogCategory, g.catalogLineRev, 10);
     catalogExtras.subcategory_affinity = catalogMapToAffinity(g.catalogSubcategory, g.catalogLineRev, 10);
@@ -755,11 +751,8 @@ export function computeSegmentMigrationFromEcommerceOrders(
   };
 }
 
-/**
- * RFM + συγκέντρωση segments από raw e-commerce παραγγελίες.
- * Αγνοεί cancelled / Data Analysis exclusions & 100% demo.
- * Χρησιμοποιεί rolling 12μηνο ώστε historical backfills να μη φουσκώνουν κάθε φορά το ενεργό πελατολόγιο.
- */
+/** RFM + segment aggregation from raw e-commerce orders; ignores cancelled / Data Analysis exclusions & 100% demo.
+ *  Uses a rolling 12-month window so historical backfills don't inflate the active customer base. */
 export function computeRfmSegmentsFromEcommerceOrders(
   orders: EcommerceRawOrder[],
   catalog: RfmCatalogContext | null | undefined = undefined,

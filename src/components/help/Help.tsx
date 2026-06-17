@@ -29,7 +29,7 @@ export function Help() {
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Handle hash navigation: #help?article=… ή #help?q=… (αναζήτηση από header)
+  // Handle hash navigation: #help?article=… or #help?q=… (search from header)
   useEffect(() => {
     const checkHash = () => {
       const hash = window.location.hash.replace(/^#/, '');

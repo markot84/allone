@@ -24,7 +24,7 @@ export default defineConfig(({ mode }) => {
     host: '0.0.0.0',
     port: 5173,
     strictPort: false,
-    // Ίδιο origin με production (Firebase Hosting rewrite) — αποφεύγει CORS στο dev
+    // Same origin as production (Firebase Hosting rewrite) — avoids CORS in dev
     proxy: {
       '/api/submitInterestLead': {
         target: `https://${region}-${projectId}.cloudfunctions.net`,

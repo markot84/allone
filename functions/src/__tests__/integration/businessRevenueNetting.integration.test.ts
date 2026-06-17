@@ -1,16 +1,5 @@
-/**
- * PER-137 — computeBusinessRevenueSummary credit-note netting against the REAL module +
- * Firestore emulator. Contract (commit 2, canonical net):
- *  - canonical fields (totalRevenue, revenueByDay/Month) are now NET-of-returns, so every
- *    consumer (Dashboard, digest) shows turnover after returns with no frontend change;
- *  - gross* fields preserve sales-only totals for the gross→returns→net breakdown;
- *  - only credits whose parentDocumentId is a known sales invoice are netted (supplier-return
- *    credits have purchase-doc parents → unlinked → reported, not netted);
- *  - cancelled credits and legacy docs without `kind` keep today's semantics;
- *  - net days/months may go negative when returns exceed sales in a period.
- *
- * Run via `npm run test:integration` (firebase emulators:exec wraps this).
- */
+/** computeBusinessRevenueSummary credit-note netting vs the real module + Firestore emulator: canonical fields are NET, gross* preserves sales-only, only sales-linked credits net.
+ * Run via `npm run test:integration` (firebase emulators:exec wraps this). */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as admin from 'firebase-admin';
 
@@ -44,7 +33,7 @@ beforeEach(async () => {
   await db.doc(`business_revenue_summary/${BRAND}`).delete().catch(() => undefined);
 });
 
-describe('computeBusinessRevenueSummary credit netting (PER-137)', () => {
+describe('computeBusinessRevenueSummary credit netting', () => {
   it('nets linked customer credits into canonical fields, ignores supplier/unlinked and cancelled credits, preserves gross', async () => {
     // sales — one new-style (kind set), one legacy (no kind → back-compat)
     await seedInvoice('mv_inv_D100', { documentId: 'D100', kind: 'sales_invoice', netAmount: 100, date: '2026-05-02', status: 'Approved' });

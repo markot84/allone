@@ -4,7 +4,7 @@ import type { Campaign } from '../../types';
 
 countries.registerLocale(en as Parameters<typeof countries.registerLocale>[0]);
 
-/** ISO-3166-1 alpha-2 από κλειδί Firestore (ISO2, όνομα, ή «GR GR»). */
+/** ISO-3166-1 alpha-2 from a Firestore key (ISO2, name, or "GR GR"). */
 export function resolveCountryToIso2(raw: string): string | undefined {
   const key = (raw || '').trim();
   if (!key || key === 'UNKNOWN' || key === '??') return undefined;
@@ -17,7 +17,7 @@ export function resolveCountryToIso2(raw: string): string | undefined {
   return fromLib || undefined;
 }
 
-/** Κανάλι για χρωματική στοίβαση στο Mekko (συμβατό με Campaign.channel). */
+/** Channel for color stacking in the Mekko (compatible with Campaign.channel). */
 export type GeoMekkoChannel = 'Google Ads' | 'Meta' | 'Other';
 export type GeoChartMetric =
   | 'amount_spent'
@@ -97,10 +97,8 @@ function formatGeoLabel(raw: string): string {
   return t || '—';
 }
 
-/**
- * Στήλες Mekko: πλάτος ανάλογο με συνολικό spend περιοχής, ύψος στοίβας = κατανομή spend ανά κανάλι.
- * (Αθροίζει geo ανά campaign — ίδια λογική πηγής με τον πίνακα Τοποθεσία.)
- */
+/** Mekko columns: width ∝ region total spend, stack height = per-channel distribution.
+ * Aggregates geo per campaign — same source logic as the Location table. */
 export function buildGeoMekkoColumns(
   campaigns: Campaign[],
   level: 'country' | 'city',

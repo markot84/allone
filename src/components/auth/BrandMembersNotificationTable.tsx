@@ -55,7 +55,7 @@ function nextChannelsForGroup(
   return next;
 }
 
-/** Υπογραφή μελών ώστε αλλαγή τμήματος/label/ρόλου να αλλάζει query key (όχι μόνο uid). */
+/** Members signature so a department/label/role change bumps the query key, not just uid. */
 function membersProfileSig(list: BrandMember[]): string {
   return list
     .map((m) => `${m.userId}:${m.department ?? ''}:${m.departmentLabel ?? ''}:${m.role ?? ''}`)
@@ -74,7 +74,7 @@ function canEditRoles(viewer: BrandMember | undefined, isSuperAdmin: boolean): b
   return r === 'owner' || r === 'admin';
 }
 
-/** Owner, brand admin και super admin: πλήρης λίστα ρόλων (συμπ. αλλαγή owner). */
+/** Owner, brand admin and super admin: full role list (including changing owner). */
 function roleOptionsForRow(
   viewer: BrandMember | undefined,
   _target: BrandMember,

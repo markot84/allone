@@ -3,10 +3,8 @@ import type { Campaign } from '../types';
 import type { BudgetOpportunityEngineOptions, BudgetOpportunityResult } from '../types/budgetSuggestions';
 import { computeBudgetOpportunities } from '../services/budgetOpportunityEngine';
 
-/**
- * Προτάσεις budget από ημερήσια metrics καμπανιών (client-side).
- * Για scheduled ιστορικό / ειδοποιήσεις: μελλοντικά Cloud Function + Firestore.
- */
+/** Budget suggestions from daily campaign metrics (client-side); scheduled history /
+ * notifications are a future Cloud Function + Firestore. */
 export function useBudgetSuggestions(
   campaigns: Campaign[],
   options?: Partial<BudgetOpportunityEngineOptions>

@@ -279,8 +279,7 @@ export function WeightConfigurator({
     sourceLabel: sourceProductDataSourceLabel,
     sourceKind: sourceProductSourceKind,
   } = useProductSource();
-  // PER-130 (P5): staticFirstPage — το WeightConfigurator διαβάζει ΜΟΝΟ το .aggregate,
-  // αλλά το pageQuery πυροδοτούσε την unfiltered CF (~1.5k reads) σε κάθε strategy-page mount.
+  // staticFirstPage: read ONLY .aggregate; avoids the unfiltered CF (~1.5k reads) per mount.
   const serverProductIntelligence = useProductIntelligenceAggregate('all', 1, {}, { staticFirstPage: true });
   const products = sourceProducts;
   const hasImported = sourceHasImported || !!serverProductIntelligence.aggregate;
@@ -316,8 +315,8 @@ export function WeightConfigurator({
   const { benchmarks } = usePriceBenchmarks();
   const toast = useToast();
 
-  // Source provenance — δίνεται στα Gemini prompts ώστε να calibrate το AI
-  // confidence (π.χ. αν λείπει connector, δεν υπόσχεται real-time ROAS).
+  // Source provenance passed to Gemini prompts to calibrate AI confidence
+  // (e.g. without a connector, it won't promise real-time ROAS).
   const { coverage: signalCoverage, signalsBySku } = useProductSignals(products, {
     preferProcurementStock: usingProcurement,
   });
@@ -335,9 +334,8 @@ export function WeightConfigurator({
     return Object.fromEntries(entries);
   }, [skuMovement]);
 
-  // sku → { procurement_category, procurement_status } από procurement_inventory.
-  // Δίνει δεύτερη πηγή κατηγοριοποίησης (lifecycle status π.χ. «Επί παραγγελία», «Προς κατάργηση»),
-  // χωριστή από την εμπορική κατηγορία προϊόντος.
+  // sku → { procurement_category, procurement_status } from procurement_inventory:
+  // a second categorization source (lifecycle status) separate from commercial category.
   const procurementBySku = useMemo(() => {
     const out = new Map<string, { category: string; status: string }>();
     const inventory = (procurementData?.inventory ?? []) as Array<Record<string, unknown>>;
@@ -357,15 +355,8 @@ export function WeightConfigurator({
 
   const hasProcurementCategories = procurementBySku.size > 0;
 
-  // Source-of-truth προτεραιότητα για τα φίλτρα Sales Optimization:
-  //   1) Connector orders (skuStats.sold*) — αυθεντικά δεδομένα παραγγελιών.
-  //   2) Stock movement (skuMovement.dec*) — καθολικός μηχανισμός που λειτουργεί για κάθε brand
-  //      και αποτυπώνει net κινητικότητα (πωλήσεις μείον επιστροφές/ακυρώσεις).
-  //   3) Import lifetime/period — fallback όταν δεν υπάρχει τίποτα από τα παραπάνω.
-  //
-  // Σημείωση: το stock movement δεν δίνει `last_sale_at` (δεν γνωρίζουμε ημερομηνία ακριβούς πώλησης
-  // από snapshots), αλλά καλύπτει 7/30/90d windows. Αν δεν είχαμε καμία μείωση σε όλα τα windows,
-  // το προϊόν θεωρείται "πάγωμα αποθέματος" → 0 πωλήσεις στο αντίστοιχο window.
+  // Sales-filter source priority: connector orders (skuStats.sold*) → stock movement
+  // (skuMovement.dec*, net of returns) → import lifetime/period. Movement lacks `last_sale_at` but covers 7/30/90d; zero decrease ⇒ stock-frozen, 0 sales.
   const hasConnector = (connectedPlatforms?.length ?? 0) > 0;
   const skuStatsHasWindows = useMemo(() => {
     if (!normalizedSkuStats) return false;
@@ -393,7 +384,7 @@ export function WeightConfigurator({
       const stats = key ? normalizedSkuStats?.[key] : undefined;
       const move = key ? normalizedSkuMovement?.[key] : undefined;
 
-      // Αν υπάρχουν αυθεντικά connector orders → κυρίαρχη πηγή.
+      // If authentic connector orders exist → primary source.
       if (hasConnector && skuStatsHasWindows) {
         const sold7 = stats?.sold7d != null ? Math.max(0, Math.round(stats.sold7d)) : 0;
         const sold30 = stats?.sold30d != null ? Math.max(0, Math.round(stats.sold30d)) : 0;
@@ -410,7 +401,7 @@ export function WeightConfigurator({
         } as Product;
       }
 
-      // Αλλιώς: stock movement (universal) ως κυρίαρχη πηγή για windowed sales.
+      // Otherwise: stock movement (universal) as primary source for windowed sales.
       if (hasMovementData.any && move) {
         const out: Product = { ...p };
         if (hasMovementData.d7 && move.dec7d != null) {
@@ -422,7 +413,7 @@ export function WeightConfigurator({
         if (hasMovementData.d90 && move.dec90d != null) {
           out.qty_sold_last_90d = Math.max(0, Math.round(move.dec90d));
         }
-        // Στο connector skuStats μπορεί να έχουμε stock & lastSaleAt — γράψ' τα αν λείπουν.
+        // Connector skuStats may carry stock & lastSaleAt — fill them in if missing.
         if (out.stock_level == null && stats?.stock != null) {
           out.stock_level = Math.max(0, Math.round(stats.stock));
         }
@@ -432,7 +423,7 @@ export function WeightConfigurator({
         return out;
       }
 
-      // Τέλος: συμπλήρωσε από connector skuStats (αν υπάρχει) χωρίς override.
+      // Finally: fill from connector skuStats (if any) without overriding.
       if (!stats) return p;
       const sold90Fallback = stats.sold90d ?? stats.sold;
       return {
@@ -455,7 +446,7 @@ export function WeightConfigurator({
       } as Product;
     };
 
-    // Wrap: εφαρμογή sales enrichment + procurement enrichment σε όλα τα products.
+    // Apply sales enrichment + procurement enrichment to all products.
     return products.map((p) => {
       const enriched = enrichSales(p);
       const key = (p.sku || '').trim().toLowerCase();
@@ -504,7 +495,7 @@ export function WeightConfigurator({
     setBriefingName(strategyName);
   }, []);
 
-  // strategySaveVersion bump triggers downstream effects (κρατείται για future use).
+  // strategySaveVersion bump triggers downstream effects (kept for future use).
   const [, setStrategySaveVersion] = useState(0);
   const queryClient = useQueryClient();
   
@@ -578,9 +569,8 @@ export function WeightConfigurator({
   });
   const [seasonalDiscountConfig, setSeasonalDiscountConfig] = useState<SeasonalDiscountConfig | null>(null);
   const [seasonalPanelOpen, setSeasonalPanelOpen] = useState(false);
-  // Triage origin: ποιο decision bucket γέννησε την επιλογή πολιτικής & SKU scope.
-  // Persists στο active_strategies — επιτρέπει downstream consumers (Channel
-  // Activation, AI prompts, exports) να γνωρίζουν την αιτία της στρατηγικής.
+  // Triage origin: decision bucket that produced the policy choice & SKU scope.
+  // Persisted in active_strategies so downstream consumers know the strategy's reason.
   const [triageOrigin, setTriageOrigin] = useState<TriageOrigin | null>(null);
   const scrollToScenarioSelector = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -625,8 +615,7 @@ export function WeightConfigurator({
   );
   const triageScopeCount = triageScopedProductIds?.size ?? 0;
 
-  // Memoized AI prompt contexts — αναγεννώνται μόνο όταν αλλάζει το triage ή
-  // η κάλυψη πηγών (όχι σε κάθε render).
+  // Memoized AI prompt contexts — rebuilt only when triage or source coverage changes.
   const triagePromptCtx = useMemo(
     () => buildTriagePromptContext(triageOrigin),
     [triageOrigin]
@@ -697,7 +686,7 @@ export function WeightConfigurator({
           audience: dataCoverage,
         }).then(async rec => {
           if (!rec) return;
-          // Mirror στα 2 πεδία ώστε Channel page (activation) και RFM exports (channel) να μη διαφωνούν.
+          // Mirror to both fields so Channel page (activation) and RFM exports (channel) stay in sync.
           const clean = JSON.parse(JSON.stringify(rec));
           await FirestoreService.setDocument('active_strategies', savedStrategyId, {
             activationRecommendation: clean,
@@ -795,7 +784,7 @@ export function WeightConfigurator({
       logger.error('Error saving strategy:', { err: error });
       toast.error(`Σφάλμα: ${error?.message || error}`);
     });
-  }, [user, saveActiveStrategy, toast, triageOrigin, triggerAIGeneration, createStrategyDecision]); // CODE-5: triageOrigin in deps (was stale)
+  }, [user, saveActiveStrategy, toast, triageOrigin, triggerAIGeneration, createStrategyDecision]); // triageOrigin in deps (was stale)
 
   const handleMixedApply = useCallback((blendedWeights: Record<string, number>, config: MixConfig) => {
     setMixConfig(config);
@@ -829,7 +818,7 @@ export function WeightConfigurator({
       logger.error('Error saving mixed strategy:', { err: error });
       toast.error(`Σφάλμα: ${error?.message || error}`);
     });
-  }, [user, saveActiveStrategy, toast, duration, triageOrigin, triggerAIGeneration, createStrategyDecision]); // CODE-5: triageOrigin in deps (was stale)
+  }, [user, saveActiveStrategy, toast, duration, triageOrigin, triggerAIGeneration, createStrategyDecision]); // triageOrigin in deps (was stale)
 
   const handleSeasonApply = useCallback((period: SeasonalPeriod) => {
     if (!user) {
@@ -919,7 +908,7 @@ export function WeightConfigurator({
       if (saved?.id) triggerAIGeneration(saved.id, 'seasonal_discount', weights);
       createStrategyDecision(`Εκπτωτική: ${config.periodName} (-${config.discountPercent}%)`);
     }).catch(() => {});
-  }, [user, saveActiveStrategy, toast, weights, duration, triageOrigin, triggerAIGeneration, createStrategyDecision]); // CODE-5: triageOrigin in deps (was stale)
+  }, [user, saveActiveStrategy, toast, weights, duration, triageOrigin, triggerAIGeneration, createStrategyDecision]); // triageOrigin in deps (was stale)
 
 
   const handleSaveCustomSeason = useCallback((period: SeasonalPeriod) => {
@@ -1335,9 +1324,8 @@ export function WeightConfigurator({
     setIsExportingStrategy(false);
   };
 
-  // Channel recommendation πλέον προβάλλεται/παράγεται από το Channel Activation
-  // (single source of truth). Εδώ διαβάζουμε ΜΟΝΟ το αποθηκευμένο rec για να
-  // τροφοδοτήσουμε το StrategyPackage preview.
+  // Channel recommendation is shown/generated by Channel Activation (single source of
+  // truth); here we read ONLY the saved rec to feed the StrategyPackage preview.
   const aiRecommendation = activeStrategy?.channelRecommendation ?? null;
 
   // After strategy save: generate activation + content AI (directly to Firestore, no mutation closures)
@@ -1358,7 +1346,7 @@ export function WeightConfigurator({
       } else {
         setMixConfig(null);
       }
-      // Rehydrate seasonal discount config — αλλιώς reload χάνει την επιλογή του χρήστη.
+      // Rehydrate seasonal discount config — otherwise a reload loses the user's choice.
       const savedSeasonal = (activeStrategy as any).seasonalDiscount as SeasonalDiscountConfig | undefined;
       if (activeStrategy.scenarioId === 'seasonal_discount' && savedSeasonal) {
         setSeasonalDiscountConfig(savedSeasonal);
@@ -1481,7 +1469,7 @@ export function WeightConfigurator({
             }}
           />
 
-          {/* Διάγνωση προτεραιοτήτων (Decision Buckets) πάνω από τις πολιτικές */}
+          {/* Priority diagnosis (Decision Buckets) above the policies */}
           <TriageCard
             products={products}
             onSelectPolicy={(policy, bucket, payload) => {
@@ -1896,9 +1884,8 @@ export function WeightConfigurator({
         </Card>
       </div>
 
-      {/* Συστάσεις καναλιών (segments + budget allocation + κανάλια + briefs) έχουν
-          μεταφερθεί στο Channel Activation. Εδώ ο ιδιοκτήτης ορίζει ΜΟΝΟ την εμπορική
-          πολιτική· οι λεπτομέρειες υλοποίησης ζουν δίπλα στους πίνακες ενεργοποίησης. */}
+      {/* Channel recommendations (segments + budget + channels + briefs) moved to Channel
+          Activation; here the owner sets ONLY the commercial policy. */}
 
       {/* Strategy Impact Detail Modal */}
       {pendingScenarioChange && (

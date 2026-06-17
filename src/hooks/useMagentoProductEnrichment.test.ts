@@ -5,45 +5,45 @@ const { buildImageLink, buildProductLink, inferMagentoMediaBaseUrl } = __test;
 
 describe('useMagentoProductEnrichment helpers', () => {
   describe('buildImageLink', () => {
-    it('επιστρέφει absolute URL αν δοθεί http(s)', () => {
+    it('returns the absolute URL when given an http(s) link', () => {
       expect(buildImageLink('https://shop.gr/pub/media', 'https://cdn.example.com/img.jpg')).toBe('https://cdn.example.com/img.jpg');
     });
-    it('χτίζει με βάση media + catalog/product πρόθεμα', () => {
-      expect(buildImageLink('https://safeblock.gr/pub/media', '/s/k/sku-001.jpg')).toBe(
-        'https://safeblock.gr/pub/media/catalog/product/s/k/sku-001.jpg'
+    it('builds from the media base with the catalog/product prefix', () => {
+      expect(buildImageLink('https://shop.gr/pub/media', '/s/k/sku-001.jpg')).toBe(
+        'https://shop.gr/pub/media/catalog/product/s/k/sku-001.jpg'
       );
     });
-    it('αφαιρεί διπλά slashes χωρίς να χαλάει το scheme', () => {
+    it('collapses double slashes without breaking the scheme', () => {
       expect(buildImageLink('https://shop.gr/pub/media/', '/a/b/c.jpg')).toBe('https://shop.gr/pub/media/catalog/product/a/b/c.jpg');
     });
-    it('επιστρέφει κενό αν λείπει image ή media', () => {
+    it('returns empty when the image or media base is missing', () => {
       expect(buildImageLink('https://shop.gr/pub/media', '')).toBe('');
       expect(buildImageLink('', '/a/b.jpg')).toBe('');
     });
-    it('αγνοεί το Magento no_selection ώστε να γίνει fallback σε parent εικόνα', () => {
+    it('ignores Magento no_selection so it falls back to the parent image', () => {
       expect(buildImageLink('https://shop.gr/pub/media', 'no_selection')).toBe('');
     });
   });
 
   describe('buildProductLink', () => {
-    it('χρησιμοποιεί url_key όταν υπάρχει', () => {
-      expect(buildProductLink('https://safeblock.gr', 'safeblock-pro-100', 'SBP-100')).toBe('https://safeblock.gr/safeblock-pro-100.html');
+    it('uses url_key when present', () => {
+      expect(buildProductLink('https://shop.gr', 'demo-pro-100', 'DEMO-100')).toBe('https://shop.gr/demo-pro-100.html');
     });
-    it('fallback σε catalog/product/view/sku όταν δεν υπάρχει url_key', () => {
-      expect(buildProductLink('https://safeblock.gr/', '', 'SBP-100')).toBe('https://safeblock.gr/catalog/product/view/sku/SBP-100');
+    it('falls back to catalog/product/view/sku when url_key is missing', () => {
+      expect(buildProductLink('https://shop.gr/', '', 'DEMO-100')).toBe('https://shop.gr/catalog/product/view/sku/DEMO-100');
     });
-    it('επιστρέφει κενό αν λείπει storeWebUrl', () => {
+    it('returns empty when storeWebUrl is missing', () => {
       expect(buildProductLink('', 'foo', 'BAR-1')).toBe('');
     });
   });
 
   describe('inferMagentoMediaBaseUrl', () => {
-    it('κρατάει configured mediaBaseUrl όταν υπάρχει', () => {
+    it('keeps the configured mediaBaseUrl when present', () => {
       expect(inferMagentoMediaBaseUrl('https://shop.gr/pub/media', 'https://shop.gr')).toBe('https://shop.gr/pub/media');
     });
 
-    it('κάνει fallback στο /media από storeUrl όταν λείπει mediaBaseUrl', () => {
-      expect(inferMagentoMediaBaseUrl('', 'https://www.e-tennis.gr/')).toBe('https://www.e-tennis.gr/media');
+    it('falls back to /media from storeUrl when mediaBaseUrl is missing', () => {
+      expect(inferMagentoMediaBaseUrl('', 'https://www.shop.gr/')).toBe('https://www.shop.gr/media');
     });
   });
 });

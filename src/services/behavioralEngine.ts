@@ -203,7 +203,7 @@ function getDefaultBehavioral(): BehavioralProfile {
   };
 }
 
-/** Κανονικοποίηση για SEGMENT_BEHAVIORAL_MAP (Can't → Cant, trim, κενά). */
+/** Normalize a key for SEGMENT_BEHAVIORAL_MAP (Can't -> Cant, trim, spaces). */
 export function normalizeSegmentLookupKey(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, '_').replace(/'/g, '');
 }
@@ -218,7 +218,7 @@ function getMappedBehavioralPartial(segment: RFMSegment): Partial<BehavioralProf
   );
 }
 
-/** Τιμές που βάζει το validateSegmentRow όταν λείπουν στήλες — όχι «πραγματικό» import. */
+/** Values set by validateSegmentRow when columns are missing - not a "real" import. */
 const IMPORT_TEMPLATE_DEFAULTS = {
   engagement_score: 40,
   upsell_score: 30,
@@ -244,10 +244,8 @@ function buildProfileFromMapped(mapped: Partial<BehavioralProfile>): BehavioralP
   return profile;
 }
 
-/**
- * Συγχώνευση εισαγόμενου behavioral με RFM-derived: αν το CSV είχε μόνο persona κ.λπ.
- * αλλά τα scores είναι τα template defaults (40/30/30/60), χρησιμοποιούμε τις τιμές από το map ανά segment.
- */
+/** Merge imported behavioral with RFM-derived: when the CSV had only persona etc. and scores
+ * are the template defaults (40/30/30/60), use the per-segment map values instead. */
 function mergeImportedBehavioralWithDerived(
   imported: BehavioralProfile,
   derived: BehavioralProfile
@@ -295,7 +293,7 @@ export function deriveBehavioralProfile(segment: RFMSegment): BehavioralProfile 
   return mergeImportedBehavioralWithDerived(segment.behavioral, derived);
 }
 
-/** Υπολογισμός predictive από το ίδιο behavioral profile (μετά merge) — όχι μόνο raw map. */
+/** Compute predictive metrics from the merged behavioral profile, not just the raw map. */
 function computeDerivedPredictiveMetrics(segment: RFMSegment): PredictiveMetrics {
   const profile = deriveBehavioralProfile(segment);
   const avgBasket = profile.avg_basket_size;
@@ -339,7 +337,7 @@ export function derivePredictiveMetrics(segment: RFMSegment): PredictiveMetrics 
   if (!imp) return derived;
 
   const templateChurn = Math.round(100 - IMPORT_TEMPLATE_DEFAULTS.engagement_score);
-  /** Τιμές που προκύπτουν από κενά πεδία στο CSV (ίδιο churn 60% παντού = 100 − default engagement 40). */
+  /** Value produced by empty CSV fields (same 60% churn everywhere = 100 - default engagement 40). */
   const useImportedChurn = imp.churn_risk > 0 && imp.churn_risk !== templateChurn;
   const useImportedLtv = imp.estimated_ltv > 0;
 

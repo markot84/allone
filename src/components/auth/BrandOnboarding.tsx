@@ -52,7 +52,7 @@ export function BrandOnboarding({ children }: BrandOnboardingProps) {
     );
   }
 
-  // Super admin: μπαίνει κατευθείαν στην εφαρμογή ακόμη χωρίς brand στο προφίλ (π.χ. διαχείριση, invites).
+  // Super admin: enters the app directly even without a brand on their profile (e.g. management, invites).
   if (isSuperAdmin) return <>{children}</>;
 
   if (brands.length > 0 && !brandCreated) return <>{children}</>;

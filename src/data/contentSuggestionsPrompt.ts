@@ -1,7 +1,5 @@
-/**
- * Prompt για AI Organic Content Suggestions.
- * Προτείνει θεματικές κατευθύνσεις ανά κανάλι + παραδείγματα ενεργειών βάσει στρατηγικής.
- */
+/** AI Organic Content Suggestions prompt: thematic directions per channel
+ *  plus example actions based on strategy. */
 
 import { buildAdvisorySystemPrompt } from './aiAdvisoryFramework';
 
@@ -44,11 +42,11 @@ export interface StrategyContext {
   brandProfileText?: string;
   topCategories?: string[];
   segmentNames?: string[];
-  /** Διαγνωστική ρίζα από Decision Buckets (αν η στρατηγική προέκυψε από bucket triage). */
+  /** Diagnostic root from Decision Buckets (when the strategy came from bucket triage). */
   triage?: TriageContentContext;
-  /** Snapshot πηγών δεδομένων — βοηθά το AI να καλιμπράρει τη σιγουριά του copy. */
+  /** Data source snapshot - helps the AI calibrate the confidence of its copy. */
   provenance?: ProvenanceContentContext;
-  /** Πολιτική πελατολογίου από Data Analysis. */
+  /** Customer-base policy from Data Analysis. */
   audience?: AudienceContentContext;
 }
 

@@ -20,11 +20,11 @@ export type EcommerceOrderForClassification = {
   paymentMethod?: string;
   shippingMethod?: string;
   customerEmail?: string;
-  /** Combined customer full name (e.g. "Μαμάσης Γεώργιος") — used for intercompany matching. */
+  /** Combined customer full name — used for intercompany matching. */
   customerName?: string;
-  /** Magento `store_id` από sync (μόνο δεδομένα, όχι κανόνες καναλιού — χρησιμοποιείται `orderStoreDomain`). */
+  /** Magento `store_id` from sync (data only, not a channel rule — use `orderStoreDomain`). */
   magentoStoreId?: number;
-  /** Κανονικοποιημένο hostname storefront (π.χ. shop.example.gr)· Magento multi-store / φίλτρο domain. */
+  /** Normalized storefront hostname (e.g. shop.example.gr); Magento multi-store / domain filter. */
   orderStoreDomain?: string;
 };
 
@@ -54,13 +54,13 @@ const EXCLUDED_STATUS_SET = new Set([
   'closed',
   'refunded',
   'voided',
-  /** Viva / Klarna handshake σε εξέλιξη — δεν θεωρούμε ολοκληρωμένη παραγγελία (Safeblock κ.λπ.). */
+  /** Viva / Klarna handshake in progress — not treated as a completed order. */
   'viva_klarna_undefined',
 ]);
 
 const DEFAULT_MATCH_FIELDS = ['paymentMethod', 'shippingMethod', 'orderName', 'orderId'];
 
-/** Ακριβές ταίριασμα τιμής όπου χρειάζεται (κενό: όλα substring μέσω normalize). */
+/** Exact value match where needed (empty: all matched as substring via normalize). */
 const EXACT_MATCH_FIELDS = new Set<string>();
 
 export function isExcludedEcommerceStatus(status: string | null | undefined): boolean {
@@ -103,7 +103,7 @@ export function normalizeSalesChannelRules(raw: unknown): EcommerceSalesChannelR
     .filter((rule) => rule.enabled !== false && Array.isArray(rule.patterns) && rule.patterns.length > 0);
 }
 
-/** Συγχώνευση κανόνων ανά brand· με `eshop_all` δεν εφαρμόζονται κανόνες καναλιών (άλλο revenue mode). */
+/** Merge rules per brand; with `eshop_all` no channel rules apply (different revenue mode). */
 export function mergeSalesChannelRulesForBrand(
   persistedPieces: unknown[],
   revenueSourceMode: 'eshop_classified' | 'eshop_all' | 'erp'

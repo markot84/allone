@@ -68,11 +68,11 @@ interface SalesBaseSetupModalProps {
   onContinue: (scope: SalesBaseScope) => void;
   hasConnector?: boolean;
   hasFreshWindowedStats?: boolean;
-  /** ISO YYYY-MM-DD — ημερομηνία πρώτου stock snapshot (lifetime baseline). */
+  /** ISO YYYY-MM-DD — date of the first stock snapshot (lifetime baseline). */
   stockMovementBaselineDate?: string | null;
-  /** Διαθέσιμα windows από stock movement tracking. */
+  /** Windows available from stock movement tracking. */
   hasMovementWindows?: { d7: boolean; d30: boolean; d90: boolean; any: boolean };
-  /** Αν υπάρχει procurement_inventory upload για το brand → ενεργοποιεί τον διακόπτη πηγής κατηγοριών. */
+  /** If a procurement_inventory upload exists for the brand → enables the category-source toggle. */
   hasProcurementCategories?: boolean;
   onRefreshStats?: () => Promise<void>;
 }
@@ -110,7 +110,7 @@ export function SalesBaseSetupModal({
     setCategorySource(s.categorySource ?? 'product');
   }, [isOpen, initialScope]);
 
-  // Όταν αλλάζει η πηγή κατηγοριών, καθάρισε excluded/filter — έχουν διαφορετικές ετικέτες.
+  // When the category source changes, clear excluded/filter — labels differ.
   useEffect(() => {
     setExcludedCategories([]);
     setCategoryFilter('');
@@ -162,7 +162,7 @@ export function SalesBaseSetupModal({
   );
 
   // Detect data limitation: brand has no per-window sales nor last_sale_at anywhere.
-  // Time-windowed presets are not meaningful in that case (αν δεν υπάρχει ούτε movement tracking).
+  // Time-windowed presets are not meaningful in that case (if there is no movement tracking either).
   const lacksTimeWindowSignals = useMemo(() => {
     if (!products.length) return false;
     for (const p of products) {
@@ -178,7 +178,7 @@ export function SalesBaseSetupModal({
     return true;
   }, [products]);
 
-  // Πόσες ημέρες tracking κινητικότητας έχουμε ήδη.
+  // How many days of movement tracking we already have.
   const movementDaysAvailable = useMemo(() => {
     if (!stockMovementBaselineDate) return null;
     const baseline = new Date(stockMovementBaselineDate + 'T00:00:00Z');

@@ -44,16 +44,16 @@ export type MarketingPlanReorderGroup = {
   currentStockValue: number;
   estimatedReorderQty: number;
   estimatedReorderValue: number;
-  /** 'erp' = επίσημη πρόταση ανατροφοδοσίας (Megaventory), 'estimated' = εκτίμηση από ζήτηση/stock. */
+  /** 'erp' = official replenishment suggestion (Megaventory), 'estimated' = estimate from demand/stock. */
   reorderQtySource: 'erp' | 'estimated';
-  /** Σταθμισμένο μικτό περιθώριο (%) — από ERP pricing policy, όταν υπάρχει. */
+  /** Weighted gross margin (%) — from ERP pricing policy, when available. */
   marginPct?: number;
-  /** Σταθμισμένες ημέρες επάρκειας αποθέματος — από ERP, όταν υπάρχει. */
+  /** Weighted days of stock cover — from ERP, when available. */
   daysOfCover?: number;
   action: ReorderAction;
   confidence: 'high' | 'medium' | 'low';
   rationale: string;
-  /** Αναλυτικά τα SKU της ομάδας που αναλύθηκαν (capped) — για expandable προβολή στην κάρτα. */
+  /** The group's analyzed SKUs (capped) — for expandable card view. */
   skus?: MarketingPlanSkuSuggestion[];
 };
 
@@ -82,7 +82,7 @@ export type MarketingPlanInsight = {
 };
 
 // SKU signal shape — mirrors the useful subset of ProcurementSignal (ERP/procurement).
-// Διατηρείται τοπικό για αποφυγή circular dep με τα hooks.
+// Kept local to avoid a circular dep with the hooks.
 type SkuSignal = {
   available_stock?: number;
   category?: string;
@@ -131,13 +131,13 @@ type GroupAccumulator = {
   stockValue: number;
   replenishmentQty: number;
   tiedCapital: number;
-  /** Margin σταθμισμένο με revenue */
+  /** Margin weighted by revenue */
   marginWeightedRev: number;
   marginRevBase: number;
-  /** Days-of-cover σταθμισμένο με τεμάχια */
+  /** Days-of-cover weighted by units */
   coverWeightedUnits: number;
   coverUnitsBase: number;
-  /** SKU που έχουν ήδη μετρηθεί για stock-level πεδία (αποφυγή διπλομέτρησης ανά γραμμή) */
+  /** SKUs already counted for stock-level fields (avoid double-counting per line) */
   seenSkus: Set<string>;
 };
 
@@ -177,11 +177,8 @@ function nf(value: number): string {
   return Math.round(value).toLocaleString('el-GR');
 }
 
-/**
- * Canonical SKU tokens: lowercase + split σε αλφαριθμητικά segments. Επιτρέπει join περσινών
- * πωλήσεων (variant-level SKU, π.χ. "101567-100-L3-UNSTRUNG") με ERP signals (base SKU,
- * π.χ. "101567-100") μέσω κοινού prefix.
- */
+/** Canonical SKU tokens (lowercase alphanumeric segments) — joins variant-level order SKUs
+ * with base ERP SKUs via shared prefix. */
 function canonTokens(value: unknown): string[] {
   return String(value ?? '')
     .toLowerCase()
@@ -189,11 +186,8 @@ function canonTokens(value: unknown): string[] {
     .filter((t) => t.length > 0);
 }
 
-/**
- * Δείκτης κατηγορίας ανά base/parent code από τα procurement signals: επιτρέπει σε SKU του πλήρους
- * καταλόγου (που ΔΕΝ υπάρχουν στο custom report) να «κληρονομήσουν» κατηγορία από αδελφικά SKU του
- * ίδιου μοντέλου (π.χ. ίδιο `023625-01-...` διαφορετικό μέγεθος). Index prefixes ≥2 tokens (model-specific).
- */
+/** Category index by base/parent code: lets full-catalog SKUs inherit a category from sibling
+ * SKUs of the same model. Indexes prefixes ≥2 tokens (model-specific). */
 function buildSignalCategoryIndex(
   signals: Record<string, SkuSignal>
 ): Map<string, { category?: string; subcategory?: string; brand?: string }> {
@@ -224,14 +218,14 @@ function inheritCategoryForSku(
   return null;
 }
 
-/** Demand lookup για ένα ERP SKU: full canonical key και, ως fallback, μικρότερα prefixes (≥4 chars). */
+/** Demand lookup for an ERP SKU: full canonical key and, as a fallback, shorter prefixes (≥4 chars). */
 function lookupDemandForSku(
   demandByKey: Map<string, { units: number; revenue: number }>,
   tokens: string[]
 ): { units: number; revenue: number } {
   for (let i = tokens.length; i >= 1; i--) {
     const key = tokens.slice(0, i).join('-');
-    // Το πλήρες SKU ταιριάζει πάντα· τα μικρότερα prefixes μόνο αν είναι αρκετά specific (≥4 chars).
+    // The full SKU always matches; shorter prefixes only if specific enough (≥4 chars).
     if (i < tokens.length && key.length < 4) break;
     const d = demandByKey.get(key);
     if (d) return d;
@@ -239,11 +233,10 @@ function lookupDemandForSku(
   return { units: 0, revenue: 0 };
 }
 
-// ── Name-bridge ──────────────────────────────────────────────────────────────
-// Όταν τα order SKU (π.χ. Magento) ΔΕΝ μοιράζονται κωδικοποίηση με τα ERP SKU (π.χ. Megaventory),
-// γεφυρώνουμε μέσω ονόματος προϊόντος: order line.name → inventory product.name → ERP sku → κατηγορία.
+// Name-bridge: when order SKUs (Magento) don't share an encoding with ERP SKUs (Megaventory),
+// bridge via product name: order line.name → inventory product.name → ERP sku → category.
 
-/** Greek→Latin phonetic fold: τα ονόματα συχνά γράφονται με ελληνικούς χαρακτήρες-σωσίες. */
+/** Greek→Latin phonetic fold: names are often written with look-alike Greek characters. */
 const GREEK_FOLD: Record<string, string> = {
   α: 'a', β: 'b', γ: 'g', δ: 'd', ε: 'e', ζ: 'z', η: 'i', θ: 'th', ι: 'i', κ: 'k', λ: 'l',
   μ: 'm', ν: 'n', ξ: 'x', ο: 'o', π: 'p', ρ: 'r', σ: 's', ς: 's', τ: 't', υ: 'y', φ: 'f',
@@ -279,7 +272,7 @@ interface NameBridgeIndex {
   byCollapsed: Map<string, number>;
 }
 
-/** Inverted token index πάνω στο inventory catalog (Megaventory) για fuzzy αντιστοίχιση ονομάτων. */
+/** Inverted token index over the inventory catalog (Megaventory) for fuzzy name matching. */
 function buildNameBridgeIndex(products: Product[]): NameBridgeIndex {
   const entries: NameBridgeEntry[] = [];
   const postings = new Map<string, number[]>();
@@ -303,7 +296,7 @@ function buildNameBridgeIndex(products: Product[]): NameBridgeIndex {
   return { entries, postings, byCollapsed };
 }
 
-/** Επιστρέφει το ERP sku (canonical) που αντιστοιχεί στο όνομα της γραμμής, ή null. */
+/** Returns the canonical ERP sku matching the line's name, or null. */
 function resolveNameToSku(index: NameBridgeIndex, rawName: unknown): { skuCanon: string; exact: boolean } | null {
   const toks = nameTokens(rawName);
   const collapsed = toks.join('');
@@ -374,8 +367,8 @@ export function buildInventoryLookupFromSignals(
     if (id) byProductId.set(id, product);
   }
 
-  // Procurement/ERP signals: authoritative για stock + category/supplier/margin/cover.
-  // (Megaventory/procurement uploads → ΚΑΤΗΓΟΡΙΑ/ΠΡΟΜΗΘΕΥΤΗΣ/ΟΜΑΔΑ_ΡΟΗΣ κ.λπ.)
+  // Procurement/ERP signals: authoritative for stock + category/supplier/margin/cover.
+  // (Megaventory/procurement uploads → category/supplier/flow-group etc.)
   for (const [sku, sig] of Object.entries(procurementSignals)) {
     if (sig.available_stock == null) continue;
     const key = normalizeKey(sku);
@@ -394,7 +387,7 @@ export function buildInventoryLookupFromSignals(
       bySku.set(key, {
         ...existing,
         stock: sig.available_stock,
-        // Συμπληρώνουμε από signal μόνο ό,τι λείπει από το product catalog.
+        // Fill from the signal only what's missing from the product catalog.
         category: existing.category !== 'Uncategorized' ? existing.category : sigCategory || 'Uncategorized',
         subcategory: existing.subcategory || sigSub,
         brand: existing.brand || sigBrand,
@@ -484,12 +477,8 @@ export function buildMarketingPlanInsight(input: {
   const inventoryProducts = input.inventoryProducts ?? [];
   const hasErp = Object.keys(signals).length > 0;
 
-  // ── ERP universe ──────────────────────────────────────────────────────────
-  // Τα procurement signals (custom report) είναι συχνά ΥΠΟΣΥΝΟΛΟ του πλήρους ERP καταλόγου
-  // (π.χ. e-tennis: 724 signals έναντι ~6.266 ενεργών SKU στο `products`). Όταν ο κατάλογος είναι
-  // ουσιαστικά μεγαλύτερος, διευρύνουμε το «σύμπαν» SKU με τα προϊόντα του καταλόγου ώστε το coverage
-  // να αντικατοπτρίζει ΟΛΑ τα ενεργά SKU. Τα signals υπερισχύουν (κατηγορία/margin/ανατροφοδοσία)·
-  // για product-only SKU δοκιμάζουμε κληρονομιά κατηγορίας από αδελφικά (ίδιο base/parent code).
+  // ERP universe: procurement signals are often a subset of the catalog, so expand with catalog
+  // products for full coverage. Signals take precedence; product-only SKUs inherit sibling category.
   const expandUniverse = hasErp && inventoryProducts.length > Object.keys(signals).length;
   const universeSignals: Record<string, SkuSignal> = { ...signals };
   if (expandUniverse) {
@@ -511,22 +500,21 @@ export function buildMarketingPlanInsight(input: {
     }
   }
 
-  // Canonical keys ΟΛΟΥ του universe (signals + κατάλογος) — για matchedLines + prefix join με
-  // variant-level order SKUs. Έτσι το «SKU MATCH» αντανακλά τον πλήρη κατάλογο, όχι μόνο το report.
+  // Canonical keys for the whole universe (signals + catalog) — for matchedLines + prefix join
+  // with variant-level order SKUs, so SKU match reflects the full catalog, not just the report.
   const signalCanonSet = new Set<string>();
   for (const k of Object.keys(universeSignals)) {
     const t = canonTokens(k);
     if (t.length) signalCanonSet.add(t.join('-'));
   }
 
-  // Name-bridge index (μόνο όταν υπάρχει ERP + inventory catalog): γεφυρώνει order names → ERP sku
-  // για brands όπου τα order SKU δεν μοιράζονται κωδικοποίηση με το ERP (π.χ. Magento ↔ Megaventory).
+  // Name-bridge index (only when ERP + inventory catalog exist): bridges order names → ERP sku
+  // for stores where order SKUs don't share an encoding with the ERP (e.g. Magento ↔ Megaventory).
   const nameIndex = hasErp && inventoryProducts.length > 0 ? buildNameBridgeIndex(inventoryProducts) : null;
   const bridgedSkus = new Map<string, 'exact' | 'fuzzy'>();
 
-  // ── 1. Ζήτηση από τις περσινές παραγγελίες (πάντα) ──────────────────────────
-  // Συσσωρεύουμε ζήτηση σε ΟΛΑ τα prefixes του SKU, ώστε ένα base ERP SKU να βρίσκει το άθροισμα
-  // των variants του (π.χ. όλα τα μεγέθη/χρώματα).
+  // 1. Demand from last year's orders: accumulate across ALL SKU prefixes, so a base ERP SKU
+  // finds the sum of its variants (sizes/colors).
   const demandByKey = new Map<string, { units: number; revenue: number }>();
   let revenue = 0;
   let orders = 0;
@@ -543,7 +531,7 @@ export function buildMarketingPlanInsight(input: {
     revenue += Number(order.total) || 0;
     for (const line of order.lineItems) {
       if (isEcommerceDemoLineItem(line)) continue;
-      // Magento configurable: η child (simple) γραμμή διπλομετρά ποσότητα — κρατάμε μόνο τη γονική.
+      // Magento configurable: the child (simple) line double-counts quantity — keep only the parent.
       if ((line as any).parentItemId != null) continue;
       const quantity = Number(line.quantity ?? 0) || 0;
       if (quantity <= 0) continue;
@@ -562,7 +550,7 @@ export function buildMarketingPlanInsight(input: {
           if (!matched && (i === tokens.length || key.length >= 4) && signalCanonSet.has(key)) matched = true;
         }
       }
-      // Fallback: αν το SKU δεν αντιστοιχεί σε ERP signal, δοκίμασε γέφυρα μέσω ονόματος.
+      // Fallback: if the SKU doesn't match an ERP signal, try bridging via name.
       if (hasErp && !matched && nameIndex) {
         const bridged = resolveNameToSku(nameIndex, (line as any).name ?? (line as any).title);
         if (bridged) {
@@ -580,9 +568,8 @@ export function buildMarketingPlanInsight(input: {
     }
   }
 
-  // ── 2. Reorder plan ─────────────────────────────────────────────────────────
-  // ERP-driven όταν υπάρχουν procurement signals (αυθεντική πηγή αποθέματος + ανατροφοδοσίας),
-  // αλλιώς fallback στην order-driven λογική (catalog lookup) για brands χωρίς ERP.
+  // 2. Reorder plan: ERP-driven when procurement signals exist (authoritative for stock +
+  // replenishment), otherwise order-driven catalog lookup for stores without ERP.
   let reorderPlan: MarketingPlanReorderGroup[];
   let skuSuggestions: MarketingPlanSkuSuggestion[];
   let totalSkusCovered: number;
@@ -642,8 +629,8 @@ export function buildMarketingPlanInsight(input: {
   };
 }
 
-// ── ERP-driven reorder: τα procurement signals είναι το «σύμπαν» (κατηγορία/απόθεμα/ανατροφοδοσία),
-//    με τις περσινές πωλήσεις ως enrichment ζήτησης (join ανά SKU). ───────────────────────────
+// ERP-driven reorder: procurement signals are the universe (category/stock/replenishment),
+// with last year's sales as demand enrichment (join per SKU).
 function buildErpDrivenReorder(
   signals: Record<string, SkuSignal>,
   demandByKey: Map<string, { units: number; revenue: number }>,
@@ -662,7 +649,7 @@ function buildErpDrivenReorder(
   let totalSkus = 0;
 
   for (const [rawSku, sig] of Object.entries(signals)) {
-    // Αγνόησε ανενεργά SKU χωρίς απόθεμα/ανατροφοδοσία/κατηγορία.
+    // Skip inactive SKUs with no stock/replenishment/category.
     if (sig.available_stock == null && (sig.replenishment_qty ?? 0) <= 0 && !sig.category) continue;
     totalSkus += 1;
 
@@ -697,13 +684,13 @@ function buildErpDrivenReorder(
     g.replenishmentQty += repl;
     g.replenishmentValue += replValue;
     g.tiedCapital += tied;
-    // Margin σταθμισμένο με αξία (περσινή πώληση ή αξία αποθέματος), cover σταθμισμένο με απόθεμα.
+    // Margin weighted by value (last year's sales or stock value), cover weighted by stock.
     const mw = lyRev > 0 ? lyRev : stock * price > 0 ? stock * price : 1;
     if (margin != null) { g.marginWeighted += margin * mw; g.marginBase += mw; }
     if (cover != null) { const cb = Math.max(1, stock); g.coverWeighted += cover * cb; g.coverBase += cb; }
     groups.set(key, g);
 
-    // SKU-level πρόταση: ERP ανατροφοδοσία ή ζήτηση που ξεπερνά το απόθεμα.
+    // SKU-level suggestion: ERP replenishment or demand exceeding stock.
     const needsReorder = repl > 0 || (lyUnits > 0 && stock < lyUnits);
     const qty = repl > 0 ? repl : reorderQty(lyUnits, stock);
     const skuRow: MarketingPlanSkuSuggestion = {
@@ -727,9 +714,9 @@ function buildErpDrivenReorder(
               ? 'medium'
               : 'low',
     };
-    // Κάθε αναλυμένο SKU στην ομάδα (για expandable προβολή· ταξινόμηση κατά αξία/ζήτηση).
+    // Every analyzed SKU in the group (for expandable view; sorted by value/demand).
     g.skus.push({ row: skuRow, sortValue: replValue || lyRev || stock * price || qty });
-    // Global top-SKU opportunities: μόνο όσα χρειάζονται πραγματικά παραγγελία.
+    // Global top-SKU opportunities: only those that actually need an order.
     if (needsReorder && qty > 0) {
       skuRows.push({ row: skuRow, sortValue: replValue || lyRev || qty * price });
     }
@@ -789,7 +776,7 @@ function buildErpDrivenReorder(
           .map((s) => s.row),
       };
     })
-    // Προτεραιότητα: ομάδες που χρειάζονται παραγγελία πρώτα, μετά κατά αξία ανατροφοδοσίας/ζήτησης.
+    // Priority: groups needing an order first, then by replenishment/demand value.
     .sort((a, b) => {
       const ai = a.action === 'increase' ? 1 : 0;
       const bi = b.action === 'increase' ? 1 : 0;
@@ -806,7 +793,7 @@ function buildErpDrivenReorder(
   return { reorderPlan, skuSuggestions, totalSkus };
 }
 
-// ── Order-driven reorder (fallback χωρίς ERP): join περσινών line items με catalog lookup. ──
+// ── Order-driven reorder (fallback without ERP): join last year's line items with catalog lookup. ──
 function buildOrderDrivenReorder(
   lastYearOrders: EcommerceRawOrder[],
   lookup: ProductLookup,

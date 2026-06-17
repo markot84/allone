@@ -20,7 +20,7 @@ interface PriceInsightsData {
   items: PriceInsight[];
   count: number;
   syncedAt: any;
-  /** Merchant Center account display name (ο «πωλητής» στο Google Shopping). */
+  /** Merchant Center account display name (the "seller" in Google Shopping). */
   sellerName?: string | null;
 }
 

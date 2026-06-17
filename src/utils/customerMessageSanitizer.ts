@@ -1,21 +1,8 @@
-/**
- * Defense-in-depth sanitizer για AI-generated customer-facing messages.
- *
- * Φιλοσοφία (per user request): καθαρό εμπορικό μήνυμα, χωρίς καμία αναφορά
- * στον τύπο/ομάδα του πελάτη. Καμία προσφώνηση τύπου «Αγαπητοί πελάτες»,
- * «Ως αγαπημένοι μας πελάτες», «για τους πιστούς μας φίλους» κλπ. Μόνο η
- * εμπορική πρόταση + CTA.
- *
- * Pipeline:
- *  1. JARGON REPLACEMENT — αντικαθιστά internal terms με consumer-friendly
- *  2. SEGMENT NAME STRIPPING — αφαιρεί κάθε αναφορά segment ονόματος
- *  3. CUSTOMER ADDRESSING REMOVAL — αφαιρεί προσφωνήσεις (Ως..., Αγαπητοί..., για τους...)
- *  4. ARTICLE/GRAMMAR CLEANUP
- *  5. WHITESPACE CLEANUP
- */
+/** Sanitizer for AI-generated customer-facing messages: strips jargon, segment names, salutations, then cleans grammar/whitespace.
+ * Output is plain commercial copy + CTA with no reference to the customer's type/segment. */
 
 const SEGMENT_NAMES = [
-  // multi-word πρώτα
+  // multi-word first
   'Loyal Customers',
   'New Customers',
   'Recent Customers',
@@ -37,10 +24,7 @@ const SEGMENT_NAMES = [
   'Lost',
 ];
 
-/**
- * Φράσεις που ακούγονται παρακλητικές/ικετευτικές — αφαιρούνται εντελώς.
- * Στόχος: αυτοπεποίθηση και εμπορικός τόνος, όχι «μας λείψατε, γυρίστε σας παρακαλούμε».
- */
+/** Pleading/begging phrases removed entirely to keep a confident commercial tone. */
 const NEEDY_PHRASES: RegExp[] = [
   /Σας\s+έχουμε\s+χάσει[!.,·]?\s*/gi,
   /Μας\s+λείψατε[!.,·]?\s*/gi,
@@ -48,7 +32,7 @@ const NEEDY_PHRASES: RegExp[] = [
   /Σας\s+περιμένουμε(?:\s+πίσω)?[!.,·]?\s*/gi,
   /(?:Σας\s+)?θέλουμε\s+(?:πίσω|να\s+σας\s+κερδίσουμε)[!.,·]?\s*/gi,
   /(?:Έχει\s+καιρό|Πάει\s+καιρός)\s+(?:από\s+την\s+τελευταία\s+σας\s+επίσκεψη|που\s+σας\s+είδαμε|που\s+δε\s+σας\s+είδαμε)[!.,·]?\s*/gi,
-  /Επιστρέψτε(?!\s+με\s+\d)[!.,·]?\s*/gi, // «Επιστρέψτε!» μόνο του (αν δεν συνοδεύεται από ποσοστό/προσφορά)
+  /Επιστρέψτε(?!\s+με\s+\d)[!.,·]?\s*/gi, // "Come back!" on its own (not followed by a percentage/offer)
 ];
 
 const JARGON_MAP: Array<{ pattern: RegExp; replacement: string }> = [
@@ -82,7 +66,7 @@ const JARGON_MAP: Array<{ pattern: RegExp; replacement: string }> = [
 
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** Έλεγχος αν ένα κείμενο περιέχει οποιαδήποτε forbidden phrase. */
+/** Check whether a text contains any forbidden phrase. */
 export function containsForbiddenContent(text: string | undefined | null): boolean {
   if (!text) return false;
   // Segment name
@@ -93,7 +77,7 @@ export function containsForbiddenContent(text: string | undefined | null): boole
   // Customer-addressing prefixes (forbidden by design — we want pure commercial copy)
   if (/\b(Αγαπητο[ίύ]|Αγαπημένο[ιυ])\s+(?:μας\s+)?(?:πελάτες|φίλοι|χρήστες)/i.test(text)) return true;
   if (/\bΩς\s+(?:ένας?\s+από\s+τους?\s+)?(?:αγαπημένοι?|αγαπημένους?|αγαπητο[ίύ]ς?|πιστο[ίύ]ς?|εκλεκτο[ίύ]ς?|τακτικο[ίύ]ς?)\s+(?:μας\s+)?(?:πελάτες|πελάτη|φίλοι|φίλε|υποστηρικτές)/i.test(text)) return true;
-  // Παρακλητικός / ικετευτικός τόνος
+  // Pleading / begging tone
   for (const re of NEEDY_PHRASES) {
     re.lastIndex = 0;
     if (re.test(text)) return true;
@@ -105,57 +89,51 @@ export function containsForbiddenContent(text: string | undefined | null): boole
   });
 }
 
-/**
- * Καθαρίζει customer-facing message:
- *  - segment names
- *  - internal jargon
- *  - προσφωνήσεις/αναφορές τύπου πελάτη («Ως ...», «Αγαπητοί ...», «για τους ... της X»)
- */
+/** Sanitizes a customer-facing message: removes segment names, internal jargon, and salutations/customer-type references. */
 export function sanitizeCustomerMessage(text: string | undefined | null): string {
   if (!text) return '';
   let result = text;
 
-  // ── PASS 1: Jargon → consumer-friendly ──
+  // PASS 1: Jargon -> consumer-friendly
   for (const { pattern, replacement } of JARGON_MAP) {
     pattern.lastIndex = 0;
     result = result.replace(pattern, replacement);
   }
 
-  // ── PASS 2: Strip segment names ──
+  // PASS 2: Strip segment names
   for (const seg of SEGMENT_NAMES) {
     const segEsc = escapeRegex(seg);
     result = result.replace(new RegExp(`«\\s*${segEsc}\\s*»`, 'gi'), '');
     result = result.replace(new RegExp(`\\b${segEsc}\\b`, 'gi'), '');
   }
 
-  // Συμπτύσσουμε whitespace ώστε να δουλέψουν αξιόπιστα τα επόμενα patterns
+  // Collapse whitespace so the following patterns work reliably
   result = result.replace(/[ \t]+/g, ' ');
 
-  // ── PASS 3: ΑΦΑΙΡΕΣΗ ΠΡΟΣΦΩΝΗΣΕΩΝ / ΑΝΑΦΟΡΩΝ ΣΕ ΤΥΠΟ ΠΕΛΑΤΗ ──
-  // Στόχος: καθαρό εμπορικό μήνυμα. Καμία αναφορά στον αποδέκτη ως ομάδα.
-  // Λέξεις «πελάτης» οικογένειας — αυτές δηλώνουν αναφορά σε ομάδα/τύπο πελάτη.
+  // PASS 3: remove salutations / customer-type references (no reference to the recipient as a group).
+  // "customer"-family words denote a reference to a customer group/type.
   const CUST_NOUN = '(?:πελάτες|πελάτη|πελατών|φίλοι|φίλους|φίλο|φίλε|φίλων|υποστηρικτές|υποστηρικτών|αγοραστές|αγοραστών|χρήστες|χρήστη|χρηστών)';
-  // Greek word με optional capital
+  // Greek word with optional capital
   const GR_WORD = '[Α-Ωα-ωΆ-Ώά-ώa-zA-Z]+';
 
   result = result
-    // «Ως [up to 6 words] πελάτης/φίλοι/... [της/του Brand][, .]» → ""
+    // "As [up to 6 words] customer/friends/... [of-the Brand][, .]" -> ""
     .replace(
       new RegExp(`\\bΩς\\s+(?:${GR_WORD}\\s+){0,6}?${CUST_NOUN}(?:\\s+(?:της|του|μας)\\s+${GR_WORD})?[,.!?·]?\\s*`, 'g'),
       ''
     )
-    // «Ως της/του Brand[, .]» → ""  (residual)
+    // "As of-the Brand[, .]" -> ""  (residual)
     .replace(new RegExp(`\\bΩς\\s+(?:της|του)\\s+${GR_WORD}[,.!?·]?\\s*`, 'g'), '')
-    // Σκέτο «Ως [, .]» → ""
+    // Bare "As [, .]" -> ""
     .replace(/\bΩς\s*[,.!?·]?\s*/g, '')
-    // «Αγαπητοί/Αγαπημένοι [up to 3 words] (πελάτες|φίλοι)?[, .]» → ""
+    // "Dear/Beloved [up to 3 words] (customers|friends)?[, .]" -> ""
     .replace(
       new RegExp(`\\b(?:Αγαπητο[ίύ]ς?|Αγαπημένο[ιυυς]ς?)\\s+(?:${GR_WORD}\\s+){0,3}?(?:${CUST_NOUN})?[,.!?·]?\\s*`, 'g'),
       ''
     )
-    // residual «Αγαπητοί ,» / «Αγαπημένοι .»
+    // residual "Dear ," / "Beloved ."
     .replace(/\b(?:Αγαπητο[ίύ]ς?|Αγαπημένο[ιυυς]ς?)\s*[,.!?·]?\s*/g, '')
-    // «προσφορές/εκπτώσεις/τιμές/ευκαιρίες για τους ... της Brand[!.?]» → «προσφορές[!.?]»
+    // "offers/discounts/prices/opportunities for the ... of-the Brand[!.?]" -> "offers[!.?]"
     .replace(
       new RegExp(
         `\\b(προσφορές|εκπτώσεις|ειδικές\\s+τιμές|τιμές|ευκαιρίες)\\s+για\\s+(?:τους|τις|τον|την|τα)\\s+(?:${GR_WORD}\\s+){0,5}?(?:της|του|μας)\\s+${GR_WORD}(\\s*[!.?·])`,
@@ -163,7 +141,7 @@ export function sanitizeCustomerMessage(text: string | undefined | null): string
       ),
       '$1$2'
     )
-    // «προσφορές για τους πελάτες/φίλους/...» → «προσφορές»
+    // "offers for the customers/friends/..." -> "offers"
     .replace(
       new RegExp(
         `\\b(προσφορές|εκπτώσεις|ειδικές\\s+τιμές|τιμές|ευκαιρίες)\\s+για\\s+(?:τους|τις|τον|την|τα)\\s+(?:${GR_WORD}\\s+){0,5}?${CUST_NOUN}(?:\\s+(?:της|του|μας)\\s+${GR_WORD})?`,
@@ -171,7 +149,7 @@ export function sanitizeCustomerMessage(text: string | undefined | null): string
       ),
       '$1'
     )
-    // «για τους ... πελάτες/φίλους/... της Brand» (μέσα σε φράση) → ""
+    // "for the ... customers/friends/... of-the Brand" (mid-phrase) -> ""
     .replace(
       new RegExp(
         `\\bγια\\s+(?:τους|τις|τον|την|τα)\\s+(?:${GR_WORD}\\s+){0,5}?${CUST_NOUN}(?:\\s+(?:της|του|μας)\\s+${GR_WORD})?`,
@@ -179,7 +157,7 @@ export function sanitizeCustomerMessage(text: string | undefined | null): string
       ),
       ''
     )
-    // «για τους ... της Brand» (χωρίς το «πελάτες», π.χ. μετά strip segment)
+    // "for the ... of-the Brand" (without "customers", e.g. after segment strip)
     .replace(
       new RegExp(
         `\\bγια\\s+(?:τους|τις|τον|την|τα)\\s+(?:${GR_WORD}\\s+){0,5}?(?:της|του|μας)\\s+${GR_WORD}`,
@@ -187,9 +165,9 @@ export function sanitizeCustomerMessage(text: string | undefined | null): string
       ),
       ''
     )
-    // «για τους/τις [, .]» orphan
+    // "for the [, .]" orphan
     .replace(/\bγια\s+(?:τους|τις|τον|την|τα)\s*(?=[,.!?·])/gi, '')
-    // «προς τους ... της Brand» → ""
+    // "to the ... of-the Brand" -> ""
     .replace(
       new RegExp(
         `\\bπρος\\s+(?:τους|τις|τον|την|τα)\\s+(?:${GR_WORD}\\s+){0,5}?(?:της|του|μας)\\s+${GR_WORD}`,
@@ -197,24 +175,24 @@ export function sanitizeCustomerMessage(text: string | undefined | null): string
       ),
       ''
     )
-    // «προς τους πελάτες» → ""
+    // "to the customers" -> ""
     .replace(
       new RegExp(`\\bπρος\\s+(?:τους|τις|τον|την|τα)\\s+(?:${GR_WORD}\\s+){0,3}?${CUST_NOUN}`, 'gi'),
       ''
     );
 
-  // ── PASS 3.5: Strip παρακλητικές/ικετευτικές φράσεις ──
+  // PASS 3.5: Strip pleading/begging phrases
   for (const re of NEEDY_PHRASES) {
     re.lastIndex = 0;
     result = result.replace(re, '');
   }
 
-  // ── PASS 4: Article fixes μετά τα jargon replacements ──
+  // PASS 4: Article fixes after the jargon replacements
   result = result
     .replace(/\b(από|στο|στον|στην|στη|με|σε)\s+(το|τον|την|τη)\s+(επιλεγμένα|μοναδικές|ειδικές)\b/gi, '$1 $3')
     .replace(/\b(του|της|το|τον|την|τη)\s+(επιλεγμένα\s+προϊόντα)\b/gi, '$2');
 
-  // ── PASS 5: Whitespace & punctuation cleanup ──
+  // PASS 5: Whitespace & punctuation cleanup
   result = result
     .replace(/\s+/g, ' ')
     .replace(/\s+([,.!?·])/g, '$1')
@@ -223,7 +201,7 @@ export function sanitizeCustomerMessage(text: string | undefined | null): string
     .replace(/^\s*[,.!?·]\s*/g, '')
     .trim();
 
-  // Capitalize πρώτο γράμμα
+  // Capitalize first letter
   if (result.length > 0) {
     result = result.charAt(0).toUpperCase() + result.slice(1);
   }

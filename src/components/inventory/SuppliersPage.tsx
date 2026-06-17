@@ -59,7 +59,7 @@ export function SuppliersPage() {
   const [newLeadTime, setNewLeadTime] = useState(0);
   const [newContact, setNewContact] = useState('');
 
-  /** Numeric filter: υποστηρίζει "10", ">=10", "<=20", "10-20". Κενό = όλα. */
+  /** Numeric filter: supports "10", ">=10", "<=20", "10-20". Empty = all. */
   const matchNumeric = (val: number, expr: string): boolean => {
     const e = expr.trim();
     if (!e) return true;

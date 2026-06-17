@@ -9,20 +9,14 @@ export interface UploadProgress {
   percentage: number;
 }
 
-/**
- * Upload brand asset (logo, images, etc.) to Firebase Storage
- * @param file - File to upload
- * @param brandId - Brand ID
- * @param assetType - Type of asset (logo, image, etc.)
- * @returns Download URL
- */
+/** Upload brand asset (logo, image, document) to Firebase Storage; returns download URL. */
 export async function uploadBrandAsset(
   file: File,
   brandId: string,
   assetType: 'logo' | 'image' | 'document' = 'image'
 ): Promise<string> {
   try {
-    // Validate file type. SEC-L7: SVG is excluded — an uploaded SVG can carry inline
+    // Validate file type. SVG is excluded — an uploaded SVG can carry inline
     // <script>, which would be stored XSS when the asset is opened same-origin.
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!allowedTypes.includes(file.type) && assetType !== 'document') {
@@ -54,10 +48,7 @@ export async function uploadBrandAsset(
   }
 }
 
-/**
- * Delete brand asset from Firebase Storage
- * @param url - Download URL of the asset to delete
- */
+/** Delete brand asset from Firebase Storage by its download URL. */
 export async function deleteBrandAsset(url: string): Promise<void> {
   try {
     // Extract path from URL
@@ -78,12 +69,7 @@ export async function deleteBrandAsset(url: string): Promise<void> {
   }
 }
 
-/**
- * Get all assets for a brand
- * @param brandId - Brand ID
- * @param assetType - Optional filter by asset type
- * @returns Array of download URLs
- */
+/** Get all asset download URLs for a brand, optionally filtered by asset type. */
 export async function getBrandAssets(
   brandId: string,
   assetType?: 'logo' | 'image' | 'document'
@@ -109,11 +95,7 @@ export async function getBrandAssets(
   }
 }
 
-/**
- * Get asset URL - works for both localhost and production
- * If URL is already a full URL, returns as-is
- * If URL is a relative path, constructs full URL
- */
+/** Resolve asset URL for localhost and production: full URLs pass through, relative paths get a base. */
 export function getAssetUrl(url: string | undefined | null): string | null {
   if (!url) return null;
   
@@ -127,9 +109,7 @@ export function getAssetUrl(url: string | undefined | null): string | null {
     return url;
   }
   
-  // If relative path, construct URL based on environment
-  // In production, assets are served from Firebase Storage
-  // In development, you might want to serve from public folder
+  // Relative path: build URL from origin (prod serves from Firebase Storage).
   if (url.startsWith('/')) {
     // Remove leading slash and construct URL
     const cleanPath = url.substring(1);

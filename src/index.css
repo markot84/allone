@@ -10,24 +10,24 @@
   --nts-light-gray: #f6f8fa;
   --nts-border-gray: #d0d7de;
 
-  /* Background scale (white → black, ήπια ένταση) */
+  /* Background scale (white → black, soft intensity) */
   --nts-bg-pure: #ffffff;
   --nts-bg-subtle: #fafafa;
   --nts-bg-muted: #f5f5f5;
   --nts-bg-strong: #e5e5e5;
   --nts-bg-dark: #171717;
 
-  /* Accent – solid, έντονο πορτοκαλί */
+  /* Accent – solid, strong orange */
   --nts-accent: #F97316;
   --nts-accent-hover: #EA580C;
   --nts-accent-light: #FFEDD5;
 
-  /* Accent (legacy – links) — ΚΛΑΣΙΚΟ default (μπλε links, όπως προϋπήρχε) */
+  /* Accent (legacy – links) — classic default (blue links, as before) */
   --nts-orange: #0969da;
   --nts-orange-hover: #0550ae;
   --nts-orange-light: #ddf4ff;
 
-  /* App chrome (header + sidebar) & canvas — classic: ουδέτερο σκούρο + λευκό canvas */
+  /* App chrome (header + sidebar) & canvas — classic: neutral dark + white canvas */
   --app-chrome-bg: #111111;
   --app-canvas-bg: #ffffff;
   
@@ -53,10 +53,8 @@
   --lost: #EF4444;
 }
 
-/* ── Accent themes (per-user, μέσω data-accent στο <html>) ──────────────────────
-   ΤΟΛΜΗΡΟ theming: το accent οδηγεί links/active-nav, το chrome (header+sidebar)
-   παίρνει ΕΝΤΟΝΟ colored-dark, και το canvas ένα ελαφρύ accent wash (οι λευκές
-   κάρτες ξεχωρίζουν). Τα semantic χρώματα (success/danger/warning) μένουν σταθερά. */
+/* Accent themes (per-user, via data-accent on <html>): accent drives links/active-nav,
+   chrome gets colored-dark, canvas a light wash; semantic colors stay fixed. */
 :root[data-accent="orange"] {
   --nts-accent: #F97316;
   --nts-accent-hover: #EA580C;
@@ -118,7 +116,7 @@
   --app-canvas-bg: #FFF4F6;
 }
 
-/* ── Combos: accent + ΑΝΤΙΘΕΤΟ chrome (duo-tone, σαν το classic με χαρακτήρα) ──── */
+/* ── Combos: accent + opposite chrome (duo-tone, like classic with character) ──── */
 :root[data-accent="midnight"] {
   --nts-accent: #38BDF8;
   --nts-accent-hover: #0EA5E9;
@@ -170,7 +168,7 @@
   --app-canvas-bg: #F0FBFC;
 }
 
-/* ── Τριχρωμίες: accent + chrome + secondary (chart) ─────────────────────────── */
+/* ── Tri-color: accent + chrome + secondary (chart) ──────────────────────────── */
 :root[data-accent="sunset"] {
   --nts-accent: #F97316;
   --nts-accent-hover: #EA580C;
@@ -232,8 +230,7 @@
   --nts-chart-secondary-light: #FEE2E2;
 }
 
-/* IMPORTANT: Do NOT zero out margins/paddings globally when using Primer.
-   It breaks spacing + component layout. Keep only box-sizing. */
+/* Do NOT zero out margins/paddings globally with Primer — breaks layout. Keep only box-sizing. */
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -315,7 +312,7 @@ a:hover {
   text-decoration: underline;
 }
 
-/* App shell logo (onDark): λευκό wordmark + πορτοκαλί + — πάνω από Primer / global `a` */
+/* App shell logo (onDark): white wordmark + orange + — over Primer / global `a` */
 .perf-plus-logo--on-dark .perf-plus-logo-word {
   color: #ffffff !important;
 }

@@ -1,13 +1,5 @@
-/**
- * Magento product enrichment για Ads Feed:
- * - Συγκεντρώνει τα ωμά Magento products από `magento_products` (ανά brandId)
- *   και το connector config (`storeWebUrl`, `mediaBaseUrl`) από `connectors/{brandId}.magento`.
- * - Επιστρέφει lookup map ανά SKU με image_link, link, description, gtin, mpn,
- *   color, size, item_group_id (parent SKU), category path κ.λπ.
- *
- * Δεν αγγίζει το unified `products` collection — η συγχώνευση γίνεται στο UI layer
- * όπου χρειάζεται (π.χ. Channel Activation → Ads Feed export/preview).
- */
+/** Magento product enrichment for the Ads Feed: builds a per-SKU lookup from `magento_products`
+ * + `connectors/{brandId}.magento`; doesn't touch `products` (merge happens in the UI). */
 import { useQuery } from '@tanstack/react-query';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';

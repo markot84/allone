@@ -113,7 +113,7 @@ describe('buildMarketingPlanInsight', () => {
         fromDate: '2026-06-01',
         toDate: '2026-06-30',
       },
-      // Megaventory catalog: ERP sku + όνομα (διαφορετική κωδικοποίηση από Magento).
+      // Megaventory catalog: ERP sku + name (different coding scheme from Magento).
       inventoryProducts: [
         product({ sku: '0000278-320', name: 'Babolat Pro Hurricane Tour String 200m', category: 'Strings' }),
       ],
@@ -129,7 +129,7 @@ describe('buildMarketingPlanInsight', () => {
       lastYearOrders: [
         order({
           lineItems: [
-            // Magento configurable: parent (μετράει) + child (αγνοείται). SKU «243102» ≠ ERP «0000278».
+            // Magento configurable: parent (counts) + child (ignored). SKU «243102» != ERP «0000278».
             { sku: '243102-1.30mm', name: 'Babolat Pro Hurricane Τοur String 200m', quantity: 3, price: 90, rowTotal: 270, itemId: 1, parentItemId: null, productType: 'configurable' },
             { sku: '243102-1.30mm', name: 'Babolat Pro Hurricane Τοur String 200m-1.30mm', quantity: 3, price: 0, rowTotal: 0, itemId: 2, parentItemId: 1, productType: 'simple' },
           ],
@@ -139,7 +139,7 @@ describe('buildMarketingPlanInsight', () => {
 
     const group = insight.reorderPlan[0];
     expect(group.category).toBe('Cordage tennis');
-    // Demand γεφυρώθηκε μέσω ονόματος (3 τεμ., όχι 6 — η child γραμμή αγνοήθηκε).
+    // Demand bridged via name (3 units, not 6 — the child line was ignored).
     expect(group.lastYearUnits).toBe(3);
     expect(group.action).toBe('increase');
     expect(insight.evidence.matchedLines).toBe(1);

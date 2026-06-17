@@ -1,10 +1,5 @@
-/**
- * GrowthPlayPanel — Εμφανίζεται στο Channel Activation όταν ο χρήστης έρθει
- * από AI insight με play context (cross_sell, upsell, winback).
- *
- * Αξιοποιεί το marketingBrief (AI-generated, ήδη αποθηκευμένο στο channelPlaybook)
- * + category_affinity από RFM segments για να παράγει ολοκληρωμένες προτάσεις.
- */
+/** Channel Activation panel for arrivals from an AI insight with a play context (cross_sell, upsell, winback).
+ * Combines channelPlaybook marketingBrief + RFM category_affinity into complete proposals. */
 
 import { useState, useMemo } from 'react';
 import {

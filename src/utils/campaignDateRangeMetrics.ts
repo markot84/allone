@@ -1,7 +1,4 @@
-/**
- * Ίδια λογική με τη σελίδα Campaigns: περιοδικό slice σε dailyMetrics / aggregates
- * ώστε ROI, hooks και exports να μην ξαναϋπολογίζουν με διαφορετικούς κανόνες.
- */
+/** Same as the Campaigns page: date-range slice over dailyMetrics/aggregates so ROI, hooks and exports share one rule. */
 import type { Campaign } from '../types';
 import { bucketOverlapFraction, metaUsesLegacyMonthBuckets } from './roiUtils';
 
@@ -92,7 +89,7 @@ function scaleConversionActions(
   return out;
 }
 
-/** Φίλτρο ίδιο με Campaigns: επικάλυψη χρονοδιαγράμματος καμπάνιας με [from, to). */
+/** Same filter as Campaigns: campaign schedule overlap with [from, to). */
 export function filterCampaignsByScheduleDateOverlap(
   campaigns: Campaign[],
   dateFrom: string,
@@ -112,10 +109,7 @@ export function filterCampaignsByScheduleDateOverlap(
   });
 }
 
-/**
- * Αναλυτικά μετρικά ανά καμπάνια μέσα στην επιλεγμένη ημερομηνιακή περίοδο
- * (ίδιο με `campaignsWithDateMetrics` στη σελίδα Campaigns).
- */
+/** Per-campaign metrics within the selected date range (same as `campaignsWithDateMetrics` on the Campaigns page). */
 export function applyCampaignDateRangeToMetrics(
   campaigns: Campaign[],
   dateFrom: string,
@@ -145,11 +139,8 @@ export function applyCampaignDateRangeToMetrics(
           conversionActions: {},
         };
       }
-      /**
-       * ΠΟΤΕ raw `return c`: με scale≈1 τα parent `purchase_*` είναι συχνά lifetime / όχι η περίοδος → ROAS εκατοντάδες x.
-       * Χωρίς ημερήσια σειρά δεν εμπιστευόμαστε doc-level purchase — μόνο κλιμακωμένο `conversion_value` / `conversions`.
-       * (Με `dailyMetrics` τα purchase ανά ημέρα κρατούν κανονικά.)
-       */
+      // Never raw `return c`: parent `purchase_*` are often lifetime (ROAS blows up). Without a daily series
+      // trust only scaled `conversion_value`/`conversions`; with `dailyMetrics` per-day purchase values stay as-is.
       const impressions = Math.round((c.impressions || 0) * scale);
       const clicks = Math.round((c.clicks || 0) * scale);
       const conversions =
@@ -227,10 +218,8 @@ export function applyCampaignDateRangeToMetrics(
             : conversion_value;
     const roas = amount_spent > 0 ? Math.round((roasBase / amount_spent) * 100) / 100 : 0;
     amount_spent = Math.round(amount_spent * 100) / 100;
-    /**
-     * Το `...c` φέρνει parent `purchase_*` (συχνά lifetime). Αν τα ημερήσια δεν έχουν purchase columns,
-     * πρέπει να τα σβήνουμε αλλιώς το getDisplayConversionValue (Google) ξαναδιαβάζει doc-level purchase.
-     */
+    // `...c` brings parent `purchase_*` (often lifetime); if daily entries lack purchase columns we must clear them,
+    // else getDisplayConversionValue (Google) re-reads doc-level purchase.
     const out: Campaign & { purchase_conversions?: number; purchase_conversion_value?: number } = {
       ...c,
       impressions,

@@ -187,20 +187,14 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               const key = query.queryKey[0];
               // AI queries: always fresh
               if (key === 'aiChannelRecommendations' || key === 'aiContentSuggestions') return false;
-              // SEC-L9: sensitive credentials/connector config should not be serialized into
-              // localStorage (XSS amplifier). Broader business-data queries stay cached for the
-              // offline UX — they're the user's own brand data, not secrets.
+              // Sensitive credentials/connector config must not be serialized into localStorage (XSS amplifier).
               if (key === 'apiKeys' || key === 'magentoConnectorConfig') return false;
-              // Large Firestore collections: served by Firestore's own IndexedDB cache —
-              // keeping them out of localStorage prevents quota-exceeded errors that
-              // silently wipe the entire persisted cache.
+              // Large Firestore collections served by Firestore's IndexedDB cache; keeping them out of localStorage avoids quota-exceeded wipes.
               if (key === 'campaigns' || key === 'search_intelligence' || key === 'priceBenchmarks' || key === 'priceInsights') return false;
-              // Product query shape changed during the rollback window; always refetch it from Firestore.
+              // Product query shape changed; always refetch it from Firestore.
               if (key === 'products') return false;
-              // ΒΑΡΙΑ procurement / Product Intelligence payloads (skuSignalsJson, 12k inventory rows,
-              // product arrays): σερβίρονται από το Firestore IndexedDB cache. Αν έμπαιναν στο
-              // localStorage, ο SYNC persister σειριοποιούσε MB σε κάθε αλλαγή brand → μπλοκάριζε το
-              // main thread (όλες οι σελίδες) + ξεπερνούσε το quota → σιωπηλό wipe όλου του cache.
+              // Heavy procurement / Product Intelligence payloads served by Firestore IndexedDB; in localStorage
+              // they'd serialize MBs per brand change, block the main thread, and exceed quota → cache wipe.
               if (
                 key === 'procurement_signals' ||
                 key === 'procurement-sheet' ||
@@ -210,23 +204,16 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               ) {
                 return false;
               }
-              // ecommerce_summary: η compact 'summary' έκδοση επιτρέπεται· οι 'sku'/'movement'
-              // εκδόσεις κουβαλούν ολόκληρα τα skuStats/skuMovement maps (βαρύ, PER-130/BUG-11
-              // parsed carrier) → εκτός localStorage.
+              // ecommerce_summary: the compact 'summary' version is allowed; the 'sku'/'movement'
+              // versions carry whole skuStats/skuMovement maps (heavy, parsed carrier) → out of localStorage.
               if (key === 'ecommerce_summary' && (query.queryKey[2] === 'sku' || query.queryKey[3] === 'movement')) return false;
-              // ga4_data_chunks: dailyTrafficByChannel (έως ~1 έτος ημερήσια×κανάλια) + organic fallback rows.
-              // ΒΑΡΥ payload — αν έμπαινε στο localStorage φούσκωνε το quota → ο sync persister σιωπηλά
-              // έσβηνε ΟΛΟ το persisted cache (incl. το compact `ga4_data`) → ο πίνακας GA4 στο Dashboard
-              // περίμενε το δίκτυο σε κάθε hard refresh. Χρειάζεται μόνο στο Analytics page (refetch εκεί).
+              // ga4_data_chunks: heavy dailyTrafficByChannel + organic fallback; in localStorage it inflates quota → cache wipe.
+              // Only needed on the Analytics page (refetched there).
               if (key === 'ga4_data_chunks') return false;
-              // Policy Impact scenarios: ΜΕΓΑΛΟ payload (εκατοντάδες rows) με ΔΙΚΟ του durable cache
-              // (dedicated localStorage key `pp-erp-scenario` + Firestore `commercial_scenario_cache`).
-              // Αν έμπαινε κι εδώ, διπλασίαζε το localStorage και ξεπερνούσε το quota → σιωπηλό σβήσιμο
-              // ΟΛΟΥ του persisted cache → τα πάντα ξαναφόρτωναν στο reload (incl. το Policy Impact).
+              // Policy Impact scenarios: large, with its own durable cache (`pp-erp-scenario` + Firestore `commercial_scenario_cache`);
+              // persisting here too doubles localStorage and exceeds quota → cache wipe.
               if (key === 'commercial_scenario_impacts') return false;
-              // Marketing Plan draft: έχει δικό του durable cache (localStorage `mp_draft_v1_*`).
-              // Διπλή αποθήκευση γέμιζε το quota → σιωπηλό σβήσιμο όλου του persisted cache →
-              // η ανάλυση ξανάτρεχε από την αρχή σε κάθε reload.
+              // Marketing Plan draft has its own durable cache (`mp_draft_v1_*`); double storage fills quota → cache wipe.
               if (key === 'marketingPlanDraft') return false;
               // Heavy raw order pulls stay out of localStorage; compact server summaries are persisted for fast first paint.
               if (
@@ -253,7 +240,7 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
 
-/** `#/section` → `section` ώστε να ταιριάζει σε VALID_SECTIONS και στο hashchange handler. */
+/** `#/section` → `section` so it matches VALID_SECTIONS and the hashchange handler. */
 function normalizeHashPath(segmentPart: string): string {
   const raw = segmentPart.trim();
   if (!raw) return '';
@@ -267,7 +254,7 @@ function AppMain() {
   useAppWarmup();
   const VALID_SECTIONS = APP_SECTIONS;
 
-  // Initialize from URL hash or default to dashboard (υποστηρίζει #products?stock=low)
+  // Initialize from URL hash or default to dashboard (supports #products?stock=low)
   const getInitialSection = () => {
     if (typeof window === 'undefined') return 'dashboard';
     try {
@@ -282,35 +269,35 @@ function AppMain() {
   };
 
   const [activeSection, setActiveSection] = useState(getInitialSection);
-  // Global Mark agent: lazy-mounted στο πρώτο άνοιγμα, διαθέσιμος από κάθε σελίδα.
+  // Global Mark agent: lazy-mounted on first open, available from every page.
   const shouldOpenMarkOnBoot = (() => {
     if (typeof window === 'undefined') return;
     const query = window.location.hash.split('?')[1] ?? '';
     return new URLSearchParams(query).get('mark') === '1';
   })();
   const [markOpen, setMarkOpen] = useState(Boolean(shouldOpenMarkOnBoot));
-  // PER-130 (0.5): κανένα preload του Mark chunk στο mobile boot — mount μόνο στο πρώτο άνοιγμα.
+  // No preload of the Mark chunk on mobile boot — mount only on first open.
   const [markMounted, setMarkMounted] = useState(() => Boolean(shouldOpenMarkOnBoot));
   const [markVoicePending, setMarkVoicePending] = useState(false);
   const handleMarkVoiceStarted = useCallback(() => setMarkVoicePending(false), []);
   const handleAskMark = useCallback(() => {
     if (markMounted) {
       setMarkOpen(true);
-      // Σύγχρονο dispatch ΜΕΣΑ στο user gesture — το χρειάζονται tts.prime()/stt.start() στο iOS.
+      // Synchronous dispatch inside the user gesture — needed by tts.prime()/stt.start() on iOS.
       window.dispatchEvent(new CustomEvent(MARK_START_VOICE_EVENT));
     } else {
       setMarkMounted(true);
       setMarkOpen(true);
-      setMarkVoicePending(true); // καταναλώνεται ως autoStartVoice prop στο πρώτο mount
+      setMarkVoicePending(true); // consumed as the autoStartVoice prop on first mount
     }
   }, [markMounted]);
 
-  // Πριν από child effects: αποθήκευση OAuth query (connector/status) — αλλιώς χάνεται από hash sync ή race.
+  // Before child effects: persist the OAuth query (connector/status) — otherwise lost to hash sync or a race.
   useLayoutEffect(() => {
     captureOAuthParamsFromLocation();
   }, []);
 
-  // Sync active section → hash (μόνο path — διατηρεί query όταν ήδη ταιριάζει το section)
+  // Sync active section → hash (path only — preserves query when the section already matches)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const hash = window.location.hash.replace('#', '');
@@ -321,7 +308,7 @@ function AppMain() {
     }
   }, [activeSection]);
 
-  // Browser back/forward — parse μόνο το path του hash
+  // Browser back/forward — parse only the path of the hash
   useEffect(() => {
     const handleHashChange = () => {
       const full = window.location.hash.replace('#', '');
@@ -455,10 +442,8 @@ function AppMain() {
       case 'help':
         return <Help />;
       case 'admin': {
-        // Gate: only super admins can access this route.
-        // Source of truth: Firestore appConfig/superAdmins.uids (resolved by
-        // AuthContext via loadSuperAdmins). Same UID list the Firestore rules
-        // and Cloud Functions read, so client/server gates never diverge.
+        // Super-admin-only route; source of truth is Firestore appConfig/superAdmins.uids
+        // (same UID list the Firestore rules and Cloud Functions read, so gates never diverge).
         if (!isSuperAdmin) {
           handleSectionChange('dashboard');
           return <DashboardOverview onSectionChange={handleSectionChange} onOpenInsights={() => handleSectionChange('insights')} />;
@@ -515,10 +500,8 @@ function AppMain() {
   );
 }
 
-/**
- * Static / public routes first (no hooks). Main SPA uses AppMain only under AuthGuard → BrandProvider
- * so useModules() → useBrand() does not throw for logged-out users.
- */
+/** Static/public routes first (no hooks); SPA runs AppMain only under AuthGuard → BrandProvider
+ * so useModules() → useBrand() does not throw for logged-out users. */
 function App() {
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search);

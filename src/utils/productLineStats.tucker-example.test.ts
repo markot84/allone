@@ -1,7 +1,5 @@
-/**
- * Reproduces the user-reported TUCKER case: app showed 34 units vs 18 actual
- * (after counting configurable parent + simple child as two lines, plus simple-only orders).
- */
+/** Reproduces the TUCKER case: app showed 34 units vs 18 actual (counting configurable parent +
+ * simple child as two lines, plus simple-only orders). */
 import { describe, expect, it } from 'vitest';
 import {
   aggregateOrderLinesForTopProducts,
@@ -90,11 +88,9 @@ describe('TUCKER example (16× parent+child + 2 simple-only)', () => {
   });
 });
 
-/**
- * Safeblock pattern: η ΓΟΝΙΚΗ γραμμή (configurable) φέρει price+row_total, το ΠΑΙΔΙ (simple)
- * έχει row_total=0. Παλιά: μετρούσαμε το παιδί → revenue €0. Νέα aggregate: revenue από τη γονική.
- */
-describe('Safeblock configurable (revenue on parent, child row_total=0)', () => {
+/** Configurable-parent pattern: parent line carries price+row_total, child line has row_total=0;
+ * aggregate must take revenue from the parent. */
+describe('configurable (revenue on parent, child row_total=0)', () => {
   const PSKU = 'RS10164-48';
   const PRICE = 120.16;
 

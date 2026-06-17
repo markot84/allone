@@ -1,6 +1,6 @@
 import type { Product, PriceBenchmarkPresetId, PriceBenchmarkStrategyScope } from '../types';
 
-/** Ελάχιστα πεδία benchmark (συμβατό με PriceBenchmark από usePriceBenchmarks). */
+/** Minimal benchmark fields (compatible with PriceBenchmark from usePriceBenchmarks). */
 export interface BenchmarkPriceFields {
   productId: string;
   gtin: string;
@@ -9,7 +9,7 @@ export interface BenchmarkPriceFields {
   yourPrice: number;
 }
 
-/** Κλειδιά σύζευξης SKU ↔ GMC productId (`online:el:GR:SKU` κ.λπ.). */
+/** Join keys SKU ↔ GMC productId (`online:el:GR:SKU` etc.). */
 export function benchmarkKeyCandidatesFromProductId(productId: string, gtin: string): string[] {
   const raw = (productId || '').trim();
   const parts = raw ? raw.split(':').map((s) => s.trim().toLowerCase()).filter(Boolean) : [];
@@ -138,10 +138,8 @@ export function productParticipatesInPriceBenchmarkStrategy(
   return productMatchesPriceBenchmarkPreset(product, scope.preset, benchmark);
 }
 
-/**
- * Έλεγχος συμμετοχής SKU στο scope Price Benchmarking.
- * Όταν υπάρχουν `selectedProductIds`, **δεν** καλεί `findBenchmarkForProduct` (αποφυγή freeze σε μεγάλο κατάλογο).
- */
+/** Whether a SKU participates in the Price Benchmarking scope; skips `findBenchmarkForProduct`
+ * when `selectedProductIds` is present (avoids freeze on a large catalog). */
 export function productInPriceBenchmarkScope<T extends BenchmarkPriceFields>(
   product: Product,
   scope: PriceBenchmarkStrategyScope | null | undefined,
@@ -186,13 +184,11 @@ export function filterProductsByPriceBenchmarkScope<T extends BenchmarkPriceFiel
   return filtered.length > 0 ? filtered : products;
 }
 
-/** 0–100: υψηλό = ισχυρό πλεονέκτημα τιμής έναντι αγοράς. */
+/** 0–100: high = strong price advantage versus the market. */
 export function calculatePriceBenchmarkAdvantageScore(b: BenchmarkPriceFields | undefined): number {
   if (!b || b.benchmarkPrice <= 0) return 22;
-  // LOGIC-6: cheaper-than-market (priceDiff < 0) is the advantage, so the score must
-  // DECREASE as priceDiff rises. The old two-branch form rewarded overpriced products
-  // (at-market 32, +30% → 60). One continuous, monotone-decreasing function, clamped:
-  // −30 → 100, 0 → 50, +30 → 0.
+  // Cheaper-than-market (priceDiff < 0) is the advantage: score decreases monotonically as
+  // priceDiff rises, clamped 0–100 (−30 → 100, 0 → 50, +30 → 0).
   const score = 50 - b.priceDiff * 2.2;
   return Math.round(Math.max(0, Math.min(100, score)));
 }

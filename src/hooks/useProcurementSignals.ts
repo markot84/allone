@@ -1,10 +1,5 @@
-/**
- * useProcurementSignals — fetches the server-aggregated `procurement_signals/{brandId}`
- * doc και deserializes το JSON map. Επιστρέφει επίσης ένα refresh mutation που
- * καλείται μετά από procurement upload.
- *
- * Βλ. functions/src/procurementSignals.ts για τη δομή του ProcurementSignal.
- */
+/** Fetches and deserializes the server-aggregated `procurement_signals/{brandId}` doc.
+ * Structure in functions/src/procurementSignals.ts; refresh mutation runs after upload. */
 
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -92,7 +87,7 @@ export function useProcurementSignals() {
   };
 }
 
-/** Mutation που καλεί το server endpoint refreshSignals — να χρησιμοποιείται μετά procurement upload. */
+/** Mutation that calls the refreshSignals server endpoint — use after a procurement upload. */
 export function useRefreshProcurementSignals() {
   const queryClient = useQueryClient();
   const { currentBrand } = useBrand();

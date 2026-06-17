@@ -1,10 +1,5 @@
-/**
- * PER-139 — magentoFetch bounded retries. One transient 30s timeout on page 108/300 must not
- * abort the whole nightly sync (observed live twice on 12-06-2026). Contract: retry ONLY on
- * timeout/network errors, HTTP 5xx and 429; never on other 4xx (the catalog-401 degraded
- * path depends on auth errors surfacing immediately); max 2 retries, then the error/response
- * propagates as before.
- */
+/** magentoFetch bounded retries: retry ONLY on timeout/network errors, HTTP 5xx and 429; never other 4xx
+ * (catalog-401 degraded path needs auth errors immediate); max 2 retries, then error/response propagates. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const safeFetchMock = vi.fn();

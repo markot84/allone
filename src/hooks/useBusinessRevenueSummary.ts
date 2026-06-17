@@ -23,9 +23,7 @@ export async function fetchBusinessRevenueSummary(brandId: string): Promise<Busi
   return snap.data() as BusinessRevenueSummaryRaw;
 }
 
-/**
- * ERP συνολικός τζίρος (Megaventory / SoftOne) — ξεχωριστό doc από το ecommerce_summary (e-shop μόνο).
- */
+/** Total ERP turnover (Megaventory / SoftOne) — separate doc from ecommerce_summary (e-shop only). */
 export function useBusinessRevenueSummary() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
@@ -40,7 +38,7 @@ export function useBusinessRevenueSummary() {
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData,
-    // PER-130 (P2): όχι fetch κάτω από το throwaway 'pending' syncVersion key.
+    // Don't fetch under the throwaway 'pending' syncVersion key.
     enabled: !!brandId && syncVersion !== 'pending',
   });
 

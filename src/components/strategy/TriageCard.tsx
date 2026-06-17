@@ -1,11 +1,5 @@
-/**
- * TriageCard — «Διάγνωση προτεραιοτήτων» (πρώην triage)
- *
- * Εμφανίζει τα Decision Buckets: συνδυασμός καταλόγου με σήματα πωλήσεων/κίνησης.
- * Δεν ταυτίζεται με τις κάρτες dead/excess του Product Intelligence (ERP view).
- *
- * Pure UI — η λογική ταξινόμησης είναι στο `useDecisionBuckets` / `decisionBuckets`.
- */
+/** TriageCard — priority diagnosis view: Decision Buckets (catalog + sales/movement signals), distinct
+ * from the dead/excess cards in Product Intelligence. Logic lives in `useDecisionBuckets`. */
 
 import { useMemo, useState } from 'react';
 import {
@@ -36,7 +30,7 @@ const ICONS: Record<BucketId, React.ComponentType<{ size?: number; className?: s
   new_or_unknown: Sparkles,
 };
 
-/** Συντομεύσεις για compact tabs (κλειστή κεφαλίδα). */
+/** Short labels for compact tabs (collapsed header). */
 const GROUP_TAB_LABEL: Record<BucketGroupId, string> = {
   critical: 'Άμεση',
   opportunity: 'Ευκαιρίες',
@@ -81,7 +75,7 @@ const GROUP_STYLES: Record<BucketGroupId, {
   },
 };
 
-/** Ίδιο pattern με ProcurementStrategyBridge: tinted panel + κουμπί πλήρους πλάτους. */
+/** Same pattern as ProcurementStrategyBridge: tinted panel + full-width button. */
 const GROUP_BRIDGE: Record<
   BucketGroupId,
   {
@@ -162,7 +156,7 @@ function fmtRelative(iso: string | undefined | null): string {
   return `${Math.floor(days / 365)} χρόνια πριν`;
 }
 
-/** Ρητή ενημέρωση: τι είναι επιβεβαιωμένο από συστήματα vs τι είναι εκτίμηση. */
+/** Explicit notice: what is system-confirmed vs what is estimated. */
 function TriageDataReliabilityCallout({
   quality,
   totalTiedCapital,
@@ -262,16 +256,14 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
   const [insufficientSignalsExpanded, setInsufficientSignalsExpanded] = useState(false);
   const productScopeLabel = scopedProducts ? 'στο snapshot αξιολόγησης' : 'στον κατάλογο';
 
-  // Data availability — για empty state checklist
-  // PER-130/BUG-11: cheap tier — το TriageCard χρειάζεται μόνο presence του movement, όχι το map.
-  // Το stockMovementBaselineDate γράφεται και στο main ecommerce_summary doc (stockMovementTracker.ts:420),
-  // οπότε ο έλεγχος παρουσίας ισχύει χωρίς το βαρύ skuStats/skuMovement chunk load.
+  // Data availability for the empty-state checklist; TriageCard only needs movement presence.
+  // stockMovementBaselineDate is on the ecommerce_summary doc, so no heavy chunk load is needed.
   const { connectedPlatforms, stockMovementBaselineDate } = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const { hasData: hasProcurement } = useProcurement();
   const hasOrders = (connectedPlatforms?.length ?? 0) > 0;
   const hasMovementData = !!stockMovementBaselineDate;
 
-  // Νέα/άγνωστο breakdown
+  // New/unknown breakdown
   const unknownBreakdown = useMemo(() => {
     const out = { new_sku: 0, no_signals: 0, virtual_sku: 0 };
     for (const a of assignments) {
@@ -377,7 +369,7 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
 
   return (
     <div className="rounded-xl border border-[#E5E7EB] bg-gradient-to-br from-[#FAFAFA] to-white overflow-hidden shadow-sm">
-      {/* HEADER — ίδιο pattern με Product Intelligence bridge */}
+      {/* HEADER — same pattern as Product Intelligence bridge */}
       <div className="border-b border-[#E8E8E8] bg-white">
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-2 sm:px-4 sm:py-2.5">
           <div className="shrink-0 p-1 rounded-lg bg-[#7C3AED]/10">
@@ -468,7 +460,7 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
         </div>
       )}
 
-      {/* GROUPED SECTIONS — οριζόντιες tinted κάρτες όπως Product Intelligence (Απόθεμα) */}
+      {/* GROUPED SECTIONS — horizontal tinted cards like Product Intelligence (Stock) */}
       <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
         {visibleGroups.map((group) => {
           const style = GROUP_STYLES[group.id];
@@ -551,7 +543,7 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
               )}
 
               {soleBucket ? (
-                /* Single-bucket ομάδα: ο τίτλος+subtitle ήδη περιγράφουν το bucket — απλό disclosure χωρίς επανάληψη ετικέτας. */
+                /* Single-bucket group: title+subtitle already describe the bucket — simple disclosure without repeating the label. */
                 (() => {
                   const isOpen = expanded === soleBucket;
                   const tied = tiedByBucket[soleBucket];
@@ -621,7 +613,7 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
                 </div>
               )}
 
-              {/* EXPANDED PANEL — πριν το κύριο CTA ώστε η λεπτομέρεια να πέφτει πάνω στο κουμπί */}
+              {/* EXPANDED PANEL — before the main CTA so detail sits above the button */}
               {expanded && group.activeBuckets.includes(expanded) && (
                 <ExpandedPanel
                   bucket={expanded}
@@ -673,11 +665,9 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────
 // SUB-COMPONENTS
-// ─────────────────────────────────────────────────────────────────────
 
-/** Συνοπτική εξήγηση γιατί πολλά SKU μένουν σε new_or_unknown — χωρίς επανάληψη των αριθμών της κάρτας. */
+/** Brief explanation of why many SKUs stay in new_or_unknown — without repeating the card's numbers. */
 function InsufficientSignalsHint({
   hasOrders,
   hasMovement,
@@ -798,7 +788,7 @@ function buildPolicyPayload(
   };
 }
 
-/** Ένα κύριο CTA ανά ομάδα, όπως στο ProcurementStrategyBridge. */
+/** One main CTA per group, as in ProcurementStrategyBridge. */
 function GroupBridgeCta({
   groupId,
   activeBuckets,
@@ -1027,7 +1017,7 @@ function ExpandedPanel({
 
   return (
     <div className="mt-3 rounded-lg bg-white border border-gray-200 overflow-hidden">
-      {/* Panel header — χωρίς επανάληψη τίτλου από την κάρτα πάνω· μόνο περιγραφή + ενέργειες */}
+      {/* Panel header — no title repeated from the card above; only description + actions */}
       <div className="px-3.5 py-3 border-b border-gray-100 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[12px] text-gray-800 leading-relaxed">{def.description}</div>
@@ -1065,7 +1055,7 @@ function ExpandedPanel({
         </div>
       </div>
 
-      {/* Special breakdown για new_or_unknown */}
+      {/* Special breakdown for new_or_unknown */}
       {bucket === 'new_or_unknown' && unknownBreakdown && (
         <div className="grid grid-cols-1 gap-2 border-b border-gray-100 bg-slate-50 px-3.5 py-2.5 sm:grid-cols-3">
           <UnknownChip label="Νέα προϊόντα" sub="< 30 ημέρες" count={unknownBreakdown.new_sku} icon={Sparkles} />

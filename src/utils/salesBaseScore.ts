@@ -2,12 +2,8 @@ import type { Product, SalesBaseCategorySource, SalesBasePresetId, SalesBaseScop
 import { coerceToDate } from './coerceDate';
 import { getStockAgeDays } from './productUtils';
 
-/**
- * Επιλογή effective category ανά SKU με βάση την πηγή κατηγοριοποίησης.
- *  - 'product'    → χρησιμοποιεί το `product.category` (ευρύτερη εμπορική κατηγορία από import products)
- *  - 'procurement'→ χρησιμοποιεί το `procurement_status` (lifecycle: «Επί παραγγελία», «Προς κατάργηση»)
- *                   με fallback στο `procurement_category` και τέλος στο `category`.
- */
+/** Effective category per SKU: 'product' uses `product.category`; 'procurement' uses
+ *  `procurement_status` then `procurement_category` then `category`. */
 export function categoryForSource(
   product: Product,
   source: SalesBaseCategorySource | undefined,
@@ -51,19 +47,8 @@ function hasZeroSalesInWindow(
   return lastDays > days;
 }
 
-/**
- * Αυστηρή λογική για «0 πωλήσεις τις τελευταίες N ημέρες»:
- *  - Αν υπάρχει το αντίστοιχο window field, αυτό είναι authoritative.
- *  - Αν lifetime=0, όλα τα windows είναι 0 (μαθηματικά ασφαλές).
- *  - Αν last_sale_at υπάρχει και είναι > N ημ. πίσω, ισχύει.
- *  - ΔΕΝ γίνεται διασταυρούμενο fallback μεταξύ διαφορετικών windows
- *    (π.χ. qty_sold_period=0 ⇒ δεν συνεπάγεται ότι 7d=0, διότι το import
- *    μπορεί να είναι παλιό και να μη γνωρίζουμε τι έγινε τις τελευταίες 7 ημ.).
- *  - Σημείωση: η μόνη μαθηματικά ασφαλής συνεπαγωγή 30d=0 ⇒ 7d=0 αφαιρέθηκε
- *    σκόπιμα, διότι στην πράξη το `qty_sold_period`/`qty_sold_last_30d` που
- *    διαβάζουμε από import αναφέρεται σε παλιό window και όχι σε «κυλιόμενες
- *    τελευταίες 30 ημέρες».
- */
+/** Strict "0 sales in last N days": the matching window field (or lifetime=0, or last_sale_at>N)
+ *  is authoritative, with no cross-window fallback since imported windows may be stale. */
 function hasZeroSalesByAvailableWindows(product: Product, days: 7 | 30 | 90): boolean {
   const life = product.qty_sold_lifetime;
   if (typeof life === 'number' && life === 0) return true;
@@ -84,14 +69,8 @@ function hasZeroSalesByAvailableWindows(product: Product, days: 7 | 30 | 90): bo
   return hasZeroSalesInWindow(undefined, lastSaleAt, 90);
 }
 
-/**
- * Εμπορική προτεραιότητα 0–100 για το σενάριο Sales Optimization (υψηλό = χρειάζεται έμφαση).
- *
- * **Δεδομένα**
- * - `qty_sold_period` / `qty_sold_last_30d`: ερμηνεύονται ως ~τελευταίες 30 ημέρες (συνεπές με `getDaysOfStock`).
- * - Προαιρετικά από import/connector: `qty_sold_last_7d`, `qty_sold_last_90d`, `qty_sold_lifetime`, `last_sale_at`.
- * - Μόνο `qty_sold_period = 0` με απόθεμα: ενισχυμένη προτεραιότητα (επανενεργοποίηση· χωρίς lifetime δεν διαχωρίζουμε «ποτέ» από «σταμάτησε»).
- */
+/** Commercial priority 0–100 for the Sales Optimization scenario (high = needs emphasis);
+ *  `qty_sold_period`/`qty_sold_last_30d` read as ~last 30 days, `qty_sold_period=0` with stock boosts priority. */
 export function calculateSalesMomentumScore(product: Product): number {
   const stock = product.stock_level ?? 0;
   if (stock <= 0) return 12;
@@ -137,7 +116,7 @@ export function calculateSalesMomentumScore(product: Product): number {
   return 40;
 }
 
-/** Σύντομη ετικέτα για στήλη preview. */
+/** Short label for the preview column. */
 export function salesMomentumLabel(product: Product): string {
   const s = calculateSalesMomentumScore(product);
   if (s >= 92) return 'Υψηλή';
@@ -147,7 +126,7 @@ export function salesMomentumLabel(product: Product): string {
   return 'Ενεργό';
 }
 
-/** Ομαδοποίηση presets για το UI του Sales Optimization modal. */
+/** Preset grouping for the Sales Optimization modal UI. */
 export type SalesBasePresetGroup = 'all' | 'zero_window' | 'other';
 
 export const SALES_BASE_PRESET_OPTIONS: {
@@ -162,7 +141,7 @@ export const SALES_BASE_PRESET_OPTIONS: {
     hint: 'Χωρίς φίλτρο ρυθμού πωλήσεων — εφαρμόζονται μόνο τα φίλτρα μάρκας/κατηγορίας/αναζήτησης.',
     group: 'all',
   },
-  // ── Αριστερή στήλη: 0 πωλήσεις σε χρονικό window ───────────────────────
+  // ── Left column: 0 sales within a time window ─────────────────────────
   {
     id: 'zero_last_7d',
     label: '0 πωλήσεις (7 ημέρες)',
@@ -181,7 +160,7 @@ export const SALES_BASE_PRESET_OPTIONS: {
     hint: 'Καμία μείωση αποθέματος τις τελευταίες 90 ημ. (από orders connector ή κινητικότητα αποθέματος).',
     group: 'zero_window',
   },
-  // ── Δεξιά στήλη: Χωρίς πωλήσεις & Πάγωμα ───────────────────────────────
+  // ── Right column: No sales & stalled ──────────────────────────────────
   {
     id: 'never_sold',
     label: 'Χωρίς πωλήσεις (lifetime)',
@@ -209,7 +188,7 @@ function productBrandLabel(p: Product): string {
   return s ?? '';
 }
 
-/** Φίλτρα κειμένου (μάρκα / κατηγορία / αναζήτηση) πάνω στο catalog. */
+/** Text filters (brand / category / search) over the catalog. */
 export function productMatchesSalesBaseTextFilters(
   product: Product,
   brandFilter: string,
@@ -247,10 +226,8 @@ export function productMatchesSalesBasePreset(product: Product, preset: SalesBas
     case 'never_sold': {
       // Authoritative: import lifetime field
       if (typeof life === 'number') return life === 0;
-      // Fallback (όταν δεν υπάρχει lifetime field, π.χ. brands μόνο με connector):
-      // Κανένα ίχνος πώλησης σε διαθέσιμο 90d window + καμία ημ/νία τελευταίας πώλησης.
-      // Επιπλέον: το SKU να βρίσκεται στο catalog αρκετό καιρό (>=30 ημ.) ώστε η απουσία
-      // πωλήσεων να είναι σημαντική (όχι νεοεισαχθέν με stock χωρίς χρόνο να πουληθεί).
+      // Fallback (no lifetime field): no 90d sale trace, no last-sale date, and in
+      // catalog >=30 days so the absence of sales is meaningful (not newly added).
       const q90 = product.qty_sold_last_90d;
       const noRecentSales = typeof q90 === 'number' ? q90 === 0 : false;
       const noLastSale = !product.last_sale_at;
@@ -278,7 +255,7 @@ export function productMatchesSalesBasePreset(product: Product, preset: SalesBas
   }
 }
 
-/** SKU που συμμετέχουν στη στρατηγική Sales Optimization (sales_base) σύμφωνα με το αποθηκευμένο scope. */
+/** SKUs participating in the Sales Optimization (sales_base) strategy per the saved scope. */
 export function productParticipatesInSalesBase(product: Product, scope: SalesBaseScope | null | undefined): boolean {
   if (!scope) return true;
   if (scope.selectedProductIds && scope.selectedProductIds.length > 0) {

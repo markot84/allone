@@ -1,7 +1,4 @@
-/**
- * PER-60: exhaustive tests for the pure sync-plan decisions — the three bugs the staging validation
- * surfaced (false-completion, stuck state, no processing split) all live here.
- */
+/** Tests for the pure sync-plan decisions (false-completion, stuck state, processing split). */
 import { describe, it, expect } from 'vitest';
 import {
   isProcessingPass,

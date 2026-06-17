@@ -49,9 +49,8 @@ export function BrandProvider({ children }: { children: ReactNode }) {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [currentBrand, setCurrentBrandState] = useState<Brand | null>(null);
   const [loading, setLoading] = useState(true);
-  // CODE-6: generation guard — a fast user/brand switch can fire refreshBrands again while an
-  // earlier run is still awaiting; only the latest run is allowed to commit its setState, so a
-  // stale resolve can't clobber a newer one with the wrong brand list/context.
+  // Generation guard: a fast user/brand switch can fire refreshBrands again mid-await; only the
+  // latest run may commit its setState, so a stale resolve can't clobber a newer brand list.
   const reqIdRef = useRef(0);
 
   const refreshBrands = useCallback(async () => {
@@ -70,11 +69,8 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       setCurrentBrandState((prev) => prev ?? cachedBrand);
       setLoading(false);
     }
-    // Wait until the super-admin status is known before loading the authoritative list:
-    // branching on a not-yet-resolved `isSuperAdmin` would load the member-only set first
-    // and then re-load the all-brands set (or vice-versa), flickering the dropdown. The
-    // cached brand above keeps the UI responsive meanwhile; this effect re-runs once
-    // `isSuperAdminResolved` flips true.
+    // Wait for resolved super-admin status before loading the authoritative list; branching on an
+    // unresolved `isSuperAdmin` would load one set then re-load the other, flickering the dropdown.
     if (!isSuperAdminResolved) return;
     try {
       if (isSuperAdmin) {
@@ -116,10 +112,8 @@ export function BrandProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         return;
       }
-      // Resolve each brand independently. A single unreadable id (a brand the
-      // user was removed from, or an orphaned/deleted id still lingering in the
-      // profile's brandIds) must NOT throw and hide every other brand — that was
-      // the bug where the whole list collapsed to the cached last-selected brand.
+      // Resolve each brand independently. A single unreadable id (removed-from or orphaned/deleted
+      // but still in brandIds) must NOT throw and hide every other brand.
       const brandList: Brand[] = [];
       const resolvedIds: string[] = [];
       for (const bid of brandIds) {
@@ -136,8 +130,8 @@ export function BrandProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Self-heal the profile: persist only the ids that resolved to a readable
-      // brand, pruning orphans so they stop poisoning future loads.
+      // Self-heal the profile: persist only ids that resolved to a readable brand,
+      // pruning orphans so they stop poisoning future loads.
       if (resolvedIds.length > 0 && !sameStringSet(fromProfile, resolvedIds)) {
         FirestoreService.setDocument('users', user.uid, { brandIds: resolvedIds } as Record<string, unknown>).catch((err) =>
           logger.warn('refreshBrands: could not sync brandIds on user profile', { err })

@@ -1,6 +1,4 @@
-/**
- * Sync logic with `src/utils/productLineStats.ts` — Magento parent line items (configurable/bundle/grouped).
- */
+/** Sync logic with `src/utils/productLineStats.ts` — Magento parent line items (configurable/bundle/grouped). */
 export type ProductLineItemLike = {
   sku?: string;
   title?: string;
@@ -85,10 +83,8 @@ function lineSkuName(line: ProductLineItemLike): { sku: string; name: string } {
   return { sku, name: String(line.title || line.name || sku) };
 }
 
-/**
- * Sync logic with `src/utils/productLineStats.ts` — ενοποίηση γονικής/παιδικής γραμμής Magento.
- * revenue = parent.row_total αν > 0, αλλιώς άθροισμα παιδιών, αλλιώς price×qty. SKU/όνομα γονικής.
- */
+/** Sync logic with `src/utils/productLineStats.ts` — merge Magento parent/child lines;
+ * revenue = parent.row_total if > 0, else sum of children, else price×qty. Parent SKU/name. */
 export function aggregateOrderLinesForTopProducts(
   platform: string,
   lines: ProductLineItemLike[] | undefined | null

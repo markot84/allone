@@ -1,10 +1,5 @@
-/**
- * Google Search Console connector
- *
- * Primary source for organic search terms shown on the GA4 page.
- * Uses Google OAuth with read-only Search Console scope and stores
- * site-level query rows for client-side date filtering.
- */
+/** Google Search Console connector: organic search terms for the GA4 page.
+ * Google OAuth (read-only scope); stores site-level query rows for client-side date filtering. */
 
 import * as admin from 'firebase-admin';
 import { signState } from './oauthState';
@@ -279,10 +274,9 @@ export async function handleSearchConsoleCallback(
 async function fetchSearchConsoleRows(accessToken: string, siteUrl: string, startDate: string, endDate: string): Promise<SearchQueryRow[]> {
   const rows: SearchQueryRow[] = [];
   const sitePath = encodeURIComponent(siteUrl);
-  // Pagination: η GSC API επιστρέφει μέγιστο 25.000 rows ανά request. Για 3ετές ιστορικό
-  // με χιλιάδες queries χρειάζεται multi-page fetch με startRow offset.
+  // GSC returns at most 25,000 rows per request; page through with the startRow offset.
   const pageSize = 25000;
-  const maxPages = 20; // ασφαλιστικό όριο: 500k rows
+  const maxPages = 20; // safety cap: 500k rows
 
   for (let page = 0; page < maxPages; page++) {
     const startRow = page * pageSize;
@@ -324,7 +318,7 @@ async function fetchSearchConsoleRows(accessToken: string, siteUrl: string, star
       });
     }
 
-    // Λιγότερες από pageSize → φτάσαμε στο τέλος.
+    // Fewer than pageSize → reached the end.
     if (pageRows.length < pageSize) break;
   }
 
@@ -357,16 +351,14 @@ export async function fetchSearchConsoleData(
     const accessToken = await refreshAccessToken(refreshTokenPlain);
     const endDateObj = new Date();
     const startDateObj = new Date();
-    // Window: 1 έτος. Τραβάμε μόνο search terms (date+query) — δεν χρειαζόμαστε
-    // μεγαλύτερο ιστορικό και κρατάμε χαμηλό το request payload / Firestore doc size.
+    // Window: 1 year of search terms (date+query) — keeps payload / Firestore doc size low.
     startDateObj.setUTCFullYear(startDateObj.getUTCFullYear() - 1);
 
     const startDate = formatDate(startDateObj);
     const endDate = formatDate(endDateObj);
     let queryRows = await fetchSearchConsoleRows(accessToken, conn.siteUrl, startDate, endDate);
 
-    // Firestore doc limit: 1 MiB. Each queryRow serialises to ~100-140 bytes.
-    // Cap to 8 000 highest-click rows to stay safely under 1MB.
+    // Firestore doc limit 1 MiB (~100-140 bytes/row); cap to 8000 highest-click rows.
     const MAX_SC_ROWS = 8_000;
     if (queryRows.length > MAX_SC_ROWS) {
       const originalCount = queryRows.length;

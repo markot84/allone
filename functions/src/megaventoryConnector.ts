@@ -1,15 +1,5 @@
-/**
- * Megaventory ERP Connector
- *
- * Σύνδεση: API key μόνο (https://api.megaventory.com/v2017a/ — JSON POST endpoints).
- * Σχήμα Firestore (κάτω από connectors/{brandId}.megaventory):
- *   { connected, apiKey (encrypted), accountName, currency, connectedAt }
- *
- * Sync: historical backfill first, then incremental docs + snapshot reference data.
- *   - Invoices → megaventory_invoices …
- *   - Sales OR / Purchase / Products / Stock / Suppliers (τυπικά API)
- *   - Προαιρετικό Custom Report → megaventory_custom_report_rows (αρ. σειρών + raw cells ανά report ID)
- */
+/** Megaventory ERP Connector — API-key auth (v2017a JSON POST); state under connectors/{brandId}.megaventory.
+ * Sync: historical backfill, then incremental docs + snapshot reference data (invoices/orders/products/stock/suppliers + optional Custom Report). */
 
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
@@ -44,51 +34,29 @@ function getDb(): Firestore {
 
 const MV_BASE = 'https://api.megaventory.com/v2017a/json/reply';
 const MV_UA = 'PerformancePlus-MegaventoryConnector/1.0';
-/** Μεγάλα payloads / αργά δίκτυα — το προηγούμενο 30s έκοβε σε πλήρη ProductGet. */
+/** Large payloads / slow networks — the previous 30s cut off on a full ProductGet. */
 const MV_TIMEOUT_MS = 120_000;
 const MV_PAGE_SIZE = 500;
-/** Ασφάλεια: max ~2.5M εγγραφές ανά endpoint ανά sync */
+/** Safety cap: max ~2.5M records per endpoint per sync */
 const MV_MAX_PAGES = 5000;
-/**
- * PER-60: soft budget για κάθε sync invocation, αρκετά κάτω από το 1800s timeout
- * του processMegaventorySyncJobs worker (onSchedule hard cap). Όταν εξαντληθεί,
- * σταματάμε με χάρη και επιστρέφουμε needsContinuation ώστε ο scheduler να
- * συνεχίσει σε επόμενο pass — ποτέ hard-kill / orphaned job / μισο-γραμμένα δεδομένα.
- */
+/** Soft budget per sync invocation; when exhausted, stop and return needsContinuation so the scheduler resumes. */
 const MV_SYNC_SOFT_DEADLINE_MS = 25 * 60 * 1000; // 25min, ~5min margin under the 1800s onSchedule cap
-/**
- * PER-60: budget που κρατάμε για τα heavy downstream (gap-fill/RFM/procurement/stock-movement).
- * Αν μετά το ingestion (catalog/docs/stock/suppliers) έχει μείνει λιγότερο από αυτό, αναβάλλουμε
- * το processing σε δικό του fresh pass (productCatalogComplete=true). Μικρά brands το τρέχουν inline.
- */
+/** Reserve for the heavy downstream (gap-fill/RFM/procurement/stock-movement); below it, defer to a fresh pass. */
 const MV_PROCESSING_RESERVE_MS = 12 * 60 * 1000; // need ~12min of headroom to run the heavy downstream
-/**
- * PER-60: SupplierClientGet is the slow non-resumable ancillary fetch (~12min for a big book). It can't
- * resume across passes, so we only START it when at least this much budget remains — otherwise defer the
- * whole fetch to a fresh pass. Prevents a near-deadline start from running into the 30min hard wall.
- */
+/** SupplierClientGet is slow (~12min) and non-resumable — START it only with this much budget left, else defer. */
 const MV_SUPPLIERS_RESERVE_MS = 13 * 60 * 1000;
-/**
- * PER-60: minimum budget required to START a processing sub-stage. A pre-flight `overBudget()` check
- * is NOT enough for a monolithic module: starting refreshStockMovement (~20min on an 88k-SKU brand,
- * measured on staging) with 12min of budget left still runs through the 30min hard wall. If the
- * remaining budget is below the module's reserve, defer it to a fresh pass (full ~25min budget).
- * Light brands burn almost no budget before these gates, so they still run everything inline.
- */
+/** Min budget to START a processing sub-stage: overBudget() can't stop a monolithic module mid-run, so defer below reserve. */
 const MV_STAGE_RESERVE_MS: Record<string, number> = {
   rfm: 15 * 60 * 1000,
   procurement: 10 * 60 * 1000,
   stockmovement: 22 * 60 * 1000,
 };
-/**
- * PER-60: deleted-products walk (ProductGet showOnlyDeleted). The first cycle imports the whole
- * deleted backlog (e-tennis: ~133k products → ~133 pages + writes), later cycles only diff. Don't
- * START a chunk of it without this much budget; the cursor makes it resumable across passes anyway.
- */
+/** Deleted-products walk (ProductGet showOnlyDeleted): first cycle imports the whole backlog (~133k), later cycles diff.
+ * Don't START a chunk without this budget; the cursor keeps it resumable. */
 const MV_DELETED_SCAN_RESERVE_MS = 8 * 60 * 1000;
 const MV_DELETED_SCAN_PAGE_SIZE = 1000;
 const MV_INVOICE_BACKFILL_PAGE_SIZE = 100;
-/** Manual connectorSync έχει 20' timeout· κρατάμε buffer για Firestore writes / response. */
+/** Manual connectorSync has a 20min timeout; keep a buffer for Firestore writes / response. */
 const MV_INVOICE_BACKFILL_RUNTIME_MS = 18 * 60 * 1000;
 const MV_INVOICE_BACKFILL_MAX_PAGES_PER_SYNC = 500;
 const MV_INCREMENTAL_DOCUMENT_FALLBACK_MAX_PAGES = 100;
@@ -102,7 +70,7 @@ type MvFilter = {
   Group?: string;
 };
 
-/** Καθαρισμός BOM/whitespace από copy-paste API keys */
+/** Strip BOM/whitespace from copy-pasted API keys */
 function normalizeApiKey(raw: string): string {
   return raw.replace(/^\uFEFF/, '').trim();
 }
@@ -127,10 +95,7 @@ interface MvCallResult {
   raw: string;
 }
 
-/**
- * Generic POST προς Megaventory JSON endpoint.
- * Όλα τα Megaventory v2017a endpoints δέχονται POST με JSON body { APIKEY, ...filters }.
- */
+/** Generic POST to a Megaventory JSON endpoint (v2017a accepts POST with body { APIKEY, ...filters }). */
 async function mvCall(endpoint: string, apiKey: string, body: Record<string, unknown> = {}): Promise<MvCallResult> {
   const url = `${MV_BASE}/${endpoint}`;
   const ctrl = new AbortController();
@@ -158,10 +123,7 @@ async function mvCall(endpoint: string, apiKey: string, body: Record<string, unk
   }
 }
 
-/**
- * Megaventory επιστρέφει 200 ακόμα και σε λάθη επιπέδου API· τα γνωρίζουμε από
- * `ResponseStatus.ErrorCode !== "0"`. Επιστρέφουμε ενιαία μορφή σφάλματος.
- */
+/** Megaventory returns 200 even for API-level errors; detect via `ResponseStatus.ErrorCode !== "0"`. */
 function asMvError(call: MvCallResult, label: string): string | null {
   if (!call.ok) {
     return `${label}: HTTP ${call.status || 'network'} — ${String(call.raw || '').slice(0, 220)}`;
@@ -182,7 +144,7 @@ const CUSTOM_REPORT_LIMIT = 1000;
 const CUSTOM_REPORT_COLLECTION = 'megaventory_custom_report_rows';
 const CUSTOM_REPORT_MAX_PAGES = 500;
 
-/** Απόσπαση array γραμμών από απάντηση CustomReportGetData (επίσημη μορφή: `Rows[]` με `{ Index, Data[] }`). */
+/** Extract the row array from a CustomReportGetData response (official shape: `Rows[]` with `{ Index, Data[] }`). */
 export function extractCustomReportRows(body: unknown): Record<string, unknown>[] {
   if (!body || typeof body !== 'object') return [];
   const b = body as Record<string, unknown>;
@@ -253,7 +215,7 @@ export function extractCustomReportRows(body: unknown): Record<string, unknown>[
   return [];
 }
 
-/** Επίσημη δομή γραμμής: `{ Index?, Data?: [{ ColumnId, ColumnName, Value }] }` */
+/** Official row shape: `{ Index?, Data?: [{ ColumnId, ColumnName, Value }] }` */
 export function normalizeMvCustomReportRow(r: Record<string, unknown>): Record<string, unknown> {
   const dataRaw = r.Data ?? r.data;
   if (!Array.isArray(dataRaw)) {
@@ -265,10 +227,8 @@ export function normalizeMvCustomReportRow(r: Record<string, unknown>): Record<s
     source: 'megaventory_custom_report_row',
     cells,
   };
-  // SEC-L13: ColumnName comes from the Megaventory API and is used as a Firestore field key.
-  // Sanitize characters Firestore field names can't safely hold, cap the key length and the
-  // column count, and never let a column overwrite the reserved keys above — so a crafted
-  // report can't corrupt the doc or explode it past the 1 MiB limit.
+  // ColumnName becomes a Firestore field key: sanitize unsafe chars, cap key length / column count,
+  // never overwrite reserved keys — a crafted report can't corrupt/explode the doc.
   const RESERVED = new Set(['mvRowIndex', 'source', 'cells']);
   const MAX_COLUMNS = 200;
   let colCount = 0;
@@ -292,7 +252,7 @@ async function fetchAllCustomReportPages(
   date2Iso: string
 ): Promise<Record<string, unknown>[]> {
   const ridNum = parseInt(String(reportId).trim(), 10);
-  /** API βλ.: CustomReportId (int)· στείλε αριθμό όταν υπάρχει. */
+  /** API expects CustomReportId (int); send a number when available. */
   const customReportId: string | number = Number.isFinite(ridNum) ? ridNum : reportId.trim();
 
   const baseBody: Record<string, unknown> = {
@@ -300,7 +260,7 @@ async function fetchAllCustomReportPages(
     CustomReportParameters: { Date1: date1Iso, Date2: date2Iso },
   };
 
-  // 1) Χωρίς Page/Limit — το OFFSET/FETCH από pagination σπάει ορισμένα SQL reports (500).
+  // 1) Without Page/Limit — the OFFSET/FETCH from pagination breaks some SQL reports (500).
   const callNoPage = await mvCall('CustomReportGetData', apiKey, { ...baseBody });
   const errNoPage = asMvError(callNoPage, 'CustomReportGetData (no Page/Limit)');
   if (!errNoPage) {
@@ -310,7 +270,7 @@ async function fetchAllCustomReportPages(
 
   logger.warn(`[Megaventory] CustomReportGetData without pagination: ${errNoPage} — fallback Page/Limit`);
 
-  // 2) Pagination (μικρότερο Limit μερικές φορές μειώνει SQL πίεση)
+  // 2) Pagination (a smaller Limit sometimes reduces SQL pressure)
   const all: Record<string, unknown>[] = [];
   const pageLimit = Math.min(CUSTOM_REPORT_LIMIT, 500);
 
@@ -353,7 +313,7 @@ async function deleteMegaventoryCustomReportRows(db: Firestore, brandId: string)
   return deleted;
 }
 
-/** Αλλαγή ID report / enable χωρίς νέο API key (απαιτεί ενεργή σύνδεση). */
+/** Change report ID / enable without a new API key (requires an active connection). */
 export async function updateMegaventoryConnectorSettings(
   brandId: string,
   updates: {
@@ -393,10 +353,7 @@ export async function updateMegaventoryConnectorSettings(
   return { ok: true };
 }
 
-/**
- * Όλα τα *Get της Megaventory με ReturnTopNRecords επιστρέφουν τα "top N" σε **φθίνουσα** σειρά
- * primary id. Επόμενη σελίδα: ίδια φίλτρα + And LessThan min(id) της προηγούμενης σελίδας.
- */
+/** *Get endpoints with ReturnTopNRecords return top N descending by primary id; next page = same filters + And LessThan min(id) of the previous page. */
 function buildMvFiltersWithCursor(
   base: MvFilter[],
   cursorField: string,
@@ -407,10 +364,8 @@ function buildMvFiltersWithCursor(
   const cursorFilter: MvFilter = {
     AndOr: base.length ? 'And' : undefined,
     FieldName: cursorField,
-    // PER-60: cursor direction must match the endpoint's natural ordering. ProductGet/DocumentGet
-    // return DESC (walk downward with LessThan); InventoryLocationStockGet returns ASC — a LessThan
-    // walk there asked for ids below page 1's (the lowest) and silently stopped at 500 products
-    // (proven live: only productIDs 34166..36594 of 34166..300662 were ever ingested).
+    // Cursor direction must match endpoint ordering: ProductGet/DocumentGet DESC (LessThan),
+    // InventoryLocationStockGet ASC — a LessThan walk there silently stops after 500.
     SearchOperator: direction === 'asc' ? 'GreaterThan' : 'LessThan',
     SearchValue: cursor,
   };
@@ -444,7 +399,7 @@ function positiveNumber(value: unknown): number | null {
   return n > 0 ? n : null;
 }
 
-/** Τα MV category names είναι full paths («Root Catalog/e-tennis/Αθλητικά Παπούτσια») — κρατάμε το leaf. */
+/** MV category names are full paths (e.g. "Root Catalog/<brand>/<category>") — keep the leaf. */
 function leafCategoryName(raw: unknown): string {
   const s = String(raw ?? '').trim();
   if (!s) return '';
@@ -452,18 +407,8 @@ function leafCategoryName(raw: unknown): string {
   return parts.length ? parts[parts.length - 1] : s;
 }
 
-/**
- * Εξάγει το όνομα κατηγορίας από ProductGet row.
- *
- * ΣΗΜΑΝΤΙΚΟ (PER-60, επιβεβαιωμένο live): το ProductGet row κουβαλάει μόνο numeric
- * `ProductCategoryID`. Με `includeReferencedObjects: true` το πραγματικό όνομα έρχεται
- * embedded ως nested object **`mvProductCategory`** (mv prefix!) — ΟΧΙ `ProductCategory`.
- * Το `ProductCategoryName` εκεί είναι full path («Root Catalog/<brand>/<κατηγορία>») οπότε
- * κρατάμε το leaf segment. Σειρά προτίμησης:
- *   1) `mvProductCategory.{ProductCategoryName|ProductCategoryDescription}` (referenced object)
- *   2) flat `ProductCategoryName`
- *   3) flat `ProductCategoryDescription` (last resort — σχεδόν πάντα κενό)
- */
+/** Category from a ProductGet row: with `includeReferencedObjects: true` the name nests under `mvProductCategory` as a full path → keep leaf;
+ * else fall back to flat `ProductCategoryName`/`ProductCategoryDescription`. */
 export function extractMvCategory(p: Record<string, unknown>): string {
   const ref = (p.mvProductCategory ?? p.ProductCategory) as Record<string, unknown> | undefined;
   if (ref && typeof ref === 'object') {
@@ -485,30 +430,24 @@ async function fetchAllMvPages(
   baseFilters: MvFilter[],
   opts: {
     responseArrayKey: string;
-    /** FieldName για το LessThan cursor (όπως στην τεκμηρίωση MV) */
+    /** FieldName for the LessThan cursor (as in the MV docs) */
     cursorField: string;
-    /** Κλειδιά για εύρεση min id στο JSON row */
+    /** Keys for finding the min id in the JSON row */
     idKeys: string[];
     label: string;
     pageSize?: number;
     maxPages?: number;
     initialCursor?: number | null;
     maxRuntimeMs?: number;
-    /** Extra body fields merged into every page request (π.χ. includeReferencedObjects). */
+    /** Extra body fields merged into every page request (e.g. includeReferencedObjects). */
     extraBody?: Record<string, unknown>;
-    /**
-     * Match the endpoint's natural ordering: 'desc' (default — ProductGet/DocumentGet, LessThan/min)
-     * or 'asc' (InventoryLocationStockGet, GreaterThan/max). Wrong direction silently truncates to
-     * the first page.
-     */
+    /** Match endpoint ordering: 'desc' (default — ProductGet/DocumentGet) or 'asc' (InventoryLocationStockGet); wrong direction silently truncates to the first page. */
     cursorDirection?: 'asc' | 'desc';
   }
 ): Promise<{ rows: any[]; error: string | null; nextCursor: number | null; exhausted: boolean }> {
   const pageSize = opts.pageSize ?? MV_PAGE_SIZE;
   const maxPages = opts.maxPages ?? MV_MAX_PAGES;
-  // PER-60: undefined ⇒ unbudgeted (null); a number (incl. 0) ⇒ a real deadline. A 0 budget means
-  // "already over the soft deadline" → fetch nothing and defer — NOT "run unbounded" (the old `? :`
-  // treated 0 as falsy → no deadline → could run the catalog/invoice walk straight into the hard wall).
+  // undefined ⇒ unbudgeted; a number (incl. 0) ⇒ a real deadline, so 0 budget fetches nothing and defers.
   const deadline = opts.maxRuntimeMs == null ? null : Date.now() + Math.max(0, opts.maxRuntimeMs);
   const rows: any[] = [];
   let cursor: number | null = opts.initialCursor ?? null;
@@ -558,11 +497,8 @@ async function fetchAllMvPages(
   return { rows, error: null, nextCursor, exhausted };
 }
 
-/**
- * Megaventory occasionally returns an empty result for `DocumentDate >= ...` even while
- * unfiltered `DocumentGet` returns current documents. For incremental syncs, recover by
- * reading recent pages ordered by id and applying the date window locally.
- */
+/** Megaventory sometimes returns empty for `DocumentDate >= ...` while unfiltered `DocumentGet` has rows;
+ * recover by reading recent id-ordered pages and applying the date window locally. */
 async function fetchRecentMvDocumentsByLocalDate(
   apiKey: string,
   sinceYmd: string,
@@ -570,11 +506,8 @@ async function fetchRecentMvDocumentsByLocalDate(
 ): Promise<{ rows: any[]; error: string | null; nextCursor: number | null; exhausted: boolean }> {
   const rows: any[] = [];
   let cursor: number | null = opts.initialCursor ?? null;
-  // PER-60: budget the fallback. Without a deadline this walked all ~50k recent docs (≈22min) and
-  // ate the whole worker budget before products. With maxRuntimeMs it stops at the soft deadline and
-  // returns nextCursor so the next pass resumes from where it left off (exhausted=false).
-  // PER-60: see fetchAllMvPages — undefined ⇒ unbudgeted; a number (incl. 0) ⇒ a real deadline so a
-  // 0 budget (already over the soft deadline) fetches nothing and defers instead of walking unbounded.
+  // Budget the fallback (unbudgeted it walked ~50k docs and ate the worker budget); maxRuntimeMs stops at
+  // the soft deadline and returns nextCursor to resume; 0 budget fetches nothing and defers.
   const deadline = opts.maxRuntimeMs == null ? null : Date.now() + Math.max(0, opts.maxRuntimeMs);
   const maxPages = opts.maxPages && opts.maxPages > 0 ? opts.maxPages : MV_INCREMENTAL_DOCUMENT_FALLBACK_MAX_PAGES;
   let exhausted = false;
@@ -614,7 +547,7 @@ async function fetchRecentMvDocumentsByLocalDate(
   return { rows, error: null, nextCursor: cursor, exhausted };
 }
 
-/** Το API επιστρέφει mvProductStockList με nested mvStock· ενοποιούμε σε flat rows όπως περιμένει το writeBatch. */
+/** The API returns mvProductStockList with nested mvStock; flatten into the rows writeBatch expects. */
 function normalizeInventoryStockRows(raw: any[]): any[] {
   const out: any[] = [];
   for (const s of raw) {
@@ -779,14 +712,8 @@ export function isLikelySalesInvoice(row: Record<string, unknown>, type: MvDocum
   );
 }
 
-/**
- * PER-137: πιστωτικά/επιστροφές (credit notes). Θετικό ποσό + τύπος που δηλώνει πιστωτικό.
- * ΔΕΝ κρίνουμε εδώ αν το πιστωτικό μειώνει τον τζίρο (πελατειακή επιστροφή) ή το κόστος
- * (επιστροφή σε προμηθευτή) — αυτό το αποφασίζει ο aggregator μέσω του `parentDocumentId`:
- * πιστωτικό μετράει στον καθαρό τζίρο ΜΟΝΟ αν ο γονέας του είναι καταχωρημένο παραστατικό
- * πώλησης. Έτσι η ταξινόμηση είναι generic — καμία per-brand λίστα τύπων (114 custom τύποι
- * στο e-tennis account μόνο).
- */
+/** Credit notes / returns: positive amount + a credit type. Aggregator decides revenue vs cost via `parentDocumentId`
+ * (nets revenue only if parent is a sales doc). */
 export function isLikelyCreditDocument(row: Record<string, unknown>, type: MvDocumentTypeInfo): boolean {
   const amount = mvNum(row, 'DocumentAmountGrandTotal', 'DocumentTotalAmount', 'DocumentAmountTotal', 'DocumentTotal');
   if (amount <= 0) return false;
@@ -800,11 +727,8 @@ function isLikelyCreditDocumentType(type: MvDocumentTypeInfo): boolean {
   return /(credit|return|refund|πιστωτ|επιστροφ)/i.test(text);
 }
 
-/**
- * PER-137: map a raw MV credit document → Firestore credit_note row. Negative amounts (MV stores
- * positive magnitudes), `parentDocumentId` for the aggregator's parent-is-sales-invoice netting join.
- * Shared by the live sync (fetchMegaventoryData) and the one-time backfill so they never drift.
- */
+/** Map a raw MV credit document → Firestore credit_note row (negate amounts since MV stores positive magnitudes; keep `parentDocumentId` for netting).
+ * Shared by live sync and backfill so they never drift. */
 function mapMvCreditDocument(
   d: Record<string, unknown>,
   documentTypesById: Map<string, MvDocumentTypeInfo>,
@@ -860,10 +784,7 @@ export interface MegaventoryTestResult {
   error?: string;
 }
 
-/**
- * Επαλήθευση API key — `CurrencyGet` είναι ελαφρύ και δεν απαιτεί ειδικά δικαιώματα.
- * Bonus: δοκιμάζουμε `AccountInformationGet` για να πάρουμε όνομα λογαριασμού.
- */
+/** Verify the API key via lightweight `CurrencyGet`; also try `AccountInformationGet` for the account name. */
 export async function testMegaventoryConnection(apiKey: string): Promise<MegaventoryTestResult> {
   const key = normalizeApiKey(apiKey);
   if (!key) return { success: false, error: 'Λείπει το API key' };
@@ -887,7 +808,7 @@ export async function testMegaventoryConnection(apiKey: string): Promise<Megaven
       currency = String(a.DefaultCurrencyCode || a.CurrencyCode || '').trim();
     }
   } catch {
-    /* προαιρετικό */
+    /* optional */
   }
 
   if (!currency) {
@@ -954,14 +875,11 @@ function isoDate(value: unknown): string {
       if (!Number.isNaN(date.getTime())) return date.toISOString().slice(0, 10);
     }
   }
-  // Megaventory συνήθως επιστρέφει "YYYY-MM-DDThh:mm:ss"
+  // Megaventory usually returns "YYYY-MM-DDThh:mm:ss"
   return s.length >= 10 ? s.slice(0, 10) : s;
 }
 
-/**
- * Firestore document IDs δεν επιτρέπουν `/` (διαχωριστικό διαδρομής).
- * SKU π.χ. `N.100.4268-612-S/M` θα έσπαγε το `doc()`.
- */
+/** Firestore doc IDs disallow `/`; a SKU like `N.100.4268-612-S/M` would break `doc()`. */
 function sanitizeFirestoreDocId(raw: string): string {
   let s = String(raw ?? '').trim();
   if (!s) s = '_';
@@ -993,14 +911,13 @@ async function writeBatch(
   }
 }
 
-/** Καθαρίζει προηγούμενα gap-fill docs πριν ξαναγραφτεί ο κατάλογος από ProductGet. */
+/** Clears previous gap-fill docs before the catalog is rewritten from ProductGet. */
 async function mergeMegaventoryApiCatalogProducts(
   db: Firestore,
   brandId: string,
   customReportSnapshotRows: Record<string, unknown>[],
 ): Promise<number> {
-  // Μόνο τα source/sku χρειάζεται αυτό το read — με projection, αλλιώς φορτώνονται ~221k
-  // ολόκληρα docs (μετά το deleted-products import) στη μνήμη του worker.
+  // Projection (source/sku only) — otherwise ~221k whole docs load into the worker's memory.
   const snap = await db.collection('products').where('brandId', '==', brandId).select('source', 'sku').get();
   const apiCatalogDocs = snap.docs.filter((d) => d.data().source === PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE);
   for (let i = 0; i < apiCatalogDocs.length; i += 500) {
@@ -1022,9 +939,8 @@ async function mergeMegaventoryApiCatalogProducts(
     if (sku) reportSkus.add(sku);
   }
 
-  // PER-60: read the full catalog from megaventory_products (persisted across resumable passes)
-  // instead of an in-memory ProductGet set — so gap-fill works without holding the whole 87k-SKU
-  // catalog in one invocation. Fields are already normalized (incl. extractMvCategory at write time).
+  // Read the full catalog from megaventory_products (persisted, already normalized) instead of an
+  // in-memory ProductGet set — gap-fill works without holding the whole 87k-SKU catalog in one invocation.
   const catalogSnap = await db.collection('megaventory_products').where('brandId', '==', brandId).get();
   const items: { id: string; data: Record<string, unknown> }[] = [];
   const seenSku = new Set<string>();
@@ -1034,10 +950,8 @@ async function mergeMegaventoryApiCatalogProducts(
     const sku = String(p.sku ?? '').trim();
     if (!sku || seenSku.has(sku)) continue;
     seenSku.add(sku);
-    // PER-60 (deleted-products reconcile): mvDeletedAt → the intelligence doc stays (history,
-    // invoice attribution) but carries discontinued_at and ZERO stock, so dashboards/procurement
-    // can tell "delisted in the ERP" from "sold out". Reversible: an unmarked source doc on a later
-    // cycle rebuilds the doc here without these fields (this is a purge-then-rewrite).
+    // mvDeletedAt → doc stays (history/attribution) but gets discontinued_at + ZERO stock so dashboards
+    // distinguish "delisted in ERP" from "sold out". Reversible: an unmarked source doc rebuilds it clean.
     const isDeleted = Boolean(p.mvDeletedAt);
     if (isDeleted) deletedSkus.add(sku);
     if (reportSkus.has(sku)) continue;
@@ -1062,8 +976,8 @@ async function mergeMegaventoryApiCatalogProducts(
       },
     });
   }
-  // PER-60: report-covered (normalized-source) docs are NOT rebuilt by gap-fill — patch the ones
-  // whose source product is deleted (and heal ones that reappeared) so the marker can't go stale.
+  // Report-covered (normalized-source) docs aren't rebuilt by gap-fill — patch deleted ones and heal
+  // reappeared ones so the marker can't go stale.
   const normalizedPatches: { ref: FirebaseFirestore.DocumentReference; data: Record<string, unknown> }[] = [];
   for (const doc of snap.docs) {
     if (doc.data().source !== MEGAVENTORY_NORMALIZED_SOURCE) continue;
@@ -1102,7 +1016,7 @@ async function inferInvoiceBackfillCursor(db: Firestore, brandId: string): Promi
 export interface MegaventorySyncResult {
   success: boolean;
   imported: number;
-  /** PER-60: true όταν η fetch δεν ολοκληρώθηκε εντός του soft budget — ο worker κάνει re-enqueue. */
+  /** True when the fetch did not finish within the soft budget — the worker re-enqueues. */
   needsContinuation?: boolean;
   invoices?: number;
   salesOrders?: number;
@@ -1110,13 +1024,13 @@ export interface MegaventorySyncResult {
   products?: number;
   stock?: number;
   suppliers?: number;
-  /** Γραμμές custom saved report (π.χ. stock / κινητικότητα) — συλλογή megaventory_custom_report_rows */
+  /** Custom saved report rows (e.g. stock / movement) — collection megaventory_custom_report_rows */
   customReportRows?: number;
   normalized?: MegaventoryNormalizationCounts;
-  /** SKU που προστέθηκαν στη συλλογή `products` από πλήρες ProductGet (έλλειψη από custom report). */
+  /** SKUs added to the `products` collection from a full ProductGet (missing from the custom report). */
   apiCatalogGapFill?: number;
   rfm?: MegaventoryRfmCounts;
-  /** PER-60: deleted-products reconcile — imported (new tombstones), marked (existing → deleted), unmarked (reappeared). */
+  /** Deleted-products reconcile — imported (new tombstones), marked (existing → deleted), unmarked (reappeared). */
   deletedImported?: number;
   deletedMarked?: number;
   deletedUnmarked?: number;
@@ -1128,14 +1042,8 @@ interface MegaventorySyncOptions {
   skipDocuments?: boolean;
 }
 
-/**
- * PER-137 — ONE-TIME historical credit-note backfill (TEMPORARY; delete after prod is backfilled).
- *
- * Ongoing credits ingest automatically on every sync (fetchMegaventoryData). This only catches up
- * credits that already existed when the credit fix shipped, for brands whose invoice backfill was
- * ALREADY complete (so the DocumentGet walk won't re-read them). Brand-agnostic, idempotent
- * (merge-by-doc-id). Cheap: walks only the credit DocumentTypeIds (not the whole document space).
- */
+/** ONE-TIME historical credit-note backfill (TEMPORARY; delete after prod is backfilled). Brand-agnostic, idempotent (merge-by-doc-id);
+ * walks only credit DocumentTypeIds for brands whose invoice backfill is done. */
 export async function backfillMegaventoryCreditNotes(
   brandId: string,
   opts?: { maxRuntimeMs?: number; maxPagesPerType?: number },
@@ -1215,10 +1123,7 @@ export async function backfillMegaventoryCreditNotes(
   };
 }
 
-/**
- * Πλήρες sync (last 90 days). Καλείται από manual button + nightly schedule.
- * Ο user έχει επιλέξει: revenue source = Invoices, Megaventory ως master.
- */
+/** Full sync (last 90 days) from the manual button + nightly schedule; revenue source = Invoices, Megaventory as master. */
 export async function fetchMegaventoryData(
   brandId: string,
   options: MegaventorySyncOptions = {}
@@ -1237,38 +1142,31 @@ export async function fetchMegaventoryData(
   }
 
   const mode = options.mode || 'manual';
-  // PER-60: soft deadline ώστε καμία invocation να μην τρέξει μέσα στο hard timeout του worker.
+  // Soft deadline so no invocation runs into the worker's hard timeout.
   const syncDeadlineAt = Date.now() + MV_SYNC_SOFT_DEADLINE_MS;
   const remainingBudgetMs = () => Math.max(0, syncDeadlineAt - Date.now());
   const overBudget = () => Date.now() >= syncDeadlineAt;
   let needsContinuation = false;
-  // PER-60: `ingestionComplete` = EVERY ingestion phase (invoices/orders/catalog/stock/suppliers) has
-  // been persisted → this invocation is the dedicated "processing pass" (skip all ingestion fetches,
-  // run only the heavy downstream). `productCatalogComplete` is narrower — it gates ONLY the ProductGet
-  // skip — so the catalog can finish while a slow ancillary (suppliers) still needs another pass, WITHOUT
-  // prematurely flipping us into processing and stranding that ancillary.
+  // `ingestionComplete` = every ingestion phase persisted → this is the dedicated processing pass.
+  // `productCatalogComplete` is narrower (gates only the ProductGet skip) so a slow ancillary can still resume.
   const ingestionAlreadyComplete = conn.ingestionComplete === true;
   const catalogAlreadyComplete = ingestionAlreadyComplete || conn.productCatalogComplete === true;
-  // Per-cycle done flags for the non-resumable ancillary fetches (so they don't re-run every pass while
-  // the catalog spans multiple passes, and so they can defer/resume across passes under the budget).
+  // Per-cycle done flags for the non-resumable ancillary fetches, so they don't re-run while the catalog spans multiple passes.
   const ordersIngestComplete = ingestionAlreadyComplete || conn.ordersIngestComplete === true;
   const stockIngestComplete = ingestionAlreadyComplete || conn.stockIngestComplete === true;
   const suppliersIngestComplete = ingestionAlreadyComplete || conn.suppliersIngestComplete === true;
-  // PER-60: deleted-products reconcile (tombstone, never delete). Walks ProductGet showOnlyDeleted
-  // and marks/unmarks `mvDeletedAt` on catalog docs so removed ERP products stop polluting stock,
-  // movement and procurement while their history stays analyzable.
+  // Deleted-products reconcile (tombstone, never delete): walk ProductGet showOnlyDeleted, mark/unmark `mvDeletedAt`
+  // so removed ERP products stop polluting stock/movement/procurement but stay analyzable.
   const deletedScanComplete = ingestionAlreadyComplete || conn.deletedScanComplete === true;
   const deletedScanCursor = positiveNumber(conn.deletedScanCursor);
   const shouldRefreshDocuments = options.skipDocuments !== true;
   let docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
   const invoiceBackfillPending = conn.invoiceDocumentBackfillComplete !== true;
-  // Manual sync must refresh reference data quickly. Scheduled ERP runs can continue the historical
-  // invoice detail backfill so existing documents gain product line items for Data Analysis.
+  // Manual sync refreshes reference data quickly; scheduled runs continue the historical invoice detail
+  // backfill so existing documents gain product line items for Data Analysis.
   const shouldStageInvoiceBackfill = mode === 'scheduled' && invoiceBackfillPending;
-  // PER-60: manual/incremental invoice ingestion is now resumable too. The date-filtered DocumentGet
-  // often returns 0 (MV quirk) → unbounded fallback recovered ~50k docs and ate the whole budget. We
-  // now budget that fallback and checkpoint a cursor (manualInvoiceCursor) + a per-cycle complete flag
-  // (manualInvoiceComplete) so it resumes across passes instead of re-fetching every ingestion pass.
+  // Manual/incremental invoice ingestion is resumable: budget the date-filter-empty fallback and checkpoint
+  // manualInvoiceCursor + manualInvoiceComplete so it resumes instead of re-fetching.
   const manualInvoiceCursor = positiveNumber(conn.manualInvoiceCursor);
   const manualInvoiceAlreadyComplete = conn.manualInvoiceComplete === true;
   let invoiceBackfillCursor = positiveNumber(conn.invoiceDocumentBackfillCursor);
@@ -1285,7 +1183,7 @@ export async function fetchMegaventoryData(
   }
   const sinceStr = toYmd(docsWindow.windowStart);
   const todayStr = toYmd(docsWindow.windowEnd);
-  /** Custom report (Performance κ.λπ.) χρειάζεται πλήρες ιστορικό· όχι το 48h overlap των documents. */
+  /** The custom report (Performance etc.) needs the full history; not the documents' 48h overlap. */
   const customReportHistoryYear =
     Number(conn.historyLoadedUntilYear) > 0
       ? Number(conn.historyLoadedUntilYear)
@@ -1323,10 +1221,8 @@ export async function fetchMegaventoryData(
   let postNormalizeRefresh: Record<string, unknown> | null = null;
   let documentDiagnostics: Record<string, unknown> | null = null;
   let invoiceBackfillProgress: Record<string, unknown> | null = null;
-  // PER-60: manual/incremental invoice ingestion progress. invoiceIngestComplete gates products (manual
-  // path only) so the catalog gets a clean budget once invoices finish; manualInvoiceResumeCursor holds
-  // the checkpoint when we defer mid-walk. The staged 3-year backfill is spread across nights → never
-  // blocks the catalog (true here), and skipDocuments runs have no invoices to wait on.
+  // invoiceIngestComplete gates products (manual path) so the catalog gets a clean budget once invoices finish;
+  // staged backfill and skipDocuments runs have no invoices to wait on (true here).
   let invoiceIngestComplete = shouldStageInvoiceBackfill || !shouldRefreshDocuments || manualInvoiceAlreadyComplete;
   let manualInvoiceResumeCursor: number | null = null;
   let manualInvoiceJustCompleted = false;
@@ -1334,7 +1230,7 @@ export async function fetchMegaventoryData(
   let customReportRowsSnapshot: Record<string, unknown>[] = [];
   let apiCatalogGapFillCount = 0;
   let productGetExhausted = false;
-  // PER-60: did each ancillary phase finish (fetch+write) on THIS pass — feeds the ingestionComplete gate.
+  // Did each ancillary phase finish (fetch+write) on THIS pass — feeds the ingestionComplete gate.
   let ordersDoneThisPass = false;
   let stockDoneThisPass = false;
   let suppliersDoneThisPass = false;
@@ -1345,7 +1241,7 @@ export async function fetchMegaventoryData(
     const skipDocumentsThisPass =
       !shouldRefreshDocuments ||
       ingestionAlreadyComplete ||
-      // PER-60: manual invoices already exhausted earlier this ingestion cycle — don't re-fetch every pass
+      // Manual invoices already exhausted earlier this ingestion cycle — don't re-fetch every pass
       (!shouldStageInvoiceBackfill && manualInvoiceAlreadyComplete);
     if (skipDocumentsThisPass) {
       const skipReason = ingestionAlreadyComplete
@@ -1378,7 +1274,7 @@ export async function fetchMegaventoryData(
         label: 'DocumentGet (invoices)',
         pageSize: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_PAGE_SIZE : undefined,
         maxPages: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_MAX_PAGES_PER_SYNC : undefined,
-        // PER-60: resume the manual/incremental invoice walk from its checkpoint (same DocumentId cursor space)
+        // Resume the manual/incremental invoice walk from its checkpoint (same DocumentId cursor space)
         initialCursor: shouldStageInvoiceBackfill ? invoiceBackfillCursor : (manualInvoiceCursor ?? undefined),
         maxRuntimeMs: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_RUNTIME_MS : remainingBudgetMs(),
       }
@@ -1386,7 +1282,7 @@ export async function fetchMegaventoryData(
     let documentFallbackUsed = false;
     let recentDocumentRowsMerged = 0;
     if (!shouldStageInvoiceBackfill && !invFetchErr && invRows.length === 0) {
-      // PER-60: budget the fallback + resume from the manual cursor so it can't run into the hard wall.
+      // Budget the fallback + resume from the manual cursor so it can't run into the hard wall.
       const fallback = await fetchRecentMvDocumentsByLocalDate(apiKey, sinceStr, {
         maxRuntimeMs: remainingBudgetMs(),
         initialCursor: manualInvoiceCursor,
@@ -1407,7 +1303,7 @@ export async function fetchMegaventoryData(
       }
     }
     if (!shouldStageInvoiceBackfill && !invFetchErr) {
-      // PER-60: translate the manual invoice walk outcome into resume/complete signals for products + state.
+      // Translate the manual invoice walk outcome into resume/complete signals for products + state.
       if (invoiceBackfillExhausted) {
         invoiceIngestComplete = true;
         manualInvoiceJustCompleted = true;
@@ -1421,7 +1317,7 @@ export async function fetchMegaventoryData(
     }
     if (!invFetchErr) {
       const rollingRecentWindow = buildRollingUtcDayWindow(MV_RECENT_DOCUMENT_LOOKBACK_DAYS);
-      // PER-60: budget the rolling-window merge too (best-effort freshness pull). When the pass already
+      // Budget the rolling-window merge too (best-effort freshness pull). When the pass already
       // ran over budget — e.g. invoices were just deferred — remainingBudgetMs()≈0 makes this a no-op.
       const recent = await fetchRecentMvDocumentsByLocalDate(apiKey, rollingRecentWindow.since, {
         maxRuntimeMs: remainingBudgetMs(),
@@ -1450,8 +1346,8 @@ export async function fetchMegaventoryData(
     } else {
       const rawDocs = invRows as Record<string, unknown>[];
       const docs = rawDocs.filter((d) => isLikelySalesInvoice(d, documentTypeInfo(d, documentTypesById)));
-      // PER-137: τα πιστωτικά ρέουν από το ΙΔΙΟ DocumentGet stream (incremental & backfill) —
-      // μέχρι τώρα απορρίπτονταν σιωπηλά και ο τζίρος ERP έμενε μικτός (επιστροφές αόρατες).
+      // Credits flow from the SAME DocumentGet stream (incremental & backfill) — they used to be
+      // silently dropped, leaving ERP revenue gross (returns invisible).
       const creditDocs = rawDocs.filter((d) => isLikelyCreditDocument(d, documentTypeInfo(d, documentTypesById)));
       documentDiagnostics = {
         invoiceBackfillMode: shouldStageInvoiceBackfill ? 'staged' : invoiceBackfillPending ? 'incremental_backfill_pending' : 'incremental',
@@ -1496,14 +1392,13 @@ export async function fetchMegaventoryData(
           clientId: mvText(d, 'DocumentSupplierClientId', 'DocumentSupplierClientID', 'SupplierClientId', 'SupplierClientID'),
           lineItems: mvDocumentLineItems(d),
           source: 'megaventory_api',
-          // PER-137: ρητό kind ώστε ο aggregator να ξεχωρίζει πωλήσεις από πιστωτικά.
-          // Παλιά docs χωρίς kind = πωλήσεις (back-compat).
+          // Explicit kind so the aggregator distinguishes sales from credits.
+          // Old docs without kind = sales (back-compat).
           kind: 'sales_invoice',
         },
       }));
-      // PER-137: πιστωτικά → ίδια collection, αρνητικά totalAmount/netAmount (στο MV API
-      // αποθηκεύονται ως θετικά μεγέθη), kind: 'credit_note', + parentDocumentId για το
-      // generic netting join στον aggregator.
+      // Credits → same collection, negated amounts (MV stores positive magnitudes), kind: 'credit_note',
+      // + parentDocumentId for the aggregator's netting join.
       const creditItems = creditDocs.map((d) =>
         mapMvCreditDocument(d, documentTypesById, String(conn.currency || 'EUR'))
       );
@@ -1529,11 +1424,8 @@ export async function fetchMegaventoryData(
     }
 
     if (docsOk && shouldStageInvoiceBackfill && invoiceBackfillProgress) {
-      // EARLY write (πριν τα αργά gap-fill/RFM που κάνουν το function timeout). Γράφουμε ΕΔΩ:
-      //  • αν ΔΕΝ έχει τελειώσει → το νέο cursor (συνεχίζει την επόμενη νύχτα)
-      //  • αν τελείωσε (exhausted) → το flag Complete ΩΣΤΕ να μην ξανατρέξει το 3ετές staged backfill.
-      // Πριν, το Complete μαρκαριζόταν μόνο στο τελικό patch → το function τερμάτιζε πρώτα και το
-      // backfill κολλούσε «μισοτελειωμένο» επ' άπειρον, ξανα-σκανάροντας 3 χρόνια κάθε νύχτα.
+      // EARLY write (before the slow gap-fill/RFM time out the function): not-done → new cursor; done (exhausted) →
+      // Complete flag so the 3-year staged backfill doesn't re-scan every night.
       const patch: Record<string, unknown> = {
         'megaventory.lastDocsSyncAt': FieldValue.serverTimestamp(),
         'megaventory.historyLoadedUntilYear': docsWindow.historyStartYear,
@@ -1583,12 +1475,10 @@ export async function fetchMegaventoryData(
         ...(errors.length ? { error: errors[0] } : {}),
       };
     }
-    } // PER-60: end invoice ingestion (documents refresh block)
+    } // end invoice ingestion (documents refresh block)
 
     // ── Sales & Purchase Orders (ingestion — own per-cycle done flag + budget guard) ──
-    // PER-60: pulled OUT of the documents-else so they still run on passes where invoices are already
-    // complete (otherwise they'd be skipped forever → strand). Invoices keep budget priority; the whole
-    // orders fetch is deferred (not truncated) when over the soft deadline.
+    // Outside the documents-else so they still run once invoices are complete; deferred (not truncated) when over the soft deadline.
     if (!ingestionAlreadyComplete && !ordersIngestComplete && invoiceIngestComplete) {
     if (overBudget()) {
       needsContinuation = true;
@@ -1686,22 +1576,19 @@ export async function fetchMegaventoryData(
     } // end orders ingestion guard
 
     // ── Products (resumable catalog fetch) ────────────────────────────
-    // PER-60: το ProductGet (87k+ SKU) δεν χωράει πάντα σε ένα 30min pass. Το τραβάμε σταδιακά με
-    // cursor (productCatalogCursor) γράφοντας idempotent στο megaventory_products. Όταν εξαντληθεί,
-    // productCatalogComplete=true και τα downstream (gap-fill κ.λπ.) διαβάζουν τον πλήρη κατάλογο
-    // από το Firestore σε επόμενο pass — αντί να τον κρατάμε όλο στη μνήμη.
+    // ProductGet (87k+ SKUs) may span passes via productCatalogCursor (idempotent to megaventory_products); when exhausted, downstream reads the full catalog from Firestore.
     let productGetExhausted = true;
     let productCatalogNextCursor: number | null = null;
     if (catalogAlreadyComplete) {
       logger.info(`[Megaventory] catalog already complete for ${brandId} — skipping ProductGet, running downstream`);
     } else if (!invoiceIngestComplete) {
-      // PER-60: invoices haven't finished ingesting this cycle — give them the remaining passes first so
-      // the catalog isn't started with a near-zero budget (which previously ran ProductGet into the wall).
+      // Invoices haven't finished this cycle — give them remaining passes first so the catalog
+      // isn't started with a near-zero budget (which ran ProductGet into the wall).
       productGetExhausted = false;
       needsContinuation = true;
       logger.info(`[Megaventory] ProductGet deferred for ${brandId} — manual invoice ingestion not yet complete`);
     } else if (overBudget()) {
-      // PER-60: no budget left for the catalog this pass — defer rather than fetch unbounded (maxRuntimeMs≈0
+      // No budget left for the catalog this pass — defer rather than fetch unbounded (maxRuntimeMs≈0
       // would otherwise disable the deadline inside fetchAllMvPages).
       productGetExhausted = false;
       needsContinuation = true;
@@ -1712,7 +1599,7 @@ export async function fetchMegaventoryData(
         cursorField: 'ProductID',
         idKeys: ['ProductID', 'ProductId'],
         label: 'ProductGet',
-        // PER-60: referenced objects → κατηγορία· budget + cursor ώστε να μη «φάει» το worker timeout.
+        // Referenced objects → category; budget + cursor so it doesn't eat the worker timeout.
         extraBody: { includeReferencedObjects: true },
         maxRuntimeMs: remainingBudgetMs(),
         initialCursor: positiveNumber(conn.productCatalogCursor) ?? undefined,
@@ -1735,10 +1622,8 @@ export async function fetchMegaventoryData(
             unitOfMeasurement: p.ProductUnitOfMeasurement || '',
             sellingPrice: num(p.ProductSellingPrice),
             purchasePrice: num(p.ProductPurchasePrice),
-            // PER-60: NO stockOnHand here — ProductGet carries no stock fields at all
-            // (probe-verified 2026-06-10: ProductStockOnHandTotal does not exist in the
-            // response, so the old num() mapping wrote 0 for every product and would
-            // clobber the real totals the stock walk merges in below).
+            // NO stockOnHand here — ProductGet carries no stock fields (ProductStockOnHandTotal doesn't exist);
+            // mapping it would write 0 and clobber the real totals the stock walk merges in below.
             source: 'megaventory_api',
           },
         }));
@@ -1758,7 +1643,7 @@ export async function fetchMegaventoryData(
     let stRowsRaw: any[] = [];
     let stFetchErr: string | null = null;
     let stExhausted = false;
-    // PER-60: this endpoint returns rows in ASCENDING productID order (probe-verified) — the cursor
+    // This endpoint returns rows in ASCENDING productID order (probe-verified) — the cursor
     // must walk upward (GreaterThan/max), or the walk silently stops after the first 500 products.
     ({ rows: stRowsRaw, error: stFetchErr, exhausted: stExhausted } = await fetchAllMvPages('InventoryLocationStockGet', apiKey, [], {
       responseArrayKey: 'mvProductStockList',
@@ -1782,9 +1667,8 @@ export async function fetchMegaventoryData(
       referenceOk = false;
       errors.push(stFetchErr);
     } else if (!stExhausted) {
-      // PER-60: budget truncated the walk mid-way. A partial row set would produce WRONG
-      // per-product totals below (and a half-rewritten megaventory_stock) — defer the whole
-      // phase and re-walk with a fresh budget on the continuation pass.
+      // Budget truncated the walk mid-way: a partial row set would produce WRONG per-product totals
+      // (and a half-rewritten megaventory_stock) — defer and re-walk with a fresh budget next pass.
       needsContinuation = true;
       logger.warn(`[Megaventory] InventoryLocationStockGet truncated by budget for ${brandId} (${stRowsRaw.length} rows) — deferring stock to continuation pass`);
     } else {
@@ -1805,10 +1689,8 @@ export async function fetchMegaventoryData(
       counts.stock = items.length;
       totalImported += items.length;
 
-      // PER-60: per-product stock totals → megaventory_products mirrors. ProductGet returns NO
-      // stock fields (probe-verified), so this walk is the ONLY source for the mirrors'
-      // stockOnHand — which gap-fill then copies into products.stock_level. Same semantics as
-      // the PI overlay (applyMegaventoryStockOverlay): available when positive, else physical.
+      // Per-product stock totals → megaventory_products mirrors. ProductGet has NO stock fields, so this walk is the ONLY
+      // source for stockOnHand (copied to products.stock_level by gap-fill): available when positive, else physical.
       const totals = new Map<string, { available: number; physical: number }>();
       for (const s of stocks) {
         const pid = String(s.productID || s.ProductId || '');
@@ -1882,11 +1764,7 @@ export async function fetchMegaventoryData(
     } // end suppliers ingestion guard
 
     // ── Deleted products (import + tombstone reconcile) ──────────────
-    // PER-60: MV stops returning ANY data for deleted products in the normal sync, so our mirrors
-    // would freeze at last-seen stock forever. Per the agreed requirements (Makis 2026-06-10): keep
-    // deleted products (history/statistics), import the FULL deleted backlog (~133k for e-tennis,
-    // first cycle only — later cycles diff), mark with `mvDeletedAt`, zero their stock, and unmark
-    // products that reappear (MV supports undelete). Budgeted + cursor-resumable like every phase.
+    // MV drops deleted products from normal sync; import the FULL backlog (~133k first cycle, later diff), mark `mvDeletedAt`, zero stock, unmark reappeared. Cursor-resumable.
     if (!ingestionAlreadyComplete && !deletedScanComplete && invoiceIngestComplete) {
     if (remainingBudgetMs() < MV_DELETED_SCAN_RESERVE_MS) {
       needsContinuation = true;
@@ -2029,7 +1907,7 @@ export async function fetchMegaventoryData(
     } // end deleted-scan reserve guard
     } // end deleted-scan ingestion guard
 
-    // ── Custom saved report (π.χ. Performance / αποθέματα — CustomReportGetData) ──
+    // ── Custom saved report (e.g. Performance / stock — CustomReportGetData) ──
     const reportId = String(conn.customReportId || '').trim();
     const reportEnabled = conn.customReportEnabled !== false;
     if (reportId && reportEnabled) {
@@ -2067,10 +1945,7 @@ export async function fetchMegaventoryData(
     }
 
     // ── Early completion marker ──────────────────────────────────────
-    // Τα core δεδομένα (invoices/orders/products/stock/suppliers/custom report) έχουν ήδη γραφτεί.
-    // Γράφουμε ΕΔΩ το ορατό `lastSyncAt` ώστε το UI να δείχνει φρέσκο sync ΑΚΟΜΗ κι αν τα επόμενα
-    // βαριά/ασταθή βήματα (gap-fill, RFM, procurement refresh) αργήσουν ή «φάνε» το function timeout
-    // σε μεγάλα e-shops. Το πλήρες import_jobs record παραμένει στο τέλος (best-effort).
+    // Core data is written; mark visible `lastSyncAt` HERE so the UI shows a fresh sync even if the heavy steps (gap-fill/RFM/procurement) run long or time out.
     try {
       await db.doc(`connectors/${brandId}`).update({
         'megaventory.lastSyncAt': FieldValue.serverTimestamp(),
@@ -2079,29 +1954,22 @@ export async function fetchMegaventoryData(
       logger.warn(`[Megaventory] early lastSyncAt mark failed for ${brandId}: ${markErr instanceof Error ? markErr.message : String(markErr)}`);
     }
 
-    // PER-60: gap-fill διαγράφει & ξαναγράφει ΟΛΟΚΛΗΡΟ τον api-catalog διαβάζοντας από το
-    // megaventory_products (Firestore). Τρέχει ΜΟΝΟ όταν ο κατάλογος είναι ΠΛΗΡΗΣ — αλλιώς θα
-    // έκανε purge-then-partial = data loss. Αν δεν είναι (ή ξεμείναμε από budget), ζητάμε continuation.
-    // PER-60: the catalog (ProductGet) is "done" when exhausted this pass or already complete from a prior.
+    // Gap-fill purges & rewrites the ENTIRE api-catalog from megaventory_products; runs ONLY when the catalog is COMPLETE
+    // (else purge-then-partial = data loss) — otherwise request continuation. "Done" = exhausted this pass or complete from a prior.
     const productCatalogDone = catalogAlreadyComplete || (referenceOk && productGetExhausted !== false);
     const ordersDone = ordersIngestComplete || ordersDoneThisPass;
     const stockDone = stockIngestComplete || stockDoneThisPass;
     const suppliersDone = suppliersIngestComplete || suppliersDoneThisPass;
     const deletedScanDone = deletedScanComplete || deletedScanDoneThisPass;
-    // PER-60: ingestion is complete only when EVERY phase (invoices/orders/catalog/stock/suppliers/
-    // deleted-scan) is in. Processing (gap-fill etc.) purges+rewrites from Firestore — it must not start
-    // on a partial dataset, and no single fast phase may flip us into "processing pass" early and strand
-    // a slow one.
+    // Ingestion complete only when EVERY phase (invoices/orders/catalog/stock/suppliers/deleted-scan) is in.
+    // Processing purges+rewrites from Firestore — must not start on a partial dataset nor be flipped early by one fast phase.
     const ingestionComplete = ingestionAlreadyComplete ||
       (referenceOk && invoiceIngestComplete && productCatalogDone && ordersDone && stockDone && suppliersDone && deletedScanDone);
-    // PER-60: run the heavy downstream only when ingestion is complete AND we are either the dedicated
-    // processing pass or still have a full budget reserve. Otherwise defer to a fresh pass — large brands
-    // can't fit ingestion AND processing in one 30-min invocation; small brands finish in a single pass.
+    // Run the heavy downstream only when ingestion is complete AND we're either the dedicated processing pass or
+    // still have a full budget reserve; else defer (large brands can't fit ingestion AND processing in one 30-min pass).
     const runProcessing = ingestionComplete && (ingestionAlreadyComplete || remainingBudgetMs() >= MV_PROCESSING_RESERVE_MS);
-    // PER-60: within the processing stage, run heavy sub-stages greedily but checkpoint between them
-    // (gapfill=0 → rfm=1 → finalize=2). `processingDoneThrough` = index of the next sub-stage still to
-    // run this pass; it advances as each completes. A brand whose processing alone exceeds 30min then
-    // completes across several passes; a light brand runs all three inline in one pass.
+    // Run heavy sub-stages greedily but checkpoint between them (gapfill=0 → rfm=1 → finalize=2). `processingDoneThrough` =
+    // index of the next sub-stage to run, advancing as each completes; heavy brands span passes, light ones run all inline.
     let processingDoneThrough = runProcessing
       ? PROCESSING_ORDER.indexOf(planProcessing(conn.processingStage as ProcessingStage | null | undefined).run)
       : 0;
@@ -2135,9 +2003,8 @@ export async function fetchMegaventoryData(
       processingDoneThrough = 1; // gap-fill stage done (advance even on error — don't loop on it)
     }
 
-    // PER-60: the standalone after-gap-fill stock-movement refresh was REMOVED — it ran the ~20min
-    // module right after gap-fill inside the same pass (the pass-2 hard-kill). The dedicated
-    // 'stockmovement' sub-stage below covers its case (gap-fill signal) in its own budgeted pass.
+    // The standalone after-gap-fill stock-movement refresh was REMOVED (it ran the ~20min module in the same pass);
+    // the dedicated 'stockmovement' sub-stage below covers its case (gap-fill signal) in its own budgeted pass.
 
     // ── Log import_jobs ──────────────────────────────────────────────
     const patch: Record<string, unknown> = {};
@@ -2175,10 +2042,8 @@ export async function fetchMegaventoryData(
           patch['megaventory.invoiceDocumentBackfillCompletedAt'] = FieldValue.serverTimestamp();
         }
       } else {
-        // PER-60: manual/incremental invoice resume state. Checkpoint the cursor when we defer mid-walk;
-        // mark complete (and drop the cursor) when the walk exhausts so later ingestion passes skip it.
-        // NOT reset on failure (unlike the catalog) — a saved cursor means a retry resumes instead of
-        // re-walking from scratch, which is what prevents re-hitting the wall at the same spot.
+        // Manual/incremental invoice resume: checkpoint cursor when deferring mid-walk, mark complete (drop cursor) when exhausted.
+        // NOT reset on failure (unlike catalog) — a saved cursor lets a retry resume instead of re-hitting the wall at the same spot.
         if (manualInvoiceJustCompleted) {
           patch['megaventory.manualInvoiceComplete'] = true;
           patch['megaventory.manualInvoiceCompletedAt'] = FieldValue.serverTimestamp();
@@ -2213,12 +2078,12 @@ export async function fetchMegaventoryData(
     const invoiceBackfillStillInProgress =
       invoiceBackfillPending && (!shouldStageInvoiceBackfill || invoiceBackfillProgress?.exhausted !== true);
     if (!runProcessing) {
-      // PER-60: ingestion pass — RFM runs on the dedicated processing pass.
+      // Ingestion pass — RFM runs on the dedicated processing pass.
       rfmSkippedReason = 'deferred_to_processing_pass';
     } else if (processingDoneThrough !== 1) {
       // not the RFM sub-stage on this pass (gap-fill deferred earlier, or RFM already done in a prior pass)
     } else if (remainingBudgetMs() < MV_STAGE_RESERVE_MS.rfm) {
-      // PER-60: not enough budget to fit the monolithic RFM rebuild — defer it to a fresh pass.
+      // Not enough budget to fit the monolithic RFM rebuild — defer it to a fresh pass.
       needsContinuation = true;
       rfmSkippedReason = 'deferred_over_budget';
       logger.warn(`[Megaventory] insufficient budget reserve before RFM refresh for ${brandId} — deferring to continuation pass`);
@@ -2245,7 +2110,7 @@ export async function fetchMegaventoryData(
     if (!runProcessing || processingDoneThrough !== 2) {
       // not the procurement sub-stage on this pass (earlier sub-stage deferred, or already done)
     } else if (remainingBudgetMs() < MV_STAGE_RESERVE_MS.procurement) {
-      // PER-60: not enough budget to fit the procurement refresh — defer it to a fresh pass.
+      // Not enough budget to fit the procurement refresh — defer it to a fresh pass.
       needsContinuation = true;
       logger.warn(`[Megaventory] insufficient budget reserve before procurement refresh for ${brandId} — deferring to continuation pass`);
     } else {
@@ -2269,14 +2134,13 @@ export async function fetchMegaventoryData(
     if (!runProcessing || processingDoneThrough !== 3) {
       // not the stock-movement sub-stage on this pass (earlier sub-stage deferred, or already done)
     } else if (remainingBudgetMs() < MV_STAGE_RESERVE_MS.stockmovement) {
-      // PER-60: refreshStockMovement alone takes ~20min for an 88k-SKU brand (the pass-2 hard-kill on
+      // refreshStockMovement alone takes ~20min for an 88k-SKU brand (the pass-2 hard-kill on
       // staging) — only START it with a near-full budget, i.e. effectively in its OWN fresh pass.
       needsContinuation = true;
       logger.warn(`[Megaventory] insufficient budget reserve before stock-movement refresh for ${brandId} — deferring to continuation pass`);
     } else {
       // ── Processing sub-stage 3: stock movement (last) ──
-      // Runs when the custom report normalized products OR the gap-fill added catalog SKUs (this pass
-      // or a prior checkpointed one) — covers the old standalone after-gap-fill refresh too.
+      // Runs when the custom report normalized products OR gap-fill added catalog SKUs (this pass or a prior checkpoint).
       const gapFillSignal = apiCatalogGapFillCount > 0 || Number(conn.lastApiCatalogGapFill) > 0;
       if ((normalizedCounts && normalizedCounts.products > 0) || gapFillSignal) {
         try {
@@ -2295,10 +2159,8 @@ export async function fetchMegaventoryData(
       processingDoneThrough = 4; // stock-movement done — whole processing stage complete
     }
 
-    // PER-60: persist resumable state AFTER every phase has decided whether it needs continuation.
-    // (a) Per-phase progress — checkpoint so the next pass skips finished phases. ProductGet has its own
-    //     complete/cursor; the ancillaries (orders/stock/suppliers) have per-cycle done flags. These persist
-    //     EVEN when the whole ingestion isn't done yet, so a multi-pass cycle never re-fetches a done phase.
+    // Persist resumable state AFTER every phase decided continuation.
+    // (a) Per-phase progress — checkpoint so the next pass skips finished phases (ProductGet's own complete/cursor; ancillary per-cycle flags), persisted even mid-ingestion.
     if (!catalogAlreadyComplete) {
       if (productGetExhausted !== false && referenceOk) {
         patch['megaventory.productCatalogComplete'] = true;

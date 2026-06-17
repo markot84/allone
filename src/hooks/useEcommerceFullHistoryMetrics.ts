@@ -13,16 +13,13 @@ import { monthlyRevenueFromDailyRecord } from '../utils/roiUtils';
 import { filterByBrandHistory, getBrandHistoryStartISO, passesBrandHistory } from '../utils/brandHistoryStart';
 
 export type EcommerceFullHistoryMode =
-  /** Φόρτωση όλων των παραγγελιών από Firestore — αργό, για σελίδες που χρειάζονται parity/detail. */
+  /** Load all orders from Firestore — slow, for pages that need parity/detail. */
   | 'full'
-  /** Μόνο server aggregate (`ecommerce_summary`) — γρήγορο Dashboard. */
+  /** Server aggregate only (`ecommerce_summary`) — fast Dashboard. */
   | 'summary_only';
 
-/**
- * E-shop metrics από Firestore:
- * - `full`: μετά τη φόρτωση raw orders, τα ημερήσια/μηνιαία συμπληρώνουν όλο το ιστορικό· μέχρι τότε fallback στο summary.
- * - `summary_only`: χωρίς raw fetch — εμπιστεύεται το `ecommerce_summary` (υπολογισμός από τον aggregator στο sync).
- */
+/** E-shop metrics from Firestore: `full` loads raw orders for full daily/monthly history (summary
+ * fallback until then); `summary_only` trusts `ecommerce_summary` computed at sync. */
 export function useEcommerceFullHistoryMetrics(options?: { mode?: EcommerceFullHistoryMode }) {
   const mode = options?.mode ?? 'summary_only';
   const { currentBrand } = useBrand();
@@ -30,7 +27,7 @@ export function useEcommerceFullHistoryMetrics(options?: { mode?: EcommerceFullH
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const platformsKey = [...ecomm.connectedPlatforms].sort().join('|');
 
-  /** Cutoff στο Firestore query — ίδια σημασιά με το client clamp· λιγότερα docs για e-shop όταν έχει οριστεί historyStartDate. */
+  /** Cutoff in the Firestore query — same meaning as the client clamp; fewer docs when historyStartDate is set. */
   const historyCutoff = getBrandHistoryStartISO(currentBrand);
   const revenueModeKey = currentBrand?.revenueSourceMode ?? 'eshop_classified';
 
@@ -43,7 +40,7 @@ export function useEcommerceFullHistoryMetrics(options?: { mode?: EcommerceFullH
           })
         : Promise.resolve([]),
     enabled: mode === 'full' && !!brandId && ecomm.connectedPlatforms.length > 0,
-    /** Όχι «η χθεσινή μέρα μόνο»: το query κατεβάζει όλο το ιστορικό για επανυπολογισμό KPI — μεγάλο staleTime + cache πρώτα μειώνει επαναλαμβανόμενη αναμονή. */
+    /** Not "yesterday only": the query downloads the full history to recompute KPIs — large staleTime + cache-first reduces repeated waiting. */
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -77,9 +74,8 @@ export function useEcommerceFullHistoryMetrics(options?: { mode?: EcommerceFullH
       : ecomm.ordersByDay;
     const monthlyRevenueClamped = historyCutoff
       ? ecomm.monthlyRevenue.filter((r) => {
-          // LOGIC-13: a month is in range if ANY of its days is ≥ the brand-history cutoff —
-          // compare its LAST day, not the 1st, so a mid-month historyStartDate doesn't drop
-          // the whole (partially-in-range) month from the monthly chart.
+          // A month is in range if ANY day is ≥ the cutoff — compare its LAST day so a
+          // mid-month historyStartDate doesn't drop the partially-in-range month.
           const [y, m] = r.month.split('-').map(Number);
           const lastDay = new Date(y, m, 0).getDate();
           return passesBrandHistory(`${r.month}-${String(lastDay).padStart(2, '0')}`, currentBrand);

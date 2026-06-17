@@ -110,7 +110,7 @@ export function Reports() {
   const segmentsCount = segments.length;
   const { campaigns } = useCampaigns();
   const { records: organicRecords, totalOrganicRevenue, hasOrganicRevenue: hasOrganic } = useOrganic();
-  // PER-130/BUG-11: revenue/platforms only — skip the heavy skuStats + stock_movement chunk load.
+  // Revenue/platforms only — skip the heavy skuStats + stock_movement chunk load.
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const campaignsTyped = (campaigns ?? []) as import('../../types').Campaign[];
 

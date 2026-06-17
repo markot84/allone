@@ -1,4 +1,4 @@
-/** Ενδεικτικά δεδομένα για τις 7 καρτέλες Procurement (ίδια δομή με PROCUREMENT_TEMPLATE.xlsx) */
+/** Sample data for the 7 Procurement tabs (same structure as PROCUREMENT_TEMPLATE.xlsx) */
 
 type ProcurementColl = 'procurement_inventory' | 'procurement_costing' | 'procurement_item_evaluation' | 'procurement_customer_evaluation' | 'procurement_pricing_policy' | 'procurement_fiscal_year' | 'procurement_statistics';
 
@@ -16,7 +16,7 @@ export async function seedProcurementDemoData(
 ): Promise<number> {
   let total = 0;
 
-  // 1. ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ
+  // 1. Inventory management
   const inventoryRows: Record<string, string>[] = [
     { 'ΚΩΔΙΚΟΣ': 'SKU-001', 'ΠΕΡΙΓΡΑΦΗ': 'Προϊόν Alpha', 'ΚΑΤΗΓΟΡΙΑ': 'Ηλεκτρονικά', 'ΠΡΟΜΗΘΕΥΤΗΣ': 'Supplier A', 'ΟΜΑΔΑ ΡΟΗΣ': 'Υψηλή', 'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ': 'A', 'STATUS ΚΩΔΙΚΟΥ': 'Ενεργό', 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ Μ.Μ.': '12,50', 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ': '150', 'ΔΥΝΑΜΙΚΟ ΥΠΟΛΟΙΠΟ': '180', 'ΣΥΝΟΛΙΚΕΣ ΠΩΛΗΣΕΙΣ': '320', 'ΗΜΕΡΕΣ ΕΠΑΡΚΕΙΑΣ ΔΙΑΘΕΣΙΜΟΥ ΑΠΟΘΕΜΑΤΟΣ': '45', 'ΚΙΒΩΤΟΛΟΓΙΟ': 'Ναι', 'ΠΟΣΟΤΗΤΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ': '5', 'ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ': '62,50', 'ΠΟΣΟΤΗΤΑ ΑΜΕΣΗΣ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ': '2', 'ΠΟΣΟΤΗΤΑ ΠΡΟΣ ΠΡΟΩΘΗΣΗ': '20' },
     { 'ΚΩΔΙΚΟΣ': 'SKU-002', 'ΠΕΡΙΓΡΑΦΗ': 'Προϊόν Beta', 'ΚΑΤΗΓΟΡΙΑ': 'Ρούχα', 'ΠΡΟΜΗΘΕΥΤΗΣ': 'Supplier B', 'ΟΜΑΔΑ ΡΟΗΣ': 'Μέτρια', 'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ': 'B', 'STATUS ΚΩΔΙΚΟΥ': 'Ενεργό', 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ Μ.Μ.': '8,20', 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ': '80', 'ΔΥΝΑΜΙΚΟ ΥΠΟΛΟΙΠΟ': '95', 'ΣΥΝΟΛΙΚΕΣ ΠΩΛΗΣΕΙΣ': '210', 'ΗΜΕΡΕΣ ΕΠΑΡΚΕΙΑΣ ΔΙΑΘΕΣΙΜΟΥ ΑΠΟΘΕΜΑΤΟΣ': '60', 'ΚΙΒΩΤΟΛΟΓΙΟ': 'Όχι', 'ΠΟΣΟΤΗΤΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ': '0', 'ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ': '0', 'ΠΟΣΟΤΗΤΑ ΑΜΕΣΗΣ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ': '0', 'ΠΟΣΟΤΗΤΑ ΠΡΟΣ ΠΡΟΩΘΗΣΗ': '15' },
@@ -25,7 +25,7 @@ export async function seedProcurementDemoData(
   await batchSet('procurement_inventory', makeItems('inventory', inventoryRows), brandId);
   total += inventoryRows.length;
 
-  // 2. ΚΟΣΤΟΛΟΓΗΣΗ
+  // 2. Costing
   const costingRows: Record<string, string>[] = [
     { 'ΚΩΔΙΚΟΣ': 'SKU-001', 'ΠΕΡΙΓΡΑΦΗ': 'Προϊόν Alpha', 'ΚΑΤΗΓΟΡΙΑ': 'Ηλεκτρονικά', 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ': '12,50', 'ΔΕΥΤΕΡΟΓΕΝΕΣ ΚΟΣΤΟΣ': '2,30', 'ΑΝΑΛΥΣΗ ΚΟΣΤΟΥΣ ΑΝΑ ΔΡΑΣΤΗΡΙΟΤΗΤΑ': 'Συσκευασία 1,20€ · Μεταφορά 0,80€ · Αποθήκη 0,30€', 'ΜΕΣΟ ΚΟΣΤΟΣ ΚΑΤΗΓΟΡΙΑΣ': '11,20', 'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ': '48.520' },
     { 'ΚΩΔΙΚΟΣ': 'SKU-002', 'ΠΕΡΙΓΡΑΦΗ': 'Προϊόν Beta', 'ΚΑΤΗΓΟΡΙΑ': 'Ρούχα', 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ': '8,20', 'ΔΕΥΤΕΡΟΓΕΝΕΣ ΚΟΣΤΟΣ': '1,50', 'ΑΝΑΛΥΣΗ ΚΟΣΤΟΥΣ ΑΝΑ ΔΡΑΣΤΗΡΙΟΤΗΤΑ': 'Συσκευασία 0,60€ · Μεταφορά 0,50€', 'ΜΕΣΟ ΚΟΣΤΟΣ ΚΑΤΗΓΟΡΙΑΣ': '9,10', 'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ': '31.265' },
@@ -34,7 +34,7 @@ export async function seedProcurementDemoData(
   await batchSet('procurement_costing', makeItems('costing', costingRows), brandId);
   total += costingRows.length;
 
-  // 3. ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΩΝ
+  // 3. Item evaluation
   const itemEvalRows: Record<string, string>[] = [
     { 'ΚΩΔΙΚΟΣ': 'SKU-001', 'ΠΕΡΙΓΡΑΦΗ': 'Προϊόν Alpha', 'ΚΑΤΗΓΟΡΙΑ': 'Ηλεκτρονικά', 'ΑΞΙΟΛΟΓΗΣΗ': 'Άριστα', 'ΒΑΘΜΟΛΟΓΙΑ': '95', 'ΑΞΙΟΛΟΓΗΣΗ ΑΝΑ ΔΕΙΚΤΗ': 'Πελάτες 98 · Κέρδος 92 · Ροή 95' },
     { 'ΚΩΔΙΚΟΣ': 'SKU-002', 'ΠΕΡΙΓΡΑΦΗ': 'Προϊόν Beta', 'ΚΑΤΗΓΟΡΙΑ': 'Ρούχα', 'ΑΞΙΟΛΟΓΗΣΗ': 'Καλά', 'ΒΑΘΜΟΛΟΓΙΑ': '78', 'ΑΞΙΟΛΟΓΗΣΗ ΑΝΑ ΔΕΙΚΤΗ': 'Πελάτες 82 · Κέρδος 75 · Ροή 77' },
@@ -43,7 +43,7 @@ export async function seedProcurementDemoData(
   await batchSet('procurement_item_evaluation', makeItems('item_evaluation', itemEvalRows), brandId);
   total += itemEvalRows.length;
 
-  // 4. ΑΞΙΟΛΟΓΗΣΗ ΠΕΛΑΤΩΝ
+  // 4. Customer evaluation
   const customerEvalRows: Record<string, string>[] = [
     { 'ΚΩΔΙΚΟΣ': 'C-001', 'ΕΠΩΝΥΜΙΑ': 'Εταιρεία ΑΕ', 'ΑΞΙΟΛΟΓΗΣΗ': 'VIP', 'ΒΑΘΜΟΛΟΓΙΑ': '92', 'ΑΞΙΟΛΟΓΗΣΗ ΑΝΑ ΔΕΙΚΤΗ': 'Τζίρος 95 · Συχνότητα 90 · Προτεραιότητα 91' },
     { 'ΚΩΔΙΚΟΣ': 'C-002', 'ΕΠΩΝΥΜΙΑ': 'Μάρκετ Β', 'ΑΞΙΟΛΟΓΗΣΗ': 'Καλή', 'ΒΑΘΜΟΛΟΓΙΑ': '75', 'ΑΞΙΟΛΟΓΗΣΗ ΑΝΑ ΔΕΙΚΤΗ': 'Τζίρος 70 · Συχνότητα 78 · Προτεραιότητα 77' },
@@ -52,7 +52,7 @@ export async function seedProcurementDemoData(
   await batchSet('procurement_customer_evaluation', makeItems('customer_evaluation', customerEvalRows), brandId);
   total += customerEvalRows.length;
 
-  // 5. ΤΙΜΟΛΟΓΙΑΚΗ ΠΟΛΙΤΙΚΗ
+  // 5. Pricing policy
   const pricingRows: Record<string, string>[] = [
     { 'ΚΩΔΙΚΟΣ': 'SKU-001', 'ΠΕΡΙΓΡΑΦΗ': 'Προϊόν Alpha', 'ΚΑΤΗΓΟΡΙΑ': 'Ηλεκτρονικά', 'ΚΟΣΤΟΣ ΑΓΟΡΑΣ': '14,80', 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ': '12,50', 'ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ': '14,80', 'MARKETING BASED COSTING': '15,20', 'ACTIVITY BASED COSTING': '14,50', 'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ': 'A', 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ': '24,90', 'ΤΙΜΟΚΑΤΑΛΟΓΟΣ ΒΑΣΗΣ': '26,90', 'ΕΤΑΙΡΙΚΟΣ ΚΑΤΑΛΟΓΟΣ': '23,90', 'ΕΚΠΤΩΤΙΚΟΣ Α': '22,90', 'ΕΚΠΤΩΤΙΚΟΣ Β': '21,50', 'ΕΚΠΤΩΤΙΚΟΣ C': '19,90' },
     { 'ΚΩΔΙΚΟΣ': 'SKU-002', 'ΠΕΡΙΓΡΑΦΗ': 'Προϊόν Beta', 'ΚΑΤΗΓΟΡΙΑ': 'Ρούχα', 'ΚΟΣΤΟΣ ΑΓΟΡΑΣ': '9,70', 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ': '8,20', 'ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ': '9,70', 'MARKETING BASED COSTING': '10,20', 'ACTIVITY BASED COSTING': '9,50', 'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ': 'B', 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ': '18,50', 'ΤΙΜΟΚΑΤΑΛΟΓΟΣ ΒΑΣΗΣ': '19,90', 'ΕΤΑΙΡΙΚΟΣ ΚΑΤΑΛΟΓΟΣ': '17,90', 'ΕΚΠΤΩΤΙΚΟΣ Α': '16,90', 'ΕΚΠΤΩΤΙΚΟΣ Β': '15,90', 'ΕΚΠΤΩΤΙΚΟΣ C': '14,50' },
@@ -61,7 +61,7 @@ export async function seedProcurementDemoData(
   await batchSet('procurement_pricing_policy', makeItems('pricing_policy', pricingRows), brandId);
   total += pricingRows.length;
 
-  // 6. ΑΠΟΛΟΓΙΣΤΙΚΟ ΕΤΟΣ
+  // 6. Fiscal year
   const fiscalRows: Record<string, string>[] = [
     { 'ΚΩΔΙΚΟΣ': 'SKU-001', 'ΠΕΡΙΓΡΑΦΗ': 'Προϊόν Alpha', 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ': '24,90', 'ΠΡΟΤΑΣΗ ΤΙΜΟΛΟΓΙΑΚΗΣ ΠΟΛΙΤΙΚΗΣ': 'Μείωση 5% για προώθηση', 'ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ': '7.968', 'ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ': '3.984' },
     { 'ΚΩΔΙΚΟΣ': 'SKU-002', 'ΠΕΡΙΓΡΑΦΗ': 'Προϊόν Beta', 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ': '18,50', 'ΠΡΟΤΑΣΗ ΤΙΜΟΛΟΓΙΑΚΗΣ ΠΟΛΙΤΙΚΗΣ': 'Σταθερή τιμή', 'ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ': '3.885', 'ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ': '2.068' },
@@ -70,7 +70,7 @@ export async function seedProcurementDemoData(
   await batchSet('procurement_fiscal_year', makeItems('fiscal_year', fiscalRows), brandId);
   total += fiscalRows.length;
 
-  // 7. ΣΤΑΤΙΣΤΙΚΑ (matrix: πρώτη στήλη = μετρική, υπόλοιπες = περιόδους)
+  // 7. Statistics (matrix: first column = metric, rest = periods)
   const statsRows: Record<string, string>[] = [
     { 'ΣΤΑΤΙΣΤΙΚΑ ΑΝΑ ΠΕΡΙΟΔΟ (ΜΗΝΑΣ)': 'Πλήθος ενεργού κωδικολογίου', 'Ιαν': '312', 'Φεβ': '308', 'Μαρ': '315', 'Απρ': '318' },
     { 'ΣΤΑΤΙΣΤΙΚΑ ΑΝΑ ΠΕΡΙΟΔΟ (ΜΗΝΑΣ)': 'Νέοι κωδικοί', 'Ιαν': '12', 'Φεβ': '8', 'Μαρ': '15', 'Απρ': '11' },

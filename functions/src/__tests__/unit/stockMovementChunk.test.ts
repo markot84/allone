@@ -1,11 +1,5 @@
-/**
- * PER-60 — chunkRecord: correctness + the linear-time property.
- *
- * The original implementation re-JSON.stringify-ed the whole growing bucket on every
- * insertion (quadratic): measured ~11min of pure CPU for an 88k-SKU record, which ran the
- * Megaventory stock-movement pass into the worker's 30min hard cap. These tests pin both
- * the chunking semantics and that a catalog-sized record chunks in interactive time.
- */
+/** chunkRecord: correctness + linear-time. Pins chunking semantics and that a
+ * catalog-sized record (Megaventory stock-movement) chunks in interactive time. */
 import { describe, expect, it } from 'vitest';
 import { chunkRecord } from '../../stockMovementTracker';
 

@@ -158,7 +158,7 @@ type KpiTabId = 'campaignEfficiency' | 'storeEfficiency';
 
 type ExpenseKpiId = 'campaignsSpend' | 'marketingExpenses' | 'totalMarketingCost';
 
-/** Κορυφή σελίδας: τα δύο βασικά ROI (μεγάλη εμφάνιση). */
+/** Top of page: the two main ROI KPIs (large display). */
 const ROI_HERO_ORDER: KpiTabId[] = ['storeEfficiency', 'campaignEfficiency'];
 
 const EXPENSES_ORDER: ExpenseKpiId[] = ['campaignsSpend', 'marketingExpenses', 'totalMarketingCost'];
@@ -168,7 +168,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const { campaigns, hasImported: hasCampaigns } = useCampaigns();
   const campaignsAll = campaigns as Campaign[];
   const { activeStrategy } = useActiveStrategy();
-  // PER-130/BUG-11: revenue/platforms only — skip the heavy skuStats + stock_movement chunk load.
+  // Revenue/platforms only — skip the heavy skuStats + stock_movement chunk load.
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
   const {
@@ -204,7 +204,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     ]
   );
 
-  /** Όταν δεν υπάρχει organicRevenueByDay στο Firestore, εφαρμόζεται κατανομή από σύνολο καναλιών. */
+  /** When organicRevenueByDay is missing in Firestore, distribute from the channel total. */
   const organicUsesChannelFallback = useMemo(() => {
     let sumRaw = 0;
     if (ga4OrganicByDay) {
@@ -215,7 +215,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     return sumRaw < 0.5 && totalOrganicRevenueFromChannels > 0;
   }, [ga4OrganicByDay, periodDates.fromDate, periodDates.toDate, totalOrganicRevenueFromChannels]);
 
-  /** Ίδια pipeline με Campaigns: schedule overlap → applyCampaignDateRangeToMetrics (όχι ξεχωριστός τύπος slice). */
+  /** Same pipeline as Campaigns: schedule overlap → applyCampaignDateRangeToMetrics (no separate slice type). */
   const dateFilteredCampaigns = useMemo(() => {
     const all = campaigns as Campaign[];
     const { fromDate, toDate } = periodDates;
@@ -284,7 +284,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     [ecommRevenueByDay, periodDates.fromDate, periodDates.toDate]
   );
 
-  /** Online παραγγελίες (direct e-shop + marketplaces όπως Skroutz) στην επιλεγμένη περίοδο — για εμπορικό CVR. */
+  /** Online orders (direct e-shop + marketplaces like Skroutz) in the selected period — for commercial CVR. */
   const onlineOrdersCountInPeriod = useMemo(() => {
     return ecommHist.allOrdersByDay.reduce((sum, row) => {
       if (row.date >= periodDates.fromDate && row.date <= periodDates.toDate) return sum + row.orders;
@@ -292,7 +292,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     }, 0);
   }, [ecommHist.allOrdersByDay, periodDates.fromDate, periodDates.toDate]);
 
-  /** GA4 sessions στην επιλεγμένη περίοδο (ημερήσια σύνολα). */
+  /** GA4 sessions in the selected period (daily totals). */
   const ga4SessionsInPeriod = useMemo(() => {
     if (!hasGa4Data || ga4DailyEntries.length === 0) return 0;
     const byDate = new Map(ga4DailyEntries.map((d) => [d.date, d.sessions]));
@@ -303,19 +303,15 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     return sum;
   }, [hasGa4Data, ga4DailyEntries, periodDates.fromDate, periodDates.toDate]);
 
-  /**
-   * Online CVR: όλες οι εμπορικές online παραγγελίες από synced stores/marketplaces
-   * στην περίοδο ÷ συνολικές συνεδρίες GA4 τις ίδιες ημέρες. Το GA4 property πρέπει να αντιστοιχεί στο site.
-   */
+  /** Online CVR: commercial online orders from synced stores/marketplaces in the period ÷ total
+   * GA4 sessions on the same days. The GA4 property must match the site. */
   const eShopCvrPercent = useMemo(() => {
     if (!ecomm.hasData || !hasGa4Data || ga4SessionsInPeriod <= 0 || onlineOrdersCountInPeriod <= 0) return null;
     return (onlineOrdersCountInPeriod / ga4SessionsInPeriod) * 100;
   }, [ecomm.hasData, hasGa4Data, ga4SessionsInPeriod, onlineOrdersCountInPeriod]);
 
-  /**
-   * Organic CVR από GA4 traffic channels (όσα default channel groups περιέχουν «organic»).
-   * Βασίζεται στο τελευταίο GA4 sync, όχι στο ακριβές εύρος ημερολογίου ROI.
-   */
+  /** Organic CVR from GA4 default channel groups containing "organic".
+   * Based on the last GA4 sync, not the exact ROI calendar range. */
   const organicCvrPercent = useMemo(() => {
     if (!ga4TrafficSources.length) return null;
     let sessions = 0;
@@ -352,7 +348,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     ]
   );
 
-  /** Organic στην επιλεγμένη περίοδο (ίδιο άθροισμα με τη γραμμή Organic στο chart τάσης). */
+  /** Organic in the selected period (same sum as the Organic line in the trend chart). */
   const organicRevenueInPeriod = useMemo(
     () => trendData.reduce((s, r) => s + (r.organic || 0), 0),
     [trendData]
@@ -851,7 +847,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         </Card>
       </div>
 
-      {/* Section 2: Revenue Trend */}
+      {/* Revenue Trend */}
       {trendData.length > 0 && (
         <Card padding="lg">
           <CardHeader
@@ -973,7 +969,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         </Card>
       )}
 
-      {/* Section 3: Budget Utilization */}
+      {/* Budget Utilization */}
       {monthlyBudget > 0 && (
         <Card padding="lg">
           <CardHeader

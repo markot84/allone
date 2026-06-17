@@ -1,10 +1,8 @@
-/**
- * Κοινά βοηθητικά Firestore για ERP connectors (SoftOne, Epsilon Net, Entersoft).
- */
+/** Shared Firestore helpers for ERP connectors (SoftOne, Epsilon Net, Entersoft). */
 
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 
-/** Firestore document IDs δεν επιτρέπουν `/`. */
+/** Firestore document IDs cannot contain `/`. */
 export function sanitizeFirestoreDocId(raw: string): string {
   let s = String(raw ?? '').trim();
   if (!s) s = '_';
@@ -26,9 +24,7 @@ export function erpIsoDate(value: unknown): string {
   return s.length >= 10 ? s.slice(0, 10) : s;
 }
 
-/**
- * Normalize base URL: trim, ensure scheme, optional trailing slash.
- */
+/** Normalize base URL: trim, ensure scheme, optional trailing slash. */
 export function normalizeHttpBase(url: string, trailingSlash: boolean): string {
   let s = String(url ?? '').trim();
   if (!s) return '';

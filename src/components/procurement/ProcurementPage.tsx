@@ -173,9 +173,8 @@ function isNumericColName(k: string): boolean {
   return k.trim() !== '' && !isNaN(Number(k.trim()));
 }
 
-/** Excludes summary/total rows that have an empty ΚΩΔΙΚΟΣ field.
- *  The procurement Excel template places a grand-total row at index 0 with no ΚΩΔΙΚΟΣ;
- *  including it in sums or averages doubles (or otherwise skews) every KPI. */
+/** Excludes summary/total rows with an empty ΚΩΔΙΚΟΣ (e.g. the template's grand-total row at
+ *  index 0), which would otherwise skew sums/averages. */
 function getProductRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
   if (rows.length === 0) return rows;
   const kodikosKey =
@@ -187,9 +186,8 @@ function getProductRows(rows: Record<string, unknown>[]): Record<string, unknown
   });
 }
 
-/** Totals for the ΑΠΟΛΟΓΙΣΤΙΚΟ ΕΤΟΣ sheet: sum per-SKU rows (semantically correct & robust).
- *  Uses getProductRows to exclude the grand-total row at index 0 (empty ΚΩΔΙΚΟΣ),
- *  which would otherwise double every figure. */
+/** Totals for the ΑΠΟΛΟΓΙΣΤΙΚΟ ΕΤΟΣ sheet by summing per-SKU rows; getProductRows excludes the
+ *  empty-ΚΩΔΙΚΟΣ grand-total row that would otherwise double every figure. */
 function getFiscalYearTotals(rows: Record<string, unknown>[]): { turnover: number; profit: number; marginPct: number } {
   if (rows.length === 0) return { turnover: 0, profit: 0, marginPct: 0 };
   const productRows = getProductRows(rows);
@@ -214,8 +212,8 @@ const COL_ALIASES: Record<string, string[]> = {
   'ΔΕΥΤΕΡΟΓΕΝΕΣ':        ['ΔΕΥΤΕΡΟΓΕΝΕΣ', 'ΔΕΥΤΕΡ'],
   'ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ':['ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ', 'ΤΖΙΡΟΣ'],
   'ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ': ['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ', 'ΚΕΡΔΟΣ'],
-  // Κοστολόγηση · στήλη Η — όχι απολογιστικό έτος (what-if)
-  // Στη Firestore αποθηκεύεται ως 'ΤΖΙΡΟΣ' (το ακριβές header από το Excel template)
+  // Costing sheet · column H — not the fiscal year (what-if)
+  // Stored in Firestore as 'ΤΖΙΡΟΣ' (the exact header from the Excel template)
   'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ': [
     'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ',
     'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12 ΜΗΝΟΥ',
@@ -233,22 +231,13 @@ const COL_ALIASES: Record<string, string[]> = {
   'ΚΕΡΔΟΣ':              ['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ', 'ΚΕΡΔΟΣ', 'PROFIT', 'ΚΕΡΔΗ'],
   'ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ': ['ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ', 'ΑΞΙΑ ΑΝΑΤΡΟΦ'],
   'ΠΕΡΙΓΡΑΦΗ':           ['ΠΕΡΙΓΡΑΦΗ', 'ΟΝΟΜΑ', 'DESCRIPTION', 'NAME'],
-  // «ΚΩΔΙΚΟΣ MASTER»/«MASTER»: στο συγκεντρωτικό φύλλο «ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ MASTER» ο κωδικός
-  // είναι ο parent (master) κωδικός. Μπαίνουν ΜΕΤΑ το «ΚΩΔΙΚΟΣ» ώστε στα αναλυτικά φύλλα (που έχουν
-  // και τα δύο) να κερδίζει πάντα το exact «ΚΩΔΙΚΟΣ» (variant) — pass-1 exact προηγείται.
+  // «ΚΩΔΙΚΟΣ MASTER»/«MASTER» listed after «ΚΩΔΙΚΟΣ» so on detail sheets (which have both) the
+  // exact «ΚΩΔΙΚΟΣ» variant wins via pass-1.
   'ΚΩΔΙΚΟΣ':             ['ΚΩΔΙΚΟΣ', 'ΚΩΔΙΚΟΣ MASTER', 'MASTER', 'SKU', 'CODE', 'BARCODE'],
 };
 
-/** Returns the first non-numeric column key whose name contains the keyword (case-insensitive).
- *  Tries multiple aliases when the primary keyword doesn't match.
- *  Normalises whitespace, newlines and underscores before comparing — handles Excel headers
- *  that contain line-breaks, extra spaces, or underscore-separated Firestore keys.
- *
- *  Two-pass strategy:
- *   1. Exact normalised match (===) — avoids false positives like "ΤΖΙΡΟΣ 12ΜΗΝΟΥ ΑΛΥΣΙΔΑ"
- *      matching before "ΤΖΙΡΟΣ 12ΜΗΝΟΥ".
- *   2. Substring/includes match — fallback for short/partial aliases (e.g. "ΠΡΩΤΟΓΕΝΕΣ"
- *      finding "ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ"). */
+/** Finds a non-numeric column key matching the keyword (with aliases), normalising whitespace/
+ *  newlines/underscores: pass 1 exact normalised match, pass 2 substring fallback. */
 function findCol(rows: Record<string, unknown>[], keyword: string): string {
   if (rows.length === 0) return keyword;
   const keys = Object.keys(rows[0]).filter(k => !isNumericColName(k));
@@ -272,19 +261,16 @@ function findCol(rows: Record<string, unknown>[], keyword: string): string {
   return keyword;
 }
 
-/** Άθροισμα στήλης «Πραγματικός τζίρος 12μήνου» στο φύλλο Κοστολόγηση (στήλη Η στο PROCUREMENT_TEMPLATE).
- *  Falls back to positional lookup (column index 7 = H) when named matching fails.
- *  The positional fallback sorts dataKeys by canonical costing template order so that
- *  alphabetical / underscore-keyed Firestore docs still resolve to the correct column. */
+/** Sum of «Πραγματικός τζίρος 12μήνου» (Costing column H); falls back to positional lookup
+ *  (index 7, dataKeys sorted by canonical costing order) when named matching fails. */
 function getCostingReal12mTurnover(rows: Record<string, unknown>[]): { sum: number; hasColumn: boolean } {
   if (rows.length === 0) return { sum: 0, hasColumn: false };
   let col = findCol(rows, 'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ');
   const first = rows[0];
   let hasColumn = col in first && first[col] !== undefined;
 
-  // Positional fallback: column H = index 7 of data columns (after stripping metadata keys).
-  // Sort by canonical costing column order (normalising underscores/spaces) so the correct
-  // column is always at position 7 regardless of Firestore key ordering.
+  // Positional fallback: column H = index 7 of data columns (metadata keys stripped), sorted by
+  // canonical costing order so position 7 is correct regardless of Firestore key ordering.
   if (!hasColumn) {
     const normK = (s: string) => s.toUpperCase().replace(/[\s\n\r_]+/g, ' ').trim();
     const canonicalNorm = CANONICAL_COLUMN_ORDER['costing'].map(normK);
@@ -437,12 +423,8 @@ function getSummary(key: ProcurementSheetType, rows: Record<string, unknown>[]) 
   }
 }
 
-/**
- * Identifies the "metric name" column in statistics rows by finding
- * the key whose values are mostly non-numeric (text) strings.
- * Needed because Firestore returns fields in undefined order, so we
- * cannot rely on allKeys[0] being the label column.
- */
+/** Identifies the statistics "metric name" column as the key with mostly non-numeric values
+ *  (Firestore field order is undefined, so allKeys[0] can't be trusted as the label). */
 function findStatMetricColumn(rows: Record<string, unknown>[], excludedKeys: Set<string>): string {
   if (rows.length === 0) return '';
   const keys = Object.keys(rows[0]).filter(k => !excludedKeys.has(k));
@@ -804,12 +786,11 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
   const toast = useToast();
   const { currentBrand } = useBrand();
   const { data, isRefreshing, hasData, invalidate, isSheetLoading } = useProcurement();
-  // Full-page spinner ΜΟΝΟ για τα sheets που τροφοδοτούν την επισκόπηση/KPIs. Τα υπόλοιπα
-  // (pricing_policy/customer_evaluation/fiscal_year/statistics) φορτώνουν στο παρασκήνιο και
-  // εμφανίζονται όταν ανοίξει το αντίστοιχο tab → η σελίδα εμφανίζεται πολύ νωρίτερα.
+  // Full-page spinner only for sheets feeding the overview/KPIs; the rest load in the background
+  // and appear when their tab opens, so the page renders much earlier.
   const criticalLoading = isSheetLoading('inventory') || isSheetLoading('costing') || isSheetLoading('item_evaluation');
   const { refresh: refreshProcurementSignals } = useRefreshProcurementSignals();
-  // PER-130/BUG-11: revenue only — skip the heavy skuStats + stock_movement chunk load.
+  // Revenue only — skip the heavy skuStats + stock_movement chunk load.
   const { monthlyRevenue, totalRevenue, hasData: hasEcommerce } = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const [viewMode, setViewMode] = useState<'overview' | 'detail'>('overview');
   const [activeTab, setActiveTab] = useState<ProcurementSheetType>('inventory');
@@ -852,7 +833,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     const costRows = (data.costing ?? []) as Record<string, unknown>[];
     const { sum: costing12mSum, hasColumn: hasCosting12mCol } = getCostingReal12mTurnover(costRows);
 
-    // Πραγματικός τζίρος 12μήνου: κύρια πηγή = άθροισμα Κοστολόγηση (στήλη Η)· εναλλακτικά e-shop όταν δεν υπάρχει η στήλη στο αρχείο
+    // 12-month real turnover: primary source = Costing sheet sum (column H); fallback to e-shop when the column is absent from the file
     const last12Revenue = (() => {
       if (hasCosting12mCol) return costing12mSum;
       if (!hasEcommerce) return 0;
@@ -889,10 +870,8 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
 
   const rawActiveData = (data[activeTab] ?? []) as Record<string, unknown>[];
 
-  /**
-   * For statistics: filter out metric rows that have no values across all period columns.
-   * (If a stat couldn't be produced, we hide it — we don't want the client asking for it.)
-   */
+  /** For statistics: hide metric rows with no values across all period columns
+   *  (a stat that couldn't be produced shouldn't be shown). */
   const activeData = useMemo(() => {
     if (activeTab !== 'statistics' || rawActiveData.length === 0) return rawActiveData;
     const metricCol = findStatMetricColumn(rawActiveData, EXCLUDED_KEYS);
@@ -909,10 +888,8 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     );
   }, [rawActiveData, activeTab]);
 
-  /**
-   * Headers: union of ALL row keys (Firestore may omit empty fields per-row) →
-   * filter out empty columns → apply canonical template order → pin metric col for stats.
-   */
+  /** Headers: union of all row keys (Firestore may omit empty fields per-row), minus empty columns,
+   *  in canonical template order, with the metric col pinned for stats. */
   const headers = useMemo(() => {
     if (activeData.length === 0) return [];
     const keySet = new Set<string>();

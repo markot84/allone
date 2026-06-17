@@ -37,7 +37,7 @@ type SortCol =
 const fmtNum = (n: number) => n.toLocaleString('el-GR', { maximumFractionDigits: 0 });
 const fmtMoney = (n: number) =>
   n.toLocaleString('el-GR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
-/** CPC συχνά < 1 €· με maxFractionDigits 0 το fmtMoney έδειχνε λάθος «0 €». */
+/** CPC is often < 1 €; with maxFractionDigits 0, fmtMoney wrongly showed "0 €". */
 const fmtCpc = (n: number) =>
   n.toLocaleString('el-GR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const fmtPct = (n: number) => `${n.toFixed(2)}%`;
@@ -54,7 +54,7 @@ function formatCountryLabel(raw: string): string {
   return t || '—';
 }
 
-/** Κλειδί `CC|Τοπωνύμιο` από connectors (Google/Meta). */
+/** Key `CC|placename` from connectors (Google/Meta). */
 function parseCityKey(raw: string): { country: string; locality: string } {
   const key = raw || 'UNKNOWN';
   const pipe = key.indexOf('|');
@@ -69,9 +69,7 @@ interface Props {
   campaigns: Campaign[];
 }
 
-/**
- * Αθροίζει geo.byCountry / geo.byCity από όλες τις ορατές καμπάνιες.
- */
+/** Aggregates geo.byCountry / geo.byCity across all visible campaigns. */
 export function CampaignsGeoTab({ campaigns }: Props) {
   const [level, setLevel] = useState<'country' | 'city'>('country');
   const [search, setSearch] = useState('');
@@ -136,8 +134,8 @@ export function CampaignsGeoTab({ campaigns }: Props) {
           (typeof c.purchase_conversion_value === 'number' ? c.purchase_conversion_value : null) ??
           c.conversion_value ??
           0;
-        // Meta/ορισμένα APIs δεν δίνουν purchases ανά περιοχή (όλα 0) ενώ το campaign έχει σύνολα·
-        // κατανομή κατά spend share μόνο όταν το raw geo είναι ουσιαστικά κενό σε conversions.
+        // Meta/some APIs don't return purchases per region (all 0) while the campaign has totals;
+        // allocate by spend share only when raw geo is essentially empty of conversions.
         const convSlack = Math.max(0, Number(campConv) - totalRawConv);
         const valSlack = Math.max(0, Number(campVal) - totalRawVal);
         const allocConv = convSlack > 0.01 && totalRawConv < 0.01 && totalSpent > 0;

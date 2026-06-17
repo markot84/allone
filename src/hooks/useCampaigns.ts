@@ -7,16 +7,8 @@ import { useAttribution } from '../contexts/AttributionContext';
 import type { Campaign, MetaAttributionWindow } from '../types';
 import { isMetaChannel } from '../utils/roiUtils';
 
-/**
- * Εφαρμόζει το επιλεγμένο Meta attribution window πάνω σε Meta campaigns.
- * - Αντικαθιστά aggregate purchase_conversions / purchase_conversion_value με τις τιμές του window.
- * - Κλιμακώνει αναλογικά τα per-day purchase fields στο dailyMetrics, ώστε να παραμένουν συνεπή
- *   όταν φιλτράρουμε σε date range (date-range aware metrics αθροίζουν daily purchases).
- * - Κλιμακώνει τα purchase entries στο conversionActions ώστε το conversion-type filter να παραμένει
- *   συνεπές με το επιλεγμένο window (αποφεύγουμε εμφάνιση default-window τιμών όταν το filter είναι active).
- * - Αν το metaWindows υπάρχει αλλά δεν έχει δεδομένα για το επιλεγμένο window, μηδενίζει τα purchase
- *   fields (αντί να επιστρέφει ανέπαφο το campaign με default τιμές → μεικτά aggregates).
- */
+/** Applies the selected Meta attribution window over Meta campaigns: swaps aggregate purchase
+ * fields for the window's, scales dailyMetrics + conversionActions purchases, zeroes if no window data. */
 function applyMetaAttributionWindow(
   campaigns: Campaign[],
   window: MetaAttributionWindow
@@ -28,11 +20,11 @@ function applyMetaAttributionWindow(
     const mw = (c as Campaign & { metaWindows?: Record<string, { conversions: number; value: number }> })
       .metaWindows;
 
-    // Δεν υπάρχει καθόλου metaWindows (παλιό sync ή campaign χωρίς purchase data) → αμετάβλητο.
+    // No metaWindows at all (old sync or campaign without purchase data) -> unchanged.
     if (!mw || Object.keys(mw).length === 0) return c;
 
-    // metaWindows υπάρχει αλλά το συγκεκριμένο window δεν έχει δεδομένα (= 0 conversions).
-    // Μηδενίζουμε ρητά αντί να επιστρέψουμε τις default τιμές → αποφυγή μεικτών aggregates.
+    // metaWindows exists but this window has no data — zero out explicitly instead of
+    // returning default values, to avoid mixed aggregates.
     if (!mw[window]) {
       const zeroedCa = c.conversionActions
         ? Object.fromEntries(
@@ -59,8 +51,8 @@ function applyMetaAttributionWindow(
     const convScale = currConv > 0 ? target.conversions / currConv : 0;
     const valScale = currVal > 0 ? target.value / currVal : 0;
 
-    // Κλιμακώνει μόνο τα purchase entries στο conversionActions — non-purchase actions (Lead κ.λπ.)
-    // δεν έχουν per-window δεδομένα από το Meta API, οπότε παραμένουν αμετάβλητα.
+    // Scale only purchase entries in conversionActions — non-purchase actions (Lead etc.)
+    // have no per-window data from the Meta API, so they stay unchanged.
     let newConversionActions = c.conversionActions;
     if (c.conversionActions) {
       const ca = c.conversionActions as Record<string, { conversions: number; value: number }>;
@@ -119,16 +111,14 @@ export function useCampaigns() {
     queryKey,
     queryFn: async () => {
       if (!brandId) return [] as Campaign[];
-      // PER-130 (P1): χωρίς forceServer — με memoryLocalCache (config/firebase.ts:75-78) το
-      // getDocs πάει ούτως ή άλλως στο δίκτυο όταν είμαστε online· αυτό απλώς προσθέτει
-      // offline/flaky fallback + latency-compensated own writes. Η φρεσκάδα εξασφαλίζεται
-      // από τα write-site invalidations (ROIAttribution, CampaignsPage, DataImport, ConnectorsPanel).
+      // No forceServer — with memoryLocalCache getDocs hits the network anyway when online;
+      // freshness is ensured by write-site invalidations.
       return CampaignsService.getAll(brandId) as Promise<Campaign[]>;
     },
-    // PER-130 (P2): μην κάνεις fetch κάτω από το throwaway 'pending' syncVersion key — warm
-    // boots κλειδώνουν δωρεάν (το brandSyncVersion είναι persisted)· cold boots +≤1 RTT.
+    // Don't fetch under the throwaway 'pending' syncVersion key — warm boots dedupe for
+    // free (brandSyncVersion is persisted); cold boots cost +<=1 RTT.
     enabled: !!brandId && syncVersion !== 'pending',
-    /** Bounded staleness: Infinity με πρώτο fetch `[]` κλείδωνε το ROI σε κενά δεδομένα χωρίς refetch. */
+    /** Bounded staleness: Infinity with a first fetch of `[]` locked ROI to empty data without refetch. */
     staleTime: 5 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnMount: true,
@@ -137,7 +127,7 @@ export function useCampaigns() {
     placeholderData: (previousData) => previousData,
   });
 
-  // Εφαρμόζει on-the-fly το επιλεγμένο Meta attribution window σε όλα τα downstream reads.
+  // Applies the selected Meta attribution window on-the-fly to all downstream reads.
   const campaigns = useMemo(
     () => applyMetaAttributionWindow(rawCampaigns as Campaign[], metaWindow),
     [rawCampaigns, metaWindow]

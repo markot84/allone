@@ -1,18 +1,13 @@
-/**
- * PER-137 — isLikelyCreditDocument vs isLikelySalesInvoice. The ERP turnover was gross because
- * credit/return documents were rejected at ingest. The new predicate admits them (positive MV
- * magnitudes, credit-flavored type text) WITHOUT deciding customer-vs-supplier — that split is
- * the aggregator's parent-join (a credit nets only if its parent is a known sales invoice), so
- * no per-brand type lists exist anywhere.
- */
+/** isLikelyCreditDocument admits credit/return docs (positive amounts, credit-flavored type text) without
+ * deciding customer-vs-supplier; that split is the aggregator's parent-join. No per-brand type lists. */
 import { describe, it, expect } from 'vitest';
 import { isLikelyCreditDocument, isLikelySalesInvoice } from '../../megaventoryConnector';
 
 const row = (amount: number): Record<string, unknown> => ({ DocumentAmountGrandTotal: amount });
 const type = (abbreviation: string, description: string) => ({ id: '1', abbreviation, description });
 
-describe('isLikelyCreditDocument (PER-137)', () => {
-  it('admits Greek retail return credit notes (the dominant e-tennis type)', () => {
+describe('isLikelyCreditDocument', () => {
+  it('admits Greek retail return credit notes (the dominant store type)', () => {
     expect(isLikelyCreditDocument(row(45.9), type('ΠΛΑΣΤΗΡΑ-ΠΣΤ-ΛΙΑΝ_Cr', 'ΠΛΑΣΤΗΡΑ Πιστωτική απόδ. λιαν. επιστροφής (Credit)'))).toBe(true);
   });
 

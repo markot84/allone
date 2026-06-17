@@ -79,7 +79,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
         const range = ranges.find(r => age >= r.min && age < (r.max === Infinity ? Infinity : r.max));
         if (range) range.count++;
       }
-      // age === -1: άγνωστη ηλικία — δεν κατανέμεται σε bucket (αποφεύγουμε ψευδο-«0 ημ.»)
+      // age === -1: unknown age — not assigned to a bucket (avoid a false "0 days")
     });
 
     const hasData = ranges.some(r => r.count > 0);

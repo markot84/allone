@@ -5,31 +5,23 @@ import { buildMarkSystemPrompt } from '../data/markPrompt';
 import { getCachedBriefing } from './morningBriefing';
 
 const MODEL_NAME = 'gemini-2.5-pro';
-/** Πόσα turns ιστορικού στέλνουμε στο μοντέλο (έλεγχος κόστους + context). */
+/** How many history turns we send to the model (cost + context control). */
 const MAX_HISTORY_TURNS = 12;
-/** Σταθερό session id ανά brand — μία τρέχουσα συνομιλία ανά brand. */
+/** Fixed session id per brand — one current conversation per brand. */
 const CURRENT_SESSION = 'current';
-/** Νέα collection sessions. Παλιό όνομα (nilia_sessions) διαβάζεται για migration. */
+/** New sessions collection. Old name (nilia_sessions) is read for migration. */
 const SESSIONS_COLLECTION = 'mark_sessions';
 const LEGACY_SESSIONS_COLLECTION = 'nilia_sessions';
 
-/**
- * Η ελληνική φωνητική αναγνώριση γράφει συχνά λάθος το όνομα «Mark» — π.χ. «μάρκτη», «μάρκο»,
- * «μάρκη», «μάρκος». Κανονικοποιούμε ΜΟΝΟ ξεκάθαρες παραλλαγές του wake word σε «Mark»,
- * χωρίς να πειράζουμε υπαρκτές λέξεις όπως «μάρκα» ή «μάρκετινγκ» (λόγω του lookahead σε όριο λέξης).
- */
+/** Normalize Greek-STT mis-transcriptions of "Mark" (e.g. «μάρκτη», «μάρκο») to "Mark",
+ *  leaving real words like «μάρκα»/«μάρκετινγκ» via the word-boundary lookahead. */
 const MARK_WAKE_ALIASES = [
   'μάρκτη', 'μαρκτη', 'μάρκος', 'μάρκου', 'μάρκο', 'μάρκη', 'μάρκε', 'μάρκι', 'μαρκι',
   'μαρκς', 'μάρκ', 'μαρκ', 'marko', 'marc', 'mark',
 ];
 
-/**
- * Συντηρητικός διορθωτής συχνών φωνητικών λαθών σε εμπορικούς όρους (ελληνικό STT).
- * Περιλαμβάνει ΜΟΝΟ μεταγραφές που σχεδόν αποκλείεται να είναι κανονική λέξη σε
- * εμπορικό ερώτημα (π.χ. «ιησού»→«e-shop»). Πιο διφορούμενα (π.χ. «ξύλο»→«τζίρο»)
- * τα αναλαμβάνει το μοντέλο μέσω prompt, για να μη χαλάμε υπαρκτές λέξεις.
- * Το matching γίνεται σε ολόκληρη λέξη (whole-word).
- */
+/** Whole-word corrector for Greek-STT phonetic errors in commercial terms; only entries
+ *  unlikely to be real words (e.g. «ιησού»→«e-shop»). Ambiguous cases left to the model. */
 const DOMAIN_PHONETIC_FIXES: Array<{ aliases: string[]; canonical: string }> = [
   { aliases: ['ιησού', 'ιησου', 'εσοπ', 'έσοπ', 'ισοπ', 'ίσοπ'], canonical: 'e-shop' },
   { aliases: ['ρόας', 'ρωας', 'ρόουας'], canonical: 'ROAS' },
@@ -47,7 +39,7 @@ function normalizeMarkDomainTerms(text: string): string {
 export function normalizeMarkTranscript(text: string): string {
   if (!text) return text;
   const aliasGroup = MARK_WAKE_ALIASES.join('|');
-  // (αρχή/κενό) + προαιρετικός χαιρετισμός + alias, μόνο όταν ακολουθεί όριο λέξης/σημείο στίξης/τέλος.
+  // (start/space) + optional greeting + alias, only when followed by word boundary/punctuation/end.
   const re = new RegExp(
     `(^|\\s)(γει[άα]\\s+σου|γεια|έλα|οκ|hey)?\\s*(?:${aliasGroup})(?=\\s|[.,!?;:·]|$)`,
     'iu'
@@ -63,11 +55,11 @@ export interface MarkMessage {
   ts: number;
   relatedArticles?: string[];
   webSources?: Array<{ title: string; url: string; snippet: string }>;
-  /** Αν αυτό το μήνυμα οδήγησε σε καταχώριση εμπορικής πληροφορίας. */
+  /** Whether this message led to a commercial info entry. */
   savedInfoId?: string;
-  /** Ελεύθερο κείμενο που μπορεί να καταχωρηθεί ως εμπορική πληροφορία από CTA στο chat. */
+  /** Free text that can be saved as commercial info via a chat CTA. */
   pendingInfoText?: string;
-  /** Proactive καλωσόρισμα (δεν στέλνεται ως context turn). */
+  /** Proactive greeting (not sent as a context turn). */
   proactive?: boolean;
 }
 
@@ -123,23 +115,20 @@ function legacySessionRef(brandId: string) {
   return doc(db, 'brands', brandId, LEGACY_SESSIONS_COLLECTION, CURRENT_SESSION);
 }
 
-/**
- * Φόρτωση της τρέχουσας συνομιλίας του brand.
- * BRAND ISOLATION: επιστρέφει μηνύματα ΜΟΝΟ αν το doc ανήκει στο ίδιο brandId.
- * MIGRATION: αν δεν υπάρχει νέο session, διαβάζει το παλιό (nilia_sessions) και το μεταφέρει.
- */
+/** Load the brand's current conversation. Returns messages ONLY if the doc's brandId matches;
+ *  if no new session exists, migrates from the old nilia_sessions. */
 export async function loadMarkSession(brandId: string): Promise<MarkMessage[]> {
   if (!brandId) return [];
   try {
     const snap = await getDoc(sessionRef(brandId));
     if (snap.exists()) {
       const data = snap.data() as MarkSessionDoc;
-      if (data.brandId !== brandId) return []; // guard κατά mismatch
+      if (data.brandId !== brandId) return []; // guard against mismatch
       const messages = Array.isArray(data.messages) ? data.messages : [];
       if (messages.length > 0) writeLocalSession(brandId, messages);
       return messages;
     }
-    // Migration από παλιό collection (μία φορά).
+    // Migration from old collection (one-time).
     const legacy = await getDoc(legacySessionRef(brandId));
     if (legacy.exists()) {
       const data = legacy.data() as MarkSessionDoc;
@@ -159,14 +148,14 @@ export async function saveMarkSession(brandId: string, messages: MarkMessage[]):
   const trimmed = messages.slice(-60);
   writeLocalSession(brandId, trimmed);
   try {
-    // Κρατάμε λογικό όριο μεγέθους doc (τελευταία ~60 μηνύματα).
+    // Keep a sensible doc size limit (last ~60 messages).
     await setDoc(sessionRef(brandId), {
       brandId,
       messages: trimmed,
       updatedAt: Timestamp.now(),
     } satisfies MarkSessionDoc);
   } catch {
-    /* μη κρίσιμο — η συνομιλία συνεχίζει in-memory */
+    /* non-critical — the conversation continues in-memory */
   }
 }
 
@@ -180,7 +169,7 @@ export async function clearMarkSession(brandId: string): Promise<void> {
   }
 }
 
-/** Μετατροπή ιστορικού μηνυμάτων σε turns για το Gemini (assistant -> model). */
+/** Convert message history into turns for Gemini (assistant -> model). */
 export function toGeminiHistory(messages: MarkMessage[]): GeminiChatTurn[] {
   return messages
     .filter((m) => !m.proactive && m.content.trim().length > 0)
@@ -188,10 +177,8 @@ export function toGeminiHistory(messages: MarkMessage[]): GeminiChatTurn[] {
     .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', text: m.content }));
 }
 
-/**
- * Proactive καθημερινό καλωσόρισμα: διαβάζει το cached brief του brand και προτρέπει για
- * νέες εμπορικές πληροφορίες. Deterministic (χωρίς AI call) για μηδενικό κόστος.
- */
+/** Proactive daily greeting: reads the brand's cached brief and prompts for new
+ *  commercial info. Deterministic (no AI call) for zero cost. */
 export async function buildProactiveGreeting(params: {
   brandId: string;
   brandName: string | null;
@@ -218,7 +205,7 @@ export async function buildProactiveGreeting(params: {
       }
     }
   } catch {
-    /* αν δεν υπάρχει brief, συνεχίζουμε με το μήνυμα έναρξης */
+    /* if no brief exists, continue with the start message */
   }
 
   lines.push('');
@@ -234,10 +221,7 @@ export async function buildProactiveGreeting(params: {
   return lines.join('\n');
 }
 
-/**
- * Παραγωγή απάντησης Mark (multi-turn).
- * BRAND ISOLATION: το brandId περνά στο prompt (system) και στο logging (server).
- */
+/** Generate a Mark reply (multi-turn). brandId is passed to the prompt (system) and logging. */
 export async function generateMarkReply(params: {
   brandId: string;
   brandName: string | null;

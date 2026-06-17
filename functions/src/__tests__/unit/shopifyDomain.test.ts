@@ -1,9 +1,5 @@
-/**
- * SEC-C1 — normalizeShopDomain is the gate in front of every Shopify request: the token
- * exchange POSTs the global SHOPIFY_API_SECRET to https://{domain}/..., and the sync path
- * sends the shop access token there. Anything but a strict {store}.myshopify.com host
- * must throw — including values already stored in the member-writable connectors doc.
- */
+/** normalizeShopDomain gates every Shopify request (token exchange POSTs SHOPIFY_API_SECRET
+ * to https://{domain}/...). Anything but a strict {store}.myshopify.com host must throw. */
 import { describe, it, expect } from 'vitest';
 import { normalizeShopDomain } from '../../shopifyDomain';
 

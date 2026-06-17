@@ -1,32 +1,10 @@
-/**
- * PER-60 — Megaventory sync INTEGRATION harness.
- *
- * Runs the REAL `fetchMegaventoryData` checkpointed state machine against the
- * Firestore emulator with:
- *   • a controllable clock — `vi.useFakeTimers({ toFake: ['Date'] })` fakes ONLY
- *     Date/Date.now() (leaving setTimeout/gRPC timers real so firebase-admin
- *     still talks to the emulator), and the Megaventory `fetch` mock advances the
- *     fake clock per page to simulate a phase burning minutes → drives
- *     `overBudget()` deterministically without touching production code.
- *   • a Megaventory API mock — `fetch` is stubbed and serves per-endpoint,
- *     cursor-paginated datasets so the resume/defer transitions are exercised.
- *   • mocked heavy downstream sub-modules (RFM / procurement / stock-movement /
- *     normalizer / cleanup) so a pass is fast and the assertions target the
- *     ingestion→processing STATE MACHINE, not those modules.
- *
- * Run via `npm run test:integration` (wraps this in `firebase emulators:exec`).
- *
- * These tests pin the behaviour the slow, non-deterministic staging cycles can't
- * prove: invoice resume-across-passes, products-wait-for-invoices, catalog
- * cursor persistence, and whole-sync reset.
- */
+/** Integration harness driving the REAL `fetchMegaventoryData` state machine against the Firestore
+ * emulator with a faked Date clock + per-endpoint cursor-paginated `fetch` mock + mocked downstream modules. */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as admin from 'firebase-admin';
 
-// ── Mock the heavy downstream modules BEFORE importing the connector ──────────
-// Each mock advances the fake clock by a configurable per-test duration, so a test can give the
-// processing modules realistic costs (e-tennis profile: stock-movement ~20min, gap-fill ~5min)
-// and prove the per-module sub-stage checkpoints split them across passes.
+// Mock the heavy downstream modules BEFORE importing the connector. Each mock advances the fake clock
+// by a per-test duration so module costs prove the per-module sub-stage checkpoints split passes.
 const moduleDurations = { rfm: 0, procurement: 0, stockMovement: 0, gapFill: 0 };
 const burn = (ms: number) => { if (ms) vi.setSystemTime(Date.now() + ms); };
 vi.mock('../../megaventoryRfm', () => ({
@@ -42,11 +20,11 @@ vi.mock('../../megaventoryNormalizer', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
-    // Pretend the custom report normalized into 5 products so the processing
-    // procurement/stock-movement sub-stages (which gate on normalizedCounts.products > 0) run.
+    // Pretend the custom report normalized into 5 products so the procurement/stock-movement
+    // sub-stages (which gate on normalizedCounts.products > 0) run.
     normalizeMegaventoryCustomReportRows: vi.fn(async () => ({ products: 5, invoices: 0, stock: 0 })),
-    // gap-fill purges+rewrites the whole catalog from Firestore — return 0 fast by default; tests
-    // with a non-zero moduleDurations.gapFill simulate the heavy variant.
+    // gap-fill purges+rewrites the whole catalog from Firestore — return 0 fast by default;
+    // tests with a non-zero moduleDurations.gapFill simulate the heavy variant.
     mergeMegaventoryApiCatalogProducts: vi.fn(async () => { burn(moduleDurations.gapFill); return 0; }),
   };
 });
@@ -122,11 +100,8 @@ function page(all: Row[], idField: string, body: Row): Row[] {
   const filtered = cursor != null ? all.filter((r) => Number(r[idField]) < cursor) : all;
   return filtered.slice(0, pageSize);
 }
-/**
- * ASC variant mirroring the REAL InventoryLocationStockGet behaviour (probe-verified): rows come in
- * ASCENDING productID order and the cursor must be GreaterThan. A DESC LessThan walk against this
- * shape silently truncates to the first page — the live bug this mock pins against regression.
- */
+/** ASC variant mirroring the REAL InventoryLocationStockGet: rows come ASCENDING by productID and the
+ * cursor must be GreaterThan; a DESC LessThan walk silently truncates to page one (pinned regression). */
 function pageAsc(all: Row[], idField: string, body: Row): Row[] {
   const pageSize = Number(body.ReturnTopNRecords) || 500;
   const filters = (body.Filters as Row[] | undefined) ?? [];
@@ -157,9 +132,8 @@ function installMvMock(dataset: MvDataset, msPerPage: MsPerPage = {}) {
         payload.mvDocumentTypes = dataset.documentTypes;
         break;
       case 'DocumentGet': {
-        // The manual/incremental invoice fetch uses a DocumentDate filter; the
-        // rolling-merge / fallback / latest-sample calls are cursor-only → serve
-        // empty for those so this harness drives the MAIN-fetch resume path.
+        // Manual/incremental fetch uses a DocumentDate filter; cursor-only calls
+        // serve empty so this harness drives the MAIN-fetch resume path.
         if (hasFieldFilter(body, 'DocumentDate')) {
           payload.mvDocuments = page(dataset.invoices, 'DocumentId', body);
         } else {
@@ -180,9 +154,8 @@ function installMvMock(dataset: MvDataset, msPerPage: MsPerPage = {}) {
           : page(dataset.products, 'ProductID', body);
         break;
       case 'InventoryLocationStockGet':
-        // real shape (probe-verified): ASC ordering, one row per product with row-level
-        // Stock*Total fields plus nested mvStock per-location entries. ProductGet carries
-        // NO stock fields — this endpoint is the only stock source.
+        // Real shape: ASC, one row per product with row-level Stock*Total + nested mvStock entries.
+        // ProductGet carries NO stock fields — this endpoint is the only stock source.
         payload.mvProductStockList = pageAsc(dataset.stock, 'productID', body).map((r) => ({
           productID: r.productID,
           StockOnHandTotal: Number(r.qty ?? 1),
@@ -304,9 +277,8 @@ describe('Megaventory sync — invoice ingestion is budgeted + resumable', () =>
   });
 
   it('resumes invoices from the saved cursor, marks them complete, then starts the (deferred) catalog', async () => {
-    // Few invoices remaining (exhaust fast), but a big SLOW catalog so products
-    // defer over budget → we can observe manualInvoiceComplete=true persisting
-    // alongside a productCatalogCursor in the same pass.
+    // Few invoices (exhaust fast) + a big SLOW catalog so products defer over budget → observe
+    // manualInvoiceComplete=true persisting alongside a productCatalogCursor in the same pass.
     installMvMock(
       {
         ...emptyDataset(),
@@ -353,7 +325,7 @@ describe('Megaventory sync — full ingestion converges within the worker cap (n
     return { res: res!, elapsedPerPass, totals };
   }
 
-  it('e-tennis shape: heavy invoices + slow suppliers + catalog complete without any pass exceeding 30min', async () => {
+  it('heavy invoices + slow suppliers + catalog complete without any pass exceeding 30min', async () => {
     // invoices ~20min (exhaust), suppliers a slow 12-min fetch, modest catalog.
     installMvMock(
       {
@@ -362,9 +334,8 @@ describe('Megaventory sync — full ingestion converges within the worker cap (n
         salesOrders: descById(50, 'SalesOrderId', 700, (id) => ({ SalesOrderId: id, SalesOrderDate: '2026-06-01' })),
         purchaseOrders: descById(50, 'PurchaseOrderId', 600, (id) => ({ PurchaseOrderId: id, PurchaseOrderDate: '2026-06-01' })),
         products: descById(600, 'ProductID', 80000, (id) => ({ ProductID: id, ProductSKU: `sku-${id}` })),
-        // 1,200 stock products = 3 ASC pages → proves the GreaterThan cursor walks the FULL set
-        // (the live bug ingested only the lowest 500 = page 1). IDs overlap the catalog so the
-        // totals→mirror→gap-fill stock chain is asserted end-to-end below.
+        // 1,200 stock products = 3 ASC pages → proves the GreaterThan cursor walks the FULL set (not
+        // just page 1); IDs overlap the catalog so the totals→mirror→gap-fill chain is asserted below.
         stock: descById(1200, 'productID', 80000, (id) => ({ productID: id, qty: 2 })),
         suppliers: descById(120, 'SupplierClientID', 5000, (id) => ({ SupplierClientID: id, SupplierClientType: 'supplier', SupplierClientName: `s${id}` })),
       },
@@ -388,9 +359,8 @@ describe('Megaventory sync — full ingestion converges within the worker cap (n
     expect(totals.purchaseOrders).toBe(50);
     // ASC stock walk crossed all 3 pages (1,200 products × 1 location each) — not just page 1
     expect(totals.stock).toBe(1200);
-    // (4) stock totals flowed walk → mirror → gap-fill (ProductGet has no stock fields, so this
-    //     chain is the ONLY way products.stock_level can be non-zero — the live "everything
-    //     without stock" bug).
+    // (4) stock totals flowed walk → mirror → gap-fill — the ONLY way products.stock_level can be
+    //     non-zero, since ProductGet carries no stock fields.
     const mirror = (await db.doc('megaventory_products/mv_p_80000').get()).data();
     expect(mirror?.stockOnHand).toBe(2);
     expect(mirror?.availableStockTotal).toBe(2);

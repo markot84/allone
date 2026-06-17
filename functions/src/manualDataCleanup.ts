@@ -4,7 +4,7 @@ import { logger } from './utils/logger';
 const BATCH_SIZE = 400;
 const PRESERVED_MEGAVENTORY_SOURCE = 'megaventory_custom_report';
 const PRESERVED_MEGAVENTORY_RFM_SOURCE = 'megaventory_rfm';
-/** SKU από πλήρες ProductGet όταν το custom report καλύπτει μόνο υποσύνολο (π.χ. φίλτρο SQL). */
+/** SKUs from full ProductGet when the custom report covers only a subset (e.g. SQL filter). */
 export const PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE = 'megaventory_api_catalog';
 
 const BRAND_SCOPED_MANUAL_COLLECTIONS = [

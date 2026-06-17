@@ -1,16 +1,5 @@
-/**
- * Unit tests for functions/src/security.ts — the public-endpoint defenses:
- *  - resolveAllowedOrigin / applyStrictCors: strict CORS origin allow-list.
- *  - getClientIp: trusted-IP extraction from x-forwarded-for.
- *  - enforceRateLimit: Firestore sliding-window limiter, including the PP-13a
- *    fail-open (default) vs fail-closed (`failClosed: true`) degraded behavior.
- *
- * Firestore is mocked via `firebase-admin/firestore` so the transaction is fully
- * controllable; `firebase-functions/v2` logger is silenced. The setup file
- * (src/__tests__/setup.ts) provides GCLOUD_PROJECT so the module's top-level
- * project-id guard passes at import time, which fixes PROD_ORIGINS to
- * `https://<GCLOUD_PROJECT>.web.app` etc.
- */
+/** Tests for functions/src/security.ts: CORS allow-list, getClientIp, and rate-limiter fail-open/closed.
+ * Firestore mocked; setup.ts provides GCLOUD_PROJECT for PROD_ORIGINS. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Request } from 'firebase-functions/v2/https';
 import type { Response } from 'express';
@@ -86,10 +75,7 @@ function makeReq(opts: {
   } as unknown as Request;
 }
 
-/**
- * A controllable in-memory transaction. `seedHits` initializes the stored doc;
- * `tx.set` captures what would be written so tests can assert on it.
- */
+/** In-memory transaction: `seedHits` seeds the stored doc; `tx.set` captures the write for asserts. */
 function makeTransactionRunner(seedHits: number[] | undefined) {
   const written: { value: Record<string, unknown> | null } = { value: null };
   const runner = async (fn: (tx: unknown) => Promise<unknown>) => {
@@ -331,7 +317,7 @@ describe('enforceRateLimit', () => {
     });
   });
 
-  describe('fail modes — Firestore error (PP-13a)', () => {
+  describe('fail modes — Firestore error', () => {
     it('fail-OPEN by default: a transaction error returns allowed:true', async () => {
       runTransactionImpl = () => Promise.reject(new Error('FIRESTORE UNAVAILABLE'));
 
@@ -363,7 +349,7 @@ describe('enforceRateLimit', () => {
     });
   });
 
-  describe('fail modes — Firestore hard-timeout (PP-13a)', () => {
+  describe('fail modes — Firestore hard-timeout', () => {
     it('fail-OPEN by default: a transaction that hangs past the hard timeout returns allowed:true', async () => {
       vi.useFakeTimers();
       // A transaction that never resolves → only the hard-timeout can settle the race.

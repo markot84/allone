@@ -74,7 +74,7 @@ interface CompetitorSettings {
 
 type Tab = 'pricing' | 'insights' | 'ads';
 
-/** Στήλες πίνακα Price Benchmarks — χρησιμοποιούνται σε sort & column filters (xlsx-style). */
+/** Price Benchmarks table columns — used in sort & column filters (xlsx-style). */
 type BenchmarkCol =
   | 'title'
   | 'brand'
@@ -86,7 +86,7 @@ type BenchmarkCol =
   | 'salesStockRatio'
   | 'gtin';
 
-/** Στήλες πίνακα Price Insights — φίλτρα / ταξινόμηση όπως στα benchmarks. */
+/** Price Insights table columns — filters / sorting as in benchmarks. */
 type InsightCol =
   | 'title'
   | 'seller'
@@ -104,7 +104,7 @@ type SortDir = 'asc' | 'desc';
 
 interface BenchmarkColumnFilters {
   title?: string;
-  /** Σετ επιλεγμένων brands· αν undefined/κενό → όλα. */
+  /** Set of selected brands; if undefined/empty → all. */
   brand?: Set<string>;
   yourPrice?: string;
   benchmarkPrice?: string;
@@ -129,7 +129,7 @@ interface InsightColumnFilters {
   predConv?: string;
 }
 
-/** Excel-like numeric expressions: `>10`, `<5`, `>=3`, `<=8`, `5-20`, `=8`, ή σκέτος αριθμός. */
+/** Excel-like numeric expressions: `>10`, `<5`, `>=3`, `<=8`, `5-20`, `=8`, or a plain number. */
 function matchNumericExpr(value: number | null | undefined, expr: string): boolean {
   const e = (expr || '').trim();
   if (!e) return true;
@@ -162,7 +162,7 @@ function matchNumericExpr(value: number | null | undefined, expr: string): boole
   return true;
 }
 
-/** Από Firestore / import: κενό → null (όχι 0), ώστε το 0 πωλήσεων να ταξινομείται σωστά και το φίλτρο =0 να μην μπερδεύεται με «χωρίς δεδομένο». */
+/** From Firestore / import: empty → null (not 0), so 0 sales sorts correctly and the =0 filter is not confused with "no data". */
 function parseInventoryField(v: unknown): number | null {
   if (v === null || v === undefined) return null;
   if (typeof v === 'string' && v.trim() === '') return null;
@@ -239,10 +239,7 @@ async function fetchProductIntelligenceInventory(brandId: string): Promise<Recor
   return merged;
 }
 
-/**
- * Ταξινόμηση Στοκ/Πωλήσεις κατά τη σχέση (κόκκινο / πράσινο).
- * 2 = στοκ > πωλήσεις, 0 = πωλήσεις > στοκ, 1 = ίσα ή ασύγκριτα (λείπει τιμή).
- */
+/** Sort Stock/Sales by relation (red/green): 2 = stock > sales, 0 = sales > stock, 1 = equal/incomparable. */
 function stockSoldRelationTier(inv: SkuInventoryRow | null | undefined): number {
   const st = inv?.stock;
   const sd = inv?.sold;
@@ -252,7 +249,7 @@ function stockSoldRelationTier(inv: SkuInventoryRow | null | undefined): number 
   return 1;
 }
 
-/** Λόγος πωλήσεων προς τρέχον στοκ. Null όταν λείπει δεδομένο ή stock <= 0 για να μην παράγεται τεχνητό Infinity. */
+/** Sales-to-current-stock ratio. Null when data is missing or stock <= 0 to avoid an artificial Infinity. */
 function salesStockRatio(inv: SkuInventoryRow | null | undefined): number | null {
   const st = inv?.stock;
   const sd = inv?.sold;
@@ -308,7 +305,7 @@ function buildCustomNumericExpression(operator: string, first: string, second: s
   return `${operator}${a}`;
 }
 
-/** Δευτερεύων αριθμητικός συγκριτής: πραγματικοί αριθμοί (συμπ. 0) πριν από null/undefined. */
+/** Secondary numeric comparator: real numbers (including 0) before null/undefined. */
 function compareInventoryNumber(
   a: number | null | undefined,
   b: number | null | undefined,
@@ -334,13 +331,13 @@ const TOOLTIP_INSIGHTS_SOURCE =
 const TOOLTIP_ADS_LAST_SCAN =
   'Τελευταίος έλεγχος Meta Ad Library. Πλήρης ανανέωση: καθημερινά ~06:00 Europe/Athens + «Scan τώρα». Προβολή: cache ~5 λεπτά. Οι διαφημίσεις φιλτράρονται κατά χώρα reach — βλ. πεδίο χωρών παρακάτω.';
 
-/** Μία γραμμή στα KPI (αποφυγή wrap ημερομηνίας/ώρας σε el-GR). */
+/** Single-line KPI date/time (avoid wrapping in el-GR). */
 function formatKpiDateTime(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-/** Εμφανίσιμο κείμενο + τεχνικό απόθεμα για παλιές/αποθηκευμένες προειδοποιήσεις με raw JSON από Meta. */
+/** Display text + technical detail for old/stored warnings carrying raw JSON from Meta. */
 function parseAdLibraryWarningLine(raw: string): {
   friendly: string;
   technical?: string;
@@ -358,7 +355,7 @@ function parseAdLibraryWarningLine(raw: string): {
 
   const who = competitor ? `για «${competitor}» ` : '';
 
-  /** Πρώτα 2332004: το παλιό early-return «META_APP_ID» έκρυβε το JSON και έδειχνε λάθος κείμενο. */
+  /** Handle 2332004 first: the old "META_APP_ID" early-return hid the JSON and showed the wrong text. */
   const isAppRole2332004 =
     /2332004|"error_subcode"\s*:\s*2332004|app role required/i.test(t);
 
@@ -370,7 +367,7 @@ function parseAdLibraryWarningLine(raw: string): {
     };
   }
 
-  /* Ήδη ενημερωμένο μήνυμα από Cloud Function (μετά deploy) */
+  /* Already-updated message from the Cloud Function (post-deploy) */
   if (t.includes('Κωδικός σφάλματος Meta 2332004') || t.includes('Κωδικός 2332004:')) {
     return { isPermission: true, friendly: t, technical: undefined };
   }
@@ -390,7 +387,7 @@ function parseAdLibraryWarningLine(raw: string): {
     };
   }
 
-  /* Παλιό αποθηκευμένο κείμενο (χωρίς raw JSON) — αναβάθμιση εμφάνισης */
+  /* Old stored text (without raw JSON) — upgrade the display */
   if (t.includes('Δεν είναι δυνατή η παρακολούθηση') && t.includes('META_APP_ID')) {
     return {
       isPermission: true,
@@ -452,10 +449,8 @@ export function CompetitorInsights() {
     lastBenchmarkSyncedAt,
   } = usePriceBenchmarks({ maxDocs: COMPETITIVE_BENCHMARK_LIMIT });
 
-  // Inventory/sales enrichment για τον πίνακα benchmarks.
-  // Πηγές (με προτεραιότητα):
-  //   1) products collection / ERP (Megaventory) για stock — είναι η αξιόπιστη αποθήκη
-  //   2) ecommerce_summary.skuStats για πωλήσεις και stock μόνο όταν το ERP δεν έχει τιμή
+  // Inventory/sales enrichment for the benchmarks table. Priority: 1) products/ERP (Megaventory)
+  // for authoritative stock; 2) ecommerce_summary.skuStats for sales + stock only when ERP has no value.
   const { skuStats } = useEcommerceSummary();
   const { data: competitiveInventory = {}, isLoading: competitiveInventoryLoading } = useQuery<Record<string, SkuInventoryRow>>({
     queryKey: ['productIntelligenceInventory', brandId],
@@ -479,7 +474,7 @@ export function CompetitorInsights() {
       }
     };
 
-    // Πλήρες server-side lookup από Product Intelligence: Megaventory stock + sku_stats sales.
+    // Full server-side lookup from Product Intelligence: Megaventory stock + sku_stats sales.
     for (const [key, row] of Object.entries(competitiveInventory)) {
       mergeInventory(key, {
         stock: parseInventoryField(row.stock),
@@ -487,7 +482,7 @@ export function CompetitorInsights() {
       });
     }
 
-    // E-shop stats εμπλουτίζουν τις πωλήσεις, αλλά δεν μηδενίζουν ERP stock.
+    // E-shop stats enrich sales, but never zero out ERP stock.
     for (const [sku, s] of Object.entries(skuStats || {})) {
       mergeInventory(sku, {
         stock: parseInventoryField(s.stock),
@@ -497,7 +492,7 @@ export function CompetitorInsights() {
     return map;
   }, [competitiveInventory, skuStats]);
 
-  /** GMC productId συνήθως είναι `online:el:GR:SKU123` — δοκιμάζουμε offerId, base SKU, GTIN και compact variants. */
+  /** GMC productId is usually `online:el:GR:SKU123` — try offerId, base SKU, GTIN and compact variants. */
   const benchmarkKeyCandidates = (productId: string, gtin: string): string[] => {
     const candidates = new Set<string>();
     for (const value of [productId, gtin]) {
@@ -760,7 +755,7 @@ export function CompetitorInsights() {
     setSortDir(dir);
   }, []);
 
-  /** Μοναδικά brands για το categorical φίλτρο «Brand». */
+  /** Unique brands for the categorical "Brand" filter. */
   const brandOptions = useMemo(() => {
     const set = new Set<string>();
     for (const b of stockedBenchmarks) set.add(((b.brand || '').trim()) || '—');
@@ -839,7 +834,7 @@ export function CompetitorInsights() {
       });
     }
 
-    // Sort: αν υπάρχει column sort, υπερισχύει. Αλλιώς default (benchmark> priceDiff desc).
+    // Sort: a column sort takes precedence; otherwise default (benchmark > priceDiff desc).
     if (sortCol) {
       const dir = sortDir === 'asc' ? 1 : -1;
       if (sortCol === 'salesStockRatio') {
@@ -2194,7 +2189,7 @@ function InsightRow({
 
 interface HeaderFilterProps {
   label: string;
-  /** Στήλη — `BenchmarkCol` ή `InsightCol` (string για κοινό UI). */
+  /** Column — `BenchmarkCol` or `InsightCol` (string for the shared UI). */
   col: string;
   kind: 'text' | 'number' | 'categorical';
   align?: 'left' | 'right';

@@ -19,7 +19,7 @@ export async function sendNotificationEmail(
     entityType?: string;
     entityId?: string;
   },
-  /** Αν δοθεί (π.χ. από HTTP handler με secrets), αποφεύγεται δεύτερο createTransporter. */
+  /** If provided (e.g. from an HTTP handler with secrets), avoids a second createTransporter. */
   reuseTransporter?: Transporter
 ): Promise<void> {
   if (!_db) {
@@ -92,7 +92,7 @@ export async function sendNotificationEmail(
     await transporter.sendMail({
       from: SENDER,
       to: toEmail,
-      // SEC-M1: strip CR/LF so a crafted title can't inject extra mail headers.
+      // Strip CR/LF so a crafted title can't inject extra mail headers.
       subject: `[Performance+] ${notification.title.replace(/[\r\n]+/g, ' ')}`,
       html,
     });

@@ -76,7 +76,7 @@ export function usePriceBenchmarks(options: UsePriceBenchmarksOptions = {}) {
       ? Math.round((withMarket.reduce((s, b) => s + b.priceDiff, 0) / withMarket.length) * 10) / 10
       : 0;
 
-  /** Νεότερο `updatedAt` μεταξύ όλων των SKU — όχι `benchmarks[0]` (η σειρά getDocs δεν είναι εγγυημένη). */
+  /** Latest `updatedAt` across all SKUs — not `benchmarks[0]` (getDocs order is not guaranteed). */
   const lastBenchmarkSyncedAt = useMemo(() => {
     if (benchmarks.length === 0) return null;
     let maxMs = 0;

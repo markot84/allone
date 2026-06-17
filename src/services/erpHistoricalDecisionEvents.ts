@@ -168,9 +168,8 @@ function stockEvent(
 }
 
 function rankEvent(event: CommercialDecisionEvent): number {
-  // CODE-2: rank by the typed numeric revenue-change field. The previous code matched the
-  // English substring 'change' against Greek labels ('Μεταβολή …'), so it never matched and
-  // every event ranked 0 — ranking was inert.
+  // Rank by the typed numeric revenue-change field. Matching an English substring against
+  // localized labels never matches, leaving every event ranked 0.
   const pct = event.performance?.revenueChangePct;
   return typeof pct === 'number' && Number.isFinite(pct) ? Math.abs(pct) : 0;
 }

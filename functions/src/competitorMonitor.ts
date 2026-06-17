@@ -1,9 +1,5 @@
-/**
- * Competitor Monitoring via Meta Ad Library API
- *
- * Uses App Access Token (app_id|app_secret) — no user OAuth needed.
- * Tracks competitor ad activity: new ads, long-running ads, active ads.
- */
+/** Competitor Monitoring via Meta Ad Library API; uses App Access Token (app_id|app_secret).
+ * Tracks competitor ad activity: new ads, long-running ads, active ads. */
 
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
@@ -25,10 +21,7 @@ function getDb(): Firestore {
 const META_GRAPH_VERSION = 'v24.0';
 const META_GRAPH_URL = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
 
-/**
- * Broad EU + export markets — B2B ads often have no impressions in GR alone.
- * Override with competitor_settings.reachedCountries (comma ISO in UI).
- */
+/** Broad EU + export markets (B2B ads often absent in GR alone); override via competitor_settings.reachedCountries. */
 const DEFAULT_REACH_COUNTRIES = [
   'GR',
   'CY',
@@ -62,11 +55,8 @@ function getAppToken(): string {
   return `${appId}|${appSecret}`;
 }
 
-/**
- * Το Graph endpoint `ads_archive` συχνά απορρίπτει το app access token («Application does not have permission»).
- * Το user access token από το Meta OAuth (ίδιο app, scopes ads_read/ads_management) συνήθως λειτουργεί.
- * Σειρά: έγκυρο OAuth token → app token.
- */
+/** `ads_archive` often rejects the app token; the Meta OAuth user token (ads_read/ads_management) usually works.
+ * Order: valid OAuth token → app token. */
 async function resolveAdLibraryAccessToken(
   brandId: string
 ): Promise<{ token: string; source: 'user' | 'app' } | null> {
@@ -177,10 +167,8 @@ function extractMetaErrorSubcode(raw: string): number | undefined {
   return undefined;
 }
 
-/**
- * Subcode 2332004 = "App role required": the Facebook *user* tied to the token must be
- * Admin/Developer on this exact Meta app — not only Business Manager admins.
- */
+/** Subcode 2332004 = "App role required": the Facebook user tied to the token must be
+ * Admin/Developer on this exact Meta app, not only Business Manager admin. */
 function friendlyAdLibraryPermissionMessage(
   competitorName: string,
   usedUserToken: boolean,
@@ -201,9 +189,7 @@ function friendlyAdLibraryPermissionMessage(
   return `${base} Συνδέστε το Meta από τις Συνδέσεις ώστε να χρησιμοποιείται user OAuth token (ο λογαριασμός που συνδέεται πρέπει να έχει ρόλο Admin/Developer στην εφαρμογή).`;
 }
 
-/**
- * Fetch competitor ads from Meta Ad Library for a brand.
- */
+/** Fetch competitor ads from Meta Ad Library for a brand. */
 export async function fetchCompetitorAds(brandId: string): Promise<{
   success: boolean;
   totalAds: number;
@@ -357,8 +343,7 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
           );
           let res: Response;
           if (nextUrl) {
-            // SEC-L8: nextUrl is the response's paging.next — safeFetch blocks a next-page
-            // URL that resolves to an internal/private address.
+            // nextUrl is paging.next; safeFetch blocks one resolving to an internal/private address.
             res = await safeFetch(nextUrl);
           } else {
             const paramsStr = buildAdLibrarySearchParams(
@@ -416,10 +401,8 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
         await runPagination('jsonArray', countries);
       }
 
-      /**
-       * Meta often returns rows when ad_reached_countries is a single ISO code, but [] when many
-       * codes are passed (observed in the wild). Probe one country at a time (union via deduped writes).
-       */
+      /** Meta often returns rows for a single ad_reached_countries ISO code but [] for many;
+       * probe one country at a time (union via deduped writes). */
       if (!hadAdLibraryHttpError && adsFetchedForPage === 0) {
         const probeOrder = [
           ...new Set([

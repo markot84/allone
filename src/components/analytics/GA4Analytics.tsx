@@ -56,7 +56,7 @@ const CHANNEL_COLORS: Record<string, string> = {
 };
 const DEFAULT_COLOR = '#94A3B8';
 
-/** Default channel group για Google organic search — EN / EL για GA4 σε διάφορες ρυθμίσεις locale. */
+/** Default channel group for Google organic search — EN/EL to match GA4 across locale settings. */
 function isOrganicSearchDefaultChannel(channel: string): boolean {
   const n = channel.normalize('NFKC').trim().toLowerCase();
   if (n === 'organic search' || n === 'οργανική αναζήτηση') return true;
@@ -70,14 +70,14 @@ function isOrganicSearchDefaultChannel(channel: string): boolean {
   return hasOrganic && searchLike && excludesSocial;
 }
 
-/** Το Recharts Area χρειάζεται ≥2 σημεία για ορατή γραμμή. */
+/** Recharts Area needs ≥2 points to render a visible line. */
 function padSparklineForChart(values: number[]): number[] {
   if (values.length === 0) return [];
   if (values.length === 1) return [values[0], values[0]];
   return values;
 }
 
-/** Ημερομηνία YYYY-MM-DD → DD/MM/YYYY για tooltips */
+/** Date YYYY-MM-DD → DD/MM/YYYY for tooltips */
 function formatDateTooltipEl(ymd: string): string {
   const [y, m, d] = ymd.split('-').map(Number);
   if (!y || !m || !d) return ymd;
@@ -105,7 +105,7 @@ type OrganicSearchRow = {
   sessions?: number;
   users?: number;
   conversions?: number;
-  /** GSC + GA4 blended: προσαρμοσμένες τιμές κατά μέριο clicks ανάτημα με Organic Search στο GA4. */
+  /** GSC + GA4 blended: values estimated by click share against GA4 Organic Search. */
   estConversions?: number;
   estRevenue?: number;
   totalRevenue?: number;
@@ -168,9 +168,8 @@ export function GA4Analytics() {
     return { ...sum, bounceRate: sum.bounceRate / n, avgDuration: sum.avgDuration / n };
   }, [filteredDailyEntries]);
 
-  // GA4-deduplicated σύνολα περιόδου (ακριβής ευθυγράμμιση με GA4 UI για Χρήστες/Νέους χρήστες κ.λπ.).
-  // Τα ημερήσια totalUsers/newUsers ΔΕΝ αθροίζονται σωστά (dedup ανά περίοδο). Όταν διαθέσιμα, τα KPI
-  // cards χρησιμοποιούν αυτά· αλλιώς fallback στο daily-sum (`totals`).
+  // GA4-deduplicated period totals (align with GA4 UI for Users/New users); daily totalUsers/newUsers
+  // don't sum correctly. KPI cards use these when available, else fall back to daily-sum `totals`.
   const { periodTotals } = useGA4PeriodTotals(effectiveFrom, effectiveTo, hasData);
   const usingPeriodTotals = !!periodTotals;
   const displayTotals = useMemo(() => {
@@ -187,7 +186,7 @@ export function GA4Analytics() {
     };
   }, [periodTotals, totals]);
 
-  // weeklyChange από τα φιλτραρισμένα ημερήσια (τελευταία 7 vs προηγούμενες 7)
+  // weeklyChange from the filtered daily entries (last 7 vs previous 7)
   const weeklyChange = useMemo(() => {
     if (filteredDailyEntries.length < 14) return null;
     const last7 = filteredDailyEntries.slice(-7);
@@ -208,12 +207,8 @@ export function GA4Analytics() {
     };
   }, [filteredDailyEntries]);
 
-  /**
-   * Πραγματικό αθροιστικό ανά κανάλι **μόνο** από ημερήσια δεδομένα GA4 (sessionDefaultChannelGroup × date).
-   * Αθροίζουμε τις μέρες μέσα στο `dailyTrafficByChannel` που πέφτουν στην επιλεγμένη περίοδο — όχι μόνο τις μέρες
-   * που εμφανίζονται στο `dailyMetrics`: οι δύο αναφορές μπορούν να διαφέρουν ελαφρά και να δίνουν κενή τομή
-   * με τον παλιό loop («Πλήρης περίοδος» ενώ το sync ήταν έγκυρο).
-   */
+  /** Per-channel totals built only from GA4 daily data (sessionDefaultChannelGroup × date), summing
+   * `dailyTrafficByChannel` days in the period — `dailyMetrics` can differ and yield an empty intersection. */
   const { trafficSourcesForPeriod, channelMixSource } = useMemo(() => {
     type Row = {
       channel: string;
@@ -288,7 +283,7 @@ export function GA4Analytics() {
     }));
   }, [trafficSourcesForPeriod]);
 
-  /** Άθροισμα conversions και εσόδου μόνο για το GA4 default channel «Organic Search» (ίδια λογική με τον πίνακα καναλιών). */
+  /** Sum of conversions and revenue only for the GA4 default channel "Organic Search" (same logic as the channels table). */
   const organicSearchChannelTotals = useMemo(() => {
     let conversions = 0;
     let totalRevenue = 0;
@@ -346,7 +341,7 @@ export function GA4Analytics() {
     ];
   }, [displayTrafficSources]);
 
-  /** Άθροισμα φετών πίτας (ισορροπεί με τον πίνακα· μπορεί να διαφέρει ελάχιστα από GA4 totals). */
+  /** Sum of pie slices (balances with the table; may differ slightly from GA4 totals). */
   const pieSlicesTotal = useMemo(
     () => pieData.reduce((a, p) => a + Number(p.value || 0), 0),
     [pieData]
@@ -415,7 +410,7 @@ export function GA4Analytics() {
     return [];
   }, [organicSearchSource, filteredOrganicFallbackRows, filteredSearchConsoleRows]);
 
-  /** Εκτιμώμενες μετατροπές / έσοδο ανά GSC-query: το άθροισμα ταιριάζει με το κανάλι Organic Search στο GA4 για την ίδια περίοδο. */
+  /** Estimated conversions/revenue per GSC query: the sum matches the GA4 Organic Search channel for the same period. */
   const organicRowsDisplay = useMemo((): OrganicSearchRow[] => {
     if (organicSearchSource !== 'gsc') return organicRows;
     const sumClicks = organicRows.reduce((acc, r) => acc + (r.clicks || 0), 0);
@@ -456,7 +451,7 @@ export function GA4Analytics() {
     showAllOrganicRows,
   ]);
 
-  /** Sparklines ευθυγραμμισμένα με το φίλτρο ημερομηνιών (όχι πάντα «τελευταίες 14» από όλο το sync). */
+  /** Sparklines aligned with the date filter (not always the "last 14" from the whole sync). */
   const sparkFiltered = useMemo(() => filteredDailyEntries.slice(-14), [filteredDailyEntries]);
 
   const kpiTooltipBase = useMemo(() => {
@@ -674,8 +669,7 @@ export function GA4Analytics() {
             <DateRangePicker
               from={effectiveFrom}
               to={effectiveTo}
-              // Γράφει στο GLOBAL (persisted per-brand) context ώστε η προσαρμοσμένη περίοδος να
-              // ΠΑΡΑΜΕΝΕΙ μετά από refresh. Πριν έγραφε σε τοπικό session-state → χανόταν στο reload.
+              // Writes to the GLOBAL (persisted per-brand) context so the custom period survives refresh.
               onChange={(f, t) => { setLocalDateFrom(''); setLocalDateTo(''); setCustomRange(f, t); }}
               onClear={() => { setLocalDateFrom(''); setLocalDateTo(''); setGlobalPeriod('current_month'); }}
             />

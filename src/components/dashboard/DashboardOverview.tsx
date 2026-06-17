@@ -84,11 +84,11 @@ import { INSIGHT_NAV } from '../insights/aiInsightsConfig';
 import { logger } from '../../utils/logger';
 import type { AIInsight } from '../../types';
 
-/** Ημερήσια σημεία στο chart· πάνω από αυτό → μηνιαία σύνοψη (αναγνώσιμο άξονα). */
+/** Daily points in the chart; above this -> monthly summary (readable axis). */
 const REVENUE_CHART_MAX_DAILY_POINTS = 90;
 
-/** Revenue Performance — κύριο chart τζίρου. Ακολουθεί το accent theme ώστε όλες οι τάσεις
- *  (e-commerce spark, GA4 spark, revenue chart) να έχουν ΕΝΙΑΙΟ χρώμα με το επιλεγμένο theme. */
+/** Revenue Performance main chart. Follows the accent theme so all trends
+ *  (e-commerce spark, GA4 spark, revenue chart) share one color with the selected theme. */
 const REV_CHART_ESHOP = 'var(--nts-accent)';
 
 const REV_PERF_LABEL_ESHOP = 'Τζίρος e-shop (παραγγελίες)';
@@ -96,10 +96,10 @@ const REV_PERF_LABEL_ESHOP_BLEND = 'Organic + καμπάνιες (εκτίμησ
 const DASHBOARD_LOADING_TIMEOUT_MS = 1800;
 const FINANCIAL_GATE_TIMEOUT_MS = 1800;
 const BRIEFING_CONTEXT_TIMEOUT_MS = 6000;
-/** Διαφήμιση — standalone efficiency chart (όχι σύγκριση με τζίρο). */
+/** Ads standalone efficiency chart (not a comparison against revenue). */
 const ADS_SPEND_COLOR = '#FDBA74';
-// Σταθερό (όχι accent): το ads efficiency chart είναι multi-series — αν ακολουθούσε το accent
-// θα συγκρουόταν με το ADS_SPEND_COLOR.
+// Fixed (not accent): the ads efficiency chart is multi-series — following the accent
+// would clash with ADS_SPEND_COLOR.
 const ADS_CONV_COLOR = '#F97316';
 const ADS_ROAS_COLOR = '#64748B';
 
@@ -111,14 +111,14 @@ function formatRevenueChartYAxisTick(value: number): string {
   return `€${formatNumber(v, 0)}`;
 }
 
-/** Άξονας X: μοναδικό κλειδί ανά ημέρα/μήνα (αποφυγή collisions από `toLocaleDateString` στο Recharts). */
+/** X axis: unique key per day/month (avoids collisions from `toLocaleDateString` in Recharts). */
 function formatDashChartDateKeyTick(dateKey: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return formatTrendDayLabel(dateKey);
   if (/^\d{4}-\d{2}$/.test(dateKey)) return formatMonthKeyShort(dateKey);
   return dateKey;
 }
 
-/** ERP chart: πλήρης ημερήσια σειρά περιόδου, χωρίς interpolation/forward-fill. Missing day = €0. */
+/** ERP chart: full daily series for the period, no interpolation/forward-fill. Missing day = €0. */
 function completeDailyRevenueSeries(dayList: string[], record: Record<string, number>): number[] {
   return dayList.map((d) => {
     if (!Object.prototype.hasOwnProperty.call(record, d)) return 0;
@@ -161,7 +161,7 @@ function hoursSince(value: unknown): number | null {
   return Math.max(0, diff / 3_600_000);
 }
 
-/** Το Recharts Area χρειάζεται ≥2 σημεία· αν υπάρχει 1 μήνας μόνο, διπλασιάζουμε για ορατή γραμμή. */
+/** Recharts Area needs >=2 points; with only 1 month, duplicate it for a visible line. */
 function padSparklineForChart(values: number[]): number[] {
   if (values.length === 0) return [];
   if (values.length === 1) return [values[0], values[0]];
@@ -191,7 +191,7 @@ const ECOMM_TOP_PLATFORM_LABELS: Record<string, string> = {
 };
 
 interface DashboardOverviewProps {
-  /** Προαιρετικό `hashQuery` για deep link (π.χ. ειδοποιήσεις → `#products?stock=low`) */
+  /** Optional `hashQuery` for deep links (e.g. alerts -> `#products?stock=low`) */
   onSectionChange?: (section: string, opts?: { hashQuery?: string }) => void;
   onOpenInsights?: () => void;
 }
@@ -201,8 +201,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const { isB2B, enabledModules } = useModules();
   const { segments: rfmSegments, hasImported: hasSegments, isLoading: segmentsLoading, dataSource: segmentsDataSource, aggregateStatus } = useSegments({
     skipOrderHydration: true,
-    // Τροφοδότηση από το έτοιμο server RFM aggregate (1 doc read) → πραγματικά segments γρήγορα,
-    // χωρίς client-side υπολογισμό από 400ήμερες παραγγελίες.
+    // Feed from the precomputed server RFM aggregate (1 doc read) -> real segments fast,
+    // without client-side computation over 400 days of orders.
     useServerAggregate: true,
   });
   const { segmentStats } = useSegmentAggregates();
@@ -224,12 +224,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   useAutomationRunner();
   const ga4 = useGA4Data();
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
-  /**
-   * Dashboard: μόνο server summary (`ecommerce_summary`) — γρήγορο, ένα Firestore read.
-   * Το `full` mode κατέβαζε όλο το ιστορικό orders παράλληλα με το `useSegments` 400ήμερο fetch
-   * → πάγωμα του main thread σε brands με 10K+ orders. Η ακρίβεια του summary εξασφαλίζεται
-   * μέσω `refreshAggregates` μετά από αλλαγή Sales Channel Rules / Revenue Source.
-   */
+  /** Server summary only (`ecommerce_summary`) — one Firestore read; `full` mode froze the main
+   *  thread on 10K+ order brands. Accuracy kept via `refreshAggregates` on rules/source change. */
   const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
   const businessRevenue = useBusinessRevenueSummary();
   const procurementSheets = useProcurement({ sheets: ['costing'] });
@@ -251,13 +247,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     dashboardRfmSegments.length > 0 ||
     (segmentStats?.totalCustomers ?? 0) > 0;
 
-  // PER-130 (0.9): κενό pie ⇒ καθοδήγηση αντί για άδειο 224px δαχτυλίδι. Κρίνεται σε ό,τι
-  // πραγματικά render-άρεται: με !segmentsLoading το dashboardRfmSegments ταυτίζεται πάντα
-  // με το rfmSegments (όλα τα μη-loading branches του memo το επιστρέφουν) — διαβάζουμε το
-  // δεύτερο ώστε ο έλεγχος να μην περνά από ref-derived τιμή (react-hooks/refs).
+  // Empty pie -> show guidance instead of an empty ring. Read rfmSegments directly (not the
+  // ref-derived value) so the check does not pass through a ref (react-hooks/refs).
   const showSegmentsEmptyState = !segmentsLoading && rfmSegments.length === 0;
-  // Προαιρετικό caption: γεμάτο pie από imported segments χωρίς πρόσφατο RFM aggregate —
-  // ήπια ένδειξη ΧΩΡΙΣ CTA (για import-only brands το refresh δεν παράγει αποτέλεσμα, BUG-7).
+  // Optional caption: full pie from imported segments without a recent RFM aggregate —
+  // a soft note WITHOUT a CTA (for import-only brands a refresh produces no result).
   const showSegmentsStaleSourceNote =
     !segmentsLoading && rfmSegments.length > 0 && segmentsDataSource !== 'ecommerce';
 
@@ -283,23 +277,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     ecomm.connectedPlatforms.length > 0 &&
     ecommHist.rawLoading;
 
-  /**
-   * Τα ecom KPIs ξεκινούν με τιμές από το server summary (1 Firestore read, instant) και
-   * αντικαθίστανται από client-side raw aggregates μόλις φορτωθούν τα orders. Όσο διαρκεί
-   * αυτό το second pass, εμφανίζουμε pulsing dot στα affected cards για να ξέρει ο user
-   * ότι το νούμερο ίσως ενημερωθεί ελαφρώς.
-   */
+  /** Ecom KPIs start from the server summary, then swap to raw client aggregates once orders
+   *  load; during that pass a pulsing dot warns affected cards may shift slightly. */
   const ecomKpisRefreshing = ecommerceRawBusy && ecommHist.source === 'summary';
 
-  /**
-   * Financial gate: μόνο στο πρώτο load χωρίς usable data.
-   * Background refetches δεν πρέπει να κρύβουν όλο το Dashboard, γιατί δημιουργούν εκνευριστικό flicker.
-   */
-  // PER-130 (P8): το procurement_costing sheet (~12k docs σε procurement Enterprise brands,
-  // persistence-denied ⇒ full network fetch κάθε boot) ΔΕΝ μπλοκάρει πλέον το financial paint.
-  // Το KPI τζίρου από costing (getCostingReal12mTurnover, ~525) ενυδατώνεται καθυστερημένα —
-  // η υπόλοιπη εικόνα εσόδων παίζει αμέσως. Το procurementSheets.hasData μένει στο
-  // hasUsableFinancialData παρακάτω (μόνο επιταχύνει το release όταν το costing είναι ήδη cached).
+  // Financial gate: only on first load without usable data; background refetches must not hide the Dashboard (flicker).
+  // procurement_costing hydrates late (getCostingReal12mTurnover) without blocking paint; procurementSheets.hasData speeds cached release.
   const rawFinancialSourcesLoading =
     Boolean(currentBrand) &&
     (businessRevenue.isLoading ||
@@ -332,11 +315,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     return () => window.clearTimeout(t);
   }, [currentBrand?.id, rawFinancialSourcesLoading, hasUsableFinancialData, financialGateReleased]);
 
-  /**
-   * Το Dashboard κάνει progressive render γρήγορα, αλλά το AI Briefing ΔΕΝ πρέπει να γράφεται
-   * πριν φορτώσουν τα κρίσιμα inputs. Αλλιώς μπορεί να δει προσωρινά campaigns=[] και να πει
-   * λάθος ότι δεν υπάρχει διαφημιστική δαπάνη.
-   */
+  /** AI Briefing must NOT be written before critical inputs load, else it may see campaigns=[]
+   *  and wrongly state there is no ad spend. */
   const briefingMetricsReady =
     !rawFinancialSourcesLoading &&
     !ecommHist.rawLoading;
@@ -365,7 +345,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       ecommerceRawBusy ||
       ga4AnalyticsLoading);
   const dashboardOverviewLoading = financialSourcesLoading || (dashboardOverviewBusy && !dashboardLoadingTimedOut);
-  /** Μην δείχνουμε «κάντε import» όσο ακόμα φορτώνουν e-shop / καμπάνιες / GA4. */
+  /** Do not show "import data" while e-shop / campaigns / GA4 are still loading. */
   const dashboardStillHydrating =
     Boolean(currentBrand) &&
     !hasAnyData &&
@@ -388,11 +368,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
   const campaignMetrics = useMemo(() => calculateCampaignMetrics(periodCampaigns), [periodCampaigns]);
 
-  /**
-   * Marketing overhead = επιπλέον κόστη marketing εκτός ad spend (agency retainers, tools, one-off)
-   * όπως δηλωμένα στο active strategy. Μπαίνουν στο KPI «Marketing Expenses» μαζί με το ad spend
-   * ώστε ο owner να βλέπει συνολική marketing δαπάνη (όχι μόνο media), συνεπές με τη σελίδα ROI.
-   */
+  /** Marketing overhead = costs beyond ad spend (agency, tools, one-off) from the active strategy,
+   *  folded into the "Marketing Expenses" KPI with ad spend for total spend (matches ROI page). */
   const marketingOverheadPeriod = useMemo(
     () =>
       computeMarketingOverheadForPeriod(
@@ -453,7 +430,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     [ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
   );
 
-  // Παραγγελίες περιόδου: πρώτα από summary, μετά από raw aggregates όταν φορτώσουν (hybrid · ίδιο με τζίρο/AOV).
+  // Orders for the period: first from summary, then from raw aggregates once loaded (hybrid, same as revenue/AOV).
   const ordersInPeriod = useMemo(
     () =>
       ecommHist.ordersByDay
@@ -462,7 +439,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     [ecommHist.ordersByDay, periodDates.fromDate, periodDates.toDate]
   );
 
-  /** AOV από πραγματικά e-shop data (revenue/orders της περιόδου). Αξιόπιστο, χωρίς ad-platform double-counting. */
+  /** AOV from real e-shop data (revenue/orders of the period). Reliable, no ad-platform double-counting. */
   const eshopAovInPeriod = useMemo(
     () => (ordersInPeriod > 0 ? storeRevenueInPeriod / ordersInPeriod : 0),
     [storeRevenueInPeriod, ordersInPeriod]
@@ -480,7 +457,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     periodDates.toDate,
   ]);
 
-  // GA4 totals για την επιλεγμένη περίοδο (αντί για 90ήμερα totals).
+  // GA4 totals for the selected period (instead of 90-day totals).
   const ga4TotalsInPeriod = useMemo(() => {
     const days = ga4.dailyEntries.filter(
       (d) => d.date >= periodDates.fromDate && d.date <= periodDates.toDate
@@ -559,18 +536,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     !ecommLatestRevenueDayInPeriod ||
     (!!erpLatestRevenueDayInPeriod && erpLatestRevenueDayInPeriod >= ecommLatestRevenueDayInPeriod);
 
-  /**
-   * ERP wins only when its daily coverage is current for the selected period.
-   * If e-shop has revenue after the latest ERP day, ERP summary is stale/incomplete for this view.
-   */
+  /** ERP wins only when its daily coverage is current for the period; e-shop revenue after the
+   *  latest ERP day means the ERP summary is stale/incomplete for this view. */
   const hasErpRevenueForPeriod = hasErpBusinessRevenue && erpRevenueInPeriod > 0 && erpDailyCoverageIsCurrentForPeriod;
 
   const hasProcurementTurnoverEstimate = procurementRevenueInPeriod > 0;
 
-  /**
-   * «Σύνολο Εσόδων» (Dashboard): Procurement (Enterprise) → ERP → e-shop → organic + καμπάνιες.
-   * Procurement έχει ΠΑΝΤΑ προτεραιότητα όταν υπάρχουν δεδομένα κοστολόγησης 12μ.
-   */
+  /** Total revenue source priority: Procurement (Enterprise) -> ERP -> e-shop -> organic + campaigns.
+   *  Procurement always wins when 12-month costing data exists. */
   const dashboardTotalRevenue = useMemo(() => {
     if (hasProcurementTurnoverEstimate) return procurementRevenueInPeriod;
     if (hasErpRevenueForPeriod) return erpRevenueInPeriod;
@@ -621,7 +594,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         ? REV_PERF_LABEL_ESHOP
         : REV_PERF_LABEL_ESHOP_BLEND;
 
-  /** Fingerprint για επαναλαμβανόμενο έλεγχο AI briefing vs KPI. */
+  /** Fingerprint for repeatedly checking AI briefing vs KPI. */
   const briefingFinanceKey = useMemo(
     () =>
       [
@@ -671,10 +644,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     storeRevenueInPeriod > 0 &&
     !ecommAggregateFresh &&
     (ecommDaysSinceLatestRevenue ?? 0) >= 2;
-  // Αξία αποθέματος:
-  //  - Enterprise: από τα procurement_signals (Σ tied_capital = απόθεμα × κόστος). Το Product
-  //    Intelligence είναι κρυφό σε Enterprise, οπότε δεν εξαρτιόμαστε πλέον από το PI aggregate.
-  //  - Growth: από το PI aggregate (procurement-sourced) ή το products aggregate (ERP/import).
+  // Inventory value: Enterprise from procurement_signals (sum tied_capital = stock x cost; PI is
+  // hidden there); Growth from the PI aggregate (procurement) or the products aggregate (ERP/import).
   const procurementInventoryValue = useMemo(() => {
     if (!isEnterprise) return 0;
     let total = 0;
@@ -710,10 +681,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     return Math.round((checks.filter(Boolean).length / checks.length) * 100);
   }, [campaignsCount, currentBrand?.enterpriseTurnoverEUR, ga4.hasData, openCommercialTasks, productsCount, suppliers.length, totalOrganicRevenue]);
 
-  /**
-   * Κύριο chart — μία σειρά τζίρου (ίδια προτεραιότητα με το KPI «Σύνολο Εσόδων»):
-   * ERP → (Enterprise) εκτίμηση Κοστολόγησης → e-shop → organic + καμπάνιες.
-   */
+  /** Main chart — single revenue series, same priority as the total revenue KPI:
+   *  ERP -> (Enterprise) costing estimate -> e-shop -> organic + campaigns. */
   const revenueChartData = useMemo(() => {
     const { fromDate, toDate } = periodDates;
     const dayCount = eachDateInclusiveLocal(fromDate, toDate).length;
@@ -819,7 +788,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     erpRevenueByDayRecord,
   ]);
 
-  /** Ημερήσια ή μηνιαία σειρά για chart διαφήμισης (δαπάνη + conversion value + ROAS από synced campaigns). */
+  /** Daily or monthly series for the ads chart (spend + conversion value + ROAS from synced campaigns). */
   const adsPerformanceSeries = useMemo(() => {
     if (!hasCampaigns || periodCampaigns.length === 0) return [];
     const { fromDate, toDate } = periodDates;
@@ -924,7 +893,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           const w = Math.round(segmentContainerRef.current.getBoundingClientRect().width);
           if (w > 0) segmentW = Math.max(1, w);
         }
-        // Κρίσιμο: χωρίς early return το Recharts + ResizeObserver δημιουργούν feedback loop (freeze).
+        // Critical: without this early return, Recharts + ResizeObserver form a feedback loop (freeze).
         if (revenueW === prev.revenue.width && segmentW === prev.segment.width) return prev;
         return {
           revenue: { width: revenueW, height: 288 },
@@ -1009,7 +978,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         </Card>
       )}
 
-      {/* Quick briefing — πάντα με brand, και χωρίς ενεργή στρατηγική */}
+      {/* Quick briefing — always with a brand, even without an active strategy */}
       {currentBrand && (
         <StrategyBriefingQuickStrip
           hasActiveStrategy={!!activeStrategy}
@@ -1275,10 +1244,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           }
         });
 
-        // expensesByMonth = ad spend + marketing overhead εκείνου του μήνα. Marketing overhead
-        // υπολογίζεται ξεχωριστά ανά calendar month (fixed_monthly = full amount, percent_of_budget &
-        // one_off_month κατανέμονται), έτσι το MoM στο «Marketing Expenses» KPI είναι σωστό σε multi-month
-        // periods («Τελευταίες 30 ημέρες», «Τρέχον Έτος» κ.λπ.).
+        // expensesByMonth = ad spend + marketing overhead, overhead computed per calendar month
+        // (fixed_monthly full; percent_of_budget & one_off_month distributed) so MoM stays correct.
         const monthsSet = new Set<string>([
           ...Object.keys(spendByMonth),
           ...Object.keys(revenueByMonth),
@@ -1312,9 +1279,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         const sortedConvVal = sortMonthKeys(Object.entries(convsValueByMonth));
         const sortedConvs = sortMonthKeys(Object.entries(convsByMonth));
 
-        // AOV ΠΡΟΤΕΡΑΙΟΤΗΤΑ: πραγματικά e-shop data (revenue/orders της περιόδου). Αυτό αποφεύγει
-        // το double-counting των ad platforms (Google Ads + Meta συχνά μετρούν την ίδια μετατροπή).
-        // Fallback: campaign-attributed value/conversions μόνο όταν δεν υπάρχει e-shop σύνδεση.
+        // AOV from real e-shop data (revenue/orders) avoids double-counting across Google Ads + Meta.
+        // Fallback: campaign-attributed value/conversions only when there is no e-shop connection.
         const hasEshop = enabledModules.ecommerce && ecomm.hasData && ordersInPeriod > 0;
         const aov = hasEshop
           ? eshopAovInPeriod
@@ -1523,7 +1489,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <p className="text-[11px] text-[#6B7280] mb-0.5">Top Platform</p>
                 <p className="text-lg font-bold text-[#1A1A1A]">{ecommTopPlatformDisplay}</p>
               </div>
-              {/* Mini sparkline — φιλτραρισμένο για την επιλεγμένη περίοδο */}
+              {/* Mini sparkline — filtered for the selected period */}
               {(() => {
                 const periodDaily = ecommHist.dailyRevenueRows.filter(
                   (d) => d.date >= periodDates.fromDate && d.date <= periodDates.toDate
@@ -1840,7 +1806,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 minHeight: '224px',
               }}
             >
-              {/* PER-130 (0.9): το div μένει mounted (ResizeObserver wiring) — εναλλάσσονται μόνο τα children. */}
+              {/* The div stays mounted (ResizeObserver wiring) — only the children swap. */}
               {showSegmentsEmptyState ? (
                 <div className="w-full h-full flex items-center justify-center bg-[#F5F5F5] rounded-lg">
                   <div className="text-center px-4">

@@ -1,9 +1,7 @@
 import type { RFMSegment } from '../types';
 
-/**
- * Όταν το import έχει τρέξει λάθος ως «μία γραμμή = ένα segment», δημιουργούνται χιλιάδες docs
- * με το ίδιο όνομα. Συγχωνεύει ανά normalized όνομα ώστε το UI να δείχνει λογικά aggregates.
- */
+/** Merges segments by normalized name so a botched "one row = one segment" import
+ * collapses into sensible aggregates. */
 export function mergeDuplicateSegmentRowsByName(segments: RFMSegment[]): RFMSegment[] {
   if (segments.length < 25) return segments;
 
@@ -20,7 +18,7 @@ export function mergeDuplicateSegmentRowsByName(segments: RFMSegment[]): RFMSegm
   const merged: RFMSegment[] = [];
   for (const [, group] of byName) {
     if (group.length === 1) {
-      // LOGIC-15: copy — the percentage loop below mutates each `merged` entry in place,
+      // Copy — the percentage loop below mutates each `merged` entry in place,
       // and pushing the input ref would mutate the caller's (React Query cache) object.
       merged.push({ ...group[0] });
       continue;

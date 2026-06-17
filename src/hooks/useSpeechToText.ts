@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-/**
- * Speech-to-text μέσω Web Speech API (browser-native, μηδενικό κόστος).
- * Εναλλακτική είσοδος για τον Mark. Graceful fallback αν δεν υποστηρίζεται.
- */
+/** Speech-to-text via the Web Speech API (browser-native, zero cost); alternative input for Mark,
+ *  with graceful fallback when unsupported. */
 
 type SpeechRecognitionLike = {
   lang: string;
@@ -27,7 +25,7 @@ function getRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
-/** Φιλικά μηνύματα σφάλματος (αντί για σιωπηλή αποτυχία). */
+/** Friendly error messages (instead of silent failure). */
 function friendlyError(code?: string): string {
   switch (code) {
     case 'not-allowed':
@@ -72,7 +70,7 @@ export function useSpeechToText(opts?: { lang?: string; onResult?: (text: string
       setError('Ο browser δεν υποστηρίζει φωνητική είσοδο. Δοκίμασε Chrome/Edge.');
       return;
     }
-    // Αν υπάρχει ενεργό instance, ακύρωσέ το πρώτα (αποφυγή InvalidStateError).
+    // If an active instance exists, abort it first (avoids InvalidStateError).
     try {
       recRef.current?.abort();
     } catch {

@@ -15,7 +15,7 @@ export interface BriefingData {
     totalOrganic: number;
     totalCampaignRevenue: number;
     storeRevenue: number;
-    /** Όταν true, το «Σύνολο Εσόδων» του dashboard = τζίρος παραγγελιών (storeRevenue), ακόμη κι αν είναι 0 — όχι blend organic+ads. */
+    /** When true, the dashboard's "Total Revenue" = order revenue (storeRevenue), even if 0 — not a blend of organic+ads. */
     ecommerceSourceActive: boolean;
     trueRoas: number;
     revenueGap: number;
@@ -101,7 +101,7 @@ export function collectBriefingData(params: {
   products: Product[];
   campaigns: Campaign[];
   segments: RFMSegment[];
-  /** Organic $ για την ίδια περίοδο με τα campaigns / e-shop στο snapshot (π.χ. dashboard period). */
+  /** Organic $ for the same period as the campaigns / e-shop in the snapshot (e.g. dashboard period). */
   totalOrganicRevenue: number;
   ga4: {
     totals: { sessions: number; users: number; newUsers: number; bounceRate: number; conversions: number };
@@ -429,7 +429,7 @@ ACTIONS (ακριβώς 3):
 
 // ── Data Hash ────────────────────────────────────────────────────────────────
 
-/** Για να κρίνουμε αν το cached briefing αντιστοιχεί ακόμα στα KPI μετά από φόρτωση raw orders. */
+/** Used to decide whether the cached briefing still matches the KPIs after loading raw orders. */
 export function computeBriefingDataHash(data: BriefingData): string {
   const key = [
     data.revenue.totalOrganic,
@@ -457,7 +457,7 @@ const MAX_DAILY_GENERATIONS = 4;
 const MIN_REGEN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour cooldown between auto-updates
 const BRIEFING_CACHE_VERSION = 4;
 
-/** Calendar day in local timezone (YYYY-MM-DD) — consistent with «σήμερα» για τον χρήστη */
+/** Calendar day in local timezone (YYYY-MM-DD) — consistent with "today" for the user */
 export function getLocalDateKey(d = new Date()): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');

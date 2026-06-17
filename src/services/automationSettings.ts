@@ -69,7 +69,7 @@ export const AutomationAlertsService = {
     await this.updateStatus(id, 'dismissed');
   },
 
-  /** Αρχειοθέτηση με αξιολόγηση — οι νέες ειδοποιήσεις συνεχίζουν να δημιουργούνται κανονικά από τον server */
+  /** Archive with evaluation — new alerts keep being created normally by the server */
   async archiveWithEvaluation(id: string, evaluation: AlertEvaluation, evaluatedBy?: string): Promise<void> {
     const ref = doc(db, 'automation_alerts', id);
     await setDoc(

@@ -1,27 +1,4 @@
-/**
- * Connector token encryption-at-rest (AES-256-GCM).
- *
- * Format: `enc:v1:{nonce_base64url}:{ciphertext+tag_base64url}`
- *
- * Στρατηγική για zero-downtime migration:
- *  - `decryptToken(value)`: αν αρχίζει με `enc:v1:` αποκρυπτογραφεί.
- *    Αλλιώς το επιστρέφει αυτούσιο (legacy plaintext tokens συνεχίζουν να δουλεύουν).
- *  - `encryptToken(plain)`: επιστρέφει encrypted string. Αν δεν υπάρχει
- *    `CONNECTOR_TOKEN_KEY` (Secret Manager), επιστρέφει το plaintext με warning.
- *  - Αυτή η transparency εξασφαλίζει ότι deploys χωρίς το secret δεν σπάνε
- *    υπάρχουσες συνδέσεις. Όταν προστεθεί το secret + redeploy, νέα tokens
- *    encrypt-άρονται αυτόματα στο επόμενο OAuth refresh / reconnect.
- *
- * Master key: 32 bytes (64 hex chars). Δημιουργία:
- *   `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
- *
- * Setup:
- *   1) `firebase functions:secrets:set CONNECTOR_TOKEN_KEY` (paste hex)
- *   2) Πρόσθεσε `'CONNECTOR_TOKEN_KEY'` στο `secrets:` array κάθε function
- *      που διαβάζει connector tokens (connectorCallback, connectorSync,
- *      connectorSelectAccount, scheduledSync, refreshAggregates, κ.λπ.)
- *   3) Redeploy. Νέα tokens encrypt-άρονται αυτόματα.
- */
+/** Connector token encryption-at-rest (AES-256-GCM), format `enc:v1:{nonce_b64url}:{ct+tag_b64url}`. Legacy plaintext passes through; new tokens encrypt on next refresh once CONNECTOR_TOKEN_KEY (32-byte hex secret) is set on every function reading tokens. */
 import { randomBytes, createCipheriv, createDecipheriv, scryptSync, type CipherGCM, type DecipherGCM } from 'crypto';
 import { logger } from './utils/logger';
 import { ALERT } from './utils/alertKeys';
@@ -43,7 +20,7 @@ function loadKey(): Buffer | null {
     cachedKey = Buffer.from(raw, 'hex');
     return cachedKey;
   }
-  // Fallback: derive 32 bytes via scrypt με σταθερό salt (idempotent ανάμεσα σε deploys)
+  // Fallback: derive 32 bytes via scrypt with a fixed salt (idempotent across deploys)
   cachedKey = scryptSync(raw, 'pp.connector.token.salt.v1', 32);
   return cachedKey;
 }
@@ -52,20 +29,14 @@ export function isEncrypted(value: unknown): value is string {
   return typeof value === 'string' && value.startsWith(PREFIX);
 }
 
-/**
- * Encrypt plaintext. Idempotent: αν είναι ήδη encrypted, επιστρέφεται ως έχει.
- * Αν λείπει το master key, επιστρέφει το plaintext με warning (fail-open).
- */
+/** Encrypt plaintext (idempotent); fails closed (throws) on missing key rather than storing plaintext. */
 export function encryptToken(plaintext: string | null | undefined): string {
   if (!plaintext) return '';
   if (isEncrypted(plaintext)) return plaintext;
   const key = loadKey();
   if (!key) {
-    // PP-13: fail CLOSED. Refuse to persist a secret token unencrypted rather than
-    // silently downgrading to plaintext at rest. Every function that acquires a
-    // fresh connector token declares CONNECTOR_TOKEN_KEY, and already-encrypted
-    // values return early above — so in a correct deployment this never fires; if
-    // it does, it signals a missing secret instead of a silent security downgrade.
+    // Fail CLOSED: refuse to persist a token unencrypted rather than downgrade to plaintext.
+    // Should never fire in a correct deployment (CONNECTOR_TOKEN_KEY declared everywhere); if it does, a secret is missing.
     logger.error(`[tokenCrypto] ${KEY_ENV} not configured — refusing to store connector token in plaintext`, { alertKey: ALERT.tokenCryptoFailed });
     throw new Error('Connector token encryption key (CONNECTOR_TOKEN_KEY) is not configured');
   }
@@ -77,17 +48,13 @@ export function encryptToken(plaintext: string | null | undefined): string {
     const payload = Buffer.concat([enc, tag]);
     return `${PREFIX}${nonce.toString('base64url')}:${payload.toString('base64url')}`;
   } catch (err) {
-    // SEC-L2: fail CLOSED on a cipher error too (not just the missing-key path above) —
-    // refuse to persist a connector token in plaintext rather than silently downgrading.
+    // Fail CLOSED on cipher errors too: refuse to persist plaintext rather than downgrade.
     logger.error('[tokenCrypto] encrypt failed — refusing to store connector token in plaintext:', { alertKey: ALERT.tokenCryptoFailed, err });
     throw new Error('Connector token encryption failed');
   }
 }
 
-/**
- * Decrypt encrypted string OR pass-through plaintext (backward compatibility).
- * Επιστρέφει '' σε περίπτωση error για να σπάει controlled (όχι throw).
- */
+/** Decrypt encrypted string or pass through plaintext; returns '' on error (no throw). */
 export function decryptToken(value: string | null | undefined): string {
   if (!value) return '';
   if (!isEncrypted(value)) return value;

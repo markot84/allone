@@ -41,9 +41,8 @@ export function generatePackageHtml(data: SharedPackageData): string {
     </div>`;
   }).join('');
 
-  // SEC-C2: escape FIRST, then apply the structural `||`→paragraph transform — escaping
-  // after would neutralize our own injected <p> tags; escaping before is safe because the
-  // structural markers (`||`, `—`, `•`) contain none of the escaped characters.
+  // Escape FIRST, then apply the structural `||`→paragraph transform: escaping after would
+  // neutralize our injected <p> tags; markers (`||`, `—`, `•`) contain no escaped characters.
   const rationaleHtml = data.rationale
     ? escapeHtml(data.rationale)
         .replace(/\|\|/g, '</p><p style="margin:8px 0;font-size:13px;color:#4A4A4A;line-height:1.6">')
@@ -189,10 +188,8 @@ export function openPackagePdf(data: SharedPackageData) {
   if (win) {
     win.document.write(html);
     win.document.close();
-    // SEC-C2/PP-19: print is triggered from the opener, not an inline <script> in the
-    // written document — so it survives removing CSP script-src 'unsafe-inline' (SEC-M7).
-    // onload can be flaky on about:blank, so fall back to a timer; a guard prevents a
-    // double print dialog if both fire.
+    // Print from the opener (not an inline <script>) so it survives CSP script-src 'unsafe-inline'.
+    // onload is flaky on about:blank, so fall back to a timer; a guard prevents a double dialog.
     let printed = false;
     const doPrint = () => {
       if (printed) return;

@@ -5,9 +5,7 @@ import {
   filterCampaignsByScheduleDateOverlap,
 } from '../utils/campaignDateRangeMetrics';
 
-/**
- * Campaigns με μετρήσεις περιόδου — ίδια λογική με σελίδα Campaigns / ROI (`campaignDateRangeMetrics`).
- */
+/** Campaigns scoped to period metrics — same logic as the Campaigns / ROI page (`campaignDateRangeMetrics`). */
 export function usePeriodScopedCampaigns(
   campaigns: Campaign[] | undefined,
   periodDates: { fromDate: string; toDate: string }

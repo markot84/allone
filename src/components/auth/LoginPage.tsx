@@ -8,9 +8,9 @@ interface LoginPageProps {
   onSignIn: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string) => Promise<void>;
   onSignInWithGoogle: (options?: { allowNewUsers?: boolean }) => Promise<void>;
-  /** Εγγραφή με email/κωδικό: μόνο αν open mode ή ροή πρόσκλησης */
+  /** Email/password registration: only in open mode or invite flow */
   allowEmailRegister: boolean;
-  /** Νέοι λογαριασμοί Google: ίδια πολιτική με το email register */
+  /** New Google accounts: same policy as email registration */
   allowGoogleNewUsers: boolean;
   onResetPassword?: (email: string) => Promise<void>;
   loading?: boolean;

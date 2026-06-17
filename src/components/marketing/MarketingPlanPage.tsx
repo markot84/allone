@@ -91,9 +91,8 @@ type PlanStage = {
   active: boolean;
 };
 
-// ── Daily plan cache (localStorage) ──────────────────────────────────────────
-// Το draft υπολογίζεται μία φορά την ημέρα ανά brand/preset και διατηρείται, ώστε η
-// πλοήγηση μέσα στην εφαρμογή να ΜΗΝ ξανατρέχει τη βαριά ανάλυση + AI κάθε φορά.
+// Daily plan cache (localStorage): the draft is computed once per day per brand/preset,
+// so in-app navigation does NOT re-run the heavy analysis + AI.
 const PLAN_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 type PlanCacheEntry = { savedAt: number; plan: MarketingPlanDraft };
 type LastYearOrdersCacheEntry = { savedAt: number; orders: EcommerceRawOrder[] };
@@ -107,10 +106,10 @@ type MarketingPlanCacheDoc = PlanCacheEntry & {
   savedAtIso: string;
 };
 
-// v4: το «σύμπαν» SKU = πλήρης ERP κατάλογος (όχι μόνο τα procurement signals) — bust παλιών drafts
-// — bump ώστε παλιά cached drafts με κενή βάση (0 τζίρος/τεμάχια) να ξαναϋπολογιστούν.
+// v4: the SKU "universe" = full ERP catalog (not just procurement signals) — busts
+// old drafts so cached ones with an empty base (0 revenue/units) get recomputed.
 function planCacheStorageKey(brandId: string, preset: string, sig = ''): string {
-  // Το sig (υπογραφή εμπορικών πληροφοριών) εξασφαλίζει recompute όταν αλλάζουν οι πληροφορίες.
+  // sig (commercial-info signature) forces a recompute when that info changes.
   return `mp_draft_v4_${brandId}_${preset}${sig ? `_${hashSig(sig)}` : ''}`;
 }
 
@@ -161,15 +160,15 @@ function writePlanCache(brandId: string, preset: string, plan: MarketingPlanDraf
   try {
     localStorage.setItem(key, payload);
   } catch {
-    // Quota exceeded → καθάρισε ΑΛΛΑ mp_draft entries (άλλων brand/preset) και ξαναδοκίμασε.
-    // Έτσι το dedicated cache δεν αποτυγχάνει σιωπηλά (που οδηγούσε σε ξανατρέξιμο της ανάλυσης).
+    // Quota exceeded → clear OTHER mp_draft entries (other brand/preset) and retry,
+    // so the dedicated cache doesn't fail silently (which caused the analysis to re-run).
     try {
       Object.keys(localStorage)
         .filter((k) => k.startsWith('mp_draft_') && k !== key)
         .forEach((k) => localStorage.removeItem(k));
       localStorage.setItem(key, payload);
     } catch {
-      /* ακόμη γεμάτο — μη μπλοκάρεις το UI (το in-memory cache καλύπτει την πλοήγηση) */
+      /* still full — don't block the UI (the in-memory cache covers navigation) */
     }
   }
 }
@@ -243,7 +242,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const commercialInfo = useCommercialInfo();
   const queryClient = useQueryClient();
 
-  // Ενεργές εμπορικές πληροφορίες — τροφοδοτούν AI μήνυμα + πρόβλεψη πωλήσεων.
+  // Active commercial info — feeds the AI message + sales forecast.
   const activeInfo = useMemo(
     () => commercialInfo.items.filter((i) => i.status === 'active'),
     [commercialInfo.items]
@@ -253,7 +252,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     () => formatBrandProfileForPrompt(currentBrand?.brandProfile),
     [currentBrand?.brandProfile]
   );
-  // Υπογραφή για το queryKey: το draft ξαναϋπολογίζεται όταν αλλάζουν οι πληροφορίες.
+  // Signature for the queryKey: the draft recomputes when the info changes.
   const infoSig = useMemo(
     () => activeInfo.map((i) => `${i.id}:${i.direction}:${i.magnitude}`).sort().join('|'),
     [activeInfo]
@@ -394,13 +393,11 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     });
   };
 
-  // Οι περσινές πωλήσεις τροφοδοτούν την «Ανάλυση βάσης» (τζίρος/τεμάχια/AOV/SKU match). Το draft
-  // ΔΕΝ πρέπει να σφραγιστεί πριν αυτές «κλείσουν» (settle), αλλιώς αποθηκεύεται μόνιμα με κενά
-  // (0 παντού) αφού δεν ξαναϋπολογίζεται. «Settled» = έχει δεδομένα (έστω []) ή απέτυχε/έληξε
-  // (8-15s timeout, bounded 1-μηνη query) → δεν μπλοκάρει το UI επ' αόριστον.
+  // Last year's sales feed the "Base analysis"; the draft must NOT seal before they settle or it
+  // saves permanently empty. "Settled" = has data (even []) or failed/expired — never blocks UI.
   const lastYearOrdersSettled = lastYearOrdersQuery.data !== undefined || lastYearOrdersQuery.isError;
 
-  // Base data έτοιμα → το plan υπολογίζεται μία φορά (ανά brand/preset/context) και διατηρείται.
+  // Base data ready → the plan is computed once (per brand/preset/context) and kept.
   const baseDataReady =
     !!brandId && contextReady && !cacheLookupPending && !inventoryLoading &&
     !procurementSignals.isLoading && lastYearOrdersSettled;
@@ -408,8 +405,8 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     !effectiveCachedPlanEntry &&
     (cacheLookupPending || !contextReady || inventoryLoading || procurementSignals.isLoading || !lastYearOrdersSettled);
 
-  // Το plan draft ζει στο React Query cache (επιβιώνει της πλοήγησης) + localStorage (επιβιώνει reload),
-  // με daily staleTime. Έτσι ΔΕΝ ξανατρέχει η βαριά ανάλυση + AI σε κάθε είσοδο στη σελίδα.
+  // The plan draft lives in the React Query cache (navigation) + localStorage (reload) with a
+  // daily staleTime, so the heavy analysis + AI does NOT re-run on every page entry.
   const planQuery = useQuery<MarketingPlanDraft>({
     queryKey: ['marketingPlanDraft', 'v4', brandId, preset, contextSig],
     enabled: baseDataReady && !effectiveCachedPlanEntry,
@@ -442,14 +439,14 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           ga4TrafficSources: ga4.trafficSources.map((s) => ({ channel: s.channel, sessions: s.sessions, totalRevenue: s.totalRevenue })),
         });
 
-      // 1) Άμεσο draft με deterministic fallback μήνυμα: γράφεται στο cache + εμφανίζεται ΤΩΡΑ,
-      //    ώστε ΑΚΟΜΗ κι αν ο χρήστης κάνει reload όσο τρέχει το (αργό) AI, να μην ξαναρχίζει η ανάλυση.
+      // 1) Immediate draft with a deterministic fallback message: cached + shown NOW, so a
+      //    reload while the slow AI runs does not restart the analysis.
       const fastDraft = assemble(buildFallbackCoreMessage(insight));
       if (brandId) writePlanCache(brandId, preset, fastDraft, contextSig);
       writeRemotePlanCache(fastDraft);
       queryClient.setQueryData(['marketingPlanDraft', 'v4', brandId, preset, contextSig], fastDraft);
 
-      // 2) Μη-μπλοκαριστικό AI enhancement: ενσωματώνει και τις εμπορικές πληροφορίες.
+      // 2) Non-blocking AI enhancement: also incorporates the commercial info.
       const coreMessage = await generateMarketingPlanMessage({
         insight,
         brandName: currentBrand?.name,
@@ -466,24 +463,23 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const draft = planQuery.data ?? null;
   const generating = planQuery.isFetching;
 
-  // Μαθήματα από προηγούμενες αποφάσεις (trailing 90 ημέρες, ανεξάρτητα από τη μελλοντική περίοδο plan).
-  // Το βαρύ fetch τρέχει μόνο αφού υπάρχει draft, ώστε να μην ανταγωνίζεται το αρχικό plan load.
+  // Learnings from past decisions (trailing 90 days, independent of the future plan period).
+  // The heavy fetch only runs once a draft exists, so it doesn't compete with the initial plan load.
   const learnTo = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const learnFrom = useMemo(() => shiftIsoDate(learnTo, -90), [learnTo]);
   const learningsQuery = useQuery({
     queryKey: ['marketingPlanLearnings', brandId, learnFrom, learnTo, [...ecomm.connectedPlatforms].sort().join('|'), campaigns.length, Object.keys(procurementSignals.signalsBySku).length],
     queryFn: async () => {
       if (!brandId) return null;
-      // Orders από windowFrom-30 (price baseline) έως σήμερα· platform-only.
-      // ΟΧΙ fetchAll: bounded στις πιο πρόσφατες ~5.000 παραγγελίες του παραθύρου. Το πλήρες
-      // pagination (έως 40k docs) μονοπωλούσε δίκτυο/CPU και πάγωνε τη σελίδα σε high-volume brands.
+      // Orders from windowFrom-30 (price baseline) to today; platform-only. NOT fetchAll —
+      // bounded to ~5,000 recent orders, as full pagination froze the page on high-volume brands.
       const orders = await fetchEcommercePlatformOrders(brandId, ecomm.connectedPlatforms, {
         sinceDate: shiftIsoDate(learnFrom, -30),
         untilDate: learnTo,
         cacheFirst: true,
         revenueMode: 'all',
       });
-      // Κόστος ανά SKU από procurement signals → margin-aware learnings.
+      // Cost per SKU from procurement signals → margin-aware learnings.
       const costBySku = new Map<string, number>();
       for (const [sku, sig] of Object.entries(procurementSignals.signalsBySku)) {
         const cost = (sig as { cost_unit?: number }).cost_unit;
@@ -507,23 +503,22 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     ? (planQuery.error instanceof Error ? planQuery.error.message : 'Αποτυχία δημιουργίας plan. Δοκίμασε ξανά.')
     : null;
 
-  // Manual «Επαναδημιουργία»: καθάρισε το daily cache και ξανατρέξε τον υπολογισμό.
+  // Manual "Regenerate": clear the daily cache and re-run the computation.
   const regenerate = () => {
     if (!brandId) return;
     clearPlanCache(brandId, preset, contextSig);
     void planQuery.refetch();
   };
 
-  // Κάλυψη SKU = ΟΛΟΚΛΗΡΟ το ενεργό «σύμπαν» που λαμβάνει υπόψη το πλάνο: ο πλήρης ERP κατάλογος
-  // (`products`) όταν είναι μεγαλύτερος από τα procurement signals (custom report subset). Έτσι το KPI
-  // δείχνει τα ~6.000 ενεργά SKU του e-tennis αντί μόνο τα 724 του report.
+  // SKU coverage = the plan's full active "universe": the ERP catalog (`products`) when larger
+  // than the procurement signals subset, so the KPI shows all active SKUs, not just the report's.
   const skuCoverage = useMemo(() => {
     const signalCount = Object.keys(procurementSignals.signalsBySku).length;
     const universe = Math.max(signalCount, inventoryProducts.length);
     return universe > 0 ? universe : null;
   }, [procurementSignals.signalsBySku, inventoryProducts.length]);
 
-  // Στάδια φόρτωσης/ανάλυσης για τον progress loader (ώστε ο χρήστης να βλέπει πρόοδο, όχι αόριστο spinner).
+  // Loading/analysis stages for the progress loader (so the user sees progress, not a vague spinner).
   const planStages = useMemo<PlanStage[]>(() => {
     const salesDone = !lastYearOrdersQuery.isLoading;
     const salesSkipped = lastYearOrdersQuery.isError;
@@ -720,7 +715,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         </div>
       </Card>
 
-      {/* Staged progress loader ενόσω φορτώνουν τα base data / συντίθεται το plan */}
+      {/* Staged progress loader while base data loads / the plan is synthesized */}
       {!draft && (generating || (loadingContext && !generateError)) && (
         <PlanProgress stages={planStages} pct={planProgressPct} generating={generating} />
       )}
@@ -728,7 +723,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       {/* 7-section plan output */}
       {draft && (
         <>
-          {/* Section 1: Ανάλυση βάσης */}
+          {/* Section 1: Base analysis */}
           <PlanSection
             id="analysis"
             title="Ανάλυση βάσης"
@@ -760,7 +755,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             )}
           </PlanSection>
 
-          {/* Section 2: Απόθεμα & Παραγγελίες */}
+          {/* Section 2: Inventory & Orders */}
           <PlanSection
             id="inventory"
             title="Απόθεμα & Παραγγελίες"
@@ -891,7 +886,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             </ul>
           </PlanSection>
 
-          {/* Section 5: Κοινό & CRM */}
+          {/* Section 5: Audience & CRM */}
           <PlanSection
             id="audience"
             title="Κοινό & CRM"
@@ -909,7 +904,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             )}
           </PlanSection>
 
-          {/* Section 6: Τιμολόγηση */}
+          {/* Section 6: Pricing */}
           <PlanSection
             id="pricing"
             title="Τιμολόγηση & Ανταγωνισμός"
@@ -986,7 +981,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         </>
       )}
 
-      {/* Βοηθητικό: μαθήματα από προηγούμενες αποφάσεις (κάτω από το plan, collapsed by default) */}
+      {/* Helper: learnings from past decisions (below the plan, collapsed by default) */}
       <LearningsCard
         open={learningsOpen}
         onToggle={() => setLearningsOpen((v) => !v)}

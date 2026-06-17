@@ -236,7 +236,7 @@ function asIsoDate(value: unknown): string | undefined {
 
 function stockBucket(stockLevel: number, qtySoldPeriod: number | null): StockBucket {
   if (stockLevel <= 0) return 'no_stock';
-  // LOGIC-5: no period/velocity signal → classify by stock-presence only, not 'dead'.
+  // No period/velocity signal → classify by stock-presence only, not 'dead'.
   if (qtySoldPeriod == null) return 'healthy';
   if (qtySoldPeriod <= 0) return 'dead';
   const daysOfStock = stockLevel / (qtySoldPeriod / SALES_PERIOD_DAYS);
@@ -252,10 +252,8 @@ function marginTier(marginPercentage: number): CompactProduct['margin_tier'] {
 }
 
 function productFromRow(docId: string, row: Record<string, unknown>, sourceKind: ProductSourceKind): CompactProduct | null {
-  // PER-60/PER-130 (8.1a): τα ERP-διαγραμμένα προϊόντα δεν μπαίνουν στο Product Intelligence.
-  // Δύο markers ανά πηγή: discontinued_at στα products tombstones (mv_api_cat_* gap-fill +
-  // patched normalized docs, megaventoryConnector.ts) και mvDeletedAt στα raw megaventory_products
-  // rows — το raw row μπαίνει ΠΡΩΤΟ στο bySku, οπότε ο έλεγχος μόνο του discontinued_at δεν αρκεί.
+  // ERP-deleted products must not enter Product Intelligence: discontinued_at (tombstones) or
+  // mvDeletedAt (raw megaventory_products, which enter bySku first) both exclude the row.
   if (row.discontinued_at || row.mvDeletedAt) return null;
   let sku = text(row.sku ?? row.SKU ?? row.productSku ?? row.ProductSKU ?? row.model ?? row.Model);
   if (!sku) sku = text(row.productId ?? row.ProductID ?? row.ProductId);
@@ -277,8 +275,8 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
       row.qty,
       row.quantity
     );
-  // LOGIC-5: cumulative lifetime sales must NOT feed the 30-day velocity calc — period fields
-  // only. When no period field exists, pass null so stockBucket classifies by stock-presence.
+  // Period fields only (no lifetime leak into 30-day velocity); pass null when none exist so
+  // stockBucket classifies by stock-presence.
   const qtySold =
     firstPositive(row.qty_sold_period, row.qtySoldPeriod, row.qty_sold_last_30d, row.qtySold);
   const hasPeriodField =
@@ -324,7 +322,7 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
 function overlayFromMegaventoryProduct(row: Record<string, unknown>): StockOverlay | null {
   const stock =
     firstPositive(row.stock_level, row.available_stock, row.stock_on_hand, row.stockOnHand, row.qty, row.quantity);
-  // LOGIC-5: same twin as productFromRow — period fields only, no lifetime leak into velocity.
+  // Same twin as productFromRow — period fields only, no lifetime leak into velocity.
   const qtySold =
     firstPositive(row.qty_sold_period, row.qtySoldPeriod, row.qty_sold_last_30d, row.qtySold);
   const hasPeriodField =
@@ -407,11 +405,8 @@ async function hasConnectorCatalog(brandId: string): Promise<{ connected: boolea
   return { connected: erp || ecommerce, sourceLabel: erp ? 'ERP' : 'E-shop catalog', hasErp: erp };
 }
 
-/**
- * Procurement-first gating: για brands στο Enterprise plan με ενεργό module Procurement, το
- * απόθεμα είναι ΑΥΘΕΝΤΙΚΟ από το ανεβασμένο procurement αρχείο (όχι από connectors). Επιστρέφει
- * true ώστε το Product Intelligence aggregate να χτιστεί από procurement_signals.
- */
+/** Procurement-first gating: Enterprise plan + Procurement module → stock is authoritative from the
+ * uploaded procurement file, so Product Intelligence is built from procurement_signals. */
 async function shouldUseProcurementCatalog(brandId: string): Promise<boolean> {
   const firestore = assertDb();
   try {
@@ -421,7 +416,7 @@ async function shouldUseProcurementCatalog(brandId: string): Promise<boolean> {
     const isEnterprise = String(data.plan || '').toLowerCase() === 'enterprise';
     if (!isEnterprise) return false;
     const modules = (data.enabledModules || {}) as Record<string, unknown>;
-    // Default ON για enterprise — απενεργοποιείται μόνο με ρητό false.
+    // Default ON for enterprise — disabled only with an explicit false.
     return modules.procurement !== false;
   } catch {
     return false;
@@ -435,17 +430,13 @@ function procurementStockBucket(avail: number, daysOfCover: number | null, lifet
     if (daysOfCover > 120) return 'excess';
     return 'healthy';
   }
-  // Χωρίς ημέρες επάρκειας: ό,τι δεν πούλησε ποτέ θεωρείται νεκρό απόθεμα.
+  // Without days-of-cover: anything that never sold is treated as dead stock.
   if (lifetimeQty != null && lifetimeQty <= 0) return 'dead';
   return 'healthy';
 }
 
-/**
- * Χτίζει κατάλογο CompactProduct από procurement δεδομένα. Καλεί ΑΠΕΥΘΕΙΑΣ το
- * computeProcurementSignals (live read + κανονικοποίηση headers) αντί να διαβάζει το αποθηκευμένο
- * procurement_signals doc — ώστε το PI να είναι αυτάρκες και να μην εξαρτάται από stale/σπασμένο
- * signals doc (π.χ. όταν είχε υπολογιστεί με παλιό logic χωρίς inventory stock).
- */
+/** Builds a CompactProduct catalog from procurement data, calling computeProcurementSignals directly
+ * (live read) instead of the stored procurement_signals doc so PI never depends on a stale one. */
 async function loadProcurementCatalog(brandId: string): Promise<CompactProduct[]> {
   const { signals } = await computeProcurementSignals(brandId);
   if (!signals || Object.keys(signals).length === 0) return [];
@@ -1276,8 +1267,8 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
   const firestore = assertDb();
   const ref = firestore.doc(`product_intelligence/${brandId}`);
 
-  // Procurement-first: για Enterprise+Procurement brands το απόθεμα είναι αυθεντικό από το
-  // ανεβασμένο procurement αρχείο και ΥΠΕΡΙΣΧΥΕΙ τυχόν connector καταλόγου.
+  // Procurement-first: for Enterprise+Procurement brands stock is authoritative from the uploaded
+  // procurement file and OVERRIDES any connector catalog.
   if (await shouldUseProcurementCatalog(brandId)) {
     const procProducts = await loadProcurementCatalog(brandId);
     if (procProducts.length > 0) {
@@ -1327,7 +1318,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
         return { success: false, brandId, error: message };
       }
     }
-    // Enterprise+Procurement αλλά χωρίς δεδομένα procurement ακόμη → πέφτουμε σε connector (αν υπάρχει).
+    // Enterprise+Procurement but no procurement data yet → fall back to connector (if any).
   }
 
   const connector = await hasConnectorCatalog(brandId);
@@ -1457,5 +1448,5 @@ export async function refreshCompetitiveInventoryLookup(brandId: string): Promis
 }
 
 
-/** Test-only export — τα unit tests ασκούν τον πραγματικό κώδικα, όχι αντίγραφα. */
+/** Test-only export — unit tests exercise the real code, not copies. */
 export const __test = { productFromRow, stockBucket, summaryForProducts };

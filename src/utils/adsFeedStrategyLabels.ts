@@ -1,13 +1,5 @@
-/**
- * Υπολογίζει τα `custom_label_0..4` του Ads Feed για κάθε προϊόν, βάσει
- * της ενεργής εμπορικής στρατηγικής (active scenario + scopes + overlays).
- *
- * label_0 = κύρια στρατηγική του προϊόντος.
- * label_1..4 = επιπλέον στρατηγικές στις οποίες συμμετέχει το ίδιο SKU
- *              (mixed sub-scenarios, seasonal, triage bucket, sales/price scope).
- *
- * Δεν αγγίζει benchmarks (αυτά έρχονται async). Αν χρειαστούν, επεκτείνεται.
- */
+/** Computes Ads Feed `custom_label_0..4` per product from the active strategy: label_0 = primary
+ * strategy, label_1..4 = other strategies the SKU joins. Skips benchmarks (loaded async). */
 import type { ActiveStrategy } from '../hooks/useActiveStrategy';
 import type { Product } from '../types';
 import { scenarios } from '../data';
@@ -19,7 +11,7 @@ export interface StrategyLabelSet {
   custom_label_2: string;
   custom_label_3: string;
   custom_label_4: string;
-  /** Όλες οι ετικέτες (δίχως padding), για debugging / preview. */
+  /** All labels (without padding), for debugging / preview. */
   all: string[];
 }
 
@@ -52,7 +44,7 @@ export function getProductStrategyLabels(
     labels.push(trimmed);
   };
 
-  // 1) Κύρια εμπορική πολιτική (ή τα 2 μέλη του Mixed)
+  // 1) Primary commercial policy (or the 2 members of Mixed)
   if (activeStrategy.scenarioId === 'mixed' && activeStrategy.mixConfig) {
     push(scenarioName(activeStrategy.mixConfig.scenarioA));
     push(scenarioName(activeStrategy.mixConfig.scenarioB));
@@ -60,7 +52,7 @@ export function getProductStrategyLabels(
     push(scenarioName(activeStrategy.scenarioId));
   }
 
-  // 2) Sales Optimization scope (αν το SKU συμμετέχει)
+  // 2) Sales Optimization scope (if the SKU participates)
   if (
     activeStrategy.salesBaseScope &&
     productParticipatesInSalesBase(product, activeStrategy.salesBaseScope)
@@ -68,7 +60,7 @@ export function getProductStrategyLabels(
     push('Sales Optimization');
   }
 
-  // 3) Price Benchmarking scope — μετράει μόνο ως allowlist (χωρίς benchmarks)
+  // 3) Price Benchmarking scope — counts only as an allowlist (without benchmarks)
   if (activeStrategy.priceBenchmarkScope) {
     const allow = activeStrategy.priceBenchmarkScope.selectedProductIds;
     if (!allow || allow.length === 0 || allow.includes(product.id)) {
@@ -76,7 +68,7 @@ export function getProductStrategyLabels(
     }
   }
 
-  // 4) Seasonal Discount overlay (περίοδος εκπτώσεων)
+  // 4) Seasonal Discount overlay (discount period)
   if (activeStrategy.seasonalDiscount) {
     const sd = activeStrategy.seasonalDiscount;
     const inScope =
@@ -94,12 +86,12 @@ export function getProductStrategyLabels(
     }
   }
 
-  // 5) Παράλληλη εποχιακή πρόταση
+  // 5) Parallel seasonal proposal
   if (activeStrategy.seasonalProposal) {
     push(`Seasonal: ${activeStrategy.seasonalProposal.periodName}`);
   }
 
-  // 6) Triage bucket (αν το SKU είναι στο snapshot)
+  // 6) Triage bucket (if the SKU is in the snapshot)
   if (activeStrategy.triageOrigin) {
     const t = activeStrategy.triageOrigin;
     const matches =

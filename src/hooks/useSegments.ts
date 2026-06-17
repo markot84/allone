@@ -64,10 +64,8 @@ type SegmentCustomerSummary = {
   monetary: number;
 };
 
-/**
- * Persisted React Query cache (localStorage) JSON-serializes Map → plain object.
- * Rehydrated data then has no `.entries()` — normalize before any Map iteration.
- */
+/** Persisted React Query cache JSON-serializes Map → plain object, so rehydrated
+ * data has no `.entries()` — normalize before any Map iteration. */
 function coerceToSegmentSummaryMap(data: unknown): Map<string, SegmentCustomerSummary> {
   if (!data) return new Map();
   if (data instanceof Map) return data as Map<string, SegmentCustomerSummary>;
@@ -107,18 +105,8 @@ function rebuildSegmentsFromCustomerSummaries(summariesBySegment: Map<string, Se
   });
 }
 
-/**
- * Επιλογή aggregate scope ΧΩΡΙΣ gate στο status: τα 'running'/'failed' writes του server
- * γίνονται με merge:true και διατηρούν σκόπιμα τα τελευταία καλά scopes
- * (functions/src/dataAnalysisRfmAggregator.ts:1216-1223, 1271-1276 — η πρόθεση τεκμηριώνεται
- * και στο services/dataAnalysisRfm.ts:51-54). Το παλιό gate `status === 'ready'` υποβάθμιζε
- * σιωπηλά κάθε aggregate consumer σε import/empty για έως έναν μήνα (BUG-5).
- *
- * Auto-switch identified→all: αν το 'identified' υπάρχει με canCompute:false και το 'all'
- * υπολογίζεται, σερβίρουμε το 'all'. Μονόδρομο σκόπιμα: το 'all' είναι υπερσύνολο του
- * 'identified' (computeScope: canCompute = segments.length > 0) — η αντίστροφη μετάβαση
- * δεν συμβαίνει ποτέ.
- */
+/** Select aggregate scope WITHOUT gating on status (server keeps last good scopes via merge:true).
+ * Auto-switch one-way identified→all: if 'identified' is canCompute:false and 'all' is computable, serve 'all'. */
 function selectAggregateScope(
   scopes: DataAnalysisRfmAggregate['scopes'] | undefined,
   preferredKey: 'identified' | 'all',
@@ -131,8 +119,8 @@ function selectAggregateScope(
   return preferred ?? scopes.all ?? scopes.identified ?? null;
 }
 
-// Καθαρά predicates για τα `enabled` gates των queries — extracted ώστε τα unit tests
-// να ασκούν τον πραγματικό κώδικα του hook (όχι αντίγραφα των εκφράσεων).
+// Pure predicates for the queries' `enabled` gates — extracted so unit tests
+// exercise the hook's real code (not copies of the expressions).
 function ordersQueryGate(a: { isDataAnalysis: boolean; skipOrderHydration: boolean; brandId: string | null; connectedPlatformsCount: number }): boolean {
   return !a.isDataAnalysis && !a.skipOrderHydration && !!a.brandId && a.connectedPlatformsCount > 0;
 }
@@ -144,21 +132,14 @@ function catalogQueryGate(a: { ordersQueryEnabled: boolean; shouldUseAggregate: 
 }
 
 export type UseSegmentsOptions = {
-  /**
-   * `data_analysis`: Data Analysis σελίδα — παραγγελίες πρώτα από ERP connectors, μετά e-shop·
-   * κατάλογος χωρίς Procurement (`products` import).
-   */
+  /** `data_analysis`: Data Analysis page — orders first from ERP connectors, then e-shop;
+   * catalog without Procurement (`products` import). */
   variant?: 'default' | 'data_analysis';
-  /**
-   * Dashboard: μόνο imported Firestore segments — χωρίς fetch 400ημέρων παραγγελιών
-   * (το βαρύ client-side RFM μένει στη σελίδα RFM).
-   */
+  /** Dashboard: only imported Firestore segments — no 400-day order fetch
+   * (the heavy client-side RFM stays on the RFM page). */
   skipOrderHydration?: boolean;
-  /**
-   * Dashboard: χρησιμοποίησε το έτοιμο server RFM aggregate (`data_analysis_rfm/{brandId}`, 1 doc read)
-   * ως πηγή segments αντί για client-side υπολογισμό. Συνδυάζεται με `skipOrderHydration` ώστε να
-   * εμφανίζονται πραγματικά segments γρήγορα, χωρίς να κατεβαίνουν παραγγελίες.
-   */
+  /** Dashboard: use the ready server RFM aggregate (`data_analysis_rfm/{brandId}`, 1 doc read) as segments
+   * source instead of client-side compute; paired with `skipOrderHydration` so segments show without downloading orders. */
   useServerAggregate?: boolean;
 };
 
@@ -240,8 +221,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     retry: 1,
   });
   const aggregateScopeKey = sourcePref === 'external' ? 'all' : 'identified';
-  // Default variant: scopes όποτε υπάρχουν, ανεξάρτητα από status (βλ. selectAggregateScope).
-  // Το data_analysis branch μένει ως έχει — η σελίδα RFM έχει δικό της fallback ladder.
+  // Default variant: scopes whenever present, regardless of status (see selectAggregateScope).
+  // The data_analysis branch stays as-is — the RFM page has its own fallback ladder.
   const aggregateScope = isDataAnalysis
     ? dataAnalysisAggregate?.scopes?.[aggregateScopeKey] ?? null
     : selectAggregateScope(dataAnalysisAggregate?.scopes, aggregateScopeKey);
@@ -309,7 +290,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     return `${rawOrders.length}:${first}:${last}`;
   }, [rawOrders]);
 
-  /** Μετά τις παραγγελίες ώστε να μην «δένει» το UI σε διπλό βαρύ parallel fetch· τα segments εμφανίζονται χωρίς catalog enrichment. */
+  /** After the orders so the UI doesn't stall on a double heavy parallel fetch; segments show without catalog enrichment. */
   const { data: catalogAlignment, isPending: catalogPending } = useQuery({
     queryKey: [catalogQueryKeyPrefix, brandId, platformsKey, rawOrdersCatalogKey],
     queryFn: () =>
@@ -471,11 +452,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     [resolvedSource, analysisOrders]
   );
 
-  /**
-   * Μην μπλοκάρεις RFM όσο περιμένεις «άδεια» segments αν το brand έχει e-shop:
-   * το `ordersLoading` δείχνει την κατάσταση φόρτωσης παραγγελιών.
-   * Μπλοκ μόνο για import-only (όχι connectors) ή external preference (segment_customers).
-   */
+  /** Don't block RFM on "empty" segments when the brand has an e-shop; block only for
+   * import-only (no connectors) or external preference (segment_customers). */
   const ecommReady = !ecomm.isLoading;
   const blocksOnImportedSegmentsOnly =
     fsPending &&
@@ -653,13 +631,13 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     segments: displayedSegments,
     totalCustomers: displayedTotalCustomers,
     isLoading: displayedSnapshot ? false : isLoading,
-    /** True όσο τραβάμε πρόσφατο order history για ecommerce RFM — UI δεν πρέπει να μπλοκάρει. */
+    /** True while fetching recent order history for ecommerce RFM — UI must not block. */
     ordersLoading,
     ordersError: (ordersError as Error | null) ?? null,
-    /** Φόρτωση *_products + unified products για catalog tabs — δεν μπλοκάρει το κύριο RFM grid. */
+    /** Loading *_products + unified products for catalog tabs — does not block the main RFM grid. */
     isCatalogEnriching,
     hasImported: displayedHasImported,
-    /** Πραγματική πηγή μετά την επιλογή του χρήστη. */
+    /** Actual source after the user's selection. */
     dataSource: displayedDataSource,
     dataOrigin: displayedDataOrigin,
     sourceLabel: displayedSourceLabel,
@@ -672,7 +650,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     segmentMigration: displayedSegmentMigration,
     segmentPeriodComparison: displayedSegmentPeriodComparison,
     importSegmentsAvailable,
-    /** Status του server RFM aggregate — 'running' όσο ξαναχτίζεται (τα segments μένουν τα τελευταία καλά)· null χωρίς aggregate. */
+    /** Server RFM aggregate status — 'running' while rebuilding (segments stay the last good ones); null without an aggregate. */
     aggregateStatus: dataAnalysisAggregate?.status ?? null,
     analysisSnapshotSavedAt: displayedSnapshot?.savedAt ?? null,
     analysisSnapshotIsStale: shouldUseStaleSnapshot,

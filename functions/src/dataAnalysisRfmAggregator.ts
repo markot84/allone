@@ -335,9 +335,8 @@ function assignQuintileScores(values: number[], lowIsHighScore: boolean): number
   const n = values.length;
   const rows = values.map((value, index) => ({ value, index })).sort((a, b) => lowIsHighScore ? a.value - b.value : b.value - a.value);
   const scores = new Array<number>(n).fill(1);
-  // LOGIC-10: position-based quintile band, but EQUAL values must get the same score —
-  // otherwise tied customers (e.g. all frequency=1) split across quintiles purely by array
-  // position. A tie carries forward the score of the first occurrence of that value.
+  // Position-based quintile band, but equal values must share a score — otherwise tied customers
+  // (e.g. all frequency=1) split across quintiles by array position; a tie carries the first score.
   let prevValue: number | undefined;
   let prevScore = 5;
   for (let i = 0; i < n; i += 1) {

@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 
-/** @deprecated Το slide-over αντικαταστάθηκε από τη σελίδα `#insights`. */
+/** @deprecated The slide-over was replaced by the `#insights` page. */
 export function AIInsightsPanel() {
   return null;
 }

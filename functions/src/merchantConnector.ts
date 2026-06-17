@@ -1,12 +1,5 @@
-/**
- * Google Merchant Center Connector
- *
- * Reuses Google OAuth (same client_id/secret as Google Ads) with
- * additional scope: https://www.googleapis.com/auth/content
- *
- * Fetches PriceCompetitivenessProductView to get benchmark prices
- * per GTIN, enabling SKU-level price comparison vs market.
- */
+/** Google Merchant Center connector: reuses Google Ads OAuth + content scope; fetches
+ * PriceCompetitivenessProductView for per-GTIN benchmark prices (SKU-level price comparison). */
 
 import * as admin from 'firebase-admin';
 import { signState } from './oauthState';
@@ -243,13 +236,8 @@ export async function selectMerchantAccount(
   logger.info(`[Merchant] Account selected for brand ${brandId}: ${merchantId}`);
 }
 
-/**
- * Lists Merchant Center accounts the user may select.
- *
- * `accounts/authinfo` only returns **identifiers tied to the user** (standalone + samples of MCA
- * access) — not every sub-account under a Multi-Client Account. For each MCA (`aggregatorId`),
- * we paginate `GET /{mcaId}/accounts` so Performance+ shows the same breadth as the GMC switcher.
- */
+/** Lists selectable Merchant Center accounts: `accounts/authinfo` gives only user-tied IDs, so for
+ *  each MCA (`aggregatorId`) we paginate `GET /{mcaId}/accounts` to match the GMC switcher breadth. */
 async function listMerchantAccounts(
   accessToken: string
 ): Promise<{ id: string; name: string }[]> {
@@ -402,7 +390,7 @@ async function refreshAccessToken(refreshToken: string): Promise<RefreshResult> 
   return { ok: true, accessToken };
 }
 
-/** Μήνυμα για UI όταν το refresh token δεν είναι πλέον έγκυρο. */
+/** UI message for when the refresh token is no longer valid. */
 function merchantRefreshErrorMessage(ref: Extract<RefreshResult, { ok: false }>): string {
   const code = ref.googleError || '';
   if (code === 'invalid_grant') {
@@ -424,12 +412,10 @@ function merchantRefreshErrorMessage(ref: Extract<RefreshResult, { ok: false }>)
 const REPORT_PAGE_SIZE = 5000;
 /** Safety cap per report type — Merchant API allows up to 5000/page; we paginate until this total. */
 const MAX_REPORT_ROWS = 25000;
-/** Max SKU docs στη Firestore ανά sync — καλύπτει μεγάλους καταλόγους χωρίς unbounded writes. */
+/** Max SKU docs in Firestore per sync — covers large catalogs without unbounded writes. */
 const MAX_SKU_DOCS_PER_SYNC = 20000;
 
-/**
- * Paginated reports.search — uses max page size and tolerates alternate next-page field names.
- */
+/** Paginated reports.search — uses max page size and tolerates alternate next-page field names. */
 async function searchMerchantReports(
   merchantId: string,
   accessToken: string,
@@ -485,7 +471,7 @@ function firstGtin(gtin: unknown): string {
   return '';
 }
 
-/** Reports API επιστρέφει συχνά camelCase, μερικές φορές snake_case — διαβάζουμε και τα δύο. */
+/** Reports API often returns camelCase, sometimes snake_case — we read both. */
 function getProductView(row: any): Record<string, unknown> | null {
   const pv = row?.productView ?? row?.product_view;
   return pv && typeof pv === 'object' ? (pv as Record<string, unknown>) : null;
@@ -501,11 +487,8 @@ function getPriceInsightsBlock(row: any): Record<string, unknown> | null {
   return pi && typeof pi === 'object' ? (pi as Record<string, unknown>) : null;
 }
 
-/**
- * REST product id: `channel:contentLanguage:targetCountry:offerId` (offerId may contain `:`).
- * Reports can return the same offer with different `contentLanguage` (e.g. el vs en); full-string
- * equality then misses the join — we match on channel + country + offer tail instead.
- */
+/** REST id `channel:contentLanguage:targetCountry:offerId`: since `contentLanguage` varies (el vs en),
+ *  we key on channel + country + offer tail instead of full-string equality. */
 function productMergeKey(fullId: string): string {
   const s = String(fullId).trim();
   const parts = s.split(':');
@@ -543,7 +526,7 @@ function countryCodeNorm(row: any): string {
   return strField(getPriceCompetitiveness(row), 'countryCode', 'country_code').toUpperCase();
 }
 
-/** Προτίμηση: GR/EL με benchmark > 0, αλλιώς οποιαδήποτε χώρα με benchmark, αλλιώς GR, αλλιώς πρώτη γραμμή. */
+/** Preference: GR/EL with benchmark > 0, else any country with benchmark, else GR, else first row. */
 function pickPreferredCompetitivenessRow(arr: any[]): any {
   const bench = (r: any) =>
     microsFrom(getPriceCompetitiveness(r), 'benchmarkPriceMicros', 'benchmark_price_micros');
@@ -576,7 +559,7 @@ function groupCompetitivenessByProduct(rows: any[]): Map<string, any> {
   return out;
 }
 
-/** Καθαρίζει όλα τα SKU docs πριν από πλήρη re-import μετά το sync. */
+/** Clears all SKU docs before a full re-import after sync. */
 async function clearPriceBenchmarkSkus(brandId: string): Promise<void> {
   const col = getDb().collection('price_benchmarks').doc(brandId).collection('skus');
   const snap = await col.get();
@@ -593,15 +576,12 @@ async function clearPriceBenchmarkSkus(brandId: string): Promise<void> {
   logger.info(`[Merchant] Cleared ${docs.length} prior benchmark SKU docs for brand ${brandId}`);
 }
 
-/**
- * Fetch price benchmarks from Google Merchant Center.
- * Αποθηκεύει όλα τα SKUs από ProductView (κατάλογος) + στοιχεία από PriceCompetitiveness όταν υπάρχουν.
- * Η στήλη benchmark μπορεί να είναι 0 όταν η Google δεν έχει ακόμη benchmark για την αγορά/SKU.
- */
+/** Fetch GMC price benchmarks: stores all ProductView SKUs plus PriceCompetitiveness when available;
+ *  benchmark may be 0 when Google has no benchmark yet for the market/SKU. */
 export async function fetchPriceBenchmarks(brandId: string): Promise<{
   success: boolean;
   imported: number;
-  /** Πόσα από τα `imported` έχουν benchmark τιμάς αγοράς > 0 */
+  /** How many of `imported` have a market benchmark price > 0 */
   withMarketBenchmark?: number;
   error?: string;
 }> {
@@ -880,9 +860,7 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
   }
 }
 
-/**
- * Fetch Price Insights (suggested prices + predicted impact) from GMC.
- */
+/** Fetch Price Insights (suggested prices + predicted impact) from GMC. */
 async function fetchPriceInsights(
   brandId: string,
   merchantId: string,

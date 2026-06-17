@@ -12,9 +12,7 @@ const improvementOptions = [
   'Connectors & data unification',
 ];
 
-/**
- * Dev: Vite proxy. Prod: απευθείας HTTP function (όχι μέσω Hosting — όριο ~60s στο proxy).
- */
+/** Dev: Vite proxy. Prod: direct HTTP function (not via Hosting — proxy has a ~60s limit). */
 function getSubmitInterestLeadUrl(): string {
   const override = (import.meta.env.VITE_INTEREST_LEAD_URL as string | undefined)?.trim();
   if (override) return override;
@@ -68,7 +66,7 @@ export function InterestForm() {
       if (!res.ok) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
-      // Conversions μόνο σε επιτυχημένη υποβολή (πραγματικό lead).
+      // Conversions only on a successful submit (a real lead).
       trackGoogleFormSubmitConversion();
       trackLinkedInConversion();
       toast.success(

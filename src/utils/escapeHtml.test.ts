@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { escapeHtml } from './escapeHtml';
 
-describe('escapeHtml (SEC-C2/H1/M1)', () => {
+describe('escapeHtml', () => {
   it('escapes the five HTML-significant chars', () => {
     expect(escapeHtml(`<>&"'`)).toBe('&lt;&gt;&amp;&quot;&#39;');
   });

@@ -1,24 +1,13 @@
-/**
- * Agnostic επίλυση «parent SKU» για το Top Products grouping.
- *
- * Δύο πλατφόρμες/περιπτώσεις χωρίς μάντεμα ανά brand:
- *  1) Όταν υπάρχει συγχρονισμένος κατάλογος (π.χ. Magento configurable links),
- *     ο πραγματικός parent έρχεται από το `itemGroupId` — αξιόπιστο, χωρίς ευρετικές.
- *  2) Όταν ΔΕΝ υπάρχει κατάλογος (π.χ. e-tennis: Magento product catalog 401, ERP flat),
- *     κόβουμε ΜΟΝΟ ένα αναγνωρισμένο trailing size/gauge token (π.χ. `-1.30mm`, `-L3`,
- *     `-XL`, `-42.5`, `-unstrung`). ΔΕΝ κόβουμε αυθαίρετες παύλες — πολλά SKUs έχουν
- *     νόμιμο suffix με `-`.
- *
- * Χρησιμοποιείται μόνο στο opt-in view «Μόνο Parent SKUs»· το «Όλα τα SKUs» μένει ως έχει.
- */
+/** Brand-agnostic "parent SKU" resolution for Top Products grouping: use catalog
+ * `itemGroupId` when present, else strip only a recognized trailing size/gauge token. */
 
-/** Αναγνωρισμένα variant tokens που επιτρέπεται να αφαιρεθούν από το τέλος ενός SKU. */
+/** Recognized variant tokens allowed to be stripped from the end of a SKU. */
 const VARIANT_SUFFIX_PATTERNS: readonly RegExp[] = [
-  /^\d+(?:[.,]\d+)?\s*mm$/i, // gauge χορδής: 1.30mm, 1,25mm
-  /^L[0-5]$/i, // tennis grip size: L0..L5
-  /^(?:XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL)$/i, // μεγέθη ρούχων
-  /^\d{2}(?:[.,]\d)?$/, // μέγεθος παπουτσιού: 38, 41.5 (2 ψηφία· τα 3ψήφια color codes π.χ. -113 ΔΕΝ κόβονται)
-  /^(?:un)?strung$/i, // ρακέτα: strung / unstrung
+  /^\d+(?:[.,]\d+)?\s*mm$/i, // string gauge: 1.30mm, 1,25mm
+  /^L[0-5]$/i, // grip size: L0..L5
+  /^(?:XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL)$/i, // clothing sizes
+  /^\d{2}(?:[.,]\d)?$/, // shoe size: 38, 41.5 (2 digits; 3-digit color codes e.g. -113 are NOT stripped)
+  /^(?:un)?strung$/i, // racquet: strung / unstrung
 ];
 
 function isVariantSuffixToken(token: string): boolean {
@@ -27,22 +16,17 @@ function isVariantSuffixToken(token: string): boolean {
   return VARIANT_SUFFIX_PATTERNS.some((re) => re.test(t));
 }
 
-/**
- * Επιστρέφει τον parent SKU.
- * @param sku Το SKU της (ενοποιημένης) γραμμής προϊόντος.
- * @param itemGroupId Προαιρετικός parent από τον κατάλογο (Magento `itemGroupId` κ.λπ.).
- */
+/** Returns the parent SKU, preferring catalog `itemGroupId` over token stripping. */
 export function resolveParentSku(sku: string | null | undefined, itemGroupId?: string | null): string {
   const normalized = String(sku || '').trim();
   if (!normalized) return '';
 
-  // 1) Αξιόπιστος parent από κατάλογο.
+  // 1) Reliable parent from catalog.
   const group = String(itemGroupId || '').trim();
   if (group && group !== normalized) return group;
 
-  // 2) Conservative heuristic: κόψε επαναληπτικά αναγνωρισμένα trailing size/gauge tokens.
-  //    π.χ. e-tennis configurable: "101479-370-L3-UNSTRUNG" → -UNSTRUNG → -L3 → "101479-370".
-  //    Σταματάμε στο πρώτο μη-αναγνωρισμένο token ή όταν μένει ένα segment (ποτέ κενό).
+  // 2) Conservative heuristic: repeatedly strip recognized trailing size/gauge tokens,
+  //    stopping at the first unrecognized token or when one segment remains (never empty).
   let base = normalized;
   for (;;) {
     const lastDash = base.lastIndexOf('-');

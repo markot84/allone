@@ -1,8 +1,5 @@
-/**
- * Client-side: fetch παραγγελιών από Firestore (όλα τα e-shop connectors) και
- * αθροίσεις ίδιες με το ecommerceAggregator (demo + cancelled) ώστε οι περίοδοι >90d
- * να εμφανίζονται σωστά στο UI (το server summary κρατά rolling ~90 ημέρες).
- */
+/** Client-side fetch + aggregation mirroring ecommerceAggregator so periods >90d render
+ * correctly (the server summary keeps a rolling ~90 days). */
 import { limit, orderBy, where, Timestamp, type QueryConstraint, type QueryDocumentSnapshot, type DocumentData } from 'firebase/firestore';
 import { FirestoreService } from './firestore';
 import {
@@ -25,10 +22,10 @@ export type EcommerceRawLineItem = {
   price?: number;
   /** Magento REST `product_type` */
   productType?: string;
-  /** Magento `item_id` — για απόρριψη γονικής γραμμής όταν υπάρχουν child lines */
+  /** Magento `item_id` — used to drop the parent line when child lines exist */
   itemId?: string | number | null;
   parentItemId?: string | number | null;
-  /** Magento γραμμή μετά εκπτώσεις (store currency) */
+  /** Magento line total after discounts (store currency) */
   rowTotal?: number;
 };
 
@@ -42,25 +39,22 @@ export type EcommerceRawOrder = {
   createdAt: string;
   lineItems: EcommerceRawLineItem[];
   paymentMethod?: string;
-  /** Magento `payment.method` (κωδικός) — χρήσιμο για chart τρόπου πληρωμής με Viva */
+  /** Magento `payment.method` (code) — useful for the payment-method chart (e.g. Viva) */
   paymentMethodCode?: string;
   shippingMethod?: string;
   salesChannel?: EcommerceSalesChannel;
   revenueIncluded?: boolean;
   dataAnalysisIncluded?: boolean;
   exclusionReason?: EcommerceExclusionReason;
-  /**
-   * Stable key για RFM από raw παραγγελίες.
-   * Μόνο platform customer id. Email-only guest orders δεν μπαίνουν στο RFM.
-   */
+  /** Stable RFM key (platform customer id only); email-only guest orders do not enter RFM. */
   customerKey?: string;
   customerEmailHash?: string;
   customerEmail?: string;
-  /** Πλήρες όνομα πελάτη — για εξαγωγή λιστών audience. */
+  /** Full customer name — for exporting audience lists. */
   customerName?: string;
-  /** Numeric Magento `store_id` (όταν sync όλων των store views) για εξαιρέσεις analytics. */
+  /** Numeric Magento `store_id` (when syncing all store views) for analytics exclusions. */
   magentoStoreId?: number;
-  /** Hostname του public storefront (Magento)· για κανόνες «domain / eshop». */
+  /** Hostname of the public storefront (Magento); for "domain / eshop" rules. */
   orderStoreDomain?: string;
   /** Data Analysis: e-shop order rows used as the customer/product detail layer for an ERP-backed brand. */
   erpBacked?: boolean;
@@ -80,7 +74,7 @@ export function isEcommerceOrderCancelled(status: string | null | undefined): bo
   return isExcludedEcommerceStatus(status);
 }
 
-/** Status που αποκρύπτονται από πίνακες παραγγελιών (ενώ τα cancelled παραμένουν ορατά για έλεγχο). */
+/** Statuses hidden from order lists (while cancelled ones stay visible for review). */
 const ORDER_STATUS_OMITTED_FROM_LISTS = new Set(['viva_klarna_undefined']);
 
 export function isOmittedFromEcommerceOrderLists(status: string | null | undefined): boolean {
@@ -106,7 +100,7 @@ export function isEcommerceDemoLineItem(lineItem: EcommerceRawLineItem): boolean
   return needle.includes('demo');
 }
 
-/** Καθαρό revenue + αν η παραγγελία είναι 100% demo */
+/** Net revenue + whether the order is 100% demo */
 export function getEcommerceOrderNetRevenue(order: EcommerceRawOrder): { revenue: number; isAllDemo: boolean } {
   if (!order.lineItems.length) return { revenue: order.total, isAllDemo: false };
   let demoTotal = 0;
@@ -150,7 +144,7 @@ function coerceFirestoreCreatedAtString(v: unknown): string {
   return '';
 }
 
-/** YYYY-MM-DD για φίλτρο εύρους (μετά coerce από Timestamp / Magento string). */
+/** YYYY-MM-DD for range filtering (after coercing from Timestamp / Magento string). */
 function createdAtDayKeyFromRow(row: Record<string, unknown>): string {
   const s = coerceFirestoreCreatedAtString(row.createdAt ?? row.created_at);
   if (!s) return '';
@@ -213,14 +207,8 @@ function normalizeLineItemFromFirestore(raw: unknown): EcommerceRawLineItem {
   };
 }
 
-/**
- * Net products revenue ex-VAT — ίδια λογική με server aggregator (computeOrderExVatRevenue).
- *
- * Magento: `baseSubtotal − |baseDiscountAmount|` = items ex-tax σε base currency (EUR), χωρίς μεταφορικά.
- * Fallback: `subtotal − |discountAmount|` μόνο για EUR orders χωρίς base fields.
- *
- * Shopify/WooCommerce: `total − totalTax`. OpenCart: `total − totalTax`.
- */
+/** Net products revenue ex-VAT (matches server computeOrderExVatRevenue): Magento uses
+ *  `baseSubtotal − |baseDiscountAmount|` (EUR fallback `subtotal − |discountAmount|`); others `total − totalTax`. */
 function computeExVatTotal(platform: string, row: Record<string, unknown>): number {
   const num = (v: unknown) => {
     if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
@@ -268,15 +256,8 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
   const hasCustomerId = s !== '' && s !== '0' && s !== 'null' && s !== 'undefined';
   const hasRealEmail = customerEmail.includes('@');
 
-  /**
-   * Dedup priority για RFM (πελάτης = ταυτότητα, όχι αποκλειστικά «registered»):
-   * 1. emailHash όταν υπάρχει — κρυπτογραφημένο, σταθερό cross-store, καλύπτει guest+registered ίδιου email.
-   * 2. raw email (lower-cased) ως δευτερευόντως όταν δεν υπάρχει hash αλλά υπάρχει @.
-   * 3. ${platform}:${customerId} όταν δεν υπάρχει καθόλου email αλλά το store δίνει σταθερό id.
-   *
-   * Παλαιότερη συνθήκη απαιτούσε hasCustomerId για όλα — αυτό απέκλειε guest checkouts
-   * με έγκυρο email (συνηθισμένο σε Magento/B2C), μειώνοντας τεχνητά τους ταυτοποιημένους πελάτες.
-   */
+  /** RFM dedup priority: emailHash, then raw email (@), then ${platform}:${customerId}. Email-first
+   *  keeps guest checkouts with a valid email (common in Magento/B2C) as identified customers. */
   let customerKey = '';
   if (emailHash) {
     customerKey = `email:${emailHash}`;
@@ -376,7 +357,7 @@ async function fetchBrandRevenueSourceMode(brandId: string): Promise<'eshop_clas
   }
 }
 
-/** ERP τιμολόγια: το «Closed» κ.λπ. δεν πρέπει να περνάει ως excluded status του e-shop. */
+/** ERP invoices: "Closed" etc. must not be treated as an excluded e-shop status. */
 function sanitizeErpStatusForClassification(raw: string): string {
   const st = String(raw || '').toLowerCase();
   if (st.includes('cancel') || st.includes('void') || st.includes('ακυρ') || st.includes('reject')) {
@@ -425,7 +406,7 @@ function emailFromText(value: unknown): string {
   return match?.[0]?.trim().toLowerCase() ?? '';
 }
 
-/** Σταθερό κλειδί πελάτη για RFM από Megaventory τιμολόγια (ίδια λογική με server megaventoryRfm). */
+/** Stable customer key for RFM from Megaventory invoices (same logic as server megaventoryRfm). */
 function megaventoryInvoiceCustomerKey(row: Record<string, unknown>): string {
   const name = String(row.clientName ?? '').trim();
   const email = emailFromText(name);
@@ -531,9 +512,7 @@ function normalizeSoftOneSalesRawOrder(row: Record<string, unknown>): EcommerceR
   };
 }
 
-/**
- * Παραγγελίες από ERP connectors (Megaventory τιμολόγια / SoftOne SALDOC), φιλτραρισμένες κατά ημερομηνία.
- */
+/** Orders from ERP connectors (Megaventory invoices / SoftOne SALDOC), filtered by date. */
 async function loadAndClassifyErpConnectorOrders(
   brandId: string,
   mode: 'eshop_classified' | 'eshop_all' | 'erp',
@@ -636,14 +615,14 @@ async function fetchEcommercePlatformOrdersOnly(
     untilDate?: string;
     cacheFirst?: boolean;
     revenueMode?: 'brand' | 'classified' | 'all';
-    /** Διάβασε ΟΛΟ το εύρος (paginated) αντί μόνο τα `DATA_ANALYSIS_ORDER_LIMIT` πιο πρόσφατα.
-     *  Απαραίτητο για Policy Impact: αλλιώς desc+limit κόβει σιωπηλά τους παλιότερους μήνες. */
+    /** Read the WHOLE range (paginated) instead of only the most recent `DATA_ANALYSIS_ORDER_LIMIT`.
+     *  Required for Policy Impact: otherwise desc+limit silently drops older months. */
     fetchAll?: boolean;
-    /** Callback προόδου κατά το paginated fetch (loaded/total παραγγελίες όλων των platforms). */
+    /** Progress callback during the paginated fetch (loaded/total orders across all platforms). */
     onProgress?: (info: { loaded: number; total: number }) => void;
   } = {}
 ): Promise<EcommerceRawOrder[]> {
-  // Κοινός μετρητής προόδου ανά platform (τρέχουν concurrently στο Promise.all).
+  // Shared progress counter per platform (they run concurrently in Promise.all).
   const loadedByPlatform = new Map<string, number>();
   const totalByPlatform = new Map<string, number>();
   const emitProgress = () => {
@@ -667,7 +646,7 @@ async function fetchEcommercePlatformOrdersOnly(
         if (options.sinceDate || options.untilDate) constraints.push(orderBy('createdAt', 'desc'));
         constraints.push(limit(DATA_ANALYSIS_ORDER_LIMIT));
         const hasRange = Boolean(options.sinceDate || options.untilDate);
-        /** `cacheFirst: true` (RFM / dashboard) → γρήγορη επανεπίσκεψη· αλλιώς server για «φρέσκα» δεδομένα μετά sync. */
+        /** `cacheFirst: true` (RFM / dashboard) → fast revisit; otherwise server for fresh data after sync. */
         const rangedLoadOpts =
           options.cacheFirst === true
             ? ({ cacheFirst: true } as const)
@@ -682,8 +661,8 @@ async function fetchEcommercePlatformOrdersOnly(
             return true;
           });
 
-        // Full-range pagination: για high-volume brands (π.χ. e-tennis ~3.5k/μήνα) ένα single
-        // limit(5000) desc επιστρέφει μόνο τους 1-2 τελευταίους μήνες → χάνονται οι παλιότεροι.
+        // Full-range pagination: for high-volume brands (e.g. ~3.5k/month) a single
+        // limit(5000) desc returns only the last 1-2 months → older ones are lost.
         if (hasRange && options.fetchAll) {
           const rangeConstraints: QueryConstraint[] = [];
           if (options.sinceDate) rangeConstraints.push(where('createdAt', '>=', options.sinceDate));
@@ -697,7 +676,7 @@ async function fetchEcommercePlatformOrdersOnly(
           let knownTotal = 0;
           try {
             do {
-              // Count μόνο στην πρώτη σελίδα (cursor==null)· οι επόμενες παραλείπουν το server round-trip.
+              // Count only on the first page (cursor==null); later pages skip the server round-trip.
               const isFirstPage = cursor === null;
               const page: {
                 items: Record<string, unknown>[];
@@ -719,7 +698,7 @@ async function fetchEcommercePlatformOrdersOnly(
             } while (cursor && collected.length < HARD_CAP);
             return collected.map((row) => normalizeRawOrder(platform, row));
           } catch {
-            // Πέσε πίσω στο μη-paginated μονοπάτι παρακάτω (π.χ. λείπει index).
+            // Fall back to the non-paginated path below (e.g. missing index).
           }
         }
 
@@ -732,16 +711,8 @@ async function fetchEcommercePlatformOrdersOnly(
               brandId,
               rangedLoadOpts
             );
-            /**
-             * Παλιά λογική: `rows.length === 0` → διάβασμα **όλης** της συλλογής + client-side φίλτρο.
-             * Αυτό έκανε το UI να «κολλάει» 4–5 λεπτά και με «Τελευταίες 30 ημέρες», επειδή ο χρόνος
-             * ήταν ευθύγραμος με τις συνολικές παραγγελίες του brand, όχι με το επιλεγμένο εύρος.
-             * Αν υπήρχαν πραγματικά μηδενικά αποτελέσματα, το φόρεμα ήταν ανηθικώς δαπανηρό.
-             *
-             * Retry μία φορά με `forceServer`: αν το cache επέστρεψε ψευδο-κενό ή χρειάζεται επικύρωση
-             * από server για τα ίδια constraints — χωρίς φόρτωση ολόκληρης συλλογής.
-             * Αν υπάρχει πραγματικό σφάλμα τύπος/index, πέφτουμε στο catch (ολόκληρη συλλογή) — σπάνιο.
-             */
+            /** On empty results, retry once with `forceServer` for the same constraints (false-empty cache).
+             *  Never read the whole collection here — it scales with total orders, not the range. */
             if (rows.length === 0) {
               rows = await FirestoreService.getDocuments<Record<string, unknown>>(
                 collectionName,
@@ -770,7 +741,7 @@ async function fetchEcommercePlatformOrdersOnly(
     ),
   ]);
   const requestedMode = options.revenueMode || 'brand';
-  // `all` = χωρίς κανόνες (όλες οι παραγγελίες ως included). Αλλιώς: merge legacy Magento store + κανάλια.
+  // `all` = no rules (all orders treated as included). Otherwise: merge legacy Magento store + channels.
   const rules = requestedMode === 'all' ? [] : allRules;
   return results.flat().map((order) => ({
     ...order,
@@ -810,11 +781,8 @@ export async function fetchAllEcommerceOrders(
   return fetchEcommercePlatformOrdersOnly(brandId, platforms, mode, options);
 }
 
-/**
- * E-shop platform orders ΜΟΝΟ (Magento/Shopify/Woo/OpenCart) με line items — χωρίς το ERP-invoice
- * μονοπάτι. Για features που χρειάζονται αποκλειστικά γραμμές προϊόντων (SKU/τιμή/τεμάχια), π.χ.
- * Policy Impact, ώστε να αποφεύγουμε το ακριβό διπλό fetch (MV invoices + platform) για ERP-backed brands.
- */
+/** E-shop platform orders ONLY (Magento/Shopify/Woo/OpenCart) with line items, no ERP-invoice path —
+ *  for features needing product lines (SKU/price/quantity), avoiding the double fetch on ERP-backed brands. */
 export async function fetchEcommercePlatformOrders(
   brandId: string,
   platforms: string[],
@@ -832,10 +800,8 @@ export async function fetchEcommercePlatformOrders(
   return fetchEcommercePlatformOrdersOnly(brandId, platforms, mode, options);
 }
 
-/**
- * Data Analysis (RFM / behavioral / predictive): παραγγελίες από ERP connectors πρώτα·
- * αν δεν υπάρχουν τιμολόγια / SALDOC στο εύρος, fallback στα e-shop connectors.
- */
+/** Data Analysis (RFM / behavioral / predictive): ERP connectors first, falling back to
+ *  e-shop connectors when no invoices / SALDOC exist in the range. */
 export async function fetchDataAnalysisOrders(
   brandId: string,
   platforms: string[],
@@ -871,9 +837,7 @@ export type EcommerceRevenueDayAggregate = {
   ordersByDay: Record<string, number>;
 };
 
-/**
- * Ίδιοι κανόνες με EcommerceDashboard / server aggregator: skip all-demo, skip cancelled for revenue.
- */
+/** Same rules as EcommerceDashboard / server aggregator: skip all-demo, skip cancelled for revenue. */
 export function aggregateRevenueOrdersFromRaw(orders: EcommerceRawOrder[]): EcommerceRevenueDayAggregate {
   const revenueByDay: Record<string, number> = {};
   const ordersByDay: Record<string, number> = {};

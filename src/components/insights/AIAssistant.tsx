@@ -60,14 +60,14 @@ interface Message {
   relatedArticles?: string[];
   webSources?: Array<{ title: string; url: string; snippet: string }>;
   timestamp: Date;
-  /** Proactive καλωσόρισμα — δεν στέλνεται ως context turn στο μοντέλο. */
+  /** Proactive greeting — not sent as a context turn to the model. */
   proactive?: boolean;
   savedInfoId?: string;
-  /** Κείμενο που μπορεί να αποθηκευτεί ως εμπορική πληροφορία από CTA. */
+  /** Text that can be saved as commercial info from a CTA. */
   pendingInfoText?: string;
 }
 
-// SEC-L10: web-source URLs come from AI/web-search output — only allow http(s)
+// Web-source URLs come from AI/web-search output — only allow http(s)
 // before rendering a navigable link, so a `javascript:`/`data:` URL can't fire on click.
 function toHttpUrl(url: string): string | undefined {
   try {
@@ -172,11 +172,8 @@ function getLatestSpeakableAssistantMessage(messages: Message[]): Message | null
   return null;
 }
 
-/**
- * Memoized bubble — ΚΡΙΣΙΜΟ για performance: χωρίς αυτό, κάθε πάτημα πλήκτρου στο input
- * ξανα-render-άρει ΟΛΑ τα μηνύματα (markdown + DOMPurify parsing), παγώνοντας το tab σε μεγάλες
- * απαντήσεις. Με `memo`, τα bubbles ξανα-render-άρουν μόνο όταν αλλάξει το ίδιο το μήνυμα.
- */
+/** Memoized bubble — without `memo`, every input keystroke re-renders ALL messages
+ * (markdown + DOMPurify), freezing the tab on large responses. */
 const MarkMessageItem = memo(function MarkMessageItem({
   message,
   onClose,
@@ -316,7 +313,7 @@ const MarkMessageItem = memo(function MarkMessageItem({
 interface AIAssistantProps {
   isOpen: boolean;
   onClose: () => void;
-  /** PER-130 (0.5): voice intent από το πρώτο lazy mount — το gesture έγινε πριν υπάρξει listener. */
+  /** Voice intent from the first lazy mount — the gesture happened before a listener existed. */
   autoStartVoice?: boolean;
   onVoiceStarted?: () => void;
 }
@@ -324,8 +321,8 @@ interface AIAssistantProps {
 export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: AIAssistantProps) {
   const { currentBrand } = useBrand();
   const commercialInfo = useCommercialInfo();
-  // Light path: ο Mark χρειάζεται ΜΟΝΟ revenue/orders/platforms — όχι SKU stats / stock movement
-  // chunks (βαρύ multi-doc fetch). Αποφεύγει αργή/αποτυχημένη φόρτωση που εμφάνιζε το e-shop ως κενό.
+  // Light path: Mark needs ONLY revenue/orders/platforms — not SKU stats / stock movement
+  // chunks (heavy multi-doc fetch). Avoids slow/failed loads that showed the e-shop as empty.
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const businessRev = useBusinessRevenueSummary();
   const {
@@ -333,13 +330,12 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
     totalCustomers,
     dataSource: segmentsDataSource,
     orderRfmMeta,
-    // PER-130 (0.6): segments από το έτοιμο μηνιαίο RFM aggregate — όχι 400 ημέρες παραγγελιών
+    // Segments from the precomputed monthly RFM aggregate — not 400 days of orders
   } = useSegments({ skipOrderHydration: true, useServerAggregate: true });
   const campaignsHook = useCampaigns();
   const ga4 = useGA4Data();
-  // PER-130 (0.7): ΟΧΙ useProductSource — κατέβαζε ~220k products + 7 procurement sheets
-  // στο mount του Mark. Το count έρχεται από το PI aggregate· fallback = 1 doc + server
-  // count (≈221 reads αντί για ≈221k, μόνο σε Mark mount χωρίς aggregate).
+  // NOT useProductSource (it downloads ~220k products + procurement sheets on Mark mount).
+  // Count comes from the PI aggregate; fallback = 1 doc + server count.
   const productsLite = useProducts({ maxDocs: 1 });
   const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 }, { staticFirstPage: true });
   const campaignMetrics = useMemo(
@@ -379,8 +375,8 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
       .sort((a, b) => b.spend - a.spend);
   }, [campaignsHook.campaigns]);
 
-  // Time-bounded campaign performance (ίδια date-slice λογική με τη σελίδα Campaigns) ώστε ο Mark
-  // να απαντά σε ερωτήσεις τύπου «τζίρος Google Ads την περασμένη εβδομάδα» — όχι μόνο lifetime totals.
+  // Time-bounded campaign performance (same date-slice logic as the Campaigns page) so Mark
+  // can answer questions like "Google Ads revenue last week" — not just lifetime totals.
   const recentCampaignWindows = useMemo(() => {
     if (!campaignsHook.hasImported || campaignsHook.campaigns.length === 0) return [];
     const iso = (daysAgo: number) => {
@@ -415,10 +411,8 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
     ].filter((w) => w.channels.length > 0);
   }, [campaignsHook.campaigns, campaignsHook.hasImported]);
 
-  // ── Ενιαία ημερήσια μήτρα metrics (time-bounded για ΚΑΘΕ metric με ημερήσια δεδομένα) ──
-  // Ο Mark αθροίζει μόνος του οποιαδήποτε περίοδο ζητηθεί (όπως ήδη κάνει για τον τζίρο). Κρατάμε
-  // bounded ορίζοντα (~180 ημ.) ώστε να μην φουσκώνει το prompt. Snapshot metrics (απόθεμα/segments)
-  // ΔΕΝ έχουν ιστορικό εδώ — θα καλυφθούν στη φάση B (tools) όταν αποθηκεύουμε ιστορικά.
+  // Unified daily metrics matrix (time-bounded per metric); Mark sums any period itself.
+  // Bounded ~180-day horizon; snapshot metrics (stock/segments) have NO history here.
   const dailyMetricsMatrix = useMemo((): AssistantTenantPack['dailyMatrix'] => {
     const HORIZON_DAYS = 180;
     const cutoff = (() => {
@@ -478,9 +472,8 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
     return rows.length > 0 ? { horizonDays: HORIZON_DAYS, rows } : undefined;
   }, [ecomm.dailyRevenue, ecomm.ordersByDay, ga4.dailyEntries, campaignsHook.campaigns]);
 
-  // Χρονοσειρές τζίρου (ERP + e-shop) ώστε ο Mark να απαντά για ΟΠΟΙΑΔΗΠΟΤΕ περίοδο με δεδομένα.
-  // Κρατάμε πλήρη ημερήσια σειρά όπου υπάρχει, γιατί ερωτήσεις τύπου «πέρυσι την ίδια ημέρα»
-  // χρειάζονται ακριβή daily lookup και όχι μόνο τα τελευταία 90 ημερήσια σημεία.
+  // Revenue time series (ERP + e-shop), full daily where available so "same day last year"
+  // queries get an exact daily lookup, not just the last 90 points.
   const revenueSeries = useMemo((): AssistantTenantPack['revenue'] => {
     const buildYoyDailyPairs = (daily: Array<{ date: string; revenue: number }>) => {
       const byDate = new Map(daily.map((d) => [d.date, d.revenue]));
@@ -610,8 +603,8 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
       },
       products: {
         count: productIntelligence.aggregate?.totalCount ?? productsLite.totalCount,
-        // totalCount (server count) αντί για hasImported: το 1-doc fetch περνά από
-        // excludeDemoProducts και θα γύριζε false αν το πρώτο doc τύχαινε demo.
+        // totalCount (server count) instead of hasImported: the 1-doc fetch passes through
+        // excludeDemoProducts and would return false if the first doc happened to be a demo.
         hasImported: !!productIntelligence.aggregate || productsLite.totalCount > 0,
       },
       ga4: {
@@ -671,12 +664,12 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
   const [savingInfo, setSavingInfo] = useState(false);
   const [voiceRepliesEnabled, setVoiceRepliesEnabled] = useState(readVoiceRepliesPreference);
   const [voiceAutoSubmitArmed, setVoiceAutoSubmitArmed] = useState(false);
-  // Hands-free «conversation mode»: όταν ο χρήστης ξεκινά με φωνή, το μικρόφωνο ξανανοίγει
-  // αυτόματα μόλις τελειώσει η εκφώνηση της απάντησης του Mark (χωρίς να ξαναπατά το κουμπί).
+  // Hands-free "conversation mode": when the user starts with voice, the mic reopens
+  // automatically once Mark's reply finishes speaking (without pressing the button again).
   const [conversationMode, setConversationMode] = useState(false);
   const conversationModeRef = useRef(false);
   useEffect(() => { conversationModeRef.current = conversationMode; }, [conversationMode]);
-  // Live refs ώστε το (καθυστερημένο) restart του μικροφώνου να διαβάζει φρέσκες τιμές, όχι stale closure.
+  // Live refs so the (delayed) mic restart reads fresh values, not a stale closure.
   const isTypingRef = useRef(false);
   const savingInfoRef = useRef(false);
   const isOpenRef = useRef(false);
@@ -690,7 +683,7 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
   const lastSpokenMessageIdRef = useRef<string | null>(null);
   const voiceAutoSubmitTimerRef = useRef<number | null>(null);
   const voiceDraftRef = useRef('');
-  /** Το brandId του οποίου το session είναι φορτωμένο — guard κατά mismatch. */
+  /** The brandId whose session is loaded — guards against mismatch. */
   const loadedBrandRef = useRef<string | null>(null);
   const hydratedRef = useRef(false);
   const tts = useSpeechSynthesis();
@@ -718,10 +711,8 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
     onClose();
   }, [onClose, tts]);
 
-  // ── BRAND ISOLATION: φόρτωση session του ΕΝΕΡΓΟΥ brand.
-  // Σημαντικό: σε auth/data refresh το currentBrand μπορεί να γίνει προσωρινά null.
-  // Δεν καθαρίζουμε τα messages σε τέτοιο transient state, γιατί ο χρήστης βλέπει το chat να "χάνεται".
-  // Reset κάνουμε μόνο σε πραγματική αλλαγή από ένα non-null brand σε άλλο non-null brand.
+  // BRAND ISOLATION: load the ACTIVE brand's session. currentBrand can be transiently null on
+  // refresh — reset only on a real non-null→non-null brand change, else the chat "vanishes".
   useEffect(() => {
     let cancelled = false;
     const previousLoadedBrand = loadedBrandRef.current;
@@ -765,12 +756,12 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
       }
 
       if (previousLoadedBrand === brandId) {
-        // Αν το Firestore read γυρίσει προσωρινά άδειο/αποτύχει, μη σβήσεις το υπάρχον in-memory chat.
+        // If the Firestore read returns transiently empty/fails, don't wipe the existing in-memory chat.
         hydratedRef.current = true;
         return;
       }
 
-      // Νέα συνομιλία: proactive καλωσόρισμα + brief.
+      // New conversation: proactive greeting + brief.
       const greeting = await buildProactiveGreeting({ brandId, brandName, openInfoCount });
       if (cancelled || loadedBrandRef.current !== brandId) return;
       setMessages([
@@ -782,11 +773,11 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
     return () => {
       cancelled = true;
     };
-    // openInfoCount/brandName σκόπιμα εκτός deps: το greeting χτίζεται μία φορά ανά brand load.
+    // openInfoCount/brandName intentionally out of deps: the greeting is built once per brand load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandId]);
 
-  // Persist συνομιλίας (μόνο μετά το hydrate, μόνο για το φορτωμένο brand).
+  // Persist the conversation (only after hydrate, only for the loaded brand).
   useEffect(() => {
     if (!brandId || !hydratedRef.current || loadedBrandRef.current !== brandId) return;
     if (messages.length === 0) return;
@@ -822,7 +813,7 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
     const userQuery = (overrideText ?? input).trim();
     if (!userQuery || isTyping) return;
 
-    // BRAND GUARD: «κλειδώνουμε» το brand στην έναρξη του αιτήματος.
+    // BRAND GUARD: lock the brand at the start of the request.
     const requestBrandId = brandId;
     const requestBrandName = brandName;
     if (!requestBrandId) return;
@@ -896,7 +887,7 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
         response += '\n\n_Συνδέσου στο Performance+ για απαντήσεις με βάση τα πραγματικά δεδομένα του brand._';
       }
 
-      // BRAND GUARD: αν άλλαξε brand όσο τρέχαμε, απόρριψη απάντησης (όχι cross-brand mix).
+      // BRAND GUARD: if the brand changed while running, discard the reply (no cross-brand mix).
       if (loadedBrandRef.current !== requestBrandId) {
         setIsTyping(false);
         return;
@@ -927,7 +918,7 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
     }
   };
 
-  /** Καταχώριση εμπορικής πληροφορίας: δομεί το κείμενο και το αποθηκεύει (brand-scoped). */
+  /** Save commercial info: structures the text and stores it (brand-scoped). */
   const handleSaveInfo = useCallback(
     async (text: string, options: {
       appendUserMessage?: boolean;
@@ -1032,11 +1023,8 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
     stt.start();
   }, [clearVoiceAutoSubmit, isTyping, savingInfo, stt, tts]);
 
-  // Once-ref ΥΠΟΧΡΕΩΤΙΚΟ: το stt object έχει νέο identity σε κάθε render ⇒ το effect
-  // ξανατρέχει συνεχώς (και StrictMode double-εκτελεί) — χωρίς ref το autoStartVoice θα
-  // έκανε επανειλημμένα stt.start() abort/restart. iOS caveat (τεκμηρίωση, όχι fix): στο
-  // πρώτο cold tap το tts.prime() γίνεται εκτός gesture — το STT ξεκινά, η φωνητική
-  // απάντηση μπορεί να μείνει σιωπηλή μία φορά.
+  // Once-ref REQUIRED: stt has a new identity every render, so without it autoStartVoice would
+  // repeatedly abort/restart stt.start(). iOS caveat: first cold tap may leave the reply silent.
   const autoVoiceConsumedRef = useRef(false);
   useEffect(() => {
     window.addEventListener(MARK_START_VOICE_EVENT, startVoiceInput);
@@ -1057,7 +1045,7 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
         lastSpokenMessageIdRef.current = latest.id;
       },
       onEnd: () => {
-        // Hands-free: μόλις τελειώσει η απάντηση, ξανάνοιξε το μικρόφωνο για συνέχεια του διαλόγου.
+        // Hands-free: once the reply finishes, reopen the mic to continue the dialogue.
         if (!conversationModeRef.current) return;
         window.setTimeout(() => {
           if (
@@ -1313,5 +1301,5 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
   );
 }
 
-/** Backward-compatible alias — ο Mark είναι η εξέλιξη του παλιού AI Assistant. */
+/** Backward-compatible alias — Mark is the evolution of the old AI Assistant. */
 export const AIAssistant = MarkAgent;

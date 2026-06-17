@@ -81,7 +81,7 @@ function assignQuintileScores(values: number[], lowIsHighScore: boolean): number
   const idx = values.map((v, i) => ({ v, i }));
   idx.sort((a, b) => (lowIsHighScore ? a.v - b.v : b.v - a.v));
   const out = new Array<number>(n).fill(1);
-  // LOGIC-10: tie-aware quintile banding — equal values share a score instead of being
+  // Tie-aware quintile banding — equal values share a score instead of being
   // split across quintiles by array position (e.g. all frequency=1 customers).
   let prevValue: number | undefined;
   let prevScore = 5;
@@ -142,9 +142,8 @@ async function loadOrders(db: Firestore, brandId: string): Promise<{ source: Meg
         customerKey: customerKey(d.clientId, customerName),
         customerName,
         date: text(d.date),
-        // LOGIC-8: use the NET (ex-VAT) amount as the monetary base, consistent with
-        // ecommerceAggregator — preferring totalAmount (VAT-inclusive) inflated the RFM M
-        // dimension / revenue_share ~24% vs the revenue dashboards.
+        // Use the NET (ex-VAT) amount as the monetary base, consistent with ecommerceAggregator;
+        // totalAmount (VAT-inclusive) inflated the RFM M dimension / revenue_share ~24%.
         revenue: num(d.netAmount || d.totalAmount),
         status: d.status,
       };

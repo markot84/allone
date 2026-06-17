@@ -39,9 +39,9 @@ function catTotal(cat: PLCostCategory): number {
 
 export interface PLCostEditorProps {
   initialCategories: PLCostCategory[] | undefined;
-  /** Μηνιαίος τζίρος (για % υπολογισμό) */
+  /** Monthly revenue (for % calculation) */
   monthlyRevenue: number;
-  /** Περίοδος σε μήνες (για proration) */
+  /** Period in months (for proration) */
   periodMonths: number;
   onSave: (cats: PLCostCategory[]) => Promise<void>;
   isSaving: boolean;

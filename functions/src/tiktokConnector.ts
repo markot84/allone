@@ -21,10 +21,8 @@ const TIKTOK_REPORT_URL = `${TIKTOK_API_BASE}/open_api/${TIKTOK_API_VERSION}/rep
 const TIKTOK_HISTORY_YEARS = 3;
 
 const BASE_REPORT_METRICS = ['spend', 'impressions', 'clicks', 'ctr', 'conversion'];
-// TikTok's BASIC report rejects `conversion_value`/`purchase_value` as invalid metric names
-// (verified via API error); `total_purchase_value` is the accepted revenue field and is what
-// the row parser reads first. Unverified end-to-end until a real account with purchase data
-// syncs — but it's the name TikTok's own validation accepted.
+// BASIC report rejects `conversion_value`/`purchase_value`; `total_purchase_value` is the
+// accepted revenue field the row parser reads first.
 const VALUE_REPORT_METRICS = ['total_purchase_value'];
 
 type TikTokApiEnvelope<T> = {
@@ -242,16 +240,15 @@ export async function handleTikTokCallback(
     return { success: false, error: tokenResult.error || 'TikTok token exchange failed' };
   }
 
-  // The granted advertisers come back in the token-exchange response as `advertiser_ids`;
-  // oauth2/advertiser/get only enriches those IDs with display names. Read them here so we
-  // can both diagnose and fall back to them if the enrichment call returns nothing.
+  // Token-exchange returns granted advertisers as `advertiser_ids`; advertiser/get only enriches
+  // them with names. Read them here to diagnose and to fall back on if enrichment returns nothing.
   const rawAdvertiserIds = (tokenResult.data as Record<string, unknown>).advertiser_ids;
   const grantedAdvertiserIds = Array.isArray(rawAdvertiserIds)
     ? rawAdvertiserIds.map((x) => String(x).trim()).filter(Boolean)
     : [];
 
-  // Safe diagnostic: log the SHAPE of TikTok's token response (keys + presence/counts only,
-  // never token material) so the Marketing API flow's real fields are verifiable in logs.
+  // Log token-response SHAPE only (keys + presence/counts, never token material) so the
+  // Marketing API flow's real fields are verifiable in logs.
   logger.info(
     `[TikTok] token response keys=${JSON.stringify(Object.keys(tokenResult.data))} ` +
       `hasAccess=${Boolean(tokenResult.data.access_token)} hasRefresh=${Boolean(tokenResult.data.refresh_token)} ` +
@@ -263,16 +260,14 @@ export async function handleTikTokCallback(
   const expiresIn = parseInteger(tokenResult.data.expires_in) || 86400;
   const refreshExpiresIn = parseInteger(tokenResult.data.refresh_token_expires_in) || 31536000;
 
-  // TikTok's Marketing API advertiser-auth flow returns a long-lived access_token and,
-  // unlike Google, NO refresh_token — the same model Meta uses in this codebase. Require
-  // only the access token; keep the refresh_token (when present) as an optional renewal path.
+  // Marketing API returns a long-lived access_token and (unlike Google) no refresh_token, like Meta:
+  // require only the access token; keep refresh_token (when present) as an optional renewal path.
   if (!accessToken) {
     return { success: false, error: 'TikTok returned no access token' };
   }
 
-  // Prefer named advertisers from advertiser/get; fall back to the IDs the token response
-  // already granted if that enrichment call yields nothing (permission/shape differences on
-  // that endpoint shouldn't block a connection we were genuinely authorized for).
+  // Prefer named advertisers from advertiser/get; fall back to the granted token-response IDs if
+  // enrichment yields nothing, so endpoint quirks don't block an authorized connection.
   let availableAccounts = await listAdvertisers(accessToken);
   if (availableAccounts.length === 0 && grantedAdvertiserIds.length > 0) {
     logger.warn(
@@ -362,9 +357,8 @@ async function fetchReportPage(
   metrics: string[],
   page: number
 ): Promise<{ ok: boolean; rows: Array<Record<string, unknown>>; totalPages: number; error?: string }> {
-  // TikTok's integrated report treats campaign_name as a metric/attribute, NOT a dimension —
-  // requesting it as a dimension errors with "campaign_name is not supported". Dimensions group
-  // the rows (campaign_id × day); the name rides along in the metrics payload.
+  // The integrated report treats campaign_name as a metric, not a dimension (requesting it as a
+  // dimension errors); dimensions group rows (campaign_id × day), the name rides in the metrics.
   const metricsWithName = metrics.includes('campaign_name') ? metrics : ['campaign_name', ...metrics];
 
   const params = new URLSearchParams({
@@ -482,9 +476,8 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'No TikTok advertiser selected' };
   }
 
-  // TikTok Marketing API tokens are long-lived and the auth flow returns no refresh_token
-  // (same as Meta). Use the stored access token directly; only fall back to a refresh when
-  // a refresh token exists AND the access token is missing or past its expiry.
+  // Tokens are long-lived with no refresh_token (like Meta): use the stored access token directly,
+  // refreshing only when a refresh token exists AND the access token is missing or expired.
   let accessToken = decryptToken(String(connector.accessToken || ''));
   const refreshTokenPlain = decryptToken(String(connector.refreshToken || ''));
   const accessExpired =
@@ -505,7 +498,7 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
   const now = new Date();
   const currentYear = now.getUTCFullYear();
   const historyStartYear = currentYear - TIKTOK_HISTORY_YEARS;
-  // Auto-rebackfill όταν αυξήσουμε το παράθυρο: το flag κρατάει τον παλαιότερο χρόνο που έχει φορτωθεί.
+  // Auto-rebackfill when the window grows: the flag holds the oldest year already loaded.
   const historyLoaded =
     Boolean(connector.historyLoadedUntilYear) &&
     Number(connector.historyLoadedUntilYear) <= historyStartYear;

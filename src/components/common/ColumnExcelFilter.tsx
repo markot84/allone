@@ -8,9 +8,9 @@ export interface ColumnExcelFilterProps {
   options: ExcelFilterOption[];
   value: string[] | null;
   onChange: (next: string[] | null) => void;
-  /** excel: null = όλα τσεκαρισμένα. additive: null/[] = κανένα τσέκ = χωρίς φίλτρο (όλες οι γραμμές). */
+  /** excel: null = all checked. additive: null/[] = none checked = no filter (all rows). */
   selectionMode?: 'excel' | 'additive';
-  /** Στενό κουμπί για κεφαλίδα πίνακα (χωρίς εξωτερικό label). */
+  /** Narrow button for table header (no external label). */
   compact?: boolean;
 }
 

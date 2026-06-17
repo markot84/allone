@@ -12,9 +12,8 @@ function requireEnv(name: string): string {
   return v;
 }
 
-// Bootstrap: the six SDK keys and the App Check site key are the only env
-// values the SPA still reads. Everything else now lives in Firestore at
-// `appConfig/publicConfig` (loaded by services/appConfig.ts at app startup).
+// Only env the SPA reads: six SDK keys + App Check site key; rest loads from
+// `appConfig/publicConfig` (services/appConfig.ts at startup).
 const firebaseConfig = {
   apiKey: requireEnv('VITE_FIREBASE_API_KEY'),
   authDomain: requireEnv('VITE_FIREBASE_AUTH_DOMAIN'),
@@ -29,11 +28,8 @@ export const PROJECT_ID = firebaseConfig.projectId;
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// ── App Check (bot/abuse protection) ─────────────────────────────────────────
-// Ενεργοποιείται αυτόματα όταν υπάρχει VITE_RECAPTCHA_V3_SITE_KEY στο .env.
-// Για dev/emulator debug token: localStorage.setItem('pp:appcheck-debug', '1') → reload.
-// Τα Firestore/Auth SDK επισυνάπτουν το token αυτόματα.
-// Για HTTP Cloud Functions χρησιμοποίησε `getAppCheckHeader()` παρακάτω.
+// App Check: enabled when VITE_RECAPTCHA_V3_SITE_KEY set; debug via localStorage 'pp:appcheck-debug'='1' then reload.
+// Firestore/Auth SDKs attach the token automatically; HTTP Functions use `getAppCheckHeader()` below.
 let appCheckInstance: AppCheck | null = null;
 if (typeof window !== 'undefined') {
   const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_V3_SITE_KEY;
@@ -52,7 +48,7 @@ if (typeof window !== 'undefined') {
   }
 }
 
-/** Επιστρέφει `X-Firebase-AppCheck` header αν υπάρχει active instance, αλλιώς {} */
+/** Returns `X-Firebase-AppCheck` header if an active instance exists, otherwise {} */
 export async function getAppCheckHeader(): Promise<Record<string, string>> {
   if (!appCheckInstance) return {};
   try {
@@ -64,14 +60,8 @@ export async function getAppCheckHeader(): Promise<Record<string, string>> {
   }
 }
 
-// Firestore cache: MEMORY (όχι IndexedDB persistence).
-//
-// ΓΙΑΤΙ: το IndexedDB persistence (persistentLocalCache) μπλόκαρε την αρχικοποίηση της Firestore
-// layer — όταν το IndexedDB κλείδωνε/στόλαρε (stale tab lease, locked DB), ΟΛΑ τα reads έμπαιναν
-// σε ουρά πίσω από την persistence init → οι σελίδες «κρέμονταν» κι έσβηνε ακόμα και η λίστα brands,
-// απαιτώντας πολλαπλά hard refresh. Με memory cache τα reads πάνε κατευθείαν στο δίκτυο, χωρίς
-// dependency σε IndexedDB. Το fast first-paint καλύπτεται ήδη από το React Query localStorage persist.
-// Auto long-polling: αποφεύγει WebChannel streaming που μπλοκάρεται από proxies/extensions.
+// Memory cache (not IndexedDB persistence): a locked/stalled IndexedDB could hang reads; first-paint is covered by React Query localStorage persist.
+// Auto long-polling avoids WebChannel streaming being blocked by proxies/extensions.
 export const db = initializeFirestore(app, {
   localCache: memoryLocalCache(),
   experimentalAutoDetectLongPolling: true,
@@ -86,10 +76,8 @@ export const storage = getStorage(app);
 
 export default app;
 
-// ── Project-derived defaults ────────────────────────────────────────────────
-// Values come from .env (VITE_*) with project-derived fallbacks. publicConfig
-// used to live in Firestore (`appConfig/publicConfig`) but moved back to env
-// vars to keep deploys deterministic.
+// Project-derived defaults: values from .env (VITE_*) with project-derived
+// fallbacks; env vars keep deploys deterministic.
 
 const ENV_REGION = (import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION as string | undefined)?.trim();
 const FUNCTIONS_REGION = ENV_REGION || DEFAULT_FUNCTIONS_REGION;
@@ -102,13 +90,8 @@ export function getAppUrl(): string {
   return envUrl || DEFAULT_APP_URL;
 }
 
-/**
- * Βάση για `fetch()` προς HTTP Cloud Functions.
- *
- * Σημαντικό: το **Firebase Hosting** κόβει τα requests που κάνει proxy σε function σε **~60s**.
- * Το `connectorSync` (Megaventory κ.λπ.) μπορεί να τρέχει πολλά λεπτά — πρέπει **απευθείας**
- * στο `*.cloudfunctions.net`, όχι μέσω Hosting rewrite (αλλιώς 502/504).
- */
+/** Base for `fetch()` to HTTP Cloud Functions. Hosting proxies cut off at ~60s, so long
+ * runs like `connectorSync` (Megaventory etc.) must hit `*.cloudfunctions.net` directly (else 502/504). */
 export function getFunctionsBaseUrl(): string {
   const override = ((import.meta.env.VITE_FUNCTIONS_BASE_URL as string | undefined)
     ?? (import.meta.env.VITE_FUNCTIONS_URL as string | undefined)
@@ -133,17 +116,15 @@ export function getFunctionsBaseUrl(): string {
 export const APP_URL: string = getAppUrl();
 export const FUNCTIONS_BASE_URL: string = getFunctionsBaseUrl();
 
-/**
- * Legacy / misc origin helper. Για OAuth `redirect_uri` χρησιμοποίησε `getFunctionsBaseUrl()` + `/connectorCallback`
- * (ίδιο host με `connectorAuth`), όχι `window.location.origin` — αλλιώς `redirect_uri_mismatch` στο Google Console.
- */
+/** Legacy/misc origin helper. For OAuth `redirect_uri` use `getFunctionsBaseUrl()` + `/connectorCallback`
+ * (same host as `connectorAuth`), not `window.location.origin` — else `redirect_uri_mismatch` in Google Console. */
 export function getFunctionsOrigin(): string {
   if (import.meta.env.DEV) return getFunctionsBaseUrl();
   if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
   return getFunctionsBaseUrl();
 }
 
-/** Σταθερό public URL function — διαβάζει live από Firestore override αν υπάρχει. */
+/** Stable public function URL — reads a live Firestore override if present. */
 export function buildFunctionUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`;
   return `${getFunctionsBaseUrl()}${p}`;

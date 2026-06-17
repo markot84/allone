@@ -1,9 +1,5 @@
-/**
- * CODE-8 — segmentAffinities are on the app-wide 0–1 scale (rfmFromOrders category_affinity,
- * stored in data_analysis_rfm, rendered ×100 in the UI). calculateCompositeScore must scale
- * the affinity average to 0–100 so `fitScore` lines up with the other sub-scores, instead of
- * contributing ~100× too little. Verified by isolating the fit weight.
- */
+/** segmentAffinities are on the app-wide 0–1 scale; calculateCompositeScore must scale their average
+ *  to 0–100 so `fitScore` lines up with the other sub-scores. Verified by isolating the fit weight. */
 import { describe, it, expect } from 'vitest';
 import { calculateCompositeScore } from './compositeScore';
 import type { Product } from '../types';
@@ -20,7 +16,7 @@ const fitOnly = { profit: 0, stock: 0, strategic: 0, revenue: 0, fit: 100 };
 const fitScore = (affinities?: Record<string, number>) =>
   calculateCompositeScore(product, fitOnly, affinities);
 
-describe('calculateCompositeScore — fit scale (CODE-8)', () => {
+describe('calculateCompositeScore — fit scale', () => {
   it('defaults to the 0–100 neutral (50) when no affinities are given', () => {
     expect(fitScore(undefined)).toBe(50);
     expect(fitScore({})).toBe(50); // empty map must not produce NaN

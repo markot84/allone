@@ -61,9 +61,9 @@ interface EcommerceSummaryRaw {
   }>;
   skuStatsJson?: string;
   skuStatsCount?: number;
-  /** Stock movement (καθολικό — δουλεύει για όλα τα brands ανεξάρτητα από connector) */
+  /** Stock movement (global — works for all brands regardless of connector) */
   skuMovementJson?: string;
-  /** PER-130/BUG-11: parsed movement map (client-only) — αποφεύγει το stringify→parse round-trip. */
+  /** Parsed movement map (client-only) — avoids the stringify→parse round-trip. */
   skuMovement?: SkuMovementMap;
   skuMovementCount?: number;
   stockMovementBaselineDate?: string | null;
@@ -101,12 +101,8 @@ function parseSkuStats(raw: EcommerceSummaryRaw | null | undefined): SkuStatsMap
   return raw.skuStats ?? {};
 }
 
-/**
- * Διαβάζει το `sku_stats/{brandId}` collection (chunked layout) και επιστρέφει merged map.
- * Συμβατό με legacy: αν το main summary έχει `skuStatsJson` (παλιά docs), επιστρέφεται κενό
- * εδώ — το `parseSkuStats` του summary κάνει fallback.
- */
-/** PER-130/BUG-11: macrotask yield ώστε το main thread να ανασαίνει ανάμεσα στα chunk parses. */
+/** Reads the chunked `sku_stats/{brandId}` collection into a merged map; empty for legacy `skuStatsJson` docs (summary's `parseSkuStats` handles fallback). */
+/** Macrotask yield so the main thread can breathe between chunk parses. */
 const yieldToMain = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 async function fetchSkuStatsFromChunks(brandId: string): Promise<SkuStatsMap> {
@@ -114,8 +110,8 @@ async function fetchSkuStatsFromChunks(brandId: string): Promise<SkuStatsMap> {
     const chunksSnap = await getDocs(collection(db, 'sku_stats', brandId, 'chunks'));
     if (chunksSnap.empty) return {};
     const merged: SkuStatsMap = {};
-    // PER-130/BUG-11: parse κάθε chunk (~900KB) σε ξεχωριστό task με yield ανάμεσα — ένα ενιαίο
-    // JSON.parse 2-5MB μπλόκαρε το main thread για δευτερόλεπτα· τώρα σπάει σε ~1 task/chunk.
+    // Parse each chunk (~900KB) in a separate task with a yield between — a single
+    // JSON.parse of 2-5MB blocked the main thread for seconds.
     const docs = chunksSnap.docs;
     for (let i = 0; i < docs.length; i++) {
       const data = docs[i].data() as { skuStatsJson?: string };
@@ -145,7 +141,7 @@ async function fetchSkuMovementFromChunks(brandId: string): Promise<SkuMovementM
     const chunksSnap = await getDocs(collection(db, 'stock_movement', brandId, 'chunks'));
     if (chunksSnap.empty) return {};
     const merged: SkuMovementMap = {};
-    // PER-130/BUG-11: yield ανάμεσα στα chunks (βλ. fetchSkuStatsFromChunks).
+    // Yield between chunks (see fetchSkuStatsFromChunks).
     const docs = chunksSnap.docs.slice().sort((a, b) => Number(a.id) - Number(b.id));
     for (let i = 0; i < docs.length; i++) {
       const data = docs[i].data() as { skuMovementJson?: string };
@@ -165,8 +161,8 @@ async function fetchSkuMovementFromChunks(brandId: string): Promise<SkuMovementM
 }
 
 function parseSkuMovement(raw: EcommerceSummaryRaw | null | undefined): SkuMovementMap {
-  // PER-130/BUG-11: προτίμησε το ήδη-parsed map (από chunks) — απόφυγε το stringify (στο fetch)
-  // + parse (εδώ) round-trip πάνω σε έως ~44k entries. Legacy inline json μένει ως fallback.
+  // Prefer the already-parsed map (from chunks) to skip the stringify+parse round-trip over
+  // ~44k entries; legacy inline json stays as fallback.
   if (raw?.skuMovement) return raw.skuMovement;
   if (!raw?.skuMovementJson) return {};
   try {
@@ -191,11 +187,8 @@ export async function fetchEcommerceSummary(
   if (!summarySnap.exists()) return null;
   const summary = summarySnap.data() as EcommerceSummaryRaw;
 
-  /**
-   * Νέο layout: `sku_stats/{brandId}/chunks/*` — απαραίτητο γιατί το παλιό inline `skuStatsJson`
-   * πρόσθετε το serialized map στο main summary doc και ξεπερνούσε το Firestore όριο 1 MiB
-   * σε brands με μεγάλους καταλόγους SKU → απέτυχε το doc read → κενά δεδομένα στο UI.
-   */
+  /** New layout `sku_stats/{brandId}/chunks/*`: the old inline `skuStatsJson` in the summary doc
+   * exceeded the Firestore 1 MiB limit for large catalogs → doc read failed → empty UI. */
   const merged: EcommerceSummaryRaw = {
     ...summary,
     ...(Object.keys(chunkedSkuStats).length > 0
@@ -207,8 +200,8 @@ export async function fetchEcommerceSummary(
   const movement = movementSnap.data() as StockMovementRaw;
   return {
     ...merged,
-    // PER-130/BUG-11: κράτα το parsed map απευθείας όταν έρχεται από chunks — χωρίς stringify
-    // εδώ + parse στο hook. Legacy inline json μένει ως fallback για παλιά docs.
+    // Keep the parsed map directly when it comes from chunks — no stringify+parse round-trip;
+    // legacy inline json stays as fallback for old docs.
     ...(Object.keys(chunkedSkuMovement).length > 0
       ? { skuMovement: chunkedSkuMovement, skuMovementJson: undefined }
       : { skuMovementJson: movement.skuMovementJson ?? merged.skuMovementJson }),
@@ -226,7 +219,7 @@ export function useEcommerceSummary(options?: { includeSkuDetails?: boolean; inc
   const { data, isPending } = useQuery({
     queryKey: ['ecommerce_summary', brandId, includeSkuDetails ? 'sku' : 'summary', includeStockMovement ? 'movement' : 'no_movement'],
     queryFn: () => (brandId ? fetchEcommerceSummary(brandId, { includeSkuDetails, includeStockMovement }) : Promise.resolve(null)),
-    /** Μετά sync το invalidateQueries ανανεώνει· εδώ αποφεύγουμε refetch σε κάθε mount/focus. */
+    /** After sync, invalidateQueries refreshes; here we avoid refetch on every mount/focus. */
     staleTime: 10 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnMount: false,
@@ -262,8 +255,8 @@ export function useEcommerceSummary(options?: { includeSkuDetails?: boolean; inc
   const skuStats = useMemo(() => parseSkuStats(data), [data]);
   const skuMovement = useMemo(() => parseSkuMovement(data), [data]);
 
-  // Per-day order counts — full aggregate (NOT capped όπως το recentOrders).
-  // Χρειάζεται για date-range KPIs χωρίς το 50-row cap του recentOrders.
+  // Per-day order counts — full aggregate (NOT capped like recentOrders), for date-range
+  // KPIs without the 50-row cap.
   const ordersByDay = useMemo(() => {
     if (!data?.ordersByDay) return [];
     return Object.entries(data.ordersByDay)

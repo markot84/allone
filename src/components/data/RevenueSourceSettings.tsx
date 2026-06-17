@@ -23,7 +23,7 @@ export function RevenueSourceSettings() {
 
   const initialMode = ((m: string | undefined): Mode => {
     if (m === 'eshop_all' || m === 'eshop_classified') return m;
-    /** Legacy `erp` στο brand: πλέον ισοδυναμεί με ταξινόμηση καναλιών (το ERP τροφοδοτεί μόνο το Dashboard «Σύνολο Εσόδων»). */
+    /** Legacy `erp` on the brand: now equivalent to channel classification (ERP only feeds the Dashboard "Total Revenue"). */
     if (m === 'erp') return 'eshop_classified';
     return 'eshop_classified';
   })(currentBrand?.revenueSourceMode);

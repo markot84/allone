@@ -1,20 +1,12 @@
-/**
- * Grant super-admin Firestore access + brand membership for specific brands.
- *
- * Usage:
- *   node scripts/grant-super-admin-access.mjs [path/to/serviceAccountKey.json]
- *
- * Env: GOOGLE_APPLICATION_CREDENTIALS if key path omitted.
- */
+/** Grant super-admin Firestore access + brand membership for specific brands.
+ * Usage: node scripts/grant-super-admin-access.mjs [serviceAccountKey.json] (else GOOGLE_APPLICATION_CREDENTIALS). */
 import { initializeApp, cert, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
-// SEC-L12: don't commit super-admin emails / brand ids. Pass them via env when running this
-// one-off ops script (comma-separated), e.g.
-//   SUPER_ADMIN_EMAILS="a@x.com,b@y.com" SUPER_ADMIN_BRAND_IDS="brand1,brand2" \
-//     node scripts/grant-super-admin-access.mjs
+// Don't commit super-admin emails / brand ids; pass via env (comma-separated), e.g.
+//   SUPER_ADMIN_EMAILS="a@x.com,b@y.com" SUPER_ADMIN_BRAND_IDS="brand1,brand2" node scripts/grant-super-admin-access.mjs
 const EMAILS = (process.env.SUPER_ADMIN_EMAILS || '')
   .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 const BRAND_IDS = (process.env.SUPER_ADMIN_BRAND_IDS || '')

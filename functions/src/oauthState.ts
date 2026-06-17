@@ -1,21 +1,5 @@
-/**
- * Signed OAuth `state` (PP-12).
- *
- * The OAuth `state` carries the brandId that the resulting connector tokens get
- * written to. It used to be plain base64(JSON), so an attacker could forge a
- * state with a victim's brandId and have tokens written into the victim's brand.
- *
- * signState() now appends an HMAC-SHA256 signature and an issued-at timestamp;
- * verifyState() rejects any state whose signature doesn't match (forgery) or that
- * is older than STATE_MAX_AGE_MS (bounds replay of a leaked state). The key is
- * derived from CONNECTOR_TOKEN_KEY (already present on connectorAuth + callback),
- * with a separate subkey so it isn't the same bytes as token encryption.
- *
- * Fail-closed (SEC-L1): if the key is absent at runtime, signState throws and
- * verifyState rejects — we refuse to issue or accept an unsigned (forgeable) state
- * rather than silently downgrading CSRF protection. CONNECTOR_TOKEN_KEY is provisioned
- * in every deployed environment (same requirement as tokenCrypto / PP-13).
- */
+/** Signed OAuth `state` (carries brandId): HMAC-SHA256 + iat over base64(JSON), keyed off a
+ * separate CONNECTOR_TOKEN_KEY subkey; fail-closed if key absent. Blocks forgery + STATE_MAX_AGE_MS replay. */
 import { createHmac, timingSafeEqual, scryptSync } from 'crypto';
 import { logger } from './utils/logger';
 import { ALERT } from './utils/alertKeys';
@@ -49,9 +33,8 @@ export function signState(payload: Record<string, unknown>): string {
   const body = Buffer.from(JSON.stringify({ ...payload, iat: Date.now() })).toString('base64url');
   const key = loadKey();
   if (!key) {
-    // SEC-L1: fail CLOSED — refuse to issue an unsigned (forgeable) OAuth state rather than
-    // silently downgrading CSRF protection. Consistent with tokenCrypto (PP-13), which also
-    // requires CONNECTOR_TOKEN_KEY; the secret is provisioned in every deployed environment.
+    // Fail CLOSED — refuse to issue an unsigned (forgeable) OAuth state rather than
+    // downgrading CSRF protection; CONNECTOR_TOKEN_KEY is provisioned in every deployed env.
     logger.error(`[oauthState] ${KEY_ENV} not configured — cannot sign OAuth state`, { alertKey: ALERT.oauthStateFailed });
     throw new Error('OAuth state signing key (CONNECTOR_TOKEN_KEY) is not configured');
   }
@@ -63,8 +46,7 @@ export function verifyState<T = Record<string, unknown>>(state: string | undefin
   if (!state) return null;
   const key = loadKey();
   if (!key) {
-    // SEC-L1: without the key we can't verify the signature — reject rather than accept a
-    // potentially forged state. (Matches the fail-closed signState above.)
+    // Without the key we can't verify the signature — reject rather than accept a forged state.
     logger.error(`[oauthState] ${KEY_ENV} not configured — rejecting OAuth state`);
     return null;
   }

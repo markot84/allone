@@ -1,14 +1,5 @@
-/**
- * Magento / Adobe Commerce Connector
- *
- * Flow:
- * 1. User enters e-shop URL + Access Token (from Admin → System → Integrations)
- * 2. We validate via GET /rest/V1/store/storeConfigs
- * 3. Credentials stored in Firestore (connectors/{brandId}.magento)
- * 4. Sync performs historical backfill first, then incremental updates → Firestore
- *
- * Compatible with Magento 2.x / Adobe Commerce REST API.
- */
+/** Magento / Adobe Commerce REST connector: validate via /rest/V1/store/storeConfigs,
+ * store creds in connectors/{brandId}.magento, then backfill + incremental sync → Firestore. */
 
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
@@ -36,12 +27,12 @@ function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
 }
 
-/** BOM / whitespace από copy-paste */
+/** Strip BOM / whitespace from copy-paste */
 function normalizeMagentoToken(raw: string): string {
   return raw.replace(/^\uFEFF/, '').trim();
 }
 
-/** Βάσεις URL: canonical + εναλλακτικό www / non-www (πολλά shops redirect και χάνεται auth) */
+/** URL bases: canonical + www/non-www alternate (many shops redirect and lose auth) */
 function getCandidateStoreBases(normalizedStoreUrl: string): string[] {
   const base = normalizedStoreUrl.replace(/\/+$/, '');
   const out = new Set<string>([base]);
@@ -65,18 +56,14 @@ function getCandidateStoreBases(normalizedStoreUrl: string): string[] {
 
 const MAGENTO_UA = 'PerformancePlus-MagentoConnector/1.0';
 
-/** Default per-request timeout για Magento REST. Σπασμένα/υποφορτωμένα stores κρεμούν fetch χωρίς αυτό. */
+/** Default per-request timeout for Magento REST. Broken/overloaded stores hang fetch without it. */
 const MAGENTO_FETCH_TIMEOUT_MS = 30_000;
 const MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE = 50;
-/** Full-catalog fallback (ERP-less brands): max σελίδες/run (×100 προϊόντα), resume με cursor. */
+/** Full-catalog fallback (ERP-less brands): max pages/run (×100 products), resume via cursor. */
 const MAGENTO_FULL_CATALOG_PAGE_BUDGET = 150;
 
-/**
- * PER-139: bounded retries για παροδικά σφάλματα. Όλες οι κλήσεις Magento εδώ είναι
- * idempotent GETs, οπότε το retry είναι ασφαλές. Retry ΜΟΝΟ σε timeout/δικτυακό σφάλμα,
- * HTTP 5xx και 429 — ποτέ σε άλλα 4xx (το degraded catalog-401 path εξαρτάται από το
- * να αναδύονται αμέσως).
- */
+/** Bounded retries (idempotent GETs) ONLY on timeout/network/5xx/429 — never other 4xx,
+ * so the degraded catalog-401 path surfaces immediately. */
 const MAGENTO_FETCH_MAX_RETRIES = 2;
 const MAGENTO_RETRY_BASE_DELAYS_MS = [2_000, 8_000];
 
@@ -84,7 +71,7 @@ function isRetryableMagentoStatus(status: number): boolean {
   return status >= 500 || status === 429;
 }
 
-/** Καθυστέρηση πριν το retry attempt (0-based) με ±25% jitter για αποσυγχρονισμό. */
+/** Delay before retry attempt (0-based) with ±25% jitter to desynchronize. */
 function magentoRetryDelayMs(attempt: number, random: () => number = Math.random): number {
   const base = MAGENTO_RETRY_BASE_DELAYS_MS[Math.min(attempt, MAGENTO_RETRY_BASE_DELAYS_MS.length - 1)];
   const jitter = 0.75 + random() * 0.5;
@@ -93,7 +80,7 @@ function magentoRetryDelayMs(attempt: number, random: () => number = Math.random
 
 const sleepMs = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/** Μία προσπάθεια fetch με AbortController — μετατρέπει κρεμάσματα σε καθαρά errors. */
+/** Single fetch attempt with AbortController — turns hangs into clean errors. */
 async function magentoFetchOnce(url: string, init: RequestInit = {}, timeoutMs = MAGENTO_FETCH_TIMEOUT_MS): Promise<Response> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -109,10 +96,8 @@ async function magentoFetchOnce(url: string, init: RequestInit = {}, timeoutMs =
   }
 }
 
-/**
- * fetch wrapper με timeout + bounded retries (PER-139). Ένα αργό page στα 300 του backfill
- * δεν πρέπει να ακυρώνει ολόκληρο το νυχτερινό sync (παρατηρήθηκε live 2x στις 12-06-2026).
- */
+/** fetch wrapper with timeout + bounded retries so one slow backfill page does not
+ * cancel the entire nightly sync. */
 async function magentoFetch(url: string, init: RequestInit = {}, timeoutMs = MAGENTO_FETCH_TIMEOUT_MS): Promise<Response> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= MAGENTO_FETCH_MAX_RETRIES; attempt++) {
@@ -124,22 +109,22 @@ async function magentoFetch(url: string, init: RequestInit = {}, timeoutMs = MAG
     try {
       const res = await magentoFetchOnce(url, init, timeoutMs);
       if (isRetryableMagentoStatus(res.status) && attempt < MAGENTO_FETCH_MAX_RETRIES) {
-        // Σώμα αδιάφορο — καταναλώνεται για να μη μείνει ανοιχτό το stream, μετά retry.
+        // Body irrelevant — consumed so the stream is not left open, then retry.
         await res.text().catch(() => '');
         lastError = new Error(`Magento transient HTTP ${res.status}`);
         continue;
       }
       return res;
     } catch (e) {
-      // timeout (μετασχηματισμένο AbortError) ή δικτυακό σφάλμα → retryable· οτιδήποτε
-      // άλλο (π.χ. SSRF block από safeFetch) αναδύεται αμέσως.
+      // timeout (transformed AbortError) or network error → retryable; anything
+      // else (e.g. SSRF block from safeFetch) surfaces immediately.
       const msg = e instanceof Error ? e.message : String(e);
       const transient = /timeout|fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket|network/i.test(msg);
       if (!transient || attempt >= MAGENTO_FETCH_MAX_RETRIES) throw e;
       lastError = e;
     }
   }
-  // unreachable — το loop είτε επιστρέφει είτε κάνει throw· κρατάμε τον compiler ήσυχο.
+  // unreachable — the loop either returns or throws; this keeps the compiler quiet.
   throw lastError instanceof Error ? lastError : new Error(`Magento fetch failed: ${url}`);
 }
 
@@ -152,14 +137,14 @@ type MagentoStoreConfig = {
   website_name?: string;
   base_url?: string;
   secure_base_url?: string;
-  /** Storefront media root (π.χ. https://shop.gr/pub/media/). */
+  /** Storefront media root (e.g. https://shop.gr/pub/media/). */
   base_media_url?: string;
   secure_base_media_url?: string;
   base_static_url?: string;
   secure_base_static_url?: string;
 };
 
-/** Εγγραφές απο τις ρυθμίσεις store (για UX επιλογών εξαίρεσης & analytics). */
+/** Entries from store configs (for exclusion-choice UX & analytics). */
 export type MagentoStoreDirectoryEntry = {
   id: number;
   code: string;
@@ -184,7 +169,7 @@ export function directoryFromMagentoStoreConfigs(configs: unknown[]): MagentoSto
   return out;
 }
 
-/** Κανονικοποιημένο hostname (χωρίς www) από store base URL — για KPI rules (orderStoreDomain). */
+/** Normalized hostname (without www) from store base URL — for KPI rules (orderStoreDomain). */
 function storefrontHostFromBaseUrl(raw: string): string {
   const s = String(raw || '').trim();
   if (!s) return '';
@@ -207,11 +192,8 @@ function normalizeComparableHost(input: string): string {
   }
 }
 
-/**
- * Apex (registrable) domain για χαλαρό subdomain match (π.χ. shop.safeblock.gr → safeblock.gr).
- * Εδώ κρατάμε τα 2 τελευταία labels (αρκετό για .gr/.com/.net κ.λπ.). Δεν είναι Public Suffix List
- * ακριβές (ξεγλιστράει το co.uk), αλλά αρκεί για να αποτρέψει σιωπηλό λάθος pick.
- */
+/** Apex domain for loose subdomain match (shop.example.gr → example.gr): last 2 labels.
+ * Not PSL-accurate (misses co.uk) but enough to prevent a silent wrong pick. */
 function getApexDomain(host: string): string {
   const clean = String(host || '').trim().toLowerCase().replace(/^www\./, '');
   const parts = clean.split('.').filter(Boolean);
@@ -234,21 +216,21 @@ function getStoreConfigUrls(config: MagentoStoreConfig): string[] {
   return [config.base_url, config.secure_base_url].filter((value): value is string => Boolean(value && String(value).trim()));
 }
 
-/** Δημόσιο storefront URL (προτιμά https). */
+/** Public storefront URL (prefers https). */
 function getStorefrontWebUrl(config: MagentoStoreConfig | null): string {
   if (!config) return '';
   const candidate = (config.secure_base_url || config.base_url || '').trim().replace(/\/+$/, '');
   return candidate;
 }
 
-/** Storefront media root (π.χ. https://shop.gr/pub/media/). */
+/** Storefront media root (e.g. https://shop.gr/pub/media/). */
 function getStoreMediaBaseUrl(config: MagentoStoreConfig | null): string {
   if (!config) return '';
   const candidate = (config.secure_base_media_url || config.base_media_url || '').trim().replace(/\/+$/, '');
   return candidate;
 }
 
-/** Συνεπής με το chart e-commerce: BOX/lockers σε ένα bucket, διπλές ετικέτες ACS+ΕΛΤΑ. */
+/** Consistent with the e-commerce chart: BOX/lockers in one bucket, split ACS+ΕΛΤΑ labels. */
 function normalizeMagentoShippingDescription(raw: string | null | undefined): string {
   let s = String(raw || '')
     .replace(/\s+/g, ' ')
@@ -268,11 +250,8 @@ function normalizeMagentoShippingDescription(raw: string | null | undefined): st
   return s.replace(/^(table\s+rate|flat\s+rate|best\s+way)\s*[-–—]\s*/i, '').trim() || s;
 }
 
-/**
- * Τα Marketing › Search Terms του Magento κρατούνται στο DB, αλλά το Open Source **δεν** εκθέτει
- * λίστα `GET /V1/searchTerms` στο module-search (μόνο `GET /V1/search` για catalog). Commerce / custom
- * modules μπορεί να το προσθέτουν — δοκιμάζουμε πολλά store scopes. Αν αποτύχει παντού, βλ. fallback.
- */
+/** Open Source does not expose `GET /V1/searchTerms` (only `GET /V1/search`); Commerce/custom
+ * modules may add it, so we try multiple store scopes and fall back if all fail. */
 async function fetchAndSaveMagentoPopularSearchTerms(
   db: Firestore,
   brandId: string,
@@ -281,8 +260,8 @@ async function fetchAndSaveMagentoPopularSearchTerms(
   headers: Record<string, string>,
   storeId?: number
 ): Promise<number> {
-  // Σεβόμαστε admin CSV upload: αν ο user έχει ανεβάσει χειροκίνητα search terms
-  // από Magento Admin (Marketing → Search Terms), ΔΕΝ τα overwrite-άρουμε.
+  // Respect admin CSV upload: if the user manually uploaded search terms
+  // from Magento Admin (Marketing → Search Terms), do NOT overwrite them.
   try {
     const existing = await db.doc(`magento_popular_searches/${brandId}`).get();
     if (existing.exists) {
@@ -365,14 +344,8 @@ function getMagentoShopLabel(config: MagentoStoreConfig | null, fallbackUrl: str
   return config?.store_name || fallbackUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '');
 }
 
-/**
- * Επιλογή του σωστού storeConfig για το URL που έδωσε ο χρήστης.
- *
- * Σημαντικό: σε multi-website Magento (π.χ. ίδιο backend για Safeblock + e-tennis),
- * το /storeConfigs επιστρέφει ΟΛΑ τα stores. Ποτέ μην πέφτουμε σιωπηλά στο "first non-admin"
- * — αν το URL του χρήστη δεν ταιριάζει σε κανένα storeConfig και υπάρχουν >1 επιλογές,
- * ζητάμε ρητά store_code (ambiguous). Αυτό αποτρέπει το να εμφανιστεί π.χ. e-tennis αντί για safeblock.
- */
+/** Pick the storeConfig matching the user's URL. On multi-website Magento /storeConfigs returns
+ * ALL stores; if no URL match and >1 options, return ambiguous (ask for store_code) — never guess. */
 function pickMagentoStoreConfig(
   configs: unknown[],
   storeUrl: string,
@@ -416,7 +389,7 @@ function pickMagentoStoreConfig(
           score = Math.max(score, 120);
         }
         if (cfgHost && cfgHost === targetHost) score = Math.max(score, 100);
-        // Apex match (subdomain tolerant): shop.safeblock.gr ↔ safeblock.gr
+        // Apex match (subdomain tolerant): shop.example.gr ↔ example.gr
         if (cfgApex && targetApex && cfgApex === targetApex) score = Math.max(score, 80);
       }
       if (String(cfg.code || '').trim().toLowerCase() === 'admin') score -= 1000;
@@ -435,7 +408,7 @@ function pickMagentoStoreConfig(
     };
   }
 
-  // Δεν βρέθηκε URL match.
+  // No URL match found.
   if (nonAdmin.length === 1) {
     return {
       selected: nonAdmin[0],
@@ -446,7 +419,7 @@ function pickMagentoStoreConfig(
     };
   }
   if (nonAdmin.length > 1) {
-    // Multi-store install και το URL δεν ταυτοποιεί ξεκάθαρα ποιο store θέλει ο χρήστης.
+    // Multi-store install and the URL does not clearly identify which store the user wants.
     return {
       selected: null,
       availableCodes,
@@ -582,10 +555,7 @@ async function fetchMagentoCategoryMap(
   }
 }
 
-/**
- * Δοκιμάζει όλους τους συνήθεις τρόπους πρόσβασης στο REST API.
- * Σημαντικό: μερικά Magento χωρίς rewrite θέλουν /index.php/rest/...
- */
+/** Tries common ways to reach the REST API; installs without rewrite need /index.php/rest/... */
 async function probeMagentoStoreConfigs(
   normalizedStoreUrl: string,
   accessToken: string
@@ -654,9 +624,7 @@ function formatMagentoProbeError(fail: ProbeFail): string {
   return `Σύνδεση απέτυχε (HTTP ${lastStatus || '—'}): ${snippet || lastUrl}`;
 }
 
-/**
- * Validate Magento credentials and save them.
- */
+/** Validate Magento credentials and save them. */
 export async function saveMagentoCredentials(
   brandId: string,
   storeUrl: string,
@@ -696,16 +664,16 @@ export async function saveMagentoCredentials(
       magento: {
         connected: true,
         storeUrl: normalizedUrl,
-        /** Πρόθεμα για όλα τα REST calls — μπορεί να τελειώνει σε /index.php */
+        /** Prefix for all REST calls — may end in /index.php */
         restApiBase: testResult.restApiBase || normalizedUrl,
         shopName: testResult.shopName || normalizedUrl,
         storeCode: testResult.storeCode || '',
         storeName: testResult.storeName || '',
         storeId: testResult.storeId ?? null,
         magentoVersion: testResult.version || '',
-        /** Δημόσιο storefront base για product links στο Ads Feed */
+        /** Public storefront base for product links in the Ads Feed */
         storeWebUrl: testResult.storeWebUrl || '',
-        /** Storefront media root για image_link στο Ads Feed */
+        /** Storefront media root for image_link in the Ads Feed */
         mediaBaseUrl: testResult.mediaBaseUrl || '',
         productCatalogAccess: catalogOk,
         productCatalogAccessError: catalogOk ? FieldValue.delete() : (testResult.productCatalogAccessError || 'Magento product catalog access denied'),
@@ -735,9 +703,7 @@ export async function saveMagentoCredentials(
   };
 }
 
-/**
- * Ενημέρωση ρυθμίσεων συγχρονισμού χωρίς να ξανά-υποχρεώσει access token στο UI.
- */
+/** Update sync settings without forcing the access token to be re-entered in the UI. */
 export async function updateMagentoSyncScope(
   brandId: string,
   syncAllStores: boolean
@@ -760,10 +726,8 @@ export async function updateMagentoSyncScope(
   }
 }
 
-/**
- * Test Magento REST API connection via store config endpoint.
- * Δοκιμάζει πολλαπλά URL patterns (rewrite vs index.php, www vs bare host).
- */
+/** Test Magento REST connection via store config endpoint, trying multiple URL patterns
+ * (rewrite vs index.php, www vs bare host). */
 export async function testMagentoConnection(
   storeUrl: string,
   accessToken: string,
@@ -776,17 +740,17 @@ export async function testMagentoConnection(
   storeId?: number;
   version?: string;
   restApiBase?: string;
-  /** Δημόσιο storefront base (π.χ. https://safeblock.gr) — για product link στο feed. */
+  /** Public storefront base (e.g. https://shop.gr) — for product link in the feed. */
   storeWebUrl?: string;
-  /** Storefront media root (π.χ. https://safeblock.gr/pub/media/) — για image_link στο feed. */
+  /** Storefront media root (e.g. https://shop.gr/pub/media/) — for image_link in the feed. */
   mediaBaseUrl?: string;
   error?: string;
-  /** Όταν ambiguous ή λάθος storeCode, στέλνουμε τα διαθέσιμα στο frontend. */
+  /** When ambiguous or wrong storeCode, send the available ones to the frontend. */
   availableStoreCodes?: string[];
   storeCandidates?: MagentoStoreDirectoryEntry[];
-  /** Πλήρης λίστα store views (με numeric id) — debugging / σύζευξη. */
+  /** Full list of store views (with numeric id) — debugging / pairing. */
   storeDirectory?: MagentoStoreDirectoryEntry[];
-  /** Το token διαβάζει τον κατάλογο προϊόντων; false = orders OK αλλά όχι Catalog (degraded). */
+  /** Does the token read the product catalog? false = orders OK but not Catalog (degraded). */
   productCatalogAccess?: boolean;
   productCatalogAccessError?: string;
 }> {
@@ -801,7 +765,7 @@ export async function testMagentoConnection(
     const pick = pickMagentoStoreConfig(configs, storeUrl, preferredStoreCode);
     const { selected, availableCodes, ambiguous, candidates } = pick;
 
-    // Πάντα logάρουμε όλα τα διαθέσιμα stores για debugging multi-website installs.
+    // Always log all available stores for debugging multi-website installs.
     logger.info(
       `[Magento] storeConfigs candidates (url=${storeUrl}, preferredCode=${preferredStoreCode || '—'}): ` +
       JSON.stringify(candidates)
@@ -847,9 +811,8 @@ export async function testMagentoConnection(
       'User-Agent': MAGENTO_UA,
     };
 
-    // Product catalog access είναι enrichment (εικόνες/meta), ΟΧΙ προϋπόθεση σύνδεσης.
-    // Αν το token διαβάζει orders/store configs αλλά όχι Catalog (401/403), επιτρέπουμε
-    // τη σύνδεση σε degraded mode αντί να μπλοκάρουμε — orders/E-commerce ρέουν κανονικά.
+    // Catalog access is enrichment (images/meta), not a prerequisite: if the token reads
+    // orders but not Catalog (401/403), allow the connection in degraded mode instead of blocking.
     const productAccess = await probeMagentoProductCatalogAccess(restApiBase, resolvedStoreCode || undefined, headers);
     let productCatalogAccess = true;
     let productCatalogAccessError: string | undefined;
@@ -859,7 +822,7 @@ export async function testMagentoConnection(
         productCatalogAccess = false;
         logger.warnAlert(`[Magento] Connect: product catalog denied (degraded) — orders/store OK. ${productCatalogAccessError}`, { alertKey: ALERT.magentoSyncFailed });
       } else {
-        // Μη-auth αποτυχία (π.χ. 404/500) → πιθανό config issue, μπλοκάρουμε όπως πριν.
+        // Non-auth failure (e.g. 404/500) → likely config issue, block as before.
         return {
           success: false,
           error: productCatalogAccessError,
@@ -911,11 +874,8 @@ export async function testMagentoConnection(
   }
 }
 
-/**
- * Εξαγωγή payment info από Magento order. Καλύπτει additional_information ως
- * array, keyed object («Viva Payment Method» / «Sub-Payment Method» από Stonewave/Viva),
- * ή string. Κρατάει `paymentInfoRaw` (capped JSON) ώστε να εντοπίζουμε νέα keys χωρίς νέο deploy.
- */
+/** Extract payment info from a Magento order: additional_information as array, keyed object
+ * («Viva Payment Method»/«Sub-Payment Method»), or string. Keeps capped `paymentInfoRaw` JSON. */
 function extractMagentoPaymentInfo(payment: unknown): {
   paymentMethod: string;
   paymentMethodCode: string;
@@ -936,7 +896,7 @@ function extractMagentoPaymentInfo(payment: unknown): {
       if (v == null || v === '' || typeof v === 'object') continue;
       const val = String(v).trim();
       if (!val) continue;
-      // Κρατάμε το label (π.χ. «Sub-Payment Method») ώστε το bucketing regex να το πιάνει.
+      // Keep the label (e.g. «Sub-Payment Method») so the bucketing regex catches it.
       parts.push(/payment[\s_-]*method|method[\s_-]*title|viva|sub/i.test(k) ? `${k}: ${val}` : val);
     }
   } else if (typeof ai === 'string' && ai.trim()) {
@@ -953,11 +913,8 @@ function extractMagentoPaymentInfo(payment: unknown): {
   return { paymentMethod: parts.join(' • '), paymentMethodCode: code, paymentInfoRaw };
 }
 
-/**
- * Map a page of Magento product items → feed-ready docs and stream-write them to
- * `magento_products`. Shared between the active_stock path (SKU-filtered) and the
- * full-catalog fallback (ERP-less brands). Returns the number of products written.
- */
+/** Map a page of Magento product items → feed-ready docs, stream-written to `magento_products`.
+ * Shared between active_stock (SKU-filtered) and full-catalog (ERP-less) paths. */
 async function ingestMagentoProductPage(
   db: Firestore,
   brandId: string,
@@ -1076,18 +1033,14 @@ async function ingestMagentoProductPage(
   return pageItems.length;
 }
 
-/**
- * Fetch Magento orders/products and store in Firestore.
- * First runs backfill history; later runs use updated_at with overlap for status/stock changes.
- * Customer email is stored for audience exports, while `customerEmailHash` is used
- * for analytics/matching.
- */
+/** Fetch Magento orders/products → Firestore: first run backfills, later runs use updated_at with
+ * overlap. Stores customer email for exports; `customerEmailHash` for analytics/matching. */
 export async function fetchMagentoData(brandId: string): Promise<{
   success: boolean;
   imported: number;
   error?: string;
   message?: string;
-  /** Non-fatal degraded outcome (π.χ. orders OK αλλά product-catalog ACL denied). */
+  /** Non-fatal degraded outcome (e.g. orders OK but product-catalog ACL denied). */
   warning?: string;
   degraded?: boolean;
 }> {
@@ -1104,7 +1057,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
   const restApiBase = String((connector as { restApiBase?: string }).restApiBase || storeUrl).replace(/\/+$/, '');
   const storeCode = String((connector as { storeCode?: string }).storeCode || '').trim();
   const storeId = Number((connector as { storeId?: number | string }).storeId);
-  /** Όταν true δεν ωθούμε φίλτρο store_id στο REST API — εγκαταστάσεις πολλαπλών fronts στο ίδιο Magento. */
+  /** When true we don't push a store_id filter to the REST API — installs with multiple fronts on the same Magento. */
   const syncAllStores = Boolean((connector as { syncAllStores?: boolean }).syncAllStores);
   const accessToken = decryptToken(connector.accessToken);
   if (!accessToken) {
@@ -1154,7 +1107,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
   const productsWindowStart: Date | null = null;
   const productsWindowEnd = new Date();
   const activeStockSkus = await loadActiveStockSkus(db, brandId);
-  // ERP-less brands (άδειο `products`) → full_catalog fallback· αλλιώς active_stock enrichment.
+  // ERP-less brands (empty `products`) → full_catalog fallback; otherwise active_stock enrichment.
   const productsMode: 'active_stock' | 'full_catalog' = activeStockSkus.length === 0 ? 'full_catalog' : 'active_stock';
 
   logger.info(
@@ -1239,9 +1192,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
             subtotal: parseFloat(o.subtotal || '0'),
             taxAmount: parseFloat(o.tax_amount || '0'),
             discountAmount: parseFloat(o.discount_amount || '0'),
-            // Base currency totals — απαραίτητα για multi-store/multi-website Magento (e.g. e-tennis GR/BG/RO/CY).
-            // Όταν το store currency διαφέρει από το base (BGN/RON), χωρίς αυτά αθροίζαμε τα local νούμερα
-            // σαν να ήταν EUR → υπερεκτίμηση τζίρου. Όλα τα aggregations χρησιμοποιούν τα base_* όταν υπάρχουν.
+            // Base currency totals: when store currency differs from base (BGN/RON), aggregations
+            // use base_* to avoid summing local figures as EUR (revenue overestimation).
             baseGrandTotal: parseFloat(o.base_grand_total || '0'),
             baseSubtotal: parseFloat(o.base_subtotal || '0'),
             baseTaxAmount: parseFloat(o.base_tax_amount || '0'),
@@ -1309,13 +1261,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
 
       hasMore = currentPage * 100 < totalCount;
       currentPage++;
-      /**
-       * Backfill cap.
-       * - Historical: 300 σελίδες (30K orders) ώστε brands με μεγάλο ιστορικό (e-tennis ~3 χρόνια
-       *   × χιλιάδες/μήνα) να ολοκληρώνουν το backfill σε λίγες νύχτες αντί για >2 εβδομάδες.
-       *   Το function timeout είναι 1800s — 30K orders × ~120ms/page χωράνε άνετα.
-       * - Incremental: 100 σελίδες αρκούν (24h orders ~ <100 σελίδες).
-       */
+      // Backfill cap: historical 300 pages (30K orders, fits the 1800s timeout), incremental
+      // 100 pages (24h orders ~ <100 pages).
       const cap = orderWindow.mode === 'historical' ? 300 : 100;
       if (currentPage > cap) {
         if (hasMore && orderWindow.mode === 'historical') {
@@ -1333,23 +1280,19 @@ export async function fetchMagentoData(brandId: string): Promise<{
       logger.info(`[Magento] Orders: ${orderImportedCount} imported for brand ${brandId}`);
     }
 
-    // Real Magento search queries (popularity from /V1/searchTerms — Commerce/extension only).
-    // Magento Open Source ΔΕΝ εκθέτει αυτό το endpoint by default. Για OSS, ο χρήστης
-    // ανεβάζει CSV από Marketing → Search Terms (UI). ΔΕΝ χρησιμοποιούμε ονόματα προϊόντων ως proxy.
+    // Search queries from /V1/searchTerms (Commerce/extension only). For OSS the user uploads a
+    // CSV from Marketing → Search Terms; we do NOT use product names as a proxy.
     await fetchAndSaveMagentoPopularSearchTerms(db, brandId, restApiBase, storeCode, headers, storeId);
 
-    // ── Products ───────────────────────────────────────────────────────
-    // Streaming write: γράφουμε κάθε σελίδα στο Firestore αμέσως (αποφεύγουμε OOM για μεγάλα catalogs).
-    // Δεν περιορίζουμε με `fields` ώστε να πάρουμε media_gallery_entries, custom_attributes,
-    // extension_attributes (configurable links), category_links — απαιτούνται για Ads Feed.
+    // Products: stream each page to Firestore (avoid OOM); no `fields` restriction so media_gallery_entries,
+    // custom_attributes, extension_attributes, category_links arrive for the Ads Feed.
     let prodPage = 1;
     let prodMore = true;
     let productsOk = true;
     let productsBackfillIncomplete = false;
     let prodImportedCount = 0;
-    // Product-catalog access denial (HTTP 401/403) είναι ΜΗ-fatal: τα orders/E-commerce
-    // ρέουν κανονικά· λείπει μόνο ο εμπλουτισμός εικόνων/meta. Το κρατάμε ξεχωριστά από
-    // τα fatal errors ώστε το sync να ΜΗΝ βαφτίζεται «αποτυχία».
+    // Catalog access denial (401/403) is NON-fatal (only image/meta enrichment lost); kept
+    // separate from fatal errors so the sync is not labeled a "failure".
     let productCatalogDenied = false;
     let productCatalogDeniedReason = '';
 
@@ -1358,10 +1301,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
     const parentLinks: { childId: string; parentId: string }[] = [];
     const categoryMap = await fetchMagentoCategoryMap(restApiBase, storeCode, headers);
 
-    // Stock-source: ο ERP/import γεμίζει το `products` collection με stock_level>0.
-    // Brands ΧΩΡΙΣ ERP (Magento-only, π.χ. safeblock) έχουν άδειο `products` → 0 SKUs.
-    // Σε αυτή την περίπτωση κάνουμε fallback σε direct full-catalog sync (όπως πριν
-    // το active_stock scoping), αλλιώς ο κατάλογος δεν θα συγχρονιζόταν ποτέ.
+    // ERP/import fills `products` with stock_level>0. Magento-only brands have empty `products`
+    // (0 SKUs) → fall back to a direct full-catalog sync, else the catalog never syncs.
     const useFullCatalogFallback = productsMode === 'full_catalog';
     let fullCatalogResumeCursor: Date | null = null;
 
@@ -1426,7 +1367,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         prodPage++;
       }
 
-      // Resume cursor: αν κόπηκε από budget, συνεχίζουμε από το τελευταίο updated_at.
+      // Resume cursor: if cut by budget, continue from the last updated_at.
       if (productsOk && productsBackfillIncomplete && lastProductUpdatedAt) {
         fullCatalogResumeCursor = lastProductUpdatedAt;
       }
@@ -1477,8 +1418,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
       }
     }
 
-    // Συμπλήρωση parentSku στα child variants (ώστε στο Ads Feed → item_group_id = parent SKU).
-    // Γίνεται με targeted updates αφού έχουν γραφεί όλα τα products (streaming mode).
+    // Fill parentSku on child variants (so in the Ads Feed → item_group_id = parent SKU).
+    // Done with targeted updates after all products are written (streaming mode).
     if (parentLinks.length > 0) {
       const childToParents = new Map<string, Set<string>>();
       for (const { childId, parentId } of parentLinks) {
@@ -1523,7 +1464,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
       connectorPatch['magento.productCatalogAccessCheckedAt'] = FieldValue.serverTimestamp();
       connectorPatch['magento.productSyncScope'] = productsMode;
       connectorPatch['magento.activeStockSkuCount'] = activeStockSkus.length;
-      // Full-catalog fallback: κράτα cursor αν κόπηκε από budget, αλλιώς καθάρισέ τον.
+      // Full-catalog fallback: keep cursor if cut by budget, otherwise clear it.
       connectorPatch['magento.productsHistoryCursor'] = fullCatalogResumeCursor
         ? fullCatalogResumeCursor
         : FieldValue.delete();
@@ -1561,7 +1502,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
       products: prodImportedCount,
       failed: errors.length,
       errors: errors.slice(0, 20),
-      // Degraded = μη-fatal (orders OK, λείπει μόνο ο εμπλουτισμός καταλόγου).
+      // Degraded = non-fatal (orders OK, only catalog enrichment is missing).
       degraded: productCatalogDenied,
       degradedReason: productCatalogDenied ? productCatalogDeniedReason.slice(0, 500) : null,
       createdAt: FieldValue.serverTimestamp(),

@@ -4,12 +4,8 @@ import { useBrand } from './useBrand';
 
 const PERIOD_TOTALS_URL = `${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/ga4PeriodTotals`;
 
-/**
- * GA4-deduplicated σύνολα περιόδου (όπως τα δείχνει το GA4 UI για το επιλεγμένο εύρος).
- * Χρειάζεται γιατί τα ημερήσια totalUsers/newUsers ΔΕΝ αθροίζονται σωστά: το GA4 κάνει dedup ανά
- * περίοδο (ένας χρήστης σε 5 μέρες = 1 χρήστης, όχι 5). Τα sessions/pageviews/conversions είναι
- * αθροιστικά οπότε ταιριάζουν ήδη — αλλά τα επιστρέφουμε κι αυτά για ενιαία, ακριβή KPI cards.
- */
+/** GA4-deduplicated period totals: daily totalUsers/newUsers don't sum (GA4 dedups per period).
+ * sessions/pageviews/conversions are additive but returned too for consistent KPI cards. */
 export interface GA4PeriodTotals {
   sessions: number;
   totalUsers: number;
@@ -42,11 +38,7 @@ async function fetchPeriodTotals(
   return data?.success && data.totals ? data.totals : null;
 }
 
-/**
- * @param from YYYY-MM-DD
- * @param to   YYYY-MM-DD
- * @param enabled Συνήθως `hasData` (αποφυγή κλήσης όταν δεν υπάρχει GA4 connector).
- */
+/** from/to are YYYY-MM-DD; `enabled` (usually `hasData`) skips the call with no GA4 connector. */
 export function useGA4PeriodTotals(from: string, to: string, enabled = true) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
@@ -58,8 +50,7 @@ export function useGA4PeriodTotals(from: string, to: string, enabled = true) {
     enabled: !!brandId && enabled && valid,
     staleTime: 30 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    // true (όχι false): αν προηγούμενη session είχε cache-άρει null (π.χ. function δεν ήταν ακόμη
-    // deployed/έτοιμο), θέλουμε να ξαναπροσπαθήσει στο άνοιγμα — αλλιώς «κολλάει» στο daily-sum fallback.
+    // Retry on mount if a previous session cached null, else it sticks on the daily-sum fallback.
     refetchOnMount: true,
     refetchOnWindowFocus: false,
     retry: 1,

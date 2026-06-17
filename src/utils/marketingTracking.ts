@@ -1,16 +1,5 @@
-/**
- * Marketing / landing tracking tags + conversion events.
- *
- * Όλα τα tags φορτώνονται **δυναμικά** και **μόνο** στη marketing/landing σελίδα
- * (βλ. `useMarketingTags`) — όχι στο `index.html` — ώστε τα διαφημιστικά pixels
- * (Meta, LinkedIn, Google Ads, GA4, Clarity) να ΜΗΝ τρέχουν στις σελίδες της
- * εφαρμογής (dashboard, connectors κ.λπ.), για λόγους ιδιωτικότητας/GDPR.
- *
- * Σημείωση: το SPA renders μόνο με JavaScript, οπότε τα `<noscript>` fallbacks των
- * standard snippets είναι ουσιαστικά άνευ αντικειμένου και παραλείπονται.
- *
- * Τα IDs είναι public-by-design (εμφανίζονται έτσι κι αλλιώς στο page source).
- */
+/** Marketing/landing tracking tags + conversion events. Pixels (Meta, LinkedIn,
+ * Google Ads, GA4, Clarity) load only on the landing page for privacy/GDPR; IDs are public. */
 
 // ── IDs ──────────────────────────────────────────────────────────────────────
 export const GOOGLE_ADS_ID = 'AW-18189930823';
@@ -52,7 +41,7 @@ declare global {
 
 // ── Base tag loaders (idempotent) ────────────────────────────────────────────
 
-/** Δημιουργεί async `<script>` και το εισάγει πριν το πρώτο υπάρχον script (ή στο `<head>`). */
+/** Creates an async `<script>` and inserts it before the first existing script (or into `<head>`). */
 function injectScript(src: string, id?: string): void {
   const script = document.createElement('script');
   if (id) script.id = id;
@@ -66,14 +55,14 @@ function injectScript(src: string, id?: string): void {
   }
 }
 
-/** Google tag (gtag.js) — μία φόρτωση, δύο `config` (Google Ads + GA4). */
+/** Google tag (gtag.js) — one load, two `config` (Google Ads + GA4). */
 function loadGoogleTag(): void {
   if (document.getElementById('gtag-js')) return;
 
   window.dataLayer = window.dataLayer || [];
   if (!window.gtag) {
     window.gtag = function gtag() {
-      // gtag.js περιμένει το ίδιο το `arguments` object στο dataLayer.
+      // gtag.js expects the `arguments` object itself in dataLayer.
       // eslint-disable-next-line prefer-rest-params
       (window.dataLayer as unknown[]).push(arguments);
     } as GtagFn;
@@ -146,13 +135,12 @@ function loadClarity(): void {
 
 let baseTagsLoaded = false;
 
-/** Φορτώνει όλα τα marketing base tags μία φορά (idempotent, StrictMode-safe). */
+/** Loads all marketing base tags once (idempotent, StrictMode-safe). */
 export function loadMarketingTags(): void {
   if (baseTagsLoaded) return;
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
-  // Τα marketing/ad pixels + conversions τρέχουν ΜΟΝΟ σε production build — όχι σε
-  // staging/dev — ώστε QA/internal traffic να μη μολύνει πραγματικά conversion data.
-  // (Όλα τα window globals μένουν undefined εκτός production, οπότε τα track* no-op.)
+  // Pixels + conversions run only in a production build so QA/internal traffic
+  // doesn't pollute conversion data; outside production the track* calls no-op.
   if (import.meta.env.MODE !== 'production') return;
   baseTagsLoaded = true;
 
@@ -164,10 +152,8 @@ export function loadMarketingTags(): void {
 
 // ── Generic marketing event ──────────────────────────────────────────────────
 
-/**
- * GA4 custom event για τη marketing σελίδα (`gtag('event', …)`), με παράλληλο
- * `dataLayer` push για συμβατότητα με τυχόν GTM/GA tag manager setup.
- */
+/** GA4 custom event for the marketing page (`gtag('event', …)`), with a parallel
+ * `dataLayer` push for GTM/GA tag manager compatibility. */
 export function trackMarketingEvent(action: string, params?: Record<string, string>): void {
   if (typeof window === 'undefined') return;
   window.dataLayer?.push({ event: 'performance_plus_marketing', action, ...(params || {}) });
@@ -176,33 +162,33 @@ export function trackMarketingEvent(action: string, params?: Record<string, stri
 
 // ── Conversion events ────────────────────────────────────────────────────────
 
-/** Meta Pixel `Lead` — κουμπί «Κλείστε παρουσίαση». */
+/** Meta Pixel `Lead` — "Book a demo" button. */
 export function trackMetaLead(): void {
   window.fbq?.('track', 'Lead');
 }
 
-/** CTA «Κλείστε παρουσίαση» — GA4 `cta_click` + Meta `Lead`. */
+/** "Book a demo" CTA — GA4 `cta_click` + Meta `Lead`. */
 export function trackLeadCta(placement: string): void {
   trackMarketingEvent('cta_click', { placement });
   trackMetaLead();
 }
 
-/** Meta Pixel `Contact` — κουμπί τηλεφώνου. */
+/** Meta Pixel `Contact` — phone button. */
 export function trackMetaContact(): void {
   window.fbq?.('track', 'Contact');
 }
 
-/** Google Ads — Submit lead form conversion (υποβολή φόρμας ενδιαφέροντος). */
+/** Google Ads — Submit lead form conversion. */
 export function trackGoogleFormSubmitConversion(): void {
   window.gtag?.('event', 'conversion', { send_to: GOOGLE_FORM_SUBMIT_CONVERSION });
 }
 
-/** Google Ads — Click to call conversion (κουμπί τηλεφώνου). */
+/** Google Ads — Click to call conversion (phone button). */
 export function trackGoogleCallConversion(): void {
   window.gtag?.('event', 'conversion', { send_to: GOOGLE_CALL_CONVERSION });
 }
 
-/** LinkedIn conversion — υποβολή φόρμας ενδιαφέροντος. */
+/** LinkedIn conversion — lead form submission. */
 export function trackLinkedInConversion(): void {
   window.lintrk?.('track', { conversion_id: LINKEDIN_CONVERSION_ID });
 }

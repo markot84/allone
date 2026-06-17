@@ -1,6 +1,4 @@
-/**
- * AI Market Brief — structured JSON για Market Exploration (εκτίμηση, όχι live market data).
- */
+/** AI Market Brief: structured JSON for Market Exploration (estimates, not live market data). */
 
 import { buildAdvisorySystemPrompt } from './aiAdvisoryFramework';
 

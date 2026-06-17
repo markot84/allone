@@ -1,7 +1,4 @@
-/**
- * Συγκριτικά tests: «canonical» metrics (roiUtils) vs αφελή αθροίσματα / edge cases.
- * Τρέξιμο: npm test
- */
+/** Comparison tests: canonical metrics (roiUtils) vs naive sums / edge cases. */
 import { describe, expect, it } from 'vitest';
 import type { Campaign } from '../types';
 import {
@@ -27,7 +24,7 @@ function naiveSumConversionActions(
 }
 
 describe('isMetaChannel', () => {
-  it('ανιχνεύει Meta case-insensitive', () => {
+  it('detects Meta case-insensitively', () => {
     expect(isMetaChannel('Meta')).toBe(true);
     expect(isMetaChannel('meta')).toBe(true);
     expect(isMetaChannel(' META ')).toBe(true);
@@ -36,7 +33,7 @@ describe('isMetaChannel', () => {
 });
 
 describe('getMetaPrimaryPurchaseFromActions', () => {
-  it('προτιμά Purchase (Ads Manager / deduped) πριν το Pixel όταν και τα δύο έχουν δεδομένα', () => {
+  it('prefers Purchase (Ads Manager / deduped) over Pixel when both have data', () => {
     const ca = {
       Purchase: { conversions: 10, value: 200 },
       'Purchase (Pixel)': { conversions: 3, value: 150 },
@@ -45,7 +42,7 @@ describe('getMetaPrimaryPurchaseFromActions', () => {
     expect(row).toEqual({ conversions: 10, value: 200 });
   });
 
-  it('χρησιμοποιεί Purchase (Pixel) αν λείπει το standard Purchase', () => {
+  it('uses Purchase (Pixel) when the standard Purchase is missing', () => {
     const ca = {
       Purchase: { conversions: 7, value: 99 },
     };
@@ -53,8 +50,8 @@ describe('getMetaPrimaryPurchaseFromActions', () => {
   });
 });
 
-describe('Meta effective metrics vs αφελές άθροισμα όλων των actions', () => {
-  it('αποκλείει omni_purchase από effective — το naive sum θα ήταν φουσκωμένο', () => {
+describe('Meta effective metrics vs naive sum of all actions', () => {
+  it('excludes omni_purchase from effective — the naive sum would be inflated', () => {
     const conversionActions = {
       'Purchase (Pixel)': { conversions: 2, value: 80 },
       omni_purchase: { conversions: 40, value: 8000 },
@@ -71,7 +68,7 @@ describe('Meta effective metrics vs αφελές άθροισμα όλων τω�
     expect(naive.conv - effectiveC).toBe(40);
   });
 
-  it('ίδιο row για conv και value (όχι διαφορετική ετικέτα ανά μέτρο)', () => {
+  it('same row for conv and value (not a different label per metric)', () => {
     const conversionActions = {
       'Purchase (Pixel)': { conversions: 5, value: 250 },
       Purchase: { conversions: 99, value: 1 },
@@ -86,7 +83,7 @@ describe('Meta effective metrics vs αφελές άθροισμα όλων τω�
   });
 });
 
-describe('Μη-Meta: effective επιστρέφει conversion_value όταν > 0', () => {
+describe('Non-Meta: effective returns conversion_value when > 0', () => {
   it('Google Ads aggregate field', () => {
     const c = {
       channel: 'Google Ads',
@@ -99,28 +96,28 @@ describe('Μη-Meta: effective επιστρέφει conversion_value όταν > 
   });
 });
 
-describe('bucketOverlapFraction (ημερολόγιο vs range)', () => {
-  it('ημέρα μέσα στο range → 1', () => {
+describe('bucketOverlapFraction (calendar vs range)', () => {
+  it('day inside the range → 1', () => {
     expect(bucketOverlapFraction('2025-06-15', '2025-06-01', '2025-06-30')).toBe(1);
   });
 
-  it('ημέρα έξω από το range → 0', () => {
+  it('day outside the range → 0', () => {
     expect(bucketOverlapFraction('2025-07-01', '2025-06-01', '2025-06-30')).toBe(0);
   });
 
-  it('legacy Meta month bucket: κλειδί YYYY-MM-01 μοιράζει μέρες στο μήνα', () => {
+  it('legacy Meta month bucket: key YYYY-MM-01 splits days across the month', () => {
     const frac = bucketOverlapFraction('2025-06-01', '2025-06-15', '2025-06-20', {
       metaMonthBuckets: true,
     });
     expect(frac).toBeGreaterThan(0);
     expect(frac).toBeLessThanOrEqual(1);
-    // 6 μέρες / 30 (Ιούνιος) ≈ 0.2
+    // 6 days / 30 (June) ≈ 0.2
     expect(frac).toBeCloseTo(6 / 30, 5);
   });
 });
 
 describe('metaUsesLegacyMonthBuckets', () => {
-  it('true μόνο όταν όλα τα keys είναι ημέρα 01', () => {
+  it('true only when all keys are day 01', () => {
     const c = {
       channel: 'Meta',
       dailyMetrics: {
@@ -131,7 +128,7 @@ describe('metaUsesLegacyMonthBuckets', () => {
     expect(metaUsesLegacyMonthBuckets(c)).toBe(true);
   });
 
-  it('false αν υπάρχει πραγμαική ημερήσια ημέρα', () => {
+  it('false when a real daily day exists', () => {
     const c = {
       channel: 'Meta',
       dailyMetrics: {
@@ -143,14 +140,9 @@ describe('metaUsesLegacyMonthBuckets', () => {
   });
 });
 
-describe('getCampaignDailyAttributedValueInPeriod (ημερήσιο ROAS chart)', () => {
-  // Intended business logic (roiUtils.dailyMetricsHasPurchaseSlice + DashboardOverview ROAS chart):
-  // if a campaign reports purchases at all, daily attributed revenue uses purchase_conversion_value
-  // PER DAY — so a 0-purchase day attributes 0. Falling back to total conversion_value there would
-  // fold in non-purchase conversions and inflate ROAS ("ROAS πλασματικά υψηλό" / ad-platform
-  // double-counting), which the code explicitly avoids. conversion_value is used ONLY for campaigns
-  // with no purchase slice at all. (The earlier test asserted the inflating fallback — it contradicted
-  // the documented design and had been failing since the first commit; corrected here. See TEST-F2.)
+describe('getCampaignDailyAttributedValueInPeriod (daily ROAS chart)', () => {
+  // If a campaign reports purchases, daily revenue uses purchase_conversion_value per day (0-purchase day → 0);
+  // falling back to conversion_value would inflate ROAS. conversion_value is used ONLY when no purchase slice exists.
   it('Meta purchase-slice campaign: a 0-purchase day attributes 0 (no conversion_value inflation)', () => {
     const c = {
       channel: 'Meta',
@@ -175,8 +167,8 @@ describe('getCampaignDailyAttributedValueInPeriod (ημερήσιο ROAS chart)'
       dailyMetrics: {
         '2026-03-07': {
           amount_spent: 50,
-          conversion_value: 200, // total conversions (may include non-purchase)
-          purchase_conversion_value: 150, // actual purchase revenue → this is what ROAS should use
+          conversion_value: 200, // total conversion value (may include non-purchase)
+          purchase_conversion_value: 150, // actual purchase revenue, this is what ROAS should use
         },
       },
     } as unknown as Campaign;

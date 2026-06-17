@@ -1,18 +1,5 @@
-/**
- * Google Ads API Connector
- *
- * Flow:
- * 1. User clicks "Connect Google Ads" → redirected to Google OAuth
- * 2. Google redirects back with auth code → exchanged for refresh_token
- * 3. Tokens stored in Firestore (connectors/{brandId})
- * 4. Scheduled function uses refresh_token to pull campaign data daily
- *
- * Required secrets:
- * - GOOGLE_ADS_CLIENT_ID
- * - GOOGLE_ADS_CLIENT_SECRET
- * - GOOGLE_ADS_DEVELOPER_TOKEN
- * - GOOGLE_ADS_LOGIN_CUSTOMER_ID (MCC)
- */
+/** Google Ads OAuth connector: tokens stored in Firestore (connectors/{brandId}), scheduled daily campaign pull.
+ * Secrets: GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_LOGIN_CUSTOMER_ID (MCC). */
 
 import * as admin from 'firebase-admin';
 import { signState } from './oauthState';
@@ -195,12 +182,8 @@ async function deleteStaleGoogleAdsCampaignDocsForCustomer(
   return deleted;
 }
 
-/**
- * REST JSON uses camelCase. Use **only** metrics.conversions / metrics.conversions_value
- * (same fields as the default “Conversions” / conv. value columns in Google Ads UI).
- * Do not substitute all_conversions — summing per-action rows also does not reproduce totals.
- * @see https://developers.google.com/google-ads/api/fields/v22/metrics
- */
+/** REST JSON is camelCase; use only metrics.conversions / metrics.conversions_value (UI default columns).
+ * Do not substitute all_conversions, and summing per-action rows does not reproduce totals either. */
 function parseCampaignDayMetrics(m: Record<string, unknown> | undefined | null): {
   impressions: number;
   clicks: number;
@@ -242,7 +225,7 @@ function normalizeCustomerId(id: string): string {
   return String(id).replace(/-/g, '').trim();
 }
 
-/** Επιστρέφει child λογαριασμούς κάτω από MCC (όχι manager leaf accounts). */
+/** Returns child accounts under the MCC (not manager leaf accounts). */
 async function fetchManagedClients(accessToken: string, mccId: string): Promise<GoogleAdsCustomer[]> {
   const { developerToken } = getCredentials();
   const id = normalizeCustomerId(mccId);
@@ -318,9 +301,7 @@ async function fetchCustomerIsManager(accessToken: string, customerId: string): 
   }
 }
 
-/**
- * Generate the OAuth consent URL for Google Ads
- */
+/** Generate the OAuth consent URL for Google Ads. */
 export function getGoogleAdsAuthUrl(
   brandId: string,
   redirectUri: string,
@@ -346,9 +327,7 @@ export function getGoogleAdsAuthUrl(
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
 }
 
-/**
- * Exchange authorization code for tokens and list accessible accounts
- */
+/** Exchange authorization code for tokens and list accessible accounts. */
 export async function handleGoogleAdsCallback(
   code: string,
   brandId: string,
@@ -456,9 +435,7 @@ export async function handleGoogleAdsCallback(
   }
 }
 
-/**
- * Select a specific Google Ads customer account for a brand
- */
+/** Select a specific Google Ads customer account for a brand. */
 export async function selectGoogleAdsAccount(brandId: string, customerId: string, customerName: string): Promise<void> {
   await getDb().doc(`connectors/${brandId}`).set(
     {
@@ -476,13 +453,11 @@ export async function selectGoogleAdsAccount(brandId: string, customerId: string
   logger.info(`[GoogleAds] Account selected for brand ${brandId}: ${customerId}`);
 }
 
-/**
- * List accessible Google Ads customer accounts with names
- */
+/** List accessible Google Ads customer accounts with names. */
 async function listAccessibleCustomers(accessToken: string): Promise<GoogleAdsCustomer[]> {
   const { developerToken, loginCustomerId } = getCredentials();
 
-  // SEC-L14: log only presence/shape of credentials, never token bytes/prefix.
+  // Log only presence/shape of credentials, never token bytes/prefix.
   logger.info(`[GoogleAds] DIAG listAccessible — loginCustomerIdSet=${Boolean(loginCustomerId)} devTokenPresent=${Boolean(developerToken)} rawEnvSet=${Boolean(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID)}`);
 
   try {
@@ -533,7 +508,7 @@ async function listAccessibleCustomers(accessToken: string): Promise<GoogleAdsCu
       }
     }
 
-    // Ένας προσβάσιμος λογαριασμός: αν είναι MCC, τράβα client λογαριασμούς (όχι μόνο όταν id === env MCC)
+    // Single accessible account: if it's an MCC, pull client accounts (not only when id === env MCC)
     if (customers.length === 1) {
       const sole = customers[0];
       const subs = await fetchManagedClients(accessToken, sole.id);
@@ -558,9 +533,7 @@ async function listAccessibleCustomers(accessToken: string): Promise<GoogleAdsCu
   }
 }
 
-/**
- * Refresh the access token using the stored refresh token
- */
+/** Refresh the access token using the stored refresh token. */
 async function refreshAccessToken(refreshToken: string): Promise<string | null> {
   const { clientId, clientSecret } = getCredentials();
 
@@ -590,12 +563,7 @@ async function refreshAccessToken(refreshToken: string): Promise<string | null> 
   return data.access_token;
 }
 
-/**
- * Fetch campaign performance data from Google Ads API.
- * Strategy:
- * - Previous 2 years load once (history)
- * - Current year loads on every sync
- */
+/** Fetch campaign performance from Google Ads API: history years load once, current window re-syncs each run. */
 export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   success: boolean;
   imported: number;
@@ -631,15 +599,13 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
 
   await deleteStaleGoogleAdsCampaignDocsForCustomer(brandId, customerId);
 
-  // Date window policy:
-  // - First historical load: 3-year history -> today
-  // - Subsequent syncs: rolling trailing window (GMT) για να επαληθεύονται μέρες που λείψαν σε μερικά sync
+  // Window: first load pulls 3-year history -> today; later syncs use a rolling
+  // trailing GMT window to re-verify days possibly missed.
   const now = new Date();
   const currentYear = now.getUTCFullYear();
   const historyStartYear = currentYear - GOOGLE_ADS_HISTORY_YEARS;
-  // Auto-rebackfill: το `historyLoadedUntilYear` αποθηκεύει τον ΠΑΛΑΙΟΤΕΡΟ χρόνο
-  // που έχει φορτωθεί. Αν αυξήσουμε το παράθυρο (π.χ. 2 → 3 έτη), ξανατραβάμε
-  // αυτόματα το ιστορικό για να καλύψουμε και τα νέα παλαιότερα έτη.
+  // `historyLoadedUntilYear` stores the OLDEST year already loaded; widening the
+  // window auto-rebackfills the newly added older years.
   const historyLoaded =
     Boolean(connector.historyLoadedUntilYear) &&
     Number(connector.historyLoadedUntilYear) <= historyStartYear;
@@ -650,8 +616,8 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     `[GoogleAds] Sync window for ${brandId}: ${sinceStr} -> ${untilStr} (${historyLoaded ? 'incremental' : 'history+current'})`
   );
 
-  // Note: ORDER BY on metrics with date segmentation causes UNIMPLEMENTED in some accounts.
-  // segments.date must be in SELECT when used in WHERE with date range.
+  // ORDER BY on metrics with date segmentation causes UNIMPLEMENTED in some accounts;
+  // segments.date must be in SELECT when used in a WHERE date range.
   const gaqlQuery = `
     SELECT
       campaign.id,
@@ -815,8 +781,8 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       }
     } while (nextPageToken);
 
-    // Purchase (online) — matches Google Ads Overview «Purchases/Sales – Quantity» for typical e‑commerce:
-    // category PURCHASE only. STORE_SALES is offline/store; including it often diverges from that chart.
+    // Online purchases (category PURCHASE only) — matches the Overview «Purchases/Sales – Quantity» chart.
+    // STORE_SALES is offline and including it diverges from that chart.
     const gaqlPurchaseQuery = `
       SELECT
         campaign.id,
@@ -872,8 +838,8 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       logger.warn('[GoogleAds] Purchase category query error (non-fatal):', { err: purErr });
     }
 
-    // Second query: per-conversion-action **per calendar day** (same window as campaign daily metrics).
-    // Never attach monthly totals to each day — that multiplies counts when summing a date range.
+    // Per-conversion-action per calendar day (same window as campaign daily metrics).
+    // Never attach monthly totals to each day — it multiplies counts when summing a date range.
     const convActionMap = new Map<string, Record<string, { conversions: number; value: number }>>();
 
     try {
@@ -956,8 +922,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       logger.warn(`[GoogleAds] Conversion action query error, skipping:`, { err: caErr });
     }
 
-    // ── Geographic breakdown (country-level) ──────────────────────────────────
-    // Per-country aggregates per καμπάνια. Χρήσιμο για Campaigns → Τοποθεσία.
+    // Geographic breakdown: per-country aggregates per campaign (Campaigns -> Location).
     const geoByCampaign = new Map<string | number, Record<string, {
       impressions: number; clicks: number; conversions: number;
       conversion_value: number; amount_spent: number;
@@ -967,7 +932,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       conversion_value: number; amount_spent: number;
     }>>();
     try {
-      // Βήμα 1: geo_target_constants για χώρες (id → code/name).
+      // Step 1: geo_target_constants for countries (id -> code/name).
       const countryLookup = new Map<string, { code: string; name: string }>();
       try {
         const countryQuery = `
@@ -1001,7 +966,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
         logger.warn(`[GoogleAds] country target lookup failed: ${e}`);
       }
 
-      // Βήμα 2: geographic_view (country criterion) ανά καμπάνια.
+      // Step 2: geographic_view (country criterion) per campaign.
       const geoQuery = `
         SELECT
           campaign.id,
@@ -1032,7 +997,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
           const campaignId = row.campaign?.id;
           const rawCid = row.geographicView?.countryCriterionId;
           if (!campaignId || !rawCid) continue;
-          // To countryCriterionId έρχεται ως resource path 'geoTargetConstants/2300' ή id 2300.
+          // countryCriterionId arrives as a resource path 'geoTargetConstants/2300' or id 2300.
           const cidStr = String(rawCid);
           const cid = cidStr.includes('/') ? cidStr.split('/').pop()! : cidStr;
           const country = countryLookup.get(cid) || { code: '', name: `country_${cid}` };
@@ -1060,9 +1025,8 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       } while (geoNext);
       logger.info(`[GoogleAds] Fetched geo breakdown for ${geoByCampaign.size} campaigns`);
 
-      // Βήμα 3: user_location_view — υπο-εθνικό επίπεδο (περιφέρεια, πόλη, ταχ. κώδικας κ.λπ.) ανά καμπάνια.
-      // Προηγουμένως κρατούσαμε μόνο CITY· στην πράξη το API επιστρέφει συχνά REGION (3) ή άλλα επίπεδα,
-      // οπότε το byCity έμενε άδειο ενώ υπήρχαν country aggregates.
+      // Step 3: user_location_view — sub-national levels per campaign. The API often returns REGION (3)
+      // or other levels, not just CITY, so byCity can stay empty even when country aggregates exist.
       const isCountryOnlyTarget = (raw: unknown): boolean => {
         if (raw == null || raw === '') return false;
         if (typeof raw === 'number' && Number.isFinite(raw)) return raw === 2;
@@ -1136,9 +1100,8 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       logger.warn(`[GoogleAds] geographic_view query error, skipping:`, { err: geoErr });
     }
 
-    // Firestore allows max 500 ops per batch but also ~10MB total payload per commit.
-    // Campaign docs include multi-year dailyMetrics + nested conversionActions — one huge batch fails with
-    // INVALID_ARGUMENT: Transaction too big.
+    // Firestore caps commits at 500 ops and ~10MB; campaign docs with multi-year dailyMetrics + nested
+    // conversionActions would fail one huge batch with INVALID_ARGUMENT: Transaction too big.
     const prepared: any[] = [];
     for (const [, campaign] of campaignMap) {
       campaign.ctr = campaign.impressions > 0
@@ -1155,7 +1118,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
 
       campaign.conversionActions = convActionMap.get(campaign.id) || {};
 
-      // Τα geo maps κρατούν κλειδί το Google Ads campaign.id (αριθμός API), όχι το Firestore doc id (gads_...).
+      // The geo maps are keyed by the Google Ads campaign.id (API number), not the Firestore doc id (gads_...).
       const gadsNumericKey = String(campaign.id).startsWith('gads_')
         ? String(campaign.id).split('_').pop()!
         : String(campaign.id);
@@ -1318,7 +1281,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     {
       google_ads: {
         lastDataSyncAt: Date.now(),
-        // Αποθηκεύουμε τον ΠΑΛΑΙΟΤΕΡΟ χρόνο που πραγματικά φορτώθηκε σε αυτό το sync.
+        // Store the OLDEST year actually loaded in this sync.
         historyLoadedUntilYear: historyLoaded
           ? Number(connector.historyLoadedUntilYear) || historyStartYear
           : historyStartYear,
@@ -1330,9 +1293,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   return { success: true, imported: totalImported };
 }
 
-/**
- * Fetch search terms and keywords from Google Ads (last 90 days)
- */
+/** Fetch search terms and keywords from Google Ads (last 90 days). */
 async function fetchSearchTermsAndKeywords(
   brandId: string,
   customerId: string,

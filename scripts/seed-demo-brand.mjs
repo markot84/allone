@@ -1,23 +1,5 @@
-/**
- * Seed a full DEMO brand ("SportFlow" — φανταστική εταιρεία αθλητικών ειδών) for
- * presentations. Growth plan / B2C. Populates every collection a Growth/B2C brand
- * reads, then triggers the production aggregators so derived summaries (e-commerce,
- * product intelligence, RFM, dashboard) are built by real Cloud Function logic.
- *
- * Idempotent: deterministic doc ids + fixed RNG seed → re-running overwrites cleanly.
- *
- * Usage:
- *   node scripts/seed-demo-brand.mjs <serviceAccountKey.json> --email=you@example.com [--apiKey=WEB_API_KEY] [--no-refresh] [--brand=sportflow-demo]
- *
- * Env alternatives:
- *   GOOGLE_APPLICATION_CREDENTIALS  → service account key path (instead of arg 1)
- *   VITE_FIREBASE_API_KEY           → Web API key (for the refresh step token exchange)
- *
- * Why a service account: server-only collections (magento_orders, ecommerce_summary,
- * product_intelligence, data_analysis_rfm, sku_stats) bypass client Firestore rules.
- * The refresh step mints an ID token for your super-admin uid and calls the deployed
- * HTTP functions (refreshAggregates / refreshProductIntelligence / refreshDataAnalysisRfm).
- */
+/** Seed a full demo brand then trigger production aggregators. Idempotent (deterministic ids + fixed RNG seed). Service account needed for server-only collections. Usage: node scripts/seed-demo-brand.mjs <serviceAccountKey.json> --email=you@example.com [--apiKey=WEB_API_KEY] [--no-refresh] [--brand=sportflow-demo]
+ * Env: GOOGLE_APPLICATION_CREDENTIALS (key path), VITE_FIREBASE_API_KEY (Web API key for the refresh token exchange). */
 import { createHash } from 'node:crypto';
 import { initializeApp, cert, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -43,9 +25,8 @@ const doRefresh = !flags['no-refresh'];
 const BRAND_ID = (flags.brand || 'sportflow-demo').toString();
 const BRAND_NAME = 'SportFlow';
 
-// Volume scaling so the demo reflects a viable €2M+/year B2C e-shop.
-// CUSTOMER_SCALE drives orders → e-commerce revenue (base ≈ €87k × 24 ≈ €2.1M).
-// Traffic + paid spend scale separately to stay credible (CVR/ROAS realistic).
+// Volume scaling for a viable €2M+/year B2C e-shop: CUSTOMER_SCALE drives orders → revenue
+// (base ≈ €87k × 24 ≈ €2.1M); traffic + paid spend scale separately to keep CVR/ROAS realistic.
 const CUSTOMER_SCALE = Number(flags.scale ?? 26) || 26;
 const GA4_TRAFFIC_SCALE = 3;
 const CAMPAIGN_SCALE = 6;
@@ -85,7 +66,7 @@ const isoDay = (daysAgo) => new Date(NOW - daysAgo * DAY).toISOString();
 const ymd = (ts) => new Date(ts).toISOString().slice(0, 10);
 const ym = (ts) => new Date(ts).toISOString().slice(0, 7);
 
-// Seasonality multiplier by month (Greek retail: peaks Νοε/Δεκ + θερινές εκπτώσεις)
+// Seasonality multiplier by month (Greek retail: peaks Nov/Dec + summer sales)
 const MONTH_WEIGHT = { 0: 0.95, 1: 0.85, 2: 0.95, 3: 1.0, 4: 1.1, 5: 1.15, 6: 1.2, 7: 0.7, 8: 1.05, 9: 1.1, 10: 1.35, 11: 1.6 };
 const seasonalFactor = (ts) => MONTH_WEIGHT[new Date(ts).getMonth()] ?? 1;
 
@@ -255,8 +236,8 @@ const PROFILES = [
 ];
 
 const categories = [...new Set(products.map((p) => p.category))];
-// Keep the dead / no-stock cohort genuinely unsold so Product Intelligence shows a
-// credible dead-stock story (otherwise the scaled order volume "sells" every SKU).
+// Keep the dead / no-stock cohort genuinely unsold for a credible Product Intelligence
+// dead-stock story (else the scaled order volume "sells" every SKU).
 const sellable = products.filter((p) => p.priority_tag !== 'dead' && p.priority_tag !== 'no_stock');
 const sellableByCat = Object.fromEntries(
   categories.map((c) => {

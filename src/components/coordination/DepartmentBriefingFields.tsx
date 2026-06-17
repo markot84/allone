@@ -9,20 +9,20 @@ import { DEPARTMENT_LABELS } from '../../types';
 
 interface DepartmentBriefingFieldsProps {
   selectedDepts: BrandDepartment[];
-  /** Αν false, εμφανίζονται μόνο chips (π.χ. εμπορική πολιτική με σταθερά τμήματα) */
+  /** If false, only chips are shown (e.g. commercial policy with fixed departments) */
   deptSelectable: boolean;
   onToggleDept?: (d: BrandDepartment) => void;
   templateId: string;
   onTemplateIdChange: (id: string) => void;
   extraLine: string;
   onExtraLineChange: (v: string) => void;
-  /** Επιπλέον κείμενο (π.χ. στο BriefingDrawer μετά τη στρατηγική) */
+  /** Extra text (e.g. in BriefingDrawer after the strategy) */
   showAdditionalNote?: boolean;
   additionalNote?: string;
   onAdditionalNoteChange?: (v: string) => void;
-  /** Στενότερα πεδία για inline strip */
+  /** Narrower fields for inline strip */
   compact?: boolean;
-  /** Απόκρυψη σειράς τμημάτων (chips/toggles) — όταν τα τμήματα φαίνονται πάνω */
+  /** Hide the departments row (chips/toggles) — when departments are shown above */
   showDepartmentRow?: boolean;
 }
 

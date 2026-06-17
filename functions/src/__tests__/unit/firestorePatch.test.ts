@@ -1,9 +1,5 @@
-/**
- * PER-60 healthWatch fix — markNightlyJob used to write dotted keys via set(..., {merge:true}),
- * which stores them as LITERAL field names ("jobs.scheduledSyncErp.status") that healthWatch's
- * nested `data.jobs` read can never see. The fix routes through update() with a set() fallback
- * for the doc-doesn't-exist-yet case; nestDottedKeys builds the nested shape that fallback needs.
- */
+/** nestDottedKeys builds the nested shape markNightlyJob's set() fallback needs: dotted keys via
+ * set({merge:true}) store as LITERAL field names ("jobs.scheduledSyncErp.status") healthWatch can't read. */
 import { describe, it, expect } from 'vitest';
 import { nestDottedKeys } from '../../firestorePatch';
 

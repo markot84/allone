@@ -9,7 +9,7 @@ const daysAgo = (n: number) => {
 };
 const firstOfMonth = (y: number, m: number) =>
   `${y}-${String(m + 1).padStart(2, '0')}-01`;
-/** Τελευταία ημέρα μήνα (τοπική, όχι UTC — αποφεύγει Apr 29 αντί Apr 30). */
+/** Last day of the month (local, not UTC — avoids Apr 29 instead of Apr 30). */
 const lastOfMonth = (y: number, m: number) => formatLocalYMD(new Date(y, m + 1, 0));
 
 function formatLocalYMD(d: Date): string {
@@ -222,7 +222,7 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
     const pad = 10;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    // Δεξιά στοίχιση με το trigger (όπως τα campaigns), ώστε να μην «βγαίνει» έξω από το viewport
+    // Right-align with the trigger so the panel stays within the viewport
     let left = cr.right - pw;
     left = Math.min(Math.max(pad, left), vw - pw - pad);
     let top = cr.bottom + 8;
@@ -248,7 +248,7 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
     };
   }, [open, updatePanelPosition, rightYear, rightMonth, pendingFrom, pendingTo, pickingSecond, hoverDate]);
 
-  // Close on outside click (συμπεριλαμβανομένου του portal panel)
+  // Close on outside click (including the portal panel)
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -331,7 +331,7 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
         )}
       </div>
 
-      {/* ── Dropdown: portal + fixed ώστε να μην κόβεται από overflow / δεξί άκρο ── */}
+      {/* ── Dropdown: portal + fixed so it is not clipped by overflow / right edge ── */}
       {open &&
         typeof document !== 'undefined' &&
         createPortal(

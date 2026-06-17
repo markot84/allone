@@ -1,17 +1,10 @@
-/**
- * Public-facing branding / contact constants. These are intentionally shown
- * to end users (legal pages, marketing landing, help section, admin UI), so
- * they remain in source — moving them to Firestore would gain nothing.
- *
- * The super-admin allowlist (UIDs + emails) that was previously here has
- * moved to Firestore at `appConfig/superAdmins` and is read via
- * `services/appConfig.ts → loadSuperAdmins()`.
- */
+// Public-facing branding / contact constants, intentionally kept in source (shown to end users).
+// The super-admin allowlist moved to Firestore `appConfig/superAdmins` (services/appConfig.ts).
 
-/** Υποστήριξη χρηστών / εφαρμογής (Auth, SuperAdmin, Help, νομικά) */
+/** User / app support (Auth, SuperAdmin, Help, legal) */
 export const SUPPORT_EMAIL = 'noreply@performanceplus.gr';
 
-/** Marketing landing: φόρμες επικοινωνίας (mailto) — δεν εμφανίζονται διευθύνσεις στη σελίδα */
+/** Marketing landing: contact forms (mailto) — addresses are not shown on the page */
 export const MARKETING_CONTACT_MAILTO = 'makis@notthesame.gr,dimitris@notthesame.gr';
 
 export const APP_NAME = 'Performance+';

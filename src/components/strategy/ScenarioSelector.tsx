@@ -6,7 +6,7 @@ interface ScenarioSelectorProps {
   selectedScenario: string | null;
   onScenarioChange: (scenarioId: string) => void;
   activeDuration?: number | 'ongoing';
-  /** Προτεινόμενη ενέργεια από ERP (Product Intelligence) ανά scenario id */
+  /** Suggested action from ERP (Product Intelligence) per scenario id */
   erpHints?: Record<string, string>;
 }
 

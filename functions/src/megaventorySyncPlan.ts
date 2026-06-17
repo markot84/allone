@@ -1,25 +1,10 @@
-/**
- * PER-60: pure decision logic for the resumable, multi-pass Megaventory sync.
- *
- * Extracted out of fetchMegaventoryData / processMegaventorySyncJobs so the stage/recovery
- * decisions — where the bugs live — are deterministic and exhaustively unit-testable without the
- * Firestore emulator or the live Megaventory API.
- *
- * The sync runs as a checkpointed state machine across bounded (<30min) invocations:
- *   INGESTION  → documents + resumable catalog + stock + suppliers   (productCatalogComplete=false)
- *   PROCESSING → customReport+normalize, then gap-fill → rfm → finalize, one sub-stage per pass
- *                (productCatalogComplete=true, advanced by `processingStage`)
- * Each pass either finishes a stage and re-enqueues, or completes the whole sync and resets state.
- */
+/** Pure, unit-testable decision logic for the resumable, multi-pass Megaventory sync: a checkpointed
+ * state machine (INGESTION → PROCESSING, one sub-stage per bounded <30min pass via `processingStage`). */
 
 export type ProcessingStage = 'gapfill' | 'rfm' | 'procurement' | 'stockmovement';
 
-/**
- * Ordered processing sub-stages — each runs in its own bounded pass for very heavy brands.
- * PER-60: 'finalize' (procurement+stock-movement bundled) was split — refreshStockMovement alone
- * takes ~20min for an 88k-SKU brand, so bundling it with procurement blew the 25min budget and the
- * pass was hard-killed. One heavy module per checkpoint ⇒ each gets a fresh pass when needed.
- */
+/** Ordered processing sub-stages, one heavy module per bounded pass: procurement and
+ * stock-movement are split because bundled they overran the budget on heavy brands. */
 export const PROCESSING_ORDER: ProcessingStage[] = ['gapfill', 'rfm', 'procurement', 'stockmovement'];
 
 /** Legacy persisted value (pre-split) — resume it at the first of its two halves. */
@@ -37,10 +22,8 @@ export function isProcessingPass(s: SyncPersistedState): boolean {
   return s.productCatalogComplete === true;
 }
 
-/**
- * After the ingestion pass's catalog fetch, decide catalog-state persistence and whether to run the
- * processing inline (small brands, plenty of budget) or defer it to a fresh pass (heavy brands).
- */
+/** After the ingestion catalog fetch, decide catalog-state persistence and whether to run
+ * processing inline (enough budget) or defer it to a fresh pass. */
 export function planAfterCatalog(rt: {
   catalogExhausted: boolean;
   budgetRemainingMs: number;
@@ -55,10 +38,8 @@ export function planAfterCatalog(rt: {
   return { catalogComplete: true, startProcessingNow: startNow, needsContinuation: !startNow };
 }
 
-/**
- * Which processing sub-stage runs on this pass, and what comes next.
- * `next === null` means this was the last sub-stage → the whole sync is done after it.
- */
+/** Which processing sub-stage runs on this pass and what comes next; `next === null`
+ * means this was the last sub-stage and the whole sync is done after it. */
 export function planProcessing(current: ProcessingStage | string | null | undefined): {
   run: ProcessingStage;
   next: ProcessingStage | null;
@@ -72,12 +53,8 @@ export function planProcessing(current: ProcessingStage | string | null | undefi
   return { run, next };
 }
 
-/**
- * FIX (stale-recovery false-completion): a job stuck `running` past the stale threshold timed out
- * before it could finalize itself. It MUST resolve to `failed` — never inherit a prior pass's stored
- * `success` result (that masked real failures as success). Reset flags clear the resumable connector
- * state so the brand isn't livelocked in "processing-only" mode on the next sync.
- */
+/** A job stuck `running` past the stale threshold MUST resolve to `failed` (never inherit a prior
+ * pass's `success`); reset flags clear connector state so the brand isn't livelocked next sync. */
 export function decideStaleRecovery(): {
   status: 'failed';
   error: string;
@@ -90,13 +67,8 @@ export function decideStaleRecovery(): {
   };
 }
 
-/**
- * FIX (zombie-finalization race): an invocation that outlives its 30min request can keep running
- * detached on a warm instance. Meanwhile the stale sweep marks the job `failed` (and may be followed
- * by a NEW claim). Observed live: the zombie's `completed` write overwrote the sweep's `failed` 10s
- * later. A pass may finalize the job ONLY while it still owns it: status is still `running` AND the
- * claimToken is the one this pass wrote at claim time (a re-claim rotates the token).
- */
+/** Guards a zombie-finalization race: a pass may finalize the job ONLY while it still owns it —
+ * status still `running` AND claimToken matches this pass's claim (a re-claim rotates the token). */
 export function isJobWriteOwned(args: {
   currentStatus: unknown;
   currentClaimToken: unknown;
@@ -105,11 +77,8 @@ export function isJobWriteOwned(args: {
   return args.currentStatus === 'running' && args.currentClaimToken === args.claimToken;
 }
 
-/**
- * FIX (reset-on-failure): when a pass ends not-clean (error, or killed/recovered), the resumable
- * state must be cleared so the next sync re-ingests from scratch instead of being stuck with
- * productCatalogComplete=true forever. Returns true when the connector flags should be deleted.
- */
+/** True when the resumable connector flags should be deleted: on a non-clean pass the state must be
+ * cleared so the next sync re-ingests from scratch instead of being stuck productCatalogComplete=true. */
 export function shouldResetCatalogState(outcome: {
   success: boolean;
   needsContinuation: boolean;

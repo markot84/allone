@@ -82,27 +82,11 @@ export interface Brand {
     images?: string[];
     documents?: string[];
   };
-  /**
-   * Προαιρετικός τζίρος εκτός των online συνδέσεων του Performance+ (φυσικά καταστήματα, B2B, τιμολόγια ERP).
-   * Χειροκίνητη τιμή στο Firestore — όταν υπάρχει, εμφανίζεται στη σελίδα Οικονομικά.
-   */
+  /** Manual Firestore turnover outside online connections (physical stores, B2B, ERP invoices); shown on Finances. */
   enterpriseTurnoverEUR?: number;
-  /**
-   * Προαιρετικό cutoff ιστορικότητας (ISO date YYYY-MM-DD).
-   * Δεδομένα παλαιότερα από αυτή τη ημερομηνία (orders, GA4 daily) δεν εμφανίζονται στα reads.
-   * Παράδειγμα: brand άλλαξε Magento την 2025-09-01 — `historyStartDate = "2025-09-01"`.
-   * Δεν διαγράφει τίποτα από το Firestore — απλά clamp στις προβολές.
-   */
+  /** History cutoff (ISO YYYY-MM-DD): orders/GA4 daily older than this are clamped out of reads (deletes nothing in Firestore). */
   historyStartDate?: string;
-  /**
-   * Πώς φιλτράρονται οι παραγγελίες e-shop στο `ecommerce_summary` / σελίδα E-commerce:
-   * - `eshop_classified` (default): μόνο παραγγελίες classified ως `direct_eshop` (Sales Channel Rules).
-   * - `eshop_all`: όλες οι μη ακυρωμένες παραγγελίες από connectors.
-   * Τιμή `erp` (legacy): διαβάζεται ως `eshop_classified`. Ο τζίρος ERP γράφεται στο `business_revenue_summary` για το Dashboard.
-   *
-   * Δεν επηρεάζει αποθέματα/κατάλογο — μόνο aggregation εσόδων e-shop και raw orders για KPIs e-shop.
-   * Όταν κενό, θεωρείται `eshop_classified` (default).
-   */
+  /** E-shop order filter for `ecommerce_summary`: `eshop_classified` (default, `direct_eshop` only) | `eshop_all` (all non-cancelled). Legacy `erp` reads as `eshop_classified`. */
   revenueSourceMode?: 'eshop_classified' | 'eshop_all' | 'erp';
 }
 
@@ -175,11 +159,11 @@ export interface Invite {
   createdBy?: string;
 }
 
-// Οργανικά οικονομικά στοιχεία επιχείρησης (τζίρος χωρίς campaigns)
+// Organic business revenue (turnover excluding campaigns)
 export interface OrganicRevenue {
   id: string;
   period: string; // ISO date or "YYYY-MM" or "January 2025"
-  organic_revenue: number; // τζίρος οργανικός (χωρίς έσοδα από campaigns)
+  organic_revenue: number; // organic turnover (excluding campaign revenue)
   brandId?: string;
   createdAt?: Date | string;
   source?: string;
@@ -220,11 +204,11 @@ export interface Scenario {
   description: string;
   weights: Record<string, number> | null;
   duration?: number | 'ongoing';
-  /** Προαιρετικό footer στην κάρτα στρατηγικής (αν λείπει, υπολογίζεται από τα weights). */
+  /** Optional footer on the strategy card (if missing, computed from the weights). */
   cardHint?: string;
 }
 
-/** Προκαθορισμένα σενάρια φιλτραρίσματος SKU για Sales Optimization (sales_base). */
+/** Predefined SKU filtering scenarios for Sales Optimization (sales_base). */
 export type SalesBasePresetId =
   | 'all'
   | 'never_sold'
@@ -234,24 +218,24 @@ export type SalesBasePresetId =
   | 'stalled_7_vs_90'
   | 'cold_last_sale_30d';
 
-/** Πηγή κατηγοριοποίησης στο Sales Optimization. */
+/** Categorization source in Sales Optimization. */
 export type SalesBaseCategorySource = 'product' | 'procurement';
 
-/** Αποθηκευμένο πεδίο ενεργής στρατηγικής — ποια SKU «μετράνε» στο Sales Optimization (sales_base). */
+/** Saved active-strategy field — which SKUs "count" in Sales Optimization (sales_base). */
 export interface SalesBaseScope {
   preset: SalesBasePresetId;
   brandFilter: string;
   categoryFilter: string;
   search: string;
-  /** null = όλα όσα ταιριάζουν στο preset + φίλτρα κειμένου (δυναμικά). Διαφορετικά allowlist. */
+  /** null = everything matching the preset + text filters (dynamic). Otherwise an allowlist. */
   selectedProductIds: string[] | null;
-  /** Κατηγορίες που εξαιρούνται από την ανάλυση (π.χ. lifecycle status «Επί παραγγελία»). */
+  /** Categories excluded from the analysis (e.g. lifecycle status "made to order"). */
   excludedCategories?: string[];
-  /** Πηγή κατηγοριών: 'product' = από import products, 'procurement' = από procurement_inventory. */
+  /** Category source: 'product' = from imported products, 'procurement' = from procurement_inventory. */
   categorySource?: SalesBaseCategorySource;
 }
 
-/** Φίλτρο preset για στρατηγική Price Benchmarking (GMC). */
+/** Preset filter for the Price Benchmarking (GMC) strategy. */
 export type PriceBenchmarkPresetId = 'below_market' | 'all_benchmarked';
 
 export interface PriceBenchmarkStrategyScope {
@@ -296,14 +280,14 @@ export interface BehavioralProfile {
   peak_days: string[];
   payment_method: string;
   device_preference: 'mobile' | 'desktop' | 'mixed';
-  /** Legacy heuristic buckets (γραμμή/SKU) — χρησιμοποιείται όταν λείπει catalog. */
+  /** Legacy heuristic buckets (line/SKU) — used when catalog is missing. */
   category_affinity: CategoryAffinity[];
-  /** Catalog-backed κατηγορία (platform + ERP). */
+  /** Catalog-backed category (platform + ERP). */
   category_affinity_catalog?: CategoryAffinity[];
   brand_affinity?: CategoryAffinity[];
   subcategory_affinity?: CategoryAffinity[];
   sku_affinity?: CategoryAffinity[];
-  /** Ποσοστό τζίρου γραμμών που ταιριάζουν σε catalog (όχι line_fallback). */
+  /** Percentage of line turnover matched to catalog (not line_fallback). */
   catalog_match?: {
     revenue_matched_pct: number;
     lines_matched_pct: number;
@@ -341,9 +325,9 @@ export interface CategoryAffinity {
   name: string;
   affinity: number;
   avg_order: number;
-  /** Αθροιστικό revenue γραμμών παραγγελίας για αυτό το κλειδί (όνομα/SKU/tύπος). */
+  /** Cumulative order-line revenue for this key (name/SKU/type). */
   revenue_eur?: number;
-  /** Μερίδιο επί του συνολικού τζίρου του segment (%). */
+  /** Share of the segment's total turnover (%). */
   revenue_share_pct?: number;
   /** Operational stock snapshot from ERP/catalog, summed by unique SKU when available. */
   stock_on_hand?: number;
@@ -389,7 +373,7 @@ export interface Product {
   /** Raw ERP stock snapshots when available. */
   stock_on_hand?: number;
   available_stock?: number;
-  /** Ημέρες στο απόθεμα / κατάλογο — προαιρετικό (π.χ. procurement feed χωρίς στήλη ηλικίας). */
+  /** Days in stock / catalog — optional (e.g. procurement feed without an age column). */
   stock_age_days?: number;
   priority_tag?: string;
   price: number;
@@ -403,12 +387,12 @@ export interface Product {
   revenue_period?: number;
   /** Qty sold in period (Qty_Sold_Period in template) - optional */
   qty_sold_period?: number;
-  /** Προαιρετικά παράθυρα πωλήσεων (import / connector) — Sales Optimization. */
+  /** Optional sales windows (import / connector) — Sales Optimization. */
   qty_sold_last_7d?: number;
   qty_sold_last_30d?: number;
   qty_sold_last_90d?: number;
   qty_sold_lifetime?: number;
-  /** ISO ή Excel date string — τελευταία καταγεγραμμένη πώληση SKU */
+  /** ISO or Excel date string — last recorded sale for the SKU */
   last_sale_at?: string;
   /** First available date (First_Available_Date in template) - for Stock Age calc when Stock_Age_Days empty */
   first_available_date?: string;
@@ -416,7 +400,7 @@ export interface Product {
   createdAt?: { toDate: () => Date } | Date | string;
   /** Supplier name — links to Supplier.name for TOD lookup */
   supplier?: string;
-  /** Εμπορική μάρκα (στήλη Brand στο import) — προαιρετικό */
+  /** Commercial brand (Brand column in import) — optional */
   brand?: string;
   /** Product barcode / GTIN from ERP. */
   barcode?: string;
@@ -430,9 +414,9 @@ export interface Product {
   seasonality_tag?: string;
   reorder_point?: number;
   reorder_qty?: number;
-  /** Από procurement_inventory.ΚΑΤΗΓΟΡΙΑ — εμπορική κατηγορία στο procurement */
+  /** From procurement_inventory.ΚΑΤΗΓΟΡΙΑ — commercial category in procurement */
   procurement_category?: string;
-  /** Από procurement_inventory.STATUS_ΚΩΔΙΚΟΥ ή ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ — lifecycle status (π.χ. «Επί παραγγελία», «Προς κατάργηση») */
+  /** From procurement_inventory.STATUS_ΚΩΔΙΚΟΥ or ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ — lifecycle status (e.g. "made to order", "to be discontinued") */
   procurement_status?: string;
 }
 
@@ -469,33 +453,25 @@ export interface BudgetAction {
   suggestedChange?: number;
 }
 
-/**
- * Per-segment fit annotation παραγόμενο από AI — ΜΟΝΟ τα segments που ταιριάζουν στην
- * εμπορική πολιτική. Ο πίνακας τα δείχνει σαν tabs στο Channel Activation.
- */
+/** AI-generated per-segment fit annotation for segments matching the commercial policy; shown as tabs in Channel Activation. */
 export interface RecommendedSegment {
-  /** Όνομα segment όπως εμφανίζεται στα RFM data (π.χ. «Champions»). */
+  /** Segment name as shown in RFM data (e.g. "Champions"). */
   name: string;
-  /** Επίπεδο ταιριάσματος προς την στρατηγική. */
+  /** Fit level against the strategy. */
   fit: 'ideal' | 'good';
-  /** 1-2 προτάσεις γιατί επιλέγεται για αυτή την πολιτική. */
+  /** 1-2 reasons why it's chosen for this policy. */
   rationale: string;
 }
 
-/**
- * Playbook entry per (segment, channel). Παράγεται από το AI και κρατά:
- * - `message`: σύντομο campaign copy για τον επιχειρηματία
- * - `marketingBrief`: αναλυτικό brief για agency / execution team (campaign type,
- *   targeting, ad format, bidding strategy, KPIs, A/B testing notes).
- */
+/** AI-generated playbook entry per (segment, channel): `message` is owner-facing copy, `marketingBrief` is the detailed agency/execution brief. */
 export interface ChannelPlaybookEntry {
   segment: string;
   channel: string;
   message: string;
   marketingBrief: string;
-  /** Priority του καναλιού για το συγκεκριμένο segment (διαφέρει από το global primary/secondary). */
+  /** Channel priority for this specific segment (differs from the global primary/secondary). */
   priority?: 'primary' | 'secondary';
-  /** Προτεινόμενο % budget ΓΙΑ ΤΟ SEGMENT (αθροίζει 100 ανά segment). */
+  /** Suggested % budget FOR THE SEGMENT (sums to 100 per segment). */
   budgetSharePct?: number;
 }
 
@@ -505,15 +481,15 @@ export interface ChannelRecommendation {
   budget_allocation: Record<string, number>;
   rationale: string;
   actions?: BudgetAction[];
-  /** Mόνο τα segments που ταιριάζουν στην επιλεγμένη εμπορική πολιτική. */
+  /** Only the segments that match the chosen commercial policy. */
   targetSegments?: RecommendedSegment[];
-  /** Per (segment, channel) campaign brief / marketing brief — από AI. */
+  /** Per (segment, channel) campaign brief / marketing brief — AI-generated. */
   channelPlaybook?: ChannelPlaybookEntry[];
   /** Signature of Brand Profile prompt context used to generate customer-facing copy. */
   brandProfileContextSig?: string;
 }
 
-/** Επιπλέον κόστη marketing (agency, εργαλεία, one-off) — αποθηκεύονται στην ενεργή στρατηγική, χρησιμοποιούνται στο ROI. */
+/** Extra marketing costs (agency, tools, one-off) — stored in the active strategy, used in ROI. */
 export type MarketingCostLine =
   | {
       id: string;
@@ -536,15 +512,15 @@ export type MarketingCostLine =
       month: string;
     };
 
-/** Γραμμή κόστους P&L — μηνιαίο ποσό. */
+/** P&L cost line — monthly amount. */
 export type PLCostLine = {
   id: string;
   label: string;
-  /** Μηνιαίο κόστος σε €. */
+  /** Monthly cost in €. */
   amountEUR: number;
 };
 
-/** Κατηγορία κόστους P&L (π.χ. "Fixed Costs", "Transportation"). */
+/** P&L cost category (e.g. "Fixed Costs", "Transportation"). */
 export type PLCostCategory = {
   id: string;
   name: string;
@@ -640,7 +616,7 @@ export interface Campaign {
   cpm?: number; // Cost per 1,000 impressions
   conversions?: number;
   conversion_value?: number;
-  /** Google Ads: metrics με conversion_action_category PURCHASE (+ STORE_SALES). Meta: primary Purchase / Purchase (Pixel). */
+  /** Google Ads: metrics with conversion_action_category PURCHASE (+ STORE_SALES). Meta: primary Purchase / Purchase (Pixel). */
   purchase_conversions?: number;
   purchase_conversion_value?: number;
   roas?: number; // Return on ad spend
@@ -666,17 +642,9 @@ export interface Campaign {
     conversions: number;
     value: number;
   }>;
-  /**
-   * Meta only: purchase conversions/value ανά attribution window.
-   * Keys: '1d_click' | '7d_click' | '28d_click' | '1d_view' | '7d_view' | '28d_view'.
-   * Χρησιμοποιείται από το UI για να επιτρέψει επιλογή attribution window στα reports.
-   */
+  /** Meta only: purchase conversions/value per attribution window ('1d_click'..'28d_view') for window selection in reports. */
   metaWindows?: Record<string, { conversions: number; value: number }>;
-  /**
-   * Γεωγραφική κατανομή: ανά χώρα και (προαιρετικά) ανά πόλη/περιοχή.
-   * byCountry: Google geographic_view · Meta breakdowns=country.
-   * byCity: κλειδιά `CC|Όνομα` — Google user_location_view (πόλεις) · Meta country+region (περιοχή, όχι πάντα πόλη).
-   */
+  /** Geographic breakdown per country (Google geographic_view · Meta breakdowns=country) and optional byCity (keys `CC|Name`). */
   geo?: {
     byCountry: Record<string, {
       impressions: number;
@@ -725,7 +693,7 @@ export const ROLE_LABELS: Record<BrandMemberRole, string> = {
   member: 'Μέλος',
 };
 
-/** Κανονικοποίηση ρόλου από Firestore (legacy τιμές, κεφαλαία, κενά). */
+/** Normalize a role from Firestore (legacy values, uppercase, whitespace). */
 export function normalizeBrandMemberRole(raw: unknown): BrandMemberRole {
   if (raw == null) return 'member';
   const s = String(raw).trim().toLowerCase();
@@ -851,7 +819,7 @@ export interface NotificationPreferences {
   userId: string;
   brandId: string;
   channels: Record<ActivityType, NotificationChannel[]>;
-  /** Explicit opt-in για το πρωινό email σύνοψης του brand. Default: false. */
+  /** Explicit opt-in for the brand's morning digest email. Default: false. */
   dailyDigestEmail?: boolean;
   quietHoursEnabled?: boolean;
   quietHoursStart?: string; // HH:mm
@@ -861,7 +829,7 @@ export interface NotificationPreferences {
 
 export const DEFAULT_NOTIFICATION_CHANNELS: Record<ActivityType, NotificationChannel[]> = {
   decision_created: ['inApp', 'email'],
-  /** Must include email: manual «ειδοποίηση τμημάτων», έγκριση πρότασης κ.λπ. */
+  /** Must include email: manual "notify departments", proposal approval, etc. */
   decision_updated: ['inApp', 'email'],
   decision_completed: ['inApp', 'email'],
   task_created: ['inApp', 'email'],
@@ -875,7 +843,7 @@ export const DEFAULT_NOTIFICATION_CHANNELS: Record<ActivityType, NotificationCha
 
 export type TriggerPlanRequirement = 'growth' | 'enterprise';
 export type AlertSeverity = 'info' | 'warning' | 'critical';
-/** Αξιολόγηση χρήστη πριν το αρχείο — δεν επηρεάζει τη δημιουργία νέων server-side alerts */
+/** User evaluation before archiving — does not affect creation of new server-side alerts */
 export type AlertEvaluation = 'urgent' | 'interested' | 'not_interested';
 export type AlertStatus = 'new' | 'acknowledged' | 'acted' | 'dismissed' | 'archived';
 

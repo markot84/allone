@@ -1,7 +1,7 @@
 import type { BrandDepartment } from '../../types';
 import { DEPARTMENT_LABELS } from '../../types';
 
-/** localStorage key για απομνημονευμένη επιλογή τμημάτων (BriefingDrawer / quick strip) */
+/** localStorage key for the remembered department selection (BriefingDrawer / quick strip) */
 export const BRIEFING_DEPTS_STORAGE_KEY = 'perf-plus-briefing-depts';
 
 export const BRIEFING_DEPT_OPTIONS: [BrandDepartment, string][] = (
@@ -14,7 +14,7 @@ export interface BriefingMessageTemplate {
   body: string;
 }
 
-/** Κοινά templates για briefing από στρατηγική και ειδοποίηση εμπορικής πολιτικής */
+/** Shared templates for briefing from strategy and commercial policy notification */
 export const BRIEFING_MESSAGE_TEMPLATES: BriefingMessageTemplate[] = [
   {
     id: 'align',

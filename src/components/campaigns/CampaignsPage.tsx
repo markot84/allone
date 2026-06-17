@@ -31,9 +31,7 @@ import type { Campaign } from '../../types';
 /** Euro sign as ASCII-safe escape (avoids mojibake if source encoding drifts). */
 const EUR = '\u20AC';
 
-/**
- * PMax / store-visit campaigns: GA may label the action as Purchase with ~1 EUR per conversion.
- */
+/** PMax / store-visit campaigns: GA may label the action as Purchase with ~1 EUR per conversion. */
 function isPhantomStoreVisitPurchaseRow(
   actionName: string,
   row: { conversions?: number; value?: number },
@@ -106,11 +104,8 @@ function pickPrimaryGoogleAdsPurchaseKey(
   return byConv[0] ?? null;
 }
 
-/**
- * Προεπιλογή φίλτρου «Active»: ταυτίζεται με **Enabled** στο Google Ads και **ACTIVE** στο Meta
- * (όχι Paused, Completed/Archived, Removed, Ended).
- * Άγνωστο/κενό status: εμφανίζεται (legacy imports).
- */
+/** Default "Active" filter: Enabled (Google Ads) / ACTIVE (Meta), excluding paused/completed/archived/removed/ended.
+ * Unknown/empty status is shown (legacy imports). */
 function isActiveLikeCampaignStatus(status: string | undefined): boolean {
   const s = (status || '').toLowerCase().trim();
   if (!s) return true;
@@ -292,7 +287,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   }, [campaigns, searchQuery, channelFilter, statusFilter, dateFrom, dateTo, resolveStatus]);
 
 
-  // Compute date-range-aware metrics per campaign (κοινό με ROI — `campaignDateRangeMetrics`)
+  // Compute date-range-aware metrics per campaign (shared with ROI via `campaignDateRangeMetrics`)
   const campaignsWithDateMetrics = useMemo(() => {
     const useDateFilter = !!(dateFrom || dateTo);
     if (!useDateFilter) return filteredCampaigns;
@@ -402,7 +397,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     });
   }, [campaignsWithConvFilter, convFilterActive]);
 
-  /** KPI labels: Purchase/Sales όταν τα δεδομένα sync έχουν purchase_* (Google PURCHASE/STORE_SALES, Meta Pixel/Purchase). */
+  /** KPI labels: Purchase/Sales when synced data has purchase_* (Google PURCHASE/STORE_SALES, Meta Pixel/Purchase). */
   const showPurchaseSalesHeadlines = useMemo(() => {
     if (convFilterActive) return false;
     return campaignsInConvView.some(
@@ -452,7 +447,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     let totalSpent = 0;
     let totalConversions = 0;
     let totalConversionValue = 0;
-    /** Άθροισμα max(0, budget − spend) μόνο για καμπάνιες με δηλωμένο budget > 0. */
+    /** Sum of max(0, budget − spend) only for campaigns with a declared budget > 0. */
     let availableBudget = 0;
     let hasBudgetData = false;
 
@@ -699,10 +694,10 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         }
       />
 
-      {/* Automation Alerts — compact ώστε να μένει χώρος για πίνακες */}
+      {/* Automation Alerts — compact to leave room for tables */}
       <AlertsBanner filterGroup="campaigns" maxAlerts={3} compact onNavigate={onSectionChange} />
 
-      {/* KPI σύνοψης — αμέσως κάτω από ειδοποιήσεις (μόνο στο tab Campaigns) */}
+      {/* Summary KPIs — right below alerts (only on the Campaigns tab) */}
       {activeTab === 'campaigns' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
           <Card padding="sm">
@@ -817,7 +812,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         </div>
       )}
 
-      {/* Tabs + εύρος ημερομηνιών (ίδια γραμμή σε md+) */}
+      {/* Tabs + date range (same row on md+) */}
       <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-x-4 md:gap-y-2">
         <div className="-mx-1 max-w-full overflow-x-auto pb-1 sm:mx-0 sm:overflow-visible sm:pb-0">
         <div className="flex w-max gap-0.5 rounded-lg bg-[#F5F5F5] p-0.5 sm:w-fit">

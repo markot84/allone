@@ -1,14 +1,11 @@
-/**
- * SEC-L6 — sanitizeOAuthReturnOrigin must pin the post-OAuth redirect to THIS project's own
- * Firebase hosts (built from GCLOUD_PROJECT) + performanceplus.gr, instead of accepting any
- * *.web.app / *.firebaseapp.com (which made every Firebase project an open-redirect target).
- */
+/** sanitizeOAuthReturnOrigin pins the post-OAuth redirect to THIS project's Firebase hosts
+ * (from GCLOUD_PROJECT) + performanceplus.gr, not any *.web.app / *.firebaseapp.com. */
 import { describe, it, expect } from 'vitest';
 import { sanitizeOAuthReturnOrigin, DEFAULT_OAUTH_APP_ORIGIN } from '../../oauthRedirect';
 
 const PROJECT = process.env.GCLOUD_PROJECT;
 
-describe('sanitizeOAuthReturnOrigin (SEC-L6)', () => {
+describe('sanitizeOAuthReturnOrigin', () => {
   it("allows THIS project's own *.web.app host", () => {
     expect(PROJECT).toBeTruthy();
     const own = `https://${PROJECT}.web.app`;

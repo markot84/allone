@@ -1,25 +1,5 @@
-/**
- * Procurement Signals Aggregator
- *
- * Διαβάζει τα 4 βασικά procurement collections για ένα brand και παράγει
- * ενιαίο per-SKU signal map που χρησιμοποιείται από το client resolver
- * (useProductSignals) σε όλες τις εμπορικές πολιτικές:
- *
- *   - procurement_inventory       → status, κατηγορία, διαθέσιμο/δυναμικό υπόλοιπο,
- *                                    ημέρες επάρκειας, lifetime sales, replenishment,
- *                                    κόστος μονάδας → tied capital
- *   - procurement_pricing_policy  → list/corporate prices, εκπτώσεις A/B/C, costs,
- *                                    margin (avg_sale_price vs total_cost)
- *   - procurement_fiscal_year     → annual revenue/profit (κρατάμε το πιο πρόσφατο)
- *   - procurement_item_evaluation → score + label
- *
- * Output:
- *   procurement_signals/{brandId}
- *     { skuSignalsJson, skuCount, sources, computedAt }
- *
- * skuSignalsJson είναι JSON.stringify(Record<sku, ProcurementSignal>) για να
- * αποφύγουμε τα Firestore index limits σε μεγάλα maps (ίδιο pattern με skuStatsJson).
- */
+/** Aggregates the 4 procurement collections into procurement_signals/{brandId}; skuSignalsJson
+ * is JSON.stringify(Record<sku, ProcurementSignal>) to avoid Firestore index limits on large maps. */
 
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
@@ -35,22 +15,22 @@ function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
 }
 
-/** Robust string→number parsing (διαχειρίζεται "1.234,56", "1,234.56", "12%", "  10 €"). */
+/** Robust string→number parsing (handles "1.234,56", "1,234.56", "12%", "  10 €"). */
 function toNumber(raw: unknown): number | null {
   if (raw === null || raw === undefined) return null;
   if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
   let s = String(raw).trim();
   if (!s) return null;
   s = s.replace(/[€$£%]/g, '').replace(/\s+/g, '');
-  // Αν έχει και τελεία και κόμμα: το τελευταίο είναι το decimal separator
+  // If both dot and comma present: the last one is the decimal separator
   const lastDot = s.lastIndexOf('.');
   const lastComma = s.lastIndexOf(',');
   if (lastDot >= 0 && lastComma >= 0) {
     if (lastComma > lastDot) {
-      // ευρωπαϊκό format: 1.234,56
+      // European format: 1.234,56
       s = s.replace(/\./g, '').replace(',', '.');
     } else {
-      // αμερικάνικο: 1,234.56
+      // US format: 1,234.56
       s = s.replace(/,/g, '');
     }
   } else if (lastComma >= 0) {
@@ -64,22 +44,22 @@ function nz(n: number | null | undefined): number {
   return typeof n === 'number' && Number.isFinite(n) ? n : 0;
 }
 
-/** Per-SKU signal — ότι θεωρούμε χρήσιμο για στρατηγικές αποφάσεις. */
+/** Per-SKU signal — whatever we consider useful for strategic decisions. */
 export interface ProcurementSignal {
   // identity
   category?: string;
   description?: string;
   supplier?: string;
   flow_group?: string;
-  status?: string; // STATUS_ΚΩΔΙΚΟΥ (π.χ. "Επί παραγγελία", "Προς κατάργηση")
-  evaluation_label?: string; // ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ από inventory ή item_evaluation
+  status?: string; // STATUS_ΚΩΔΙΚΟΥ (e.g. "Επί παραγγελία", "Προς κατάργηση")
+  evaluation_label?: string; // ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ from inventory or item_evaluation
   evaluation_score?: number;
 
   // inventory snapshot
   available_stock?: number;
   dynamic_stock?: number;
   days_of_cover?: number;
-  lifetime_qty?: number; // ΣΥΝΟΛΙΚΕΣ_ΠΩΛΗΣΕΙΣ (lifetime από procurement)
+  lifetime_qty?: number; // ΣΥΝΟΛΙΚΕΣ_ΠΩΛΗΣΕΙΣ (lifetime from procurement)
 
   // capital
   cost_unit?: number; // ΠΡΩΤΟΓΕΝΕΣ_ΚΟΣΤΟΣ_Μ_Μ
@@ -153,20 +133,14 @@ interface EvaluationRow {
   [k: string]: unknown;
 }
 
-/**
- * Κανονικοποίηση κλειδιού στήλης: κενά/τελείες → underscore (π.χ. "ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ" →
- * "ΔΙΑΘΕΣΙΜΟ_ΥΠΟΛΟΙΠΟ", "ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ Μ.Μ." → "ΠΡΩΤΟΓΕΝΕΣ_ΚΟΣΤΟΣ_Μ_Μ"). Idempotent για
- * ήδη κανονικά (underscore) headers όπως τα Megaventory custom reports.
- */
+/** Normalize a column key: spaces/dots → underscore (e.g. "ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ" →
+ * "ΔΙΑΘΕΣΙΜΟ_ΥΠΟΛΟΙΠΟ"). Idempotent for already-underscored Megaventory headers. */
 function normalizeProcKey(k: string): string {
   return k.trim().replace(/[.\s]+/g, '_').replace(/^_+|_+$/g, '');
 }
 
-/**
- * Ορισμένα procurement templates (χειροκίνητο XLSX) χρησιμοποιούν headers με κενά και «MASTER»
- * αντί για «ΚΩΔΙΚΟΣ» στο inventory sheet. Κανονικοποιούμε στο read ώστε ο aggregator να δουλεύει
- * ανεξάρτητα από το template, χωρίς να απαιτείται re-upload για ήδη αποθηκευμένα δεδομένα.
- */
+/** Some manual XLSX templates use spaced headers and «MASTER» instead of «ΚΩΔΙΚΟΣ»;
+ * normalize on read so the aggregator works regardless of template, no re-upload needed. */
 function normalizeProcurementRow(raw: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(raw)) {
@@ -194,10 +168,8 @@ async function readCollection<T>(
   return snap.docs.map((d) => normalizeProcurementRow(d.data() as Record<string, unknown>) as T);
 }
 
-/**
- * Διαβάζει & ομογενοποιεί όλα τα procurement signals για ένα brand.
- * Επιστρέφει per-SKU map + provenance counts (πόσα SKUs είδαμε ανά πηγή).
- */
+/** Reads & homogenizes all procurement signals for a brand; returns a per-SKU map
+ * plus provenance counts (SKUs seen per source). */
 export async function computeProcurementSignals(brandId: string): Promise<{
   skuCount: number;
   signals: Record<string, ProcurementSignal>;
@@ -229,7 +201,7 @@ export async function computeProcurementSignals(brandId: string): Promise<{
     return cur;
   };
 
-  // 1) Inventory (κύρια πηγή — status, stock, lifetime, tied capital)
+  // 1) Inventory (primary source — status, stock, lifetime, tied capital)
   for (const row of inventoryRows) {
     const sku = String(row.ΚΩΔΙΚΟΣ || '').trim();
     if (!sku) continue;
@@ -285,7 +257,7 @@ export async function computeProcurementSignals(brandId: string): Promise<{
     if (dB !== null) sig.discount_b = dB;
     if (dC !== null) sig.discount_c = dC;
 
-    // Margin: προτιμάμε avg_sale - total_cost. Αν λείπει total_cost, fallback σε primary.
+    // Margin: prefer avg_sale - total_cost. If total_cost is missing, fall back to primary.
     const cost = totalCost ?? primary;
     if (avg !== null && cost !== null && avg > 0) {
       sig.margin_pct = +(((avg - cost) / avg) * 100).toFixed(2);
@@ -296,7 +268,7 @@ export async function computeProcurementSignals(brandId: string): Promise<{
     }
   }
 
-  // 3) Fiscal year — κρατάμε το πιο πρόσφατο έτος ανά SKU
+  // 3) Fiscal year — keep the most recent year per SKU
   const fiscalLatest = new Map<string, FiscalRow>();
   for (const row of fiscalRows) {
     const sku = String(row.ΚΩΔΙΚΟΣ || '').trim();
@@ -336,7 +308,7 @@ export async function computeProcurementSignals(brandId: string): Promise<{
 
   const signals: Record<string, ProcurementSignal> = {};
   for (const [sku, sig] of map.entries()) {
-    // Καθαρισμός undefined fields για compact JSON
+    // Strip undefined fields for compact JSON
     const clean: ProcurementSignal = {};
     (Object.keys(sig) as (keyof ProcurementSignal)[]).forEach((k) => {
       const v = sig[k];
@@ -347,7 +319,7 @@ export async function computeProcurementSignals(brandId: string): Promise<{
     if (Object.keys(clean).length > 0) signals[sku] = clean;
   }
 
-  // Sanity log: π.χ. πόσα SKUs έχουν tied capital
+  // Sanity log: e.g. how many SKUs have tied capital
   const withTied = Object.values(signals).filter((s) => nz(s.tied_capital) > 0).length;
   logger.info(
     `[ProcurementSignals] ${brandId}: ${map.size} SKUs (inv=${sources.inventory}, pricing=${sources.pricing}, fiscal=${sources.fiscal}, eval=${sources.evaluation}), withTiedCapital=${withTied}`
@@ -356,10 +328,8 @@ export async function computeProcurementSignals(brandId: string): Promise<{
   return { skuCount: map.size, signals, sources };
 }
 
-/**
- * Persist στο Firestore. Χρησιμοποιεί JSON serialization για να αποφύγουμε
- * το όριο των 20K index entries σε μεγάλα maps (ίδιο pattern με ecommerce_summary).
- */
+/** Persist to Firestore; JSON serialization avoids the 20K index-entry limit on
+ * large maps (same pattern as ecommerce_summary). */
 export async function refreshProcurementSignals(brandId: string): Promise<{
   skuCount: number;
   bytesJson: number;

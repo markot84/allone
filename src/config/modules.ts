@@ -1,9 +1,6 @@
 import type { AppSectionId, Brand, ModuleId } from '../types';
 
-/**
- * Όταν είναι false, όλα τα brands αντιμετωπίζονται ως B2C (π.χ. maintenance).
- * Ο τύπος B2B/B2C ορίζεται μόνο από Super Admin· νέα brands μένουν B2C.
- */
+/** When false, all brands are treated as B2C. B2B/B2C type is set only by Super Admin; new brands stay B2C. */
 export const B2B_EDITION_ENABLED = true;
 
 export type ModuleEditionStatus = 'core' | 'optional' | 'hidden';
@@ -14,13 +11,10 @@ export interface ModuleDefinition {
   b2bLabel?: string;
   b2bStatus: ModuleEditionStatus;
   b2cStatus: ModuleEditionStatus;
-  /** Plan feature που ΑΠΑΙΤΕΙΤΑΙ για να εμφανιστεί το module (π.χ. 'procurement' → Enterprise only). */
+  /** Plan feature REQUIRED for the module to appear (e.g. 'procurement' → Enterprise only). */
   planFeature?: string;
-  /**
-   * Plan feature που, όταν είναι διαθέσιμο, ΚΡΥΒΕΙ το module (αντίστροφο του planFeature).
-   * π.χ. το Product Intelligence χρειάζεται μόνο στο Growth (απόθεμα από ERP)· στο Enterprise τα
-   * αποθέματα έρχονται από το Procurement, οπότε κρύβεται με `hideWhenFeature: 'procurement'`.
-   */
+  /** Plan feature that, when available, HIDES the module (inverse of planFeature).
+   * E.g. Product Intelligence hidden on Enterprise via `hideWhenFeature: 'procurement'`. */
   hideWhenFeature?: string;
 }
 
@@ -70,7 +64,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'dashboard', label: 'Dashboard', b2bLabel: 'Owner Dashboard', b2bStatus: 'core', b2cStatus: 'core' },
   { id: 'roi', label: 'ROI & Performance', b2bLabel: 'Revenue & ROI', b2bStatus: 'optional', b2cStatus: 'core' },
   { id: 'ecommerce', label: 'E-commerce', b2bStatus: 'hidden', b2cStatus: 'core' },
-  /** RFM + Behavioral + Predictive — ίδια in-app λογική (behavioralEngine) για B2B/B2C. */
+  /** RFM + Behavioral + Predictive — same in-app logic (behavioralEngine) for B2B/B2C. */
   { id: 'rfm', label: 'Data Analysis', b2bStatus: 'core', b2cStatus: 'core' },
   { id: 'products', label: 'Product Intelligence', b2bLabel: 'Product Intelligence', b2bStatus: 'core', b2cStatus: 'core', hideWhenFeature: 'procurement' },
   { id: 'suppliers', label: 'Suppliers', b2bLabel: 'Supplier Management', b2bStatus: 'core', b2cStatus: 'optional' },
@@ -134,11 +128,8 @@ export function getModuleIdForSection(section: string): ModuleId | null {
   return SECTION_TO_MODULE[section as AppSectionId] ?? null;
 }
 
-/**
- * Εναλλακτικό section όταν το ζητούμενο είναι κρυφό/απενεργοποιημένο, ώστε τα deep links να μην
- * πέφτουν σε γενικό fallback. π.χ. στο Enterprise το Product Intelligence (`products`) είναι κρυφό →
- * η πλοήγηση ανακατευθύνεται στο `procurement` (η αντίστοιχη οθόνη αποθέματος για enterprise).
- */
+/** Fallback section when the requested one is hidden, so deep links don't hit a generic default.
+ * E.g. on Enterprise `products` is hidden → redirect to `procurement`. */
 const SECTION_FALLBACK_ALIAS: Partial<Record<AppSectionId, AppSectionId>> = {
   products: 'procurement',
 };
@@ -161,7 +152,7 @@ export function getDefaultModuleEnabled(moduleId: ModuleId, brandType: 'B2B' | '
   return getEditionStatus(moduleId, brandType) !== 'hidden';
 }
 
-/** Τύπος brand για modules / ναβ — σέβεται το `B2B_EDITION_ENABLED`. */
+/** Brand type for modules / nav — respects `B2B_EDITION_ENABLED`. */
 export function effectiveBrandTypeForModules(brand: Pick<Brand, 'type'> | null): 'B2B' | 'B2C' {
   if (!B2B_EDITION_ENABLED) return 'B2C';
   return brand?.type ?? 'B2C';
@@ -176,13 +167,12 @@ export function resolveEnabledModules(
 
   return MODULE_DEFINITIONS.reduce((acc, def) => {
     const editionStatus = getEditionStatus(def.id, brandType);
-    // Κρυφά modules για την έκδοση (π.χ. B2B-only σε B2C) ποτέ ενεργά, ακόμη κι αν υπάρχει παλιό override στη Firestore
+    // Modules hidden for the edition (e.g. B2B-only on B2C) are never enabled, even if an old override exists in Firestore
     if (editionStatus === 'hidden') {
       acc[def.id] = false;
       return acc;
     }
-    // Κρύψιμο όταν είναι διαθέσιμο συγκεκριμένο plan feature (π.χ. Product Intelligence κρύβεται στο
-    // Enterprise όπου το απόθεμα προέρχεται από το Procurement).
+    // Hide when a specific plan feature is available (e.g. Product Intelligence hidden on Enterprise).
     if (def.hideWhenFeature && (options?.canAccess?.(def.hideWhenFeature) ?? false)) {
       acc[def.id] = false;
       return acc;

@@ -1,12 +1,5 @@
-/**
- * SoftOne (Soft1) Web Services connector
- *
- * Τεκμηρίωση: https://www.softone.gr/ws/ — POST JSON στο `.../s1services`
- * (login → authenticate → getBrowserInfo / getBrowserData).
- *
- * Firestore: `connectors/{brandId}.softone`
- * Συλλογές: softone_customers, softone_items, softone_sales_documents, softone_purchase_documents
- */
+/** SoftOne (Soft1) Web Services connector: POST JSON to `.../s1services` (login → authenticate → getBrowserInfo / getBrowserData).
+ * Firestore `connectors/{brandId}.softone`; collections softone_customers, softone_items, softone_sales_documents, softone_purchase_documents. */
 
 import * as admin from 'firebase-admin';
 import { safeFetch } from './urlValidator';
@@ -169,7 +162,7 @@ async function softoneOpenSession(
   };
 }
 
-/** Μεταβλητές από getBrowserInfo για mapping γραμμών getBrowserData */
+/** Column keys from getBrowserInfo for mapping getBrowserData rows */
 function columnKeysFromBrowserInfo(info: Record<string, unknown>): string[] {
   const cols = info.columns as Record<string, unknown>[] | undefined;
   if (Array.isArray(cols) && cols.length) {

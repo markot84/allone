@@ -1,10 +1,5 @@
-/**
- * PER-140 — shouldRunPostSyncAggregations gates the heavy post-sync chain in connectorSync
- * (ecommerce summary, stock movement, product intelligence). The contract: a sync that
- * changed data (success, or partial import) aggregates; a pure failure or a queued
- * background job does not. Providers whose result has no `success` field keep today's
- * behavior (treated as success).
- */
+/** shouldRunPostSyncAggregations gates the heavy post-sync chain: success or partial
+ * import aggregates; pure failure or queued job does not; no `success` field == success. */
 import { describe, it, expect } from 'vitest';
 import { shouldRunPostSyncAggregations } from '../../syncPolicy';
 
@@ -15,7 +10,7 @@ describe('shouldRunPostSyncAggregations', () => {
   });
 
   it('runs after a PARTIAL sync (failed but data was imported)', () => {
-    // e.g. Magento: 30k orders imported, then "incremental page cap reached" → success:false
+    // e.g. Magento: 30k orders imported, then "incremental page cap reached" -> success:false
     expect(shouldRunPostSyncAggregations({ success: false, imported: 30000 })).toBe(true);
   });
 

@@ -1,14 +1,5 @@
-/**
- * PER-60 — stockMovementTracker against the REAL module + Firestore emulator.
- *
- * The Megaventory sync harness mocks this module; here we exercise the real
- * capture → compute path, specifically pinning the field-projection refactor
- * (`.select('sku','stock_level')` + stream): the products docs are seeded FAT
- * (big descriptive fields) and the snapshot must still read stock correctly,
- * sum duplicate SKUs, and produce movement deltas vs an older snapshot.
- *
- * Run via `npm run test:integration` (firebase emulators:exec wraps this).
- */
+/** stockMovementTracker vs the real module + Firestore emulator: pins the `.select('sku','stock_level')`+stream projection — FAT product docs must still read stock, sum duplicate SKUs, and yield deltas.
+ * Run via `npm run test:integration` (firebase emulators:exec wraps this). */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as admin from 'firebase-admin';
 

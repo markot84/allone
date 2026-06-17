@@ -1,14 +1,5 @@
-/**
- * WooCommerce Connector
- *
- * Flow:
- * 1. User enters e-shop URL + Consumer Key + Consumer Secret
- * 2. We validate with a test API call (GET /wp-json/wc/v3/system_status)
- * 3. Credentials stored in Firestore (connectors/{brandId}.woocommerce)
- * 4. Sync: πρώτο full 3ετίας + catalog· μετά incremental (modified / updated_at)
- *
- * No OAuth redirect needed — WooCommerce uses REST API keys.
- */
+/** WooCommerce Connector — validates REST API keys, stores them in connectors/{brandId}.woocommerce,
+ * then syncs a 3-year load + catalog followed by incrementals. No OAuth (REST API keys). */
 
 import * as admin from 'firebase-admin';
 import { safeFetch } from './urlValidator';
@@ -29,9 +20,7 @@ function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
 }
 
-/**
- * Validate WooCommerce credentials and save them
- */
+/** Validate WooCommerce credentials and save them. */
 export async function saveWooCredentials(
   brandId: string,
   storeUrl: string,
@@ -65,9 +54,7 @@ export async function saveWooCredentials(
   return { success: true, shopName: testResult.shopName };
 }
 
-/**
- * Test WooCommerce REST API connection
- */
+/** Test WooCommerce REST API connection. */
 export async function testWooConnection(
   storeUrl: string,
   consumerKey: string,
@@ -113,11 +100,8 @@ export async function testWooConnection(
   }
 }
 
-/**
- * Fetch WooCommerce orders (last 3 years) + products and store in Firestore.
- * Fetch WooCommerce orders + products. Customer email is stored for audience exports,
- * while `customerEmailHash` is used for analytics/matching.
- */
+/** Fetch WooCommerce orders (last 3 years) + products into Firestore. Customer email is
+ * stored for audience exports; `customerEmailHash` is used for analytics/matching. */
 export async function fetchWooCommerceData(brandId: string): Promise<{
   success: boolean;
   imported: number;
@@ -157,7 +141,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
   let productsSyncComplete = false;
 
   try {
-    // ── Orders: historical ανά ημερομηνία δημιουργίας· incremental μετά via modified_after ──
+    // Orders: historical by creation date, then incremental via modified_after
     let orderPage = 1;
     let hasMore = true;
     let ordersAbort = false;
@@ -247,7 +231,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
       logger.info(`[WooCommerce] Orders: ${orderItems.length} imported for brand ${brandId}`);
     }
 
-    // ── Products: πρώτο sync όλος ο κατάλογος· μετά με `modified_after` ──
+    // Products: first sync the whole catalog, then via `modified_after`
     let prodPage = 1;
     let prodMore = true;
     let productsAbort = false;
@@ -336,7 +320,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
       await db.doc(`connectors/${brandId}`).update(connectorPatch);
     }
 
-    // ── Log import_jobs ────────────────────────────────────────────────
+    // Log import_jobs
     await db.collection('import_jobs').add({
       brandId,
       type: 'ecommerce',
@@ -368,9 +352,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
   }
 }
 
-/**
- * Normalize store URL to https://domain format
- */
+/** Normalize store URL to https://domain format. */
 function normalizeStoreUrl(input: string): string {
   let url = input.trim();
   url = url.replace(/\/+$/, '');

@@ -1,13 +1,5 @@
-/**
- * Entersoft Business Suite — Web API connector
- *
- * Δημοσιευμένα paths από entersoftsa/eswebapi (`ESWEBAPI_URL`):
- * - POST {base}api/Login/Login  (openSession)
- * - GET/POST {base}api/rpc/PublicQuery/{groupId}/{filterId}
- *
- * Το `Model` στο login περνάει ως credentials (UserID, Password, BranchID, κ.λπ.).
- * Για πλήρη sync απαιτείται Public Query Group/Filter από την εγκατάσταση Entersoft.
- */
+/** Entersoft Business Suite Web API connector: api/Login/Login + api/rpc/PublicQuery/{groupId}/{filterId}.
+ * `Model` carries login credentials; a full sync needs a Public Query Group/Filter from the installation. */
 
 import * as admin from 'firebase-admin';
 import { safeFetch } from './urlValidator';

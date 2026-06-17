@@ -1,23 +1,5 @@
-/**
- * Stock Movement Tracker
- *
- * Καθολικός μηχανισμός παρακολούθησης κινητικότητας αποθεμάτων ανά SKU.
- * Λειτουργεί για όλα τα brands ανεξάρτητα από connector:
- *   - Brands με ecommerce connector → διαβάζει stock από magento_products / shopify_products κλπ.
- *   - Brands μόνο με imports → διαβάζει stock_level από το `products` collection.
- *
- * Καταγράφει daily snapshot ανά brand (ένα doc/ημέρα) σε:
- *   stock_snapshots/{brandId}/days/{YYYY-MM-DD}
- *     { skuStockJson, skuCount, capturedAt, source }
- *
- * Υπολογίζει deltas (μειώσεις = πωλήσεις net of returns) και τα αποθηκεύει στο
- *   stock_movement/{brandId}.skuMovementJson  →  { sku: { dec7d, dec30d, dec90d } }
- * Το ecommerce_summary κρατά μόνο metadata για να μην ξεπερνά το Firestore 1MB doc limit.
- *
- * Σχεδιαστική σημείωση: τα deltas είναι "net of returns/cancellations" — αν
- * επιστραφεί ένα προϊόν, το stock ανεβαίνει και μειώνει το dec_window. Αυτό
- * είναι feature, όχι bug: εκφράζει πραγματική κινητικότητα.
- */
+/** Per-SKU stock velocity tracker: daily snapshot per brand → deltas at stock_movement/{brandId}.
+ *  Deltas are net of returns/cancellations (returns raise stock, reducing the dec window) by design. */
 
 import * as admin from 'firebase-admin';
 import { type Firestore, type QueryDocumentSnapshot, FieldValue } from 'firebase-admin/firestore';
@@ -37,7 +19,7 @@ function getDb(): Firestore {
 const JSON_CHUNK_TARGET_BYTES = 850_000;
 const DELETE_BATCH_SIZE = 400;
 
-/** YYYY-MM-DD σε Europe/Athens (απλοποιημένο: UTC date — αρκεί για daily granularity). */
+/** YYYY-MM-DD (simplified: UTC date — sufficient for daily granularity). */
 function todayKey(date: Date = new Date()): string {
   return date.toISOString().slice(0, 10);
 }
@@ -48,13 +30,8 @@ function dateKeyDaysAgo(days: number, from: Date = new Date()): string {
   return todayKey(d);
 }
 
-/**
- * PER-60 perf: size is tracked INCREMENTALLY (stringify only the entry being added), not by
- * re-stringifying the whole growing bucket on every insertion — that was O(n·bucketSize) ≈ quadratic:
- * measured ~11min for an 88k-SKU stock record + ~8min for its movement record of pure CPU per
- * stock-movement refresh, which is what actually ran the worker into the 30min hard cap.
- * Exported for the unit test that pins this from regressing.
- */
+/** Tracks size INCREMENTALLY (stringify only each added entry); re-stringifying the whole bucket per
+ *  insert was quadratic. Exported for the unit test that pins this from regressing. */
 export function chunkRecord<T>(record: Record<string, T>): Record<string, T>[] {
   const chunks: Record<string, T>[] = [];
   let bucket: Record<string, T> = {};
@@ -131,14 +108,8 @@ async function readJsonChunks<T>(
   return Object.keys(merged).length ? merged : null;
 }
 
-/**
- * Διαβάζει stock από το `products` collection (import-based brands).
- *
- * PER-60 perf: `.select('sku','stock_level')` + stream — ΧΩΡΙΣ projection η query κατέβαζε ΟΛΟΚΛΗΡΑ
- * τα (παχιά) product-intelligence docs μόνο για 2 πεδία: σε 88k SKUs (e-tennis) αυτό ήταν ~20+ λεπτά
- * I/O και κόντευε το 30min hard cap του worker. Με projection: ίδια σημασιολογία, ~sec αντί λεπτά,
- * και το stream αποφεύγει να υλοποιήσει όλο το QuerySnapshot στη μνήμη καθώς ο κατάλογος μεγαλώνει.
- */
+/** Reads stock from the `products` collection (import-based brands). Uses `.select()` projection +
+ *  stream to avoid downloading whole product-intelligence docs for 2 fields and materializing in memory. */
 async function readImportedStockBySku(
   db: Firestore,
   brandId: string
@@ -153,22 +124,20 @@ async function readImportedStockBySku(
     const d = doc.data();
     const sku = String(d.sku || '').trim();
     if (!sku) continue;
-    // PER-60 (deleted-products reconcile): discontinued products (deleted in the ERP, kept for
-    // history with stock 0) are EXCLUDED from snapshots — otherwise the day their stock is zeroed
-    // registers as an N-unit "sale" in the movement deltas and pollutes velocity/procurement signals.
+    // Discontinued products (ERP-deleted, kept with stock 0) are EXCLUDED: otherwise zeroing their
+    // stock registers as an N-unit "sale" and pollutes velocity/procurement signals.
     if (d.discontinued_at) {
       discontinued.add(sku);
       continue;
     }
     const qty = typeof d.stock_level === 'number' ? d.stock_level : 0;
-    // Επιτρέπει πολλαπλά docs με ίδιο SKU (variants) — άθροιση.
+    // Allow multiple docs with the same SKU (variants) — sum them.
     stock.set(sku, (stock.get(sku) || 0) + qty);
   }
   return { stock, discontinued };
 }
 
-/** SKUs μαρκαρισμένα discontinued — η compute τα εξαιρεί από το union των snapshots (τα παλιά
- *  snapshots τα περιέχουν ακόμη για έως 90 μέρες μετά τη διαγραφή). */
+/** SKUs marked discontinued — excluded from the snapshot union (old snapshots keep them ~90 days). */
 async function readDiscontinuedSkus(db: Firestore, brandId: string): Promise<Set<string>> {
   const out = new Set<string>();
   const query = db
@@ -183,10 +152,7 @@ async function readDiscontinuedSkus(db: Firestore, brandId: string): Promise<Set
   return out;
 }
 
-/**
- * Καταγράφει το τρέχον stock snapshot για ένα brand. Idempotent ανά ημέρα
- * (overwrite του ίδιου doc). Επιστρέφει πληροφορίες για logging/UI.
- */
+/** Captures the current stock snapshot for a brand; idempotent per day (overwrites the same doc). */
 export async function captureStockSnapshot(brandId: string): Promise<{
   skuCount: number;
   source: 'connector' | 'import' | 'mixed' | 'none';
@@ -196,7 +162,7 @@ export async function captureStockSnapshot(brandId: string): Promise<{
   const db = getDb();
   const dateKey = todayKey();
 
-  // 1) Connector platforms (αν υπάρχουν)
+  // 1) Connector platforms (if any)
   const connDoc = await db.doc(`connectors/${brandId}`).get();
   const connData = connDoc.data() || {};
   const connectedPlatforms = ECOMMERCE_PROVIDERS.filter((p) => connData[p]?.connected);
@@ -213,14 +179,13 @@ export async function captureStockSnapshot(brandId: string): Promise<{
     }
   }
 
-  // 2) Import-based stock (πάντα διαβάζεται — covers brands χωρίς connector
-  // και SKUs που υπάρχουν μόνο στο catalog).
+  // 2) Import-based stock (always read — covers connector-less brands and catalog-only SKUs).
   const { stock: importMap, discontinued } = await readImportedStockBySku(db, brandId);
 
-  // Συνδυασμός: connector value προτεραιότητα αν υπάρχει.
+  // Combine: connector value takes priority when present.
   const merged = new Map<string, number>(importMap);
   for (const [sku, qty] of connectorMap.entries()) merged.set(sku, qty);
-  // PER-60: discontinued SKUs δεν μπαίνουν ΠΟΤΕ στο snapshot (ούτε από connector πλατφόρμες).
+  // Discontinued SKUs NEVER enter the snapshot (not even from connector platforms).
   for (const sku of discontinued) merged.delete(sku);
 
   if (merged.size === 0) {
@@ -289,11 +254,7 @@ async function readSnapshot(db: Firestore, brandId: string, dateKey: string): Pr
   return readJsonChunks<number>(db, `stock_snapshots/${brandId}/days/${dateKey}/chunks`, 'skuStockJson');
 }
 
-/**
- * Βρίσκει το πιο κοντινό snapshot σε μια ημερομηνία στόχο.
- * Επιστρέφει το πλησιέστερο snapshot με ημερομηνία <= targetDateKey
- * (αν δεν υπάρχει ακριβές match, παίρνει το παλαιότερο που είναι >= targetDateKey - tolerance).
- */
+/** Finds the closest snapshot to a target date, preferring the nearest older one within tolerance. */
 async function findClosestSnapshot(
   db: Firestore,
   brandId: string,
@@ -304,9 +265,9 @@ async function findClosestSnapshot(
   const exact = await readSnapshot(db, brandId, targetDateKey);
   if (exact) return { dateKey: targetDateKey, data: exact };
 
-  // Search ± tolerance days γύρω από target (preferred: παλαιότερο = πιο "καθαρή" baseline)
+  // Search ± tolerance days around target (preferred: older = "cleaner" baseline)
   for (let offset = 1; offset <= toleranceDays; offset++) {
-    // Πρώτα κοιτάζουμε προς τα πίσω (πιο παλιό snapshot = πιο "ασφαλές" baseline)
+    // Look backwards first (older snapshot = "safer" baseline)
     const target = new Date(targetDateKey + 'T00:00:00Z');
     const earlier = new Date(target);
     earlier.setUTCDate(earlier.getUTCDate() - offset);
@@ -329,10 +290,7 @@ interface MovementEntry {
   dec90d?: number;
 }
 
-/**
- * Υπολογίζει stock movement deltas από snapshots και τα αποθηκεύει στο
- * ecommerce_summary/{brandId}.
- */
+/** Computes stock movement deltas from snapshots and stores them at ecommerce_summary/{brandId}. */
 export async function computeStockMovement(brandId: string): Promise<{
   skuCount: number;
   baselineDate: string | null;
@@ -343,7 +301,7 @@ export async function computeStockMovement(brandId: string): Promise<{
 
   const todayData = await readSnapshot(db, brandId, todayKeyStr);
   if (!todayData) {
-    // Δεν υπάρχει σημερινό snapshot — προσπάθησε να κάνεις capture πρώτα.
+    // No snapshot for today — try capturing first.
     logger.warn(`[StockMovement] No today snapshot for ${brandId} — skipping movement computation`);
     return { skuCount: 0, baselineDate: null, windowsAvailable: { d7: false, d30: false, d90: false } };
   }
@@ -361,17 +319,16 @@ export async function computeStockMovement(brandId: string): Promise<{
   const baselineDate = allSnapshots.empty ? null : allSnapshots.docs[0].id;
 
   const movement: Record<string, MovementEntry> = {};
-  // Συμπεριλαμβάνουμε όλα τα SKUs που εμφανίζονται σε ΟΠΟΙΟΔΗΠΟΤΕ snapshot —
-  // αυτό επιτρέπει filter "never sold" όταν το stock έχει μείνει ίδιο.
+  // Include all SKUs that appear in ANY snapshot — this enables the
+  // "never sold" filter when stock has stayed the same.
   const allSkus = new Set<string>([
     ...Object.keys(todayData),
     ...(snap7 ? Object.keys(snap7.data) : []),
     ...(snap30 ? Object.keys(snap30.data) : []),
     ...(snap90 ? Object.keys(snap90.data) : []),
   ]);
-  // PER-60: discontinued SKUs βγαίνουν από το union — τα baseline snapshots (έως 90 μέρες πίσω) τα
-  // περιέχουν ακόμη, και χωρίς αυτό το φίλτρο η απουσία τους από το σημερινό snapshot θα μετρούσε
-  // ως dec = ολόκληρο το παλιό απόθεμα (ψεύτικη «πώληση» Ν τεμαχίων τη μέρα της διαγραφής).
+  // Discontinued SKUs dropped from the union — they persist in baseline snapshots (~90 days), so
+  // their absence from today's snapshot would otherwise count as a fake N-unit "sale".
   const discontinuedNow = await readDiscontinuedSkus(db, brandId);
   for (const sku of discontinuedNow) allSkus.delete(sku);
 
@@ -434,7 +391,7 @@ export async function computeStockMovement(brandId: string): Promise<{
   };
 }
 
-/** Convenience: capture + compute σε ένα call. */
+/** Convenience: capture + compute in one call. */
 export async function refreshStockMovement(brandId: string): Promise<void> {
   await captureStockSnapshot(brandId);
   await computeStockMovement(brandId);

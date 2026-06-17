@@ -15,7 +15,7 @@ import {
 
 const STALE = 5 * 60 * 1000;
 
-/** Λίστα εμπορικών πληροφοριών του ενεργού brand + mutations. Brand-scoped queryKey. */
+/** List of the active brand's commercial info + mutations. Brand-scoped queryKey. */
 export function useCommercialInfo() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;

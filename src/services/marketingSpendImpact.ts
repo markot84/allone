@@ -4,7 +4,7 @@ import { applyCampaignDateRangeToMetrics } from '../utils/campaignDateRangeMetri
 import type { Campaign } from '../types';
 import type { EcommerceRawOrder } from './ecommerceRawOrders';
 
-/** Τύπος εμπορικής απόφασης που εντοπίστηκε στην καμπάνια (before→after). */
+/** Commercial decision detected on the campaign (before→after). */
 export type MarketingDecisionType = 'launch' | 'paused' | 'scale_up' | 'scale_down' | 'steady';
 
 export interface MarketingSpendImpactRow {
@@ -12,10 +12,10 @@ export interface MarketingSpendImpactRow {
   title: string;
   channel: string;
   decisionType: MarketingDecisionType;
-  /** Σύντομη ετικέτα απόφασης, π.χ. "Budget +42%", "Νέα καμπάνια". */
+  /** Short decision label, e.g. "Budget +42%", "New campaign". */
   decisionLabel: string;
   spendBefore: number;
-  /** Spend περιόδου (after). */
+  /** Spend for the period (after). */
   spend: number;
   spendChangePct: number | null;
   revenueBefore: number;
@@ -26,11 +26,11 @@ export interface MarketingSpendImpactRow {
   roasBefore: number | null;
   /** Attributed ROAS (after). */
   roas: number | null;
-  /** Εκτιμώμενο καθαρό κέρδος (after) μετά κόστος προϊόντος & ad spend (null χωρίς κόστος SKU). */
+  /** Estimated net profit (after) net of product cost & ad spend (null when SKU cost is missing). */
   netProfit: number | null;
-  /** Actionable «μάθημα» για το μέλλον. */
+  /** Actionable takeaway for the future. */
   idea: string;
-  /** positive=Επιτυχία, negative=Αποτυχία, neutral=Ουδέτερο, insufficient=Λίγα δεδομένα. */
+  /** positive=success, negative=failure, neutral=neutral, insufficient=too little data. */
   verdict: ScenarioVerdict;
   confidence: 'low' | 'medium' | 'high';
 }
@@ -47,14 +47,14 @@ export interface MarketingSpendImpactSummary {
   totalNetProfit: number | null;
   blendedRoas: number | null;
   storeMarginRate: number | null;
-  /** Μήκος baseline σε ημέρες (για labels). */
+  /** Baseline length in days (for labels). */
   lookbackDays: number;
 }
 
 const MIN_SPEND = 25;
 const TARGET_ROAS = 3;
 const WEAK_ROAS = 1.5;
-const SPEND_CHANGE_THRESHOLD = 15; // % μεταβολή budget για να θεωρηθεί scale up/down
+const SPEND_CHANGE_THRESHOLD = 15; // % budget change to count as scale up/down
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -71,7 +71,7 @@ function fmtRoas(r: number | null): string {
   return r != null ? `${r}x` : '—';
 }
 
-/** Store-level blended margin rate (margin/revenue) για εκτίμηση κόστους στα attributed έσοδα. */
+/** Store-level blended margin rate (margin/revenue) to estimate cost on attributed revenue. */
 function storeMarginRate(
   orders: EcommerceRawOrder[],
   from: string,
@@ -223,17 +223,14 @@ function confidenceFor(spendBefore: number, spendAfter: number): 'low' | 'medium
   return 'low';
 }
 
-/**
- * Εντοπίζει εμπορικές αποφάσεις marketing (αλλαγές budget / νέες / διακοπές) συγκρίνοντας την
- * επιλεγμένη περίοδο με το προηγούμενο ισόποσο διάστημα, και τις κρίνει Επιτυχία/Ουδέτερο/Αποτυχία
- * με actionable «ιδέα» για μελλοντικά πλάνα.
- */
+/** Detects marketing decisions (budget changes / new / paused) vs the previous equal-length
+ * window and rates each success/neutral/failure with an actionable idea. */
 export function analyzeMarketingDecisions(input: {
   campaigns: Campaign[];
   orders: EcommerceRawOrder[];
   periodFrom: string;
   periodTo: string;
-  /** Baseline window· default = προηγούμενο ισόποσο διάστημα πριν την περίοδο. */
+  /** Baseline window; default = previous equal-length window before the period. */
   baselineFrom?: string;
   baselineTo?: string;
   costBySku: Map<string, number>;
@@ -249,7 +246,7 @@ export function analyzeMarketingDecisions(input: {
     const before = windowMetrics(campaign, baselineFrom, baselineTo);
     const after = windowMetrics(campaign, input.periodFrom, input.periodTo);
 
-    // Καμμία ουσιαστική δραστηριότητα σε κανένα παράθυρο → αγνόησε.
+    // No meaningful activity in either window → skip.
     if (before.spend < MIN_SPEND && after.spend < MIN_SPEND) continue;
 
     const changePct = pctChange(after.spend, before.spend);
@@ -280,7 +277,7 @@ export function analyzeMarketingDecisions(input: {
     });
   }
 
-  // Ταξινόμηση: πρώτα οι σαφείς αποφάσεις (Επιτυχία/Αποτυχία), μετά κατά spend.
+  // Sort: clear decisions first (success/failure), then by spend.
   const verdictRank: Record<ScenarioVerdict, number> = { positive: 0, negative: 0, neutral: 1, insufficient: 2 };
   rows.sort((a, b) => verdictRank[a.verdict] - verdictRank[b.verdict] || b.spend - a.spend);
 

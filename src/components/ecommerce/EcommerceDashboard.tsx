@@ -97,7 +97,7 @@ const TOOLTIP_STYLE: React.CSSProperties = {
 
 const METHOD_CHART_COLORS = ['#F97316', '#FB923C', '#FDBA74', '#F59E0B', '#FACC15', '#A3A3A3', '#94A3B8', '#CBD5E1'];
 
-/** Το Recharts Area χρειάζεται ≥2 σημεία για ορατή γραμμή. */
+/** Recharts Area needs >=2 points to render a visible line. */
 function padSparklineForChart(values: number[]): number[] {
   if (values.length === 0) return [];
   if (values.length === 1) return [values[0], values[0]];
@@ -112,7 +112,7 @@ function normalizeMethodLabel(value: string | null | undefined): string {
   return firstPara.replace(/\s+/g, ' ').trim();
 }
 
-/** «Παραλαβή από το κατάστημα - διεύθυνση…» → μόνο ο τίτλος για το pie. */
+/** For "store pickup - address..." labels, keep only the title for the pie. */
 function stripStorePickupAddressSuffix(s: string): string {
   const t = s.trim();
   if (!/^παραλαβή\s+από\s+το\s+κατάστημα\b/i.test(t)) return t;
@@ -121,10 +121,8 @@ function stripStorePickupAddressSuffix(s: string): string {
   return t;
 }
 
-/**
- * Ομαδοποίηση τρόπων αποστολής για charts: BOX/locker ανά locker → ένα slice,
- * διπλές ετικέτες τύπου «ACS - ΕΛΤΑ Courier» (Magento shipping_description) → ένας φορέας.
- */
+/** Group shipping methods for charts: BOX/locker variants collapse to one slice; dual labels like
+ * "ACS - ELTA Courier" (Magento shipping_description) collapse to one carrier. */
 function canonicalShippingMethodLabel(raw: string | null | undefined): string {
   let s = stripStorePickupAddressSuffix(normalizeMethodLabel(raw));
   if (!s) return '';
@@ -245,8 +243,8 @@ export function EcommerceDashboard() {
   const brandId = currentBrand?.id ?? null;
   const ecomm = useEcommerceSummary();
 
-  // Catalog parent SKUs (Magento itemGroupId) — αξιόπιστη ομαδοποίηση όπου υπάρχει κατάλογος.
-  // Όπου λείπει (π.χ. e-tennis: catalog 401), ο resolver πέφτει σε conservative suffix-strip.
+  // Catalog parent SKUs (Magento itemGroupId) group reliably where a catalog exists; otherwise the
+  // resolver falls back to a conservative suffix-strip.
   const productEnrichment = useMagentoProductEnrichment();
   const parentSkuOf = useMemo(() => {
     const bySku = productEnrichment.bySku;
@@ -257,7 +255,7 @@ export function EcommerceDashboard() {
     return (sku: string | null | undefined) => hasDerivedParentSku(sku, bySku.get(String(sku || '').trim())?.itemGroupId);
   }, [productEnrichment.bySku]);
 
-  // Ίδιο global date range με Dashboard/ROI — όχι session-local override (είχε προκαλέσει «άλλο Μάρτιο στο E-commerce, άλλο στο Dashboard»).
+  // Same global date range as Dashboard/ROI — no session-local override (that caused the E-commerce and Dashboard periods to diverge).
   const {
     fromDate: globalFrom,
     toDate: globalTo,
@@ -273,7 +271,7 @@ export function EcommerceDashboard() {
   const effectiveTo = rawTo;
   if (effectiveFrom > effectiveTo) effectiveFrom = effectiveTo;
 
-  // Recent orders (capped 50) για fallback rendering.
+  // Recent orders (capped 50) for fallback rendering.
   const filteredRecentOrdersVisible = useMemo(() => {
     return ecomm.recentOrders.filter(o => {
       if (isOmittedFromEcommerceOrderLists(o.status)) return false;
@@ -282,7 +280,7 @@ export function EcommerceDashboard() {
     });
   }, [ecomm.recentOrders, effectiveFrom, effectiveTo]);
 
-  // Χρησιμοποιείται μόνο ως KPI fallback για legacy aggregates.
+  // Used only as a KPI fallback for legacy aggregates.
   const filteredOrdersForKpi = useMemo(
     () => filteredRecentOrdersVisible.filter((o) => isEcommerceOrderRevenueIncluded(o)),
     [filteredRecentOrdersVisible]
@@ -351,11 +349,8 @@ export function EcommerceDashboard() {
     [ordersForTables]
   );
 
-  /**
-   * Το `ecommerce_summary` (ecommerceAggregator) περιέχει μόνο ~90 ημέρες orders· το date picker
-   * μπορεί να ζητά παλιότερες περιόδους. Για ευθυγράμμιση με πίνακες/pie, χρησιμοποιούμε
-   * αθροίσεις από full raw orders μόλις φορτώσουν.
-   */
+  /** `ecommerce_summary` only covers ~90 days, but the picker can request older periods; derive sums
+   * from the full raw orders once loaded to stay aligned with the tables/pies. */
   const periodMetricsFromRawOrders = useMemo(() => {
     if (!rawOrdersLoaded) return null;
     const dayRev: Record<string, number> = {};
@@ -518,10 +513,8 @@ export function EcommerceDashboard() {
       .sort((a, b) => b.revenue - a.revenue);
   }, [rawOrdersLoaded, revenueOrdersForTables, ecomm.topProducts, parentSkuOf, hasParentOf]);
 
-  /**
-   * Μόνο Parent SKU: ομαδοποίηση με προτεραιότητα στον κατάλογο (Magento itemGroupId)·
-   * όπου λείπει, conservative strip αναγνωρισμένου size/gauge suffix (βλ. resolveParentSku).
-   */
+  /** Parent SKU only: group by catalog itemGroupId (Magento); where missing, conservatively strip a
+   * recognized size/gauge suffix (see resolveParentSku). */
   const parentProductsForTables = useMemo<TopProductRow[]>(() => {
     const parentMap = new Map<string, { revenue: number; quantity: number; name: string }>();
     for (const product of topProductsForTables) {

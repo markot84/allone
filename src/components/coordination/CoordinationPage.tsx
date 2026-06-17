@@ -45,7 +45,7 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
 
 const DEPT_LABELS = DEPARTMENT_LABELS;
 
-/** Πρόσφατες πολιτικές στην κύρια λίστα· παλαιότερες στο «Ιστορικό». */
+/** Recent policies in the main list; older ones under "History". */
 const RECENT_DECISIONS_LIMIT = 5;
 
 // ── Main Page (Briefing Board) ───────────────────────────────────────────────

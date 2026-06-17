@@ -1,17 +1,5 @@
-/**
- * Unit tests for functions/src/oauthState.ts (PP-12 — signed OAuth `state`).
- *
- * The OAuth `state` carries the brandId that connector tokens get written to.
- * signState() appends an HMAC-SHA256 signature + issued-at timestamp; verifyState()
- * must reject any forged signature or any state older than STATE_MAX_AGE_MS (30 min),
- * and round-trip an honestly-signed payload back to its original fields.
- *
- * setup.ts provides a present, 64-hex CONNECTOR_TOKEN_KEY, so the "key configured"
- * (signing enforced) path is exercised here — the normal production case.
- *
- * Arrange-act-assert throughout. logger.warn is silenced so the security-path
- * warnings (forgery / expiry / unsigned) don't pollute test output.
- */
+/** Signed OAuth `state`: signState() appends an HMAC-SHA256 signature + `iat`; verifyState() rejects forged
+ * signatures or states older than STATE_MAX_AGE_MS (30 min). setup.ts provides a 64-hex CONNECTOR_TOKEN_KEY. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { logger } from 'firebase-functions/v2';
 import { signState, verifyState } from '../../oauthState';
@@ -161,7 +149,7 @@ describe('oauthState', () => {
     });
   });
 
-  describe('fail-closed when CONNECTOR_TOKEN_KEY is absent (SEC-L1)', () => {
+  describe('fail-closed when CONNECTOR_TOKEN_KEY is absent', () => {
     it('signState throws and verifyState rejects without the key (no silent unsigned downgrade)', async () => {
       // The module caches the key on first use, so load a FRESH instance with the env var
       // removed to exercise the no-key path in isolation.

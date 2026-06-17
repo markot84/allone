@@ -6,7 +6,7 @@ import type { Product } from '../types';
 import { classifyProcurementInventoryRow } from '../utils/procurementInventoryClassify';
 import { excludeDemoProducts, normalizeSpreadsheetCellToFirstAvailableDate } from '../utils/productUtils';
 
-/** Πρώτο header που ταιριάζει (substring, case-insensitive) με κάποιο keyword — σειρά = προτεραιότητα. */
+/** First header matching a keyword (substring, case-insensitive); keyword order = priority. */
 function findColByKeywords(rows: Record<string, unknown>[], keywords: readonly string[]): string {
   if (!rows.length) return keywords[0] ?? '';
   const headers = Object.keys(rows[0]);
@@ -26,7 +26,7 @@ type PricingSlice = {
   primaryCost?: number;
 };
 
-/** Αντιστοίχιση SKU → τιμές/κόστη από procurement_pricing_policy (ίδια λογική με procurementSignals). */
+/** Map SKU → prices/costs from procurement_pricing_policy (same logic as procurementSignals). */
 function buildPricingBySku(pricingRows: Record<string, unknown>[]): Map<string, PricingSlice> {
   const map = new Map<string, PricingSlice>();
   if (!pricingRows.length) return map;
@@ -61,7 +61,7 @@ function buildPricingBySku(pricingRows: Record<string, unknown>[]): Map<string, 
   return map;
 }
 
-/** Σειρά από συγκεκριμένα προς γενικά — best-effort αν το template έχει διαφορετικές κεφαλίδες. */
+/** Ordered specific → generic; best-effort if the template has different headers. */
 const PROCUREMENT_FIRST_AVAILABLE_KEYWORDS = [
   'ΗΜ.ΠΡΩΤΗΣ',
   'ΠΡΩΤΗΣ ΠΑΡΑΛ',
@@ -110,10 +110,7 @@ function parseNum(v: unknown): number {
   return parseFloat(s) || 0;
 }
 
-/**
- * Unified product source: uses procurement inventory for Enterprise plans,
- * falls back to regular product import otherwise.
- */
+/** Unified product source: procurement inventory for Enterprise plans, else regular product import. */
 type UseProductSourceOptions = {
   maxProducts?: number;
 };
@@ -132,7 +129,7 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
     const pricingRows = ((procData?.pricing_policy ?? []) as unknown[]) as Record<string, unknown>[];
     const pricingBySku = buildPricingBySku(pricingRows);
 
-    // Ορισμένα templates χρησιμοποιούν «MASTER» αντί για «ΚΩΔΙΚΟΣ» στο inventory sheet.
+    // Some templates use «MASTER» instead of «ΚΩΔΙΚΟΣ» in the inventory sheet.
     const codeCol = findColByKeywords(invRows, ['ΚΩΔΙΚΟΣ', 'MASTER']);
     const descCol = findColByKeywords(invRows, ['ΠΕΡΙΓΡΑΦΗ']);
     const stockCol = findColByKeywords(invRows, ['ΔΙΑΘΕΣΙΜΟ_ΥΠΟΛΟΙΠΟ', 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ']);
@@ -192,7 +189,7 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
         margin_percentage: Math.round(marginPct * 10) / 10,
         stock_level: stock,
         stock_capacity: stock * 2,
-        // Μην βάζουμε stock_age_days: 0 — ερμηνευόταν λανθασμένα ως «νέο SKU 0 ημ.» στο triage.
+        // Don't set stock_age_days: 0 — it was misread as a «new SKU, 0 days» in triage.
         priority_tag: tag,
         procurement_status: statusUpper || undefined,
         price,
@@ -219,10 +216,10 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
       : sourceKind === 'products_import'
         ? 'Products import'
         : 'Pending';
-  // Demo products φιλτράρονται και εδώ για να ισχύει σε όλους τους aggregates.
+  // Demo products are filtered here too so it applies across all aggregates.
   const products = excludeDemoProducts(usingProcurement ? procProducts : productHook.products);
 
-  /** Μέχρι να ολοκληρωθεί και το procurement (Enterprise), μην εμφανίζεις κενή σελίδα «χωρίς προϊόντα». */
+  /** Until procurement also finishes (Enterprise), don't show an empty «no products» page. */
   const isLoading =
     usingProcurement ? false : productHook.isLoading || (isEnterprise && procurementLoading);
 

@@ -52,7 +52,7 @@ function truncateName(name: string, max = 30) {
   return name.slice(0, max) + '…';
 }
 
-/** Άνω όριο SKU για σκορ επίδρασης — αποφεύγει freeze του UI σε μεγάλους καταλόγους. */
+/** Upper SKU bound for impact scoring — avoids UI freeze on large catalogs. */
 const IMPACT_SCORE_MAX_PRODUCTS = 2500;
 
 function subsampleProductsEvenly(list: Product[], max: number): Product[] {
@@ -72,11 +72,11 @@ type ProductImpactStats = {
   same: number;
   samplesUp: Product[];
   samplesDown: Product[];
-  /** Σύνολο SKU στο πεδίο εφαρμογής (μετά το φίλτρο, αν υπάρχει). */
+  /** Total SKUs in scope (after the filter, if any). */
   catalogTotal: number;
-  /** Πραγματικό μέγεθος λίστας που σκοράρεται (≤ catalogTotal). */
+  /** Actual size of the scored list (≤ catalogTotal). */
   sampleSize: number;
-  /** Αν true, τα νούμερα ↑/↓/ίδια αφορούν μόνο το δείγμα (όχι ολόκληρο τον κατάλογο). */
+  /** If true, the up/down/same numbers cover only the sample, not the whole catalog. */
   usedSample: boolean;
 };
 
@@ -160,9 +160,9 @@ interface StrategyImpactSummaryProps extends ImpactBaseProps {
   onCancel: () => void;
   onDetails: () => void;
   initialDuration: number | 'ongoing';
-  /** Περιορισμός προϊόντων στο impact preview (π.χ. Sales Optimization / sales_base scope). */
+  /** Restrict products in the impact preview (e.g. Sales Optimization / sales_base scope). */
   impactProductFilter?: (p: Product) => boolean;
-  /** Για Price Benchmarking — lookup GMC benchmark ανά SKU. */
+  /** For Price Benchmarking — lookup GMC benchmark per SKU. */
   scoreContext?: CompositeScoreContext;
 }
 
@@ -353,7 +353,7 @@ export function StrategyImpactModal({
   const campaigns = campaignsFromHook ?? [];
   const contentItems = contentFromHook ?? [];
   const [showProducts, setShowProducts] = useState(true);
-  /** Επιλεγμένη διάρκεια εφαρμογής — ίδια λογική με StrategyImpactSummary (όχι μόνο default scenario). */
+  /** Selected application duration — same logic as StrategyImpactSummary (not just default scenario). */
   const [confirmDuration, setConfirmDuration] = useState<number | 'ongoing'>(() =>
     newDuration === undefined ? 'ongoing' : newDuration,
   );
@@ -560,7 +560,7 @@ export function StrategyImpactModal({
             )}
           </div>
 
-          {/* Διάρκεια — πρέπει να είναι ορατή πριν την εφαρμογή (ίδιο UX με το summary layer). */}
+          {/* Duration — must be visible before applying (same UX as the summary layer). */}
           <div className="flex flex-col gap-2 pt-2 border-t border-[#F5F5F5]">
             <div className="flex items-center gap-2 text-xs text-[#4A4A4A]">
               <Clock size={14} className="text-[#9CA3AF] flex-shrink-0" aria-hidden />

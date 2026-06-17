@@ -7,28 +7,25 @@ import { scenarios } from '../../data';
 import { generateInsightsFromData, type InsightInventoryAggregate } from '../../services/insights';
 import type { Product } from '../../types';
 
-// PER-130 (0.4): τα product cards τρέφονται από το PI aggregate — κανένα products read.
-// Module-level ώστε το reference να είναι σταθερό για το useMemo.
+// Product cards are fed from the PI aggregate — no products read.
+// Module-level so the reference stays stable for useMemo.
 const EMPTY_PRODUCTS: Product[] = [];
 
-/**
- * @param options.skipOrderHydration — Dashboard context: ΜΗΝ τραβάς 400ήμερο raw order history
- *   για client-side RFM (παγώνει το main thread σε brands με χιλιάδες orders). Χρησιμοποιεί
- *   imported/aggregate segments — ίδια πηγή με το dashboard segment grid.
- */
+// skipOrderHydration (Dashboard context): skip 400-day raw order history for client-side RFM
+// (freezes main thread on large stores); use imported/aggregate segments instead.
 export function useAiInsightsData(options: { skipOrderHydration?: boolean; useServerAggregate?: boolean } = {}) {
   const { segments } = useSegments({
     skipOrderHydration: options.skipOrderHydration,
     useServerAggregate: options.useServerAggregate,
   });
   const piAggregate = useProductIntelligenceAggregateDoc();
-  // PER-130 (0.3): summary-only — χωρίς SKU details / stock movement sheets· μοιράζεται
-  // το cache entry του Dashboard (το queryKey διασπάται στα ίδια options).
+  // Summary-only — no SKU details / stock movement sheets; shares the Dashboard's
+  // cache entry (the queryKey splits on the same options).
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const { activeStrategy } = useActiveStrategy();
 
-  // Import-only brands: aggregate null ⇒ inventory null ⇒ με products: [] τα product
-  // cards απουσιάζουν έντιμα (τα guards του insights.ts δεν περνούν με μηδενικά).
+  // Import-only stores: aggregate null ⇒ inventory null ⇒ with products: [] the product
+  // cards are honestly absent (the insights.ts guards don't pass with zeroed values).
   const inventory = useMemo<InsightInventoryAggregate | null>(
     () =>
       piAggregate.aggregate
@@ -41,13 +38,13 @@ export function useAiInsightsData(options: { skipOrderHydration?: boolean; useSe
     [piAggregate.aggregate]
   );
 
-  // Εξάγουμε τα AI-επιλεγμένα segments από την ενεργή στρατηγική ώστε τα insights
-  // να ευθυγραμμίζονται με το Channel Activation (single AI voice για τον χρήστη).
+  // Extract the AI-selected segments from the active strategy so insights
+  // align with Channel Activation (single AI voice for the user).
   const strategyContext = useMemo(() => {
     const rec = activeStrategy?.activationRecommendation ?? activeStrategy?.channelRecommendation;
     const targetSegments = rec?.targetSegments;
     if (!targetSegments || targetSegments.length === 0) return null;
-    // Φιλτράρουμε μόνο ideal+good (ίδια λογική με Channel Activation recommendedSegments)
+    // Keep only ideal+good (same logic as Channel Activation recommendedSegments)
     const names = targetSegments
       .filter((s) => !s.fit || s.fit === 'ideal' || s.fit === 'good')
       .map((s) => s.name);

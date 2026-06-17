@@ -50,29 +50,29 @@ function makeScope(overrides: Partial<DataAnalysisRfmScope> = {}): DataAnalysisR
 }
 
 describe('selectAggregateScope', () => {
-  it('επιστρέφει null όταν δεν υπάρχει aggregate doc (scopes undefined)', () => {
+  it('returns null when there is no aggregate doc (scopes undefined)', () => {
     expect(selectAggregateScope(undefined, 'identified')).toBeNull();
     expect(selectAggregateScope(undefined, 'all')).toBeNull();
   });
 
-  it('επιστρέφει null σε first-run running/failed χωρίς preserved scopes (scopes κενό)', () => {
+  it('returns null on first-run running/failed without preserved scopes (empty scopes)', () => {
     expect(selectAggregateScope({}, 'identified')).toBeNull();
     expect(selectAggregateScope({}, 'all')).toBeNull();
   });
 
-  it('keystone: running/failed ΜΕ preserved scopes ⇒ επιστρέφει το scope (το HEAD το μηδένιζε σε status !== ready)', () => {
-    // Το predicate δεν βλέπει καθόλου το status — αρκεί τα scopes να υπάρχουν.
+  it('keystone: running/failed WITH preserved scopes returns the scope', () => {
+    // The predicate never looks at status — it only needs the scopes to exist.
     const identified = makeScope();
     expect(selectAggregateScope({ identified }, 'identified')).toBe(identified);
   });
 
-  it('auto-switch: identified με canCompute:false και all με canCompute:true ⇒ σερβίρει το all', () => {
+  it('auto-switch: identified canCompute:false and all canCompute:true serves all', () => {
     const identified = makeScope({ canCompute: false, segments: [] });
     const all = makeScope({ sourcePreference: 'external', canCompute: true });
     expect(selectAggregateScope({ identified, all }, 'identified')).toBe(all);
   });
 
-  it('και τα δύο canCompute:false ⇒ επιστρέφει το preferred ως έχει (ο caller κάνει fallback)', () => {
+  it('both canCompute:false returns the preferred as-is (caller does the fallback)', () => {
     const identified = makeScope({ canCompute: false, segments: [] });
     const all = makeScope({ canCompute: false, segments: [] });
     const result = selectAggregateScope({ identified, all }, 'identified');
@@ -80,13 +80,13 @@ describe('selectAggregateScope', () => {
     expect(result?.canCompute).toBe(false);
   });
 
-  it('μονόδρομο switch: preferred "all" με canCompute:false επιστρέφεται ως έχει, ακόμα κι αν το identified υπολογίζεται', () => {
+  it('one-way switch: preferred "all" with canCompute:false is returned as-is, even if identified can compute', () => {
     const identified = makeScope({ canCompute: true });
     const all = makeScope({ sourcePreference: 'external', canCompute: false, segments: [] });
     expect(selectAggregateScope({ identified, all }, 'all')).toBe(all);
   });
 
-  it('absent-key chain: λείπει το preferred ⇒ fallback σε all, μετά identified, μετά null', () => {
+  it('absent-key chain: preferred missing falls back to all, then identified, then null', () => {
     const all = makeScope({ sourcePreference: 'external' });
     const identified = makeScope();
     expect(selectAggregateScope({ all }, 'identified')).toBe(all);
@@ -97,41 +97,41 @@ describe('selectAggregateScope', () => {
 describe('ordersQueryGate', () => {
   const base = { isDataAnalysis: false, skipOrderHydration: false, brandId: 'b1', connectedPlatformsCount: 2 };
 
-  it('true μόνο για default variant με brand και συνδεδεμένες πλατφόρμες', () => {
+  it('true only for default variant with brand and connected platforms', () => {
     expect(ordersQueryGate(base)).toBe(true);
   });
 
-  it('false για data_analysis variant', () => {
+  it('false for data_analysis variant', () => {
     expect(ordersQueryGate({ ...base, isDataAnalysis: true })).toBe(false);
   });
 
-  it('false με skipOrderHydration (dashboard path)', () => {
+  it('false with skipOrderHydration (dashboard path)', () => {
     expect(ordersQueryGate({ ...base, skipOrderHydration: true })).toBe(false);
   });
 
-  it('false χωρίς brandId', () => {
+  it('false without brandId', () => {
     expect(ordersQueryGate({ ...base, brandId: null })).toBe(false);
   });
 
-  it('false χωρίς συνδεδεμένες πλατφόρμες', () => {
+  it('false without connected platforms', () => {
     expect(ordersQueryGate({ ...base, connectedPlatformsCount: 0 })).toBe(false);
   });
 });
 
 describe('aggregateQueryGate', () => {
-  it('true για data_analysis variant με brand', () => {
+  it('true for data_analysis variant with brand', () => {
     expect(aggregateQueryGate({ isDataAnalysis: true, useServerAggregate: false, brandId: 'b1' })).toBe(true);
   });
 
-  it('true για useServerAggregate με brand', () => {
+  it('true for useServerAggregate with brand', () => {
     expect(aggregateQueryGate({ isDataAnalysis: false, useServerAggregate: true, brandId: 'b1' })).toBe(true);
   });
 
-  it('false χωρίς κανένα από τα δύο flags', () => {
+  it('false without either flag', () => {
     expect(aggregateQueryGate({ isDataAnalysis: false, useServerAggregate: false, brandId: 'b1' })).toBe(false);
   });
 
-  it('false χωρίς brandId ακόμα και με flags', () => {
+  it('false without brandId even with flags', () => {
     expect(aggregateQueryGate({ isDataAnalysis: true, useServerAggregate: true, brandId: null })).toBe(false);
   });
 });
@@ -145,27 +145,27 @@ describe('catalogQueryGate', () => {
     rawOrdersCount: 50,
   };
 
-  it('true όταν τρέχει ο orders δρόμος με κατεβασμένες παραγγελίες', () => {
+  it('true when the orders path runs with fetched orders', () => {
     expect(catalogQueryGate(base)).toBe(true);
   });
 
-  it('false ΠΑΝΤΑ όταν shouldUseAggregate — κόβει το client-side catalogAlignment bypass', () => {
+  it('ALWAYS false when shouldUseAggregate — cuts the client-side catalogAlignment bypass', () => {
     expect(catalogQueryGate({ ...base, shouldUseAggregate: true })).toBe(false);
   });
 
-  it('false όταν σερβίρει usable snapshot', () => {
+  it('false when serving a usable snapshot', () => {
     expect(catalogQueryGate({ ...base, hasUsableSnapshot: true })).toBe(false);
   });
 
-  it('false όσο εκκρεμούν οι παραγγελίες', () => {
+  it('false while orders are pending', () => {
     expect(catalogQueryGate({ ...base, ordersPending: true })).toBe(false);
   });
 
-  it('false χωρίς παραγγελίες', () => {
+  it('false without orders', () => {
     expect(catalogQueryGate({ ...base, rawOrdersCount: 0 })).toBe(false);
   });
 
-  it('false όταν το orders query είναι κλειστό', () => {
+  it('false when the orders query is disabled', () => {
     expect(catalogQueryGate({ ...base, ordersQueryEnabled: false })).toBe(false);
   });
 });

@@ -1,12 +1,5 @@
-/**
- * Fix user profile: add brandId to brandIds so user sees brand data.
- * For users who were invited before the ensureProfile race fix.
- *
- * Usage: node scripts/fix-user-brand.mjs <email> <brandId> [path/to/serviceAccountKey.json]
- * Example: node scripts/fix-user-brand.mjs eleana@notthesame.gr airblock
- *
- * Note: brandId is case-sensitive. Use lowercase (e.g. airblock not Airblock).
- */
+/** Add brandId to a user's brandIds so they see brand data. Usage: node scripts/fix-user-brand.mjs <email> <brandId> [serviceAccountKey.json]
+ * brandId is case-sensitive — use lowercase (e.g. airblock not Airblock). */
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';

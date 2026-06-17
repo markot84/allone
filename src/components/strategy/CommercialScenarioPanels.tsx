@@ -25,7 +25,7 @@ const VERDICT_BADGE: Record<ScenarioVerdict, 'success' | 'danger' | 'warning' | 
   insufficient: 'default',
 };
 
-// Marketing: το verdict κρίνει την ΑΠΟΦΑΣΗ (αλλαγή budget/νέα/διακοπή) με before→after.
+// Marketing: the verdict judges the DECISION (budget change/new/stopped) via before→after.
 const VERDICT_LABEL_MARKETING: Record<ScenarioVerdict, string> = {
   positive: 'Επιτυχία',
   negative: 'Αποτυχία',
@@ -58,13 +58,13 @@ export function CommercialScenarioPanels({
     ? new Date(data.cachedAt).toLocaleString('el-GR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : null;
 
-  // Και τα δύο tabs εμφανίζονται πάντα· το κενό περιεχόμενο το χειρίζεται το empty-state ανά tab.
-  // (Παλιά κρύβαμε το tab όταν rows=0 — έκανε το «Τιμές» να «εξαφανίζεται» όταν δεν εντοπίζονταν αλλαγές τιμών.)
+  // Both tabs are always shown; empty content is handled by the per-tab empty-state.
+  // (Hiding a tab when rows=0 made the price tab "disappear" when no price changes were detected.)
   const visibleTabs = TABS;
   const activeTab = visibleTabs.some((t) => t.key === tab) ? tab : (visibleTabs[0]?.key ?? tab);
 
-  // ΕΝΑ φιλτραρισμένο σύνολο που τροφοδοτεί ΚΑΙ το count ΚΑΙ τον πίνακα — αποκλείει αναντιστοιχίες
-  // (π.χ. να εμφανίζονται «επιτυχίες» ενώ έχει επιλεγεί «αποτυχίες»).
+  // A single filtered set feeds BOTH the count AND the table — avoids mismatches
+  // (e.g. showing "successes" while "failures" is selected).
   const filteredPriceRows = useMemo(() => filterScenarioRows(data.price?.rows ?? [], filter), [data.price, filter]);
   const filteredMarketingRows = useMemo(() => filterScenarioRows(data.marketing?.rows ?? [], filter), [data.marketing, filter]);
   const filteredRows = activeTab === 'price' ? filteredPriceRows : filteredMarketingRows;
@@ -187,7 +187,7 @@ export function CommercialScenarioPanels({
 
 function progressPct(progress: { loaded: number; total: number } | null | undefined): number | null {
   if (!progress || progress.total <= 0) return null;
-  // Κρατάμε λίγο «αέρα» (έως 98%) μέχρι να ολοκληρωθεί και η ανάλυση μετά το fetch.
+  // Leave some headroom (cap at 98%) until the post-fetch analysis also completes.
   return Math.min(98, Math.round((progress.loaded / progress.total) * 100));
 }
 
@@ -238,7 +238,7 @@ function filterScenarioRows<T extends { verdict: ScenarioVerdict; confidence?: s
   if (filter === 'positive' || filter === 'negative') {
     return rows.filter((r) => r.verdict === filter && isActionableRow(r));
   }
-  // neutral / insufficient: ακριβές verdict (χωρίς actionable φίλτρο).
+  // neutral / insufficient: exact verdict (no actionable filter).
   return rows.filter((r) => r.verdict === filter);
 }
 
@@ -587,7 +587,7 @@ function SkuCell({
 }
 
 function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceChangeImpactRow[]; limit?: number; getThumbnailUrl: GetThumbnailUrl; stockBySku?: Map<string, number> }) {
-  // Τα σύνολα υπολογίζονται πάντα από ΟΛΕΣ τις γραμμές· το `limit` περιορίζει μόνο τις ορατές.
+  // Totals are always computed from ALL rows; `limit` only restricts the visible ones.
   const visibleRows = limit != null ? rows.slice(0, limit) : rows;
   const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
   const totRevB = rows.reduce((s, r) => s + r.before.revenue, 0);
@@ -622,8 +622,8 @@ function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceC
       </thead>
       <tbody className="divide-y divide-[#E5E7EB]">
         {visibleRows.map((row, idx) => (
-          // Το ίδιο SKU μπορεί να εμφανίζεται σε πολλά month-windows → unique key (αλλιώς διπλά keys
-          // κάνουν το React να επαναχρησιμοποιεί stale rows κατά την αλλαγή φίλτρου).
+          // The same SKU can appear across multiple month-windows → unique key (otherwise duplicate
+          // keys make React reuse stale rows when the filter changes).
           <tr key={`${row.sku}__${row.changeDate}__${idx}`} className="hover:bg-[#FAFAFA]">
             <td className="px-3 py-2">
               <SkuCell sku={row.sku} productName={row.productName} getThumbnailUrl={getThumbnailUrl} />
@@ -643,7 +643,7 @@ function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceC
               {formatNumber(row.before.qty)} → {formatNumber(row.after.qty)}
               {stockBySku && (() => {
                 const stock = stockBySku.get(row.sku.toUpperCase());
-                // null = δεν υπάρχει καταγραφή αποθέματος → «—» (διφορούμενο το να μην εμφανίζεται τίποτα).
+                // null = no stock record → "—" (showing nothing would be ambiguous).
                 if (stock == null) {
                   return <p className="text-[10px] text-[#D1D5DB]">απόθ. —</p>;
                 }
@@ -696,8 +696,8 @@ function DecisionBadge({ row }: { row: MarketingSpendImpactRow }) {
   );
 }
 
-// Χρωματισμός με βάση το ΑΠΟΤΕΛΕΣΜΑ ΤΗΣ ΑΠΟΦΑΣΗΣ (verdict), ώστε μια «Αποτυχία» να μη δείχνει
-// πράσινα νούμερα (π.χ. υψηλό ROAS σε καμπάνια που κόπηκε) και να μοιάζει με επιτυχία.
+// Color by the decision's OUTCOME (verdict), so a "failure" does not show
+// green numbers (e.g. high ROAS on a cancelled campaign) and look like a success.
 function verdictTextTone(v: ScenarioVerdict): string {
   if (v === 'positive') return 'text-emerald-600';
   if (v === 'negative') return 'text-rose-600';
@@ -711,7 +711,7 @@ function verdictAccent(v: ScenarioVerdict): string {
 }
 
 function MarketingTable({ rows, limit }: { rows: MarketingSpendImpactRow[]; limit?: number }) {
-  // Τα σύνολα υπολογίζονται πάντα από ΟΛΕΣ τις γραμμές· το `limit` περιορίζει μόνο τις ορατές.
+  // Totals are always computed from ALL rows; `limit` only restricts the visible ones.
   const visibleRows = limit != null ? rows.slice(0, limit) : rows;
   const totSpend = rows.reduce((s, r) => s + r.spend, 0);
   const totRevenue = rows.reduce((s, r) => s + r.revenue, 0);

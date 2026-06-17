@@ -13,21 +13,17 @@ import { db } from '../config/firebase';
 import { logger } from '../utils/logger';
 import type { Campaign, Product } from '../types';
 
-/**
- * PER-130: ο runner δεν φορτώνει πια προϊόντα — τα inventory triggers αξιολογούνται
- * αποκλειστικά από το nightly scheduledAlerts (aggregates/products).
- * Module-level ώστε το reference να είναι σταθερό και να μην ξανατρέχει το effect.
- */
+/** Inventory triggers run server-side (nightly scheduledAlerts); module-level
+ * for a stable reference so the effect doesn't re-run. */
 const EMPTY_PRODUCTS: Product[] = [];
 
 async function getRecentNewAdsCount(brandId: string): Promise<number> {
   try {
-    // ΠΡΟΣΟΧΗ: το firstSeenAt γράφεται ως ISO string (competitorMonitor.ts → now.toISOString()),
-    // ΟΧΙ Timestamp — το range filter πρέπει να συγκρίνει string με string, αλλιώς δεν
-    // ταιριάζει τίποτα. Λεξικογραφική σύγκριση ISO-8601 == χρονολογική.
+    // firstSeenAt is an ISO string (not a Timestamp) so the range filter compares string vs
+    // string; lexicographic ISO-8601 comparison == chronological.
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const adsQ = query(collection(db, 'competitor_ads', brandId, 'ads'), where('firstSeenAt', '>=', weekAgo));
-    // Aggregation count: κανένα doc download — 1 read ανά ≤1000 index entries.
+    // Aggregation count: no doc downloads — 1 read per ≤1000 index entries.
     const snap = await getCountFromServer(adsQ);
     return snap.data().count;
   } catch {
@@ -39,7 +35,7 @@ export function useAutomationRunner() {
   const { currentBrand } = useBrand();
   const { user } = useAuth();
   const { plan } = usePlan();
-  // PER-130 (0.1): segments από το έτοιμο μηνιαίο RFM aggregate — όχι 400 ημέρες παραγγελιών
+  // Segments from the precomputed monthly RFM aggregate — not 400 days of orders
   const { segments, isLoading: segmentsLoading } = useSegments({ skipOrderHydration: true, useServerAggregate: true });
   const { campaigns, isLoading: campaignsLoading } = useCampaigns();
   const { suppliers } = useSuppliers();
@@ -50,8 +46,8 @@ export function useAutomationRunner() {
   useEffect(() => {
     if (!currentBrand?.id || !user?.uid) return;
     if (hasRun.current === currentBrand.id) return;
-    // PER-130: gate σε «φορτώνει ακόμα», ΟΧΙ σε «άδειο» — brand χωρίς segments (π.χ. κενό
-    // RFM aggregate) πρέπει να αξιολογεί κανονικά GA4/campaigns/seasonal/competitive triggers.
+    // Gate on "still loading", not "empty" — a brand with no segments must still evaluate
+    // GA4/campaigns/seasonal/competitive triggers normally.
     if (segmentsLoading || campaignsLoading) return;
 
     const brandId = currentBrand.id;
@@ -65,7 +61,7 @@ export function useAutomationRunner() {
           userId: user.uid,
           userName: user.displayName || user.email || '',
           plan: currentBrand.plan ?? 'growth',
-          products: EMPTY_PRODUCTS, // PER-130: inventory triggers πλέον server-side
+          products: EMPTY_PRODUCTS, // Inventory triggers are now server-side
           segments,
           campaigns: (campaigns ?? []) as Campaign[],
           suppliers,

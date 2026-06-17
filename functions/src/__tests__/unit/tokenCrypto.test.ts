@@ -1,20 +1,5 @@
-/**
- * Unit tests for functions/src/tokenCrypto.ts — connector token
- * encryption-at-rest (AES-256-GCM).
- *
- * Covers:
- *  1. encrypt -> decrypt round-trip with CONNECTOR_TOKEN_KEY present
- *     (the global setup.ts injects a 64-hex test key).
- *  2. isEncrypted() classification of enc:v1: vs plaintext values.
- *  3. Legacy plaintext pass-through on decrypt + idempotent encrypt of an
- *     already-encrypted value.
- *  4. PP-13b fail-CLOSED: with CONNECTOR_TOKEN_KEY missing, encryptToken
- *     THROWS rather than silently downgrading to plaintext. The module caches
- *     the key on first use, so the missing-key path is exercised in isolation
- *     via vi.resetModules() + a fresh dynamic import() with the env var deleted.
- *     (The module header comment is stale — says "returns plaintext" — but the
- *     code throws; we assert the CODE behavior.)
- */
+/** Tests for functions/src/tokenCrypto.ts (AES-256-GCM): round-trip, isEncrypted, legacy
+ * pass-through + idempotent encrypt, fail-closed encrypt when CONNECTOR_TOKEN_KEY is missing. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { decryptToken, encryptToken, isEncrypted } from '../../tokenCrypto';
 
@@ -24,8 +9,7 @@ describe('tokenCrypto', () => {
   describe('encryptToken -> decryptToken round-trip (key present)', () => {
     it('encryptToken returns an enc:v1: string and decryptToken recovers the original plaintext', () => {
       // Arrange
-      // A representative connector token (NOT a real credential — deliberately
-      // avoids any provider token prefix so secret scanners don't flag it).
+      // Representative connector token (not a real credential; no provider prefix to avoid scanners).
       const plain = 'connector-token-sample-value';
 
       // Act
@@ -109,12 +93,11 @@ describe('tokenCrypto', () => {
     });
   });
 
-  describe('fail-CLOSED when CONNECTOR_TOKEN_KEY is missing (PP-13b)', () => {
+  describe('fail-CLOSED when CONNECTOR_TOKEN_KEY is missing', () => {
     const ORIGINAL_KEY = process.env.CONNECTOR_TOKEN_KEY;
 
     beforeEach(() => {
-      // The module caches the key at first use; reset the module registry so a
-      // fresh dynamic import re-evaluates loadKey() against the mutated env.
+      // Module caches the key on first use; reset registry so a fresh import re-reads the mutated env.
       vi.resetModules();
     });
 
@@ -144,8 +127,7 @@ describe('tokenCrypto', () => {
       delete process.env.CONNECTOR_TOKEN_KEY;
       const { encryptToken: encryptNoKey } = await import('../../tokenCrypto');
 
-      // Act / Assert — falsy returns '' and an already-encrypted value is passed
-      // through, both before the key check is ever reached.
+      // Act / Assert — falsy returns '' and already-encrypted passes through, before the key check.
       expect(encryptNoKey('')).toBe('');
       expect(encryptNoKey(`${PREFIX}nonce:payload`)).toBe(`${PREFIX}nonce:payload`);
     });
@@ -155,8 +137,7 @@ describe('tokenCrypto', () => {
       delete process.env.CONNECTOR_TOKEN_KEY;
       const { decryptToken: decryptNoKey } = await import('../../tokenCrypto');
 
-      // Act / Assert — decrypt is intentionally fail-soft (controlled empty),
-      // unlike encrypt which is fail-closed.
+      // Act / Assert — decrypt is intentionally fail-soft (controlled empty), unlike fail-closed encrypt.
       expect(decryptNoKey(`${PREFIX}nonce:payload`)).toBe('');
       expect(decryptNoKey('plain-legacy-token')).toBe('plain-legacy-token');
     });

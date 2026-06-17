@@ -17,7 +17,7 @@ const SEVERITY_STYLE: Record<string, { icon: typeof AlertTriangle; color: string
   info: { icon: Info, color: '#3B82F6', bg: '#EFF6FF' },
 };
 
-/** Παράγει το background του swatch: 3-wedge conic για τριχρωμίες, διαγώνιο για διχρωμίες, solid αλλιώς. */
+/** Builds the swatch background: 3-wedge conic for tri-color, diagonal for two-color, solid otherwise. */
 function swatchBackground(preset: AccentPreset): string {
   const cols =
     preset.swatchColors && preset.swatchColors.length > 0
@@ -40,9 +40,8 @@ export function AutomationSettingsPage() {
   const { currentBrand } = useBrand();
   const { user, isSuperAdmin } = useAuth();
   const { members } = useBrandMembers();
-  // PP-14: automation triggers can drive ad spend — only owner/admin/creator may
-  // save. Mirrors firestore.rules canManageBrandConnectors so the UI matches the
-  // server check instead of surfacing a permission error to regular members.
+  // Automation triggers can drive ad spend — only owner/admin/creator may save.
+  // Mirrors firestore.rules canManageBrandConnectors so the UI matches the server check.
   const myRole = members.find((m) => m.userId === user?.uid)?.role ?? 'member';
   const canManageAutomation =
     myRole === 'owner' || myRole === 'admin' || currentBrand?.createdBy === user?.uid || isSuperAdmin;

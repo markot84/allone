@@ -9,12 +9,12 @@ const STRUCTURE_MODEL = 'gemini-2.5-flash';
 const STRUCTURE_TIMEOUT_MS = 8000;
 
 export type CommercialFactorType =
-  | 'event' // αθλητικό/πολιτιστικό γεγονός, λανσάρισμα, σεζόν
-  | 'trend' // τάση αγοράς/καταναλωτή
-  | 'pricing' // ακρίβεια, κόστη, τιμολόγηση
-  | 'competition' // κινήσεις ανταγωνισμού
-  | 'instinct' // εμπορικό ένστικτο/εμπειρία
-  | 'macro'; // μακροοικονομικά/κοινωνικά
+  | 'event' // sports/cultural event, launch, season
+  | 'trend' // market/consumer trend
+  | 'pricing' // inflation, costs, pricing
+  | 'competition' // competitor moves
+  | 'instinct' // commercial instinct/experience
+  | 'macro'; // macroeconomic/social
 
 export type CommercialDirection = 'up' | 'down' | 'neutral';
 export type CommercialMagnitude = 'low' | 'medium' | 'high';
@@ -22,18 +22,18 @@ export type CommercialConfidence = 'low' | 'medium' | 'high';
 export type CommercialInfoStatus = 'active' | 'archived' | 'applied';
 
 export interface CommercialInfoStructured {
-  /** Σύντομη δομημένη αναδιατύπωση της πληροφορίας. */
+  /** Short structured rephrasing of the information. */
   summary: string;
-  /** Επηρεαζόμενες κατηγορίες προϊόντων. */
+  /** Affected product categories. */
   categories: string[];
-  /** Επηρεαζόμενα parent SKU / οικογένειες προϊόντων. */
+  /** Affected parent SKUs / product families. */
   parentSkus: string[];
-  /** Επηρεαζόμενες επωνυμίες/προμηθευτές (π.χ. Adidas). */
+  /** Affected brands/suppliers (e.g. Adidas). */
   brands: string[];
   factorType: CommercialFactorType;
   direction: CommercialDirection;
   magnitude: CommercialMagnitude;
-  /** Ορίζοντας ισχύος (YYYY-MM-DD) ή null αν άγνωστος. */
+  /** Validity horizon (YYYY-MM-DD) or null if unknown. */
   horizonFrom: string | null;
   horizonTo: string | null;
   confidence: CommercialConfidence;
@@ -51,14 +51,14 @@ export interface CommercialInfo extends CommercialInfoStructured {
 }
 
 export interface MarkDialogueContext {
-  /** Συμπυκνωμένα συμπεράσματα/ενέργειες από τη σχετική απάντηση του Mark. */
+  /** Condensed conclusions/actions from the related Mark response. */
   summaryBullets: string[];
-  /** Πλήρης απάντηση Mark για μελλοντική αναφορά/debug. */
+  /** Full Mark response for future reference/debug. */
   assistantResponse?: string;
   sourceMessageId?: string;
 }
 
-/** Firestore doc shape (structured nested ώστε να μένει καθαρό το top-level). */
+/** Firestore doc shape (structured nested to keep the top-level clean). */
 interface CommercialInfoDoc {
   brandId: string;
   rawText: string;
@@ -123,10 +123,8 @@ const STRUCTURE_SYSTEM = buildAdvisorySystemPrompt(
   { json: true }
 );
 
-/**
- * Δομεί ελεύθερο κείμενο εμπορικής πληροφορίας μέσω Gemini Flash.
- * Επιστρέφει πάντα έγκυρο αντικείμενο (fallback αν αποτύχει το AI).
- */
+/** Structures free-text commercial information via Gemini Flash; always returns
+ * a valid object (fallback if the AI fails). */
 export async function structureCommercialInfo(
   rawText: string,
   context?: { brandName?: string | null; today?: string; knownCategories?: string[] }
@@ -183,7 +181,7 @@ function genId(brandId: string): string {
   return `${brandId}_${Date.now()}_${rand}`;
 }
 
-/** Δημιουργία εγγραφής εμπορικής πληροφορίας (brand-scoped). */
+/** Create a commercial-information record (brand-scoped). */
 export async function createCommercialInfo(input: {
   brandId: string;
   rawText: string;
@@ -223,7 +221,7 @@ function flatten(id: string, doc: CommercialInfoDoc & { structured?: CommercialI
   };
 }
 
-/** Λίστα εμπορικών πληροφοριών για το brand (νεότερες πρώτα). */
+/** List commercial information for the brand (newest first). */
 export async function listCommercialInfo(brandId: string): Promise<CommercialInfo[]> {
   if (!brandId) return [];
   const docs = await FirestoreService.getDocuments<{ id: string } & CommercialInfoDoc>(
@@ -236,7 +234,7 @@ export async function listCommercialInfo(brandId: string): Promise<CommercialInf
     .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
 }
 
-/** Μόνο ενεργές πληροφορίες — αυτές που τροφοδοτούν πλάνο/προβλέψεις. */
+/** Only active entries — those that feed the plan/forecasts. */
 export async function listActiveCommercialInfo(brandId: string): Promise<CommercialInfo[]> {
   if (!brandId) return [];
   const docs = await FirestoreService.getDocuments<{ id: string } & CommercialInfoDoc>(
@@ -268,7 +266,7 @@ export async function deleteCommercialInfo(id: string): Promise<void> {
   await FirestoreService.deleteDocument(COLLECTION, id);
 }
 
-/** Συμπυκνωμένη απόδοση ενεργών πληροφοριών για AI prompts (brand-scoped). */
+/** Condensed rendering of active entries for AI prompts (brand-scoped). */
 export function formatCommercialInfoForPrompt(items: CommercialInfo[]): string {
   if (!items.length) return '(Καμία καταχωρημένη εμπορική πληροφορία.)';
   const dirLabel: Record<CommercialDirection, string> = { up: 'άνοδος', down: 'πτώση', neutral: 'ουδέτερο' };

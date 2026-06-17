@@ -13,7 +13,7 @@ export interface GA4DailyMetrics {
   avgSessionDuration: number;
   conversions: number;
   eventCount: number;
-  /** GA4 ecommerce: φορές που προστέθηκαν προϊόντα στο καλάθι (ανά ημέρα). */
+  /** GA4 ecommerce: number of add-to-cart events (per day). */
   addToCarts?: number;
 }
 
@@ -22,7 +22,7 @@ export interface GA4TrafficSource {
   users: number;
   newUsers: number;
   conversions: number;
-  /** Έσοδα αγορών ανά default channel group στο GA4 (`totalRevenue`). */
+  /** Purchase revenue per GA4 default channel group (`totalRevenue`). */
   totalRevenue?: number;
 }
 
@@ -40,7 +40,7 @@ export interface GA4OrganicFallbackRow {
   sessions: number;
   users: number;
   conversions: number;
-  /** Εμπορικά έσοδα ανά ημέρα/path όταν τα επιστρέφει το GA4 για organic landing rows. */
+  /** Commerce revenue per day/path when GA4 returns it for organic landing rows. */
   totalRevenue?: number;
 }
 
@@ -55,7 +55,7 @@ export interface SearchConsoleQueryRow {
 
 export type OrganicSearchSource = 'gsc' | 'ga4_fallback' | 'none';
 
-/** YYYY-MM-DD → channel → metrics (για φίλτρο ημερολογίου στο UI). */
+/** YYYY-MM-DD → channel → metrics (for the date filter in the UI). */
 export type GA4DailyTrafficByChannel = Record<
   string,
   Record<
@@ -162,9 +162,8 @@ export function useGA4Data() {
     queryFn: () => (brandId ? fetchGA4Data(brandId) : Promise.resolve(null)),
     staleTime: 10 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    // Ανανέωση όταν ανοίγει η σελίδα: μετά το νυχτερινό GA4 sync (05:40) ο χρήστης πρέπει να βλέπει
-    // φρέσκα δεδομένα, όχι το persisted cache προηγούμενης session (π.χ. έδειχνε δεδομένα έως 22/05
-    // ενώ ο server είχε συγχρονιστεί). `true` κάνει refetch μόνο αν είναι stale (>staleTime).
+    // Refresh on page open: after the nightly GA4 sync the user must see fresh data,
+    // not the persisted cache from a previous session. `true` refetches only if stale (>staleTime).
     refetchOnMount: true,
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData,

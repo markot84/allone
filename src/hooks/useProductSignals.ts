@@ -1,35 +1,13 @@
-/**
- * useProductSignals — Universal data layer για όλες τις εμπορικές πολιτικές.
- *
- * Συγχωνεύει τέσσερις πηγές δεδομένων με σταθερή ιεράρχηση και επιστρέφει
- * per-SKU resolved record + provenance per field. Καμία υπάρχουσα συμπεριφορά
- * δεν αλλάζει — είναι additive layer που τα callers (filters, scoring, AI
- * prompts) μπορούν να χρησιμοποιούν προαιρετικά.
- *
- * Source priority (από high σε low εμπιστοσύνη):
- *   1. CONNECTOR        — orders από συνδεδεμένα e-shops (skuStats από
- *                         ecommerce_summary). Ground truth για windows + last_sale_at.
- *   2. STOCK_MOVEMENT   — daily snapshot deltas (skuMovement). Έγκυρο για
- *                         brands χωρίς orders connector — net of returns.
- *   3. PROCUREMENT      — procurement_signals (ERP/inventory exports). Lifetime,
- *                         status, tied capital, margin, list/corp prices.
- *   4. IMPORT           — fields απευθείας στο product doc (από XLSX import).
- *
- * Σχεδιαστική σημείωση: τα **windows** (qty7d/30d/90d) ΔΕΝ γεμίζουν από
- * lifetime ή annual μετρήσεις. Αν δεν υπάρχει window-grade πηγή, μένουν undefined
- * και τα filters πρέπει να το αντιμετωπίζουν ως «άγνωστο» (όχι 0).
- */
+/** Additive per-SKU data layer merging four sources by priority: connector > stock-movement > procurement > import.
+ * Windows (qty7d/30d/90d) never fill from lifetime/annual: absent window-grade source stays undefined ("unknown", not 0). */
 
 import { useMemo } from 'react';
 import { useEcommerceSummary } from './useEcommerceSummary';
 import { useProcurementSignals, type ProcurementSignal } from './useProcurementSignals';
 import type { Product } from '../types';
 
-/**
- * Ενιαίο κλειδί SKU: NFC, trim, κενά, κεφαλαία — ώστε e-shop, ERP procurement και import
- * να «δένουν» παρά μικροδιαφορές (π.χ. Abc-1 vs ABC-1). Χωρίς αυτό, η Διάγνωση
- * προτεραιοτήτων αγνοούσε συχνά τα skuStats παρά ενεργό connector.
- */
+/** Unified SKU key (NFC, trim, collapse spaces, uppercase) so e-shop, ERP procurement
+ * and import line up despite minor differences (e.g. Abc-1 vs ABC-1). */
 export function normalizeSkuKeyForSignals(raw: string | undefined | null): string {
   if (raw == null) return '';
   const s = String(raw).normalize('NFC').trim().replace(/\s+/g, ' ');
@@ -146,20 +124,20 @@ export interface ResolvedSignal {
   evaluation_score?: number;
   margin_pct?: number;
   days_of_cover?: number;
-  // Annual (από procurement_fiscal_year — τελευταίο διαθέσιμο έτος)
+  // Annual (from procurement_fiscal_year — latest available year)
   annual_revenue?: number;
   annual_profit?: number;
 }
 
-/** Map field → source που το έδωσε. Τιμές για undefined fields == 'none'. */
+/** Map field → source that provided it. Undefined fields map to 'none'. */
 export type Provenance = Record<keyof Omit<ResolvedSignal, 'sku'>, SignalSource>;
 
 export interface ProductSignal {
   resolved: ResolvedSignal;
   provenance: Provenance;
-  /** True αν τουλάχιστον ένα field προέρχεται από procurement. */
+  /** True if at least one field comes from procurement. */
   hasProcurement: boolean;
-  /** True αν τουλάχιστον ένα window είναι orders-grade (connector ή movement). */
+  /** True if at least one window is orders-grade (connector or movement). */
   hasWindowSource: boolean;
 }
 
@@ -199,11 +177,11 @@ function setField<K extends keyof Provenance>(
 
 export interface UseProductSignalsResult {
   signalsBySku: Map<string, ProductSignal>;
-  /** Συνδυάζει product + signal σε ένα enriched object (αντικαθιστά μόνο null/undefined fields του product). */
+  /** Combines product + signal into one enriched object (only fills null/undefined product fields). */
   enrichProduct: (p: Product) => Product;
-  /** Resolve helper για ad-hoc lookup (επιστρέφει undefined αν δεν υπάρχει SKU). */
+  /** Resolve helper for ad-hoc lookup (returns undefined if the SKU is absent). */
   getSignal: (sku: string) => ProductSignal | undefined;
-  /** Πόσα SKUs έχουμε ανά πηγή (debug/diagnostics). */
+  /** How many SKUs we have per source (debug/diagnostics). */
   coverage: {
     connector: number;
     movement: number;
@@ -213,10 +191,7 @@ export interface UseProductSignalsResult {
   isLoading: boolean;
 }
 
-/**
- * Build resolved signals για όλα τα SKUs που εμφανίζονται σε οποιαδήποτε πηγή.
- * Δέχεται προαιρετικά μια λίστα Products για να πιάσει και τα import-only SKUs.
- */
+/** Build resolved signals for all SKUs in any source; optional Products list catches import-only SKUs. */
 export function useProductSignals(
   products?: Product[],
   options?: { preferProcurementStock?: boolean }
@@ -230,7 +205,7 @@ export function useProductSignals(
     const skuMovement = aggregateMovementByNorm(ec.skuMovement || {});
     const procSignals = aggregateProcurementByNorm(ps.signalsBySku || {});
 
-    // Συγκεντρώνουμε όλα τα γνωστά SKUs (κανονικοποιημένα κλειδιά)
+    // Gather all known SKUs (normalized keys)
     const allSkus = new Set<string>();
     for (const k of Object.keys(skuStats)) allSkus.add(k);
     for (const k of Object.keys(skuMovement)) allSkus.add(k);
@@ -257,9 +232,8 @@ export function useProductSignals(
       const resolved: ResolvedSignal = { sku };
       const prov: Provenance = { ...EMPTY_PROVENANCE };
 
-      // 0) PROCUREMENT-FIRST stock: για Enterprise+Procurement brands το απόθεμα είναι αυθεντικό
-      // από το procurement αρχείο και πρέπει να υπερισχύει του connector. Το ορίζουμε πρώτο ώστε
-      // η προτεραιότητα του setField (first-wins) να κρατήσει την τιμή procurement.
+      // 0) PROCUREMENT-FIRST stock: when authoritative, set first so setField's first-wins
+      // priority keeps the procurement value over the connector.
       if (preferProcurementStock) {
         const psStock = procSignals[sku];
         if (psStock) setField(resolved, prov, 'stock', psStock.available_stock, 'procurement');
@@ -277,7 +251,7 @@ export function useProductSignals(
         setField(resolved, prov, 'stock', stat.stock, 'connector');
       }
 
-      // 2) STOCK_MOVEMENT — fallback για windows όταν δεν έχουμε orders connector
+      // 2) STOCK_MOVEMENT — fallback for windows when there is no orders connector
       const mov = skuMovement[sku];
       if (mov) {
         coverage.movement++;
@@ -322,7 +296,7 @@ export function useProductSignals(
         setField(resolved, prov, 'margin_pct', p.margin_percentage, 'import');
       }
 
-      // 5) COMPUTED — tied_capital fallback (cost × stock) όταν procurement λείπει
+      // 5) COMPUTED — tied_capital fallback (cost × stock) when procurement is missing
       if (
         resolved.tied_capital === undefined &&
         typeof resolved.cost === 'number' &&

@@ -8,7 +8,7 @@ const { updateTriggerSpy, createAlertSpy } = vi.hoisted(() => ({
   createAlertSpy: vi.fn<(alert: { triggerId: string } & Record<string, unknown>) => Promise<string>>(async () => 'alert-1'),
 }));
 
-// Mock των Firestore services ώστε το engine να τρέχει αμιγώς in-memory (node env).
+// Mock the Firestore services so the engine runs purely in-memory (node env).
 vi.mock('./automationSettings', () => ({
   AutomationSettingsService: {
     get: vi.fn(async () => ({ triggers: allEnabledTriggers(), updatedAt: '' })),
@@ -49,13 +49,13 @@ function makeCampaign(overrides: Partial<Campaign> = {}): Campaign {
   };
 }
 
-describe('runAutomationEvaluation — PER-130 server-only inventory skip', () => {
+describe('runAutomationEvaluation — server-only inventory skip', () => {
   beforeEach(() => {
     updateTriggerSpy.mockClear();
     createAlertSpy.mockClear();
   });
 
-  it('με products: [] τα 5 inventory triggers παρακάμπτονται ΠΡΙΝ από κάθε updateTrigger write', async () => {
+  it('with products: [] the 5 inventory triggers are skipped BEFORE any updateTrigger write', async () => {
     await runAutomationEvaluation({
       brandId: 'b1',
       userId: 'u1',
@@ -74,7 +74,7 @@ describe('runAutomationEvaluation — PER-130 server-only inventory skip', () =>
     }
   });
 
-  it('τα due non-inventory triggers συνεχίζουν να αξιολογούνται και να γράφουν lastCheckedAt', async () => {
+  it('due non-inventory triggers keep being evaluated and writing lastCheckedAt', async () => {
     const results = await runAutomationEvaluation({
       brandId: 'b1',
       userId: 'u1',
@@ -88,11 +88,11 @@ describe('runAutomationEvaluation — PER-130 server-only inventory skip', () =>
 
     const stampedIds = updateTriggerSpy.mock.calls.map(call => call[1]);
     expect(stampedIds).toContain('campaign_high_roas');
-    // roas 9 > default threshold 4 ⇒ το trigger πυροδοτεί κανονικά χωρίς προϊόντα.
+    // roas 9 > default threshold 4 ⇒ the trigger fires normally without products.
     expect(results.map(r => r.triggerId)).toContain('campaign_high_roas');
   });
 
-  it('δεν δημιουργείται κανένα alert doc για inventory trigger ids', async () => {
+  it('no alert doc is created for inventory trigger ids', async () => {
     await runAutomationEvaluation({
       brandId: 'b1',
       userId: 'u1',

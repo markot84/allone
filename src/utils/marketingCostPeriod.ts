@@ -4,7 +4,7 @@ function daysInCalendarMonth(year: number, month1to12: number): number {
   return new Date(Date.UTC(year, month1to12, 0)).getUTCDate();
 }
 
-/** Ημερομηνίες YYYY-MM-DD από from έως to (συμπεριλαμβανομένων), UTC. */
+/** Dates YYYY-MM-DD from `fromDate` to `toDate` inclusive, in UTC. */
 export function eachDateInclusive(fromDate: string, toDate: string): string[] {
   const out: string[] = [];
   const [fy, fm, fd] = fromDate.split('-').map(Number);
@@ -18,10 +18,8 @@ export function eachDateInclusive(fromDate: string, toDate: string): string[] {
   return out;
 }
 
-/**
- * Ημερομηνίες YYYY-MM-DD στο **τοπικό** ημερολόγιο (ίδιο με GlobalDateContext / `<input type="date">`).
- * Χρησιμοποιήστε το όταν η περίοδος πρέπει να ταιριάζει ακριβώς με την επιλογή του χρήστη.
- */
+/** Dates YYYY-MM-DD in the **local** calendar (same as GlobalDateContext / `<input type="date">`),
+ * matching the user's selection exactly. */
 export function eachDateInclusiveLocal(fromDate: string, toDate: string): string[] {
   const [fy, fm, fd] = fromDate.split('-').map(Number);
   const [ty, tm, td] = toDate.split('-').map(Number);
@@ -72,13 +70,8 @@ function dailyRateForLine(
 
 export type MarketingOverheadBreakdown = { id: string; label: string; amount: number };
 
-/**
- * Επιπλέον κόστη marketing (εκτός ad spend) για το διάστημα [fromDate, toDate].
- *
- * - **fixed_monthly** (π.χ. agency retainer): πλήρες ποσό **ανά ημερολογιακό μήνα** που εμφανίζεται
- *   στην περίοδο (όχι αναλογία ημερών μέσα στον μήνα). Έτσι «Τρέχων Μήνας» 1–20 Απριλίου = 1× το μηνιαίο κόστος, όχι 20/30.
- * - **percent_of_budget** / **one_off_month**: παραμένω κατανομή ανά ημέρα.
- */
+/** Marketing overhead (excluding ad spend) for [fromDate, toDate]: fixed_monthly bills full per
+ * calendar month touched (not day-prorated); percent_of_budget/one_off_month are per-day. */
 export function computeMarketingOverheadForPeriod(
   lines: MarketingCostLine[] | undefined,
   monthlyBudget: number,

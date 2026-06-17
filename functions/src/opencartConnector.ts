@@ -1,15 +1,5 @@
-/**
- * OpenCart Connector
- *
- * Flow:
- * 1. User enters e-shop URL + OpenCart REST Admin API OAuth credentials
- * 2. Session authentication via /index.php?route=rest/admin_security/gettoken
- * 3. User login via /index.php?route=rest/login_admin/login
- * 4. Credentials stored in Firestore (connectors/{brandId}.opencart)
- * 5. Sync: πρώτο 3ετίας orders + full products catalog· incremental orders μετά
- *
- * Compatible with the OpenCart REST Admin API OAuth extension.
- */
+/** OpenCart Connector via the REST Admin API OAuth extension: session auth + admin login,
+ * encrypted creds in connectors/{brandId}.opencart, initial 3-year backfill then incremental. */
 
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
@@ -98,9 +88,7 @@ async function getObservedOutboundIp(): Promise<string | null> {
   }
 }
 
-/**
- * Validate OpenCart REST Admin API OAuth credentials and save them on success.
- */
+/** Validate OpenCart REST Admin API OAuth credentials and save them on success. */
 export async function saveOpenCartCredentials(
   brandId: string,
   storeUrl: string,
@@ -140,12 +128,8 @@ export async function saveOpenCartCredentials(
   return { success: true, shopName: testResult.shopName };
 }
 
-/**
- * Test OpenCart REST Admin API OAuth connection.
- * The extension requires two explicit steps:
- * 1. session authentication (`rest/admin_security/gettoken`)
- * 2. admin user login (`rest/login_admin/login`)
- */
+/** Test OpenCart REST Admin API OAuth connection: session auth (`rest/admin_security/gettoken`)
+ * then admin user login (`rest/login_admin/login`). */
 export async function testOpenCartConnection(
   storeUrl: string,
   credentials: OpenCartCredentialInput
@@ -400,11 +384,8 @@ function ocParseQty(v: unknown): number {
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
-/**
- * Extract tax amount from OpenCart order payload.
- * Looks in `totals` / `order_totals` array (code or title containing "tax"/"vat"/"φπα")
- * and falls back to direct fields like `tax`, `total_tax`.
- */
+/** Extract tax from OpenCart order: `totals`/`order_totals` entries matching "tax"/"vat"/"φπα",
+ * falling back to direct fields like `tax`, `total_tax`. */
 function extractOcTaxAmount(source: unknown): number {
   if (!source || typeof source !== 'object') return 0;
   const o = source as Record<string, unknown>;
@@ -433,9 +414,7 @@ function extractOcTaxAmount(source: unknown): number {
   return 0;
 }
 
-/**
- * Maps OpenCart order / order-info payloads → normalized lineItems (aligned with client normalizer).
- */
+/** Maps OpenCart order / order-info payloads → normalized lineItems (aligned with client normalizer). */
 function parseOpenCartOrderProductsToLineItems(source: unknown): Record<string, unknown>[] {
   if (!source || typeof source !== 'object') return [];
   const o = source as Record<string, unknown>;
@@ -475,11 +454,8 @@ async function mapPool<T, R>(items: T[], poolSize: number, worker: (item: T) => 
   return results;
 }
 
-/**
- * Fetch OpenCart orders (last 3 years) + products and store in Firestore.
- * Customer email is stored for audience exports, while `customerEmailHash` is used
- * for analytics/matching.
- */
+/** Fetch OpenCart orders (last 3 years) + products into Firestore; stores customer email for
+ * audience exports and `customerEmailHash` for analytics/matching. */
 export async function fetchOpenCartData(brandId: string): Promise<{
   success: boolean;
   imported: number;
@@ -607,7 +583,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
   const hasOrdersCursor = Boolean(connector.ordersSyncPageCursor);
   const productsCatalogComplete = Boolean(connector.lastProductsSyncAt) && !hasProductsCursor;
   const ordersHistoryComplete = Boolean(connector.lastOrdersSyncAt) && !hasOrdersCursor;
-  /** Large stores (e.g. stepsport): one leg per run to stay under Cloud Function / browser timeout. */
+  /** Large stores: one leg per run to stay under Cloud Function / browser timeout. */
   const runProductsLeg = !productsCatalogComplete;
   const runOrdersLeg = productsCatalogComplete && !ordersHistoryComplete;
   const runIncrementalBoth = productsCatalogComplete && ordersHistoryComplete;
@@ -982,10 +958,8 @@ export function isOpenCartInitialBackfillIncomplete(
   return err.includes('page cap') || err.includes('sync incomplete') || err.includes('aborted');
 }
 
-/**
- * Ensures the background backfill job is queued when the initial import is incomplete.
- * Idempotent: no-op if a job is already pending/running or backfill is complete.
- */
+/** Queues the background backfill job when the initial import is incomplete.
+ * Idempotent: no-op if a job is already pending/running or backfill is complete. */
 export async function ensureOpenCartBackfillJobQueued(
   brandId: string,
   opts?: { mode?: string }

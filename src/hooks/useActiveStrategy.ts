@@ -45,40 +45,40 @@ export interface ActiveStrategy {
   implementedAt?: string;
   mixConfig?: MixConfig;
   monthlyBudget?: number;
-  /** Επιπλέον κόστη marketing για πληρέστερο ROI (εκτός ad spend). */
+  /** Additional marketing costs for a fuller ROI (beyond ad spend). */
   marketingCostLines?: MarketingCostLine[];
-  /** Κατηγορίες κόστους P&L επιχείρησης (Fixed Costs, Transportation κλπ.). */
+  /** Business P&L cost categories (Fixed Costs, Transportation, etc.). */
   costCategories?: PLCostCategory[];
   channelRecommendation?: ChannelRecommendation;
   activationRecommendation?: ChannelRecommendation;
   contentSuggestions?: ContentSuggestionsResult;
-  /** Φίλτρο συμμετοχής SKU για Sales Optimization (sales_base) */
+  /** SKU participation filter for Sales Optimization (sales_base) */
   salesBaseScope?: SalesBaseScope;
-  /** Φίλτρο συμμετοχής SKU για Price Benchmarking (price_benchmark) */
+  /** SKU participation filter for Price Benchmarking (price_benchmark) */
   priceBenchmarkScope?: PriceBenchmarkStrategyScope;
-  /** Παράμετροι εποχιακής/εκπτωτικής περιόδου (seasonal_discount) */
+  /** Seasonal/discount period parameters (seasonal_discount) */
   seasonalDiscount?: SeasonalDiscountConfig;
-  /** Παράλληλη εποχιακή πρόταση που τρέχει δίπλα στην κύρια εμπορική πολιτική. */
+  /** Parallel seasonal proposal running alongside the main commercial policy. */
   seasonalProposal?: SeasonalProposal;
-  /** Προέλευση από Decision Buckets triage (αν η στρατηγική προήλθε από bucket CTA). */
+  /** Origin from Decision Buckets triage (if the strategy came from a bucket CTA). */
   triageOrigin?: TriageOrigin;
   createdAt: string;
   updatedAt: string;
 }
 
-/** Snapshot της επιλογής bucket από το TriageCard — καρφώνει SKU scope στην ενεργή πολιτική. */
+/** Snapshot of the bucket choice from TriageCard — pins SKU scope onto the active policy. */
 export interface TriageOrigin {
-  /** Αναγνωριστικό bucket — βλ. utils/decisionBuckets.BucketId */
+  /** Bucket identifier — see utils/decisionBuckets.BucketId */
   bucket: string;
-  /** Ανθρώπινο label (π.χ. «Νεκρά κεφάλαια»). */
+  /** Human-readable label (e.g. "Dead capital"). */
   label: string;
-  /** Λίστα SKUs που σκοπεύονται από το bucket. */
+  /** List of SKUs targeted by the bucket. */
   skus: string[];
-  /** Προαιρετική allowlist product ids για UI filtering / strategy scopes. */
+  /** Optional allowlist of product ids for UI filtering / strategy scopes. */
   productIds?: string[];
-  /** Συνολικά δεσμευμένα κεφάλαια (€) — KPI για context. */
+  /** Total tied-up capital (€) — KPI for context. */
   tiedCapital?: number;
-  /** ISO timestamp όταν επιλέχθηκε το bucket. */
+  /** ISO timestamp when the bucket was selected. */
   selectedAt: string;
 }
 
@@ -115,8 +115,7 @@ export function useActiveStrategy() {
         const sorted = [...strategies].sort((a, b) => getTime(b) - getTime(a));
         return sorted[0];
       } catch (error: any) {
-        // If index is building, return null (will use fallback)
-        // This allows saves to work even if query fails
+        // If index is building, return null (fallback) so saves still work.
         if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
           logger.debug('Index building, query unavailable. Saves will still work.');
           return null;
@@ -158,9 +157,8 @@ export function useActiveStrategy() {
       if (!brandId) throw new Error('No brand selected');
 
       const now = new Date().toISOString();
-      // Σταθερό id per brand → αποτρέπει το orphaning των channel_activations σε κάθε save.
-      // Παλιά timestamp-based docs παραμένουν στο Firestore αλλά δεν επιστρέφονται από τον reader,
-      // γιατί το νέο stable doc έχει πάντα πιο πρόσφατο updatedAt.
+      // Stable id per brand prevents orphaning channel_activations; older timestamp-based
+      // docs remain but aren't read (the stable doc always has a newer updatedAt).
       const strategyId = `strategy_${brandId}`;
       
       // Build clean object without undefined values
@@ -289,8 +287,8 @@ export function useActiveStrategy() {
     },
   });
 
-  // Channel ↔ Activation sync: όταν γράφεται οποιοδήποτε από τα δύο, mirror-άρει και τα δύο πεδία.
-  // Αποτρέπει divergence ανάμεσα σε Channel Activation page και RFM exports.
+  // Channel ↔ Activation sync: writing either one mirrors both fields.
+  // Prevents divergence between the Channel Activation page and RFM exports.
   const saveRecommendation = useMutation({
     mutationFn: async (recommendation: ChannelRecommendation) => {
       if (!activeStrategy?.id || !brandId) throw new Error('No active strategy');
@@ -352,8 +350,8 @@ export function useActiveStrategy() {
     return scenario?.name || 'Custom Strategy';
   };
 
-  /** Single source of truth για channel recommendation. Προτιμά activation (Channel page),
-   * fallback σε channel (RFM/exports legacy). */
+  /** Single source of truth for channel recommendation: prefers activation (Channel page),
+   * falls back to channel (RFM/exports legacy). */
   const getEffectiveChannelRecommendation = (
     strategy?: Pick<ActiveStrategy, 'activationRecommendation' | 'channelRecommendation'> | null,
   ): ChannelRecommendation | undefined => {
@@ -364,9 +362,9 @@ export function useActiveStrategy() {
   // Fallback to default strategy if none exists
   const effectiveStrategy = useMemo(() => {
     if (activeStrategy) return activeStrategy;
-    
-    // If no strategy found in Firestore, return default (Profit Maximization)
-    // Don't include optional fields (approvedAt, approvedBy, implementedAt) - they're undefined by default
+
+    // No Firestore strategy: return default (Profit Maximization); optional fields
+    // (approvedAt, approvedBy, implementedAt) omitted since undefined by default.
     if (!isLoading && brandId) {
       return {
         id: 'default_profit_max',

@@ -10,7 +10,7 @@ export const INSIGHT_NAV: Record<string, { section: string; hashQuery?: string }
   cross_sell: { section: 'channels', hashQuery: 'play=cross_sell' },
   ecomm_low_aov: { section: 'ecommerce' },
   ecomm_platform_risk: { section: 'ecommerce' },
-  // Ενοποιημένο strategy insight (αντικαθιστά champions/at_risk/top_segment όταν υπάρχει ενεργή στρατηγική)
+  // Unified strategy insight (replaces champions/at_risk/top_segment when a strategy is active)
   strategy_segments: { section: 'channels' },
 };
 

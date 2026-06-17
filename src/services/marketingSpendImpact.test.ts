@@ -14,7 +14,7 @@ function campaign(id: string, dailyMetrics: Daily): Campaign {
   } as unknown as Campaign;
 }
 
-// Period = Απρίλιος 2026 → baseline (default) = προηγούμενο ισόποσο διάστημα (02–31 Μαρ).
+// Period = April 2026 → baseline (default) = previous equal-length interval (Mar 02–31).
 const periodFrom = '2026-04-01';
 const periodTo = '2026-04-30';
 const BEFORE_DAY = '2026-03-15';
@@ -37,7 +37,7 @@ function rowFor(res: ReturnType<typeof run>, id: string) {
 }
 
 describe('analyzeMarketingDecisions', () => {
-  it('scale_up που κράτησε το ROAS → Επιτυχία', () => {
+  it('scale_up that held ROAS → success', () => {
     const c = campaign('up_ok', {
       [BEFORE_DAY]: { amount_spent: 100, conversion_value: 400, conversions: 10 },
       [AFTER_DAY]: { amount_spent: 200, conversion_value: 760, conversions: 19 },
@@ -52,7 +52,7 @@ describe('analyzeMarketingDecisions', () => {
     expect(row.verdict).toBe('positive');
   });
 
-  it('scale_up που γκρέμισε το ROAS → Αποτυχία', () => {
+  it('scale_up that crashed ROAS → failure', () => {
     const c = campaign('up_bad', {
       [BEFORE_DAY]: { amount_spent: 100, conversion_value: 800, conversions: 20 },
       [AFTER_DAY]: { amount_spent: 300, conversion_value: 420, conversions: 12 },
@@ -63,7 +63,7 @@ describe('analyzeMarketingDecisions', () => {
     expect(row.verdict).toBe('negative');
   });
 
-  it('νέα καμπάνια με καλό ROAS → Επιτυχία (launch)', () => {
+  it('new campaign with good ROAS → success (launch)', () => {
     const c = campaign('launch_ok', {
       [AFTER_DAY]: { amount_spent: 150, conversion_value: 600, conversions: 15 },
     });
@@ -74,7 +74,7 @@ describe('analyzeMarketingDecisions', () => {
     expect(row.verdict).toBe('positive');
   });
 
-  it('διακοπή καμπάνιας που απέδιδε → Αποτυχία (paused)', () => {
+  it('pausing a campaign that was performing → failure (paused)', () => {
     const c = campaign('paused_bad', {
       [BEFORE_DAY]: { amount_spent: 200, conversion_value: 800, conversions: 20 },
     });
@@ -86,7 +86,7 @@ describe('analyzeMarketingDecisions', () => {
     expect(row.verdict).toBe('negative');
   });
 
-  it('scale_down χωρίς απώλεια τζίρου → Επιτυχία', () => {
+  it('scale_down without revenue loss → success', () => {
     const c = campaign('down_ok', {
       [BEFORE_DAY]: { amount_spent: 200, conversion_value: 600, conversions: 15 },
       [AFTER_DAY]: { amount_spent: 100, conversion_value: 580, conversions: 14 },
@@ -97,14 +97,14 @@ describe('analyzeMarketingDecisions', () => {
     expect(row.verdict).toBe('positive');
   });
 
-  it('αγνοεί καμπάνιες χωρίς ουσιαστικό spend σε κανένα παράθυρο', () => {
+  it('ignores campaigns with no meaningful spend in any window', () => {
     const c = campaign('tiny', {
       [AFTER_DAY]: { amount_spent: 5, conversion_value: 20, conversions: 1 },
     });
     expect(run([c]).rows).toHaveLength(0);
   });
 
-  it('summary μετρά επιτυχίες/αποτυχίες και blended ROAS', () => {
+  it('summary counts successes/failures and blended ROAS', () => {
     const res = run([
       campaign('a', {
         [BEFORE_DAY]: { amount_spent: 100, conversion_value: 400, conversions: 10 },

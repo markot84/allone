@@ -5,10 +5,7 @@ import {
   type MetaAttributionWindow,
 } from '../../types';
 
-/**
- * Selector για Meta attribution window. Επηρεάζει μόνο Meta campaigns.
- * Χρησιμοποιείται στο header του Campaigns και ROI.
- */
+/** Selector for the Meta attribution window (Meta campaigns only); used in Campaigns and ROI headers. */
 export function MetaAttributionSelector({ compact = false }: { compact?: boolean }) {
   const { metaWindow, setMetaWindow } = useAttribution();
 

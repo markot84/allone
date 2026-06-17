@@ -238,8 +238,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
     setUrlError(null);
     setImportResult(null);
     try {
-      // Fetch server-side: most feed hosts send no CORS headers, so a browser
-      // fetch is blocked. fetchImportUrl (SSRF-guarded) returns the bytes for us.
+      // Fetch server-side (SSRF-guarded fetchImportUrl): most feed hosts send no CORS headers.
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) throw new Error('Συνδεθείτε ξανά και δοκιμάστε.');
       const appCheck = await getAppCheckHeader();
@@ -271,8 +270,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
         contentType.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ||
         fileName.toLowerCase().endsWith('.xlsx') ||
         fileName.toLowerCase().endsWith('.xls');
-      // XML feeds (application/xml, text/xml) — must NOT be renamed to .csv, or the
-      // importer parses each XML line as a CSV row (12k junk "products").
+      // XML feeds must NOT be renamed to .csv, or the importer parses each XML line as a CSV row.
       const isXml =
         contentType.includes('xml') ||
         fileName.toLowerCase().endsWith('.xml');
@@ -299,8 +297,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
       toast.success(`Το αρχείο "${fileName}" φορτώθηκε επιτυχώς. Κάντε κλικ στο Import για εισαγωγή.`);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      // The fetch now goes through fetchImportUrl server-side, so CORS is no
-      // longer a failure mode; surface the proxy's actual error.
+      // Fetch goes through fetchImportUrl server-side, so surface the proxy's actual error (not CORS).
       setUrlError(`Σφάλμα: ${errorMsg}. Ελέγξτε ότι το URL είναι έγκυρο και προσβάσιμο.`);
     } finally {
       setUrlLoading(false);
@@ -418,10 +415,8 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           }
         }
         if (typesImported.has('procurement')) {
-          // Τα per-sheet queries του useProcurement χρησιμοποιούν ['procurement-sheet', brandId, key]
-          // (όχι ['procurement']). Επειδή έχουν refetchOnMount:false + staleTime 10', ΠΡΕΠΕΙ να
-          // ακυρωθούν ρητά εδώ, αλλιώς οι σελίδες (Commercial Strategy, useProductSource) κρατούν
-          // παλιό απόθεμα μετά το ανέβασμα του αρχείου procurement.
+          // useProcurement's ['procurement-sheet', brandId, key] queries (refetchOnMount:false +
+          // staleTime 10') MUST be invalidated explicitly, else pages keep stale stock post-upload.
           queryClient.removeQueries({ queryKey: ['procurement-sheet'] });
           queryClient.removeQueries({ queryKey: ['procurement'] });
           queryClient.removeQueries({ queryKey: ['procurement_signals', brandId] });
@@ -430,10 +425,8 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           queryClient.removeQueries({ queryKey: ['productIntelligenceInventory', brandId] });
           queryClient.invalidateQueries({ queryKey: ['procurement-sheet'] });
           queryClient.invalidateQueries({ queryKey: ['procurement'] });
-          // Re-aggregate procurement_signals server-side ώστε να ενημερωθούν οι εμπορικές
-          // πολιτικές (Sales Opt, Profit Max, Stock Clearance κλπ). Στη συνέχεια ξαναχτίζουμε
-          // το Product Intelligence aggregate ΑΦΟΥ ολοκληρωθούν τα signals — για Enterprise+
-          // Procurement brands το PI/Dashboard απόθεμα προέρχεται πλέον από εδώ.
+          // Re-aggregate procurement_signals server-side, then rebuild the Product Intelligence
+          // aggregate AFTER signals complete (PI/Dashboard stock comes from here for Procurement brands).
           const piBrandId = brandId;
           refreshProcurementSignals()
             .then((r) => {
@@ -1123,7 +1116,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
         )}
       </AnimatePresence>
 
-      {/* Feed Sources - saved sources with Sync τώρα */}
+      {/* Feed Sources - saved sources with Sync now */}
       {importMode === 'feed' && <FeedSourcesSection />}
 
       {/* Ad Platform Connectors (Google Ads, Meta) */}

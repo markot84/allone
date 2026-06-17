@@ -1,21 +1,11 @@
-/**
- * Public-endpoint defenses: strict CORS (origin allow-list) και rate limiting
- * μέσω Firestore sliding window. Χρησιμοποιείται από endpoints που:
- *  - δέχονται δημόσιο traffic (submitInterestLead) ή
- *  - καλούν κοστοβόρα APIs (geminiProxy)
- *
- * Σημ.: fail-open policy — αν το Firestore transaction αποτύχει, αφήνουμε
- * το request να περάσει. Αυτό αποφεύγει να γίνει το ίδιο το rate limiter
- * single-point-of-failure (π.χ. outage → όλοι οι χρήστες blocked).
- */
+/** Public-endpoint defenses: strict CORS allow-list + Firestore sliding-window rate limiting. Fail-open by default so the limiter never becomes a single point of failure. */
 import type { Request } from 'firebase-functions/v2/https';
 import type { Response } from 'express';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 
-// `GCLOUD_PROJECT` is set automatically by the Firebase Functions runtime
-// (and by the local emulator). Δεν δεχόμαστε fallback — αν λείπει, σπάμε
-// νωρίς ώστε να μην ξεκινήσει function χωρίς σαφές project context.
+// `GCLOUD_PROJECT` is set by the Functions runtime/emulator; no fallback —
+// fail early so a function never starts without a clear project context.
 const PROJECT_ID = process.env.GCLOUD_PROJECT;
 if (!PROJECT_ID) {
   throw new Error('[security] GCLOUD_PROJECT is not set — refusing to start without a project id');
@@ -41,10 +31,7 @@ export function resolveAllowedOrigin(reqOrigin?: string): string | null {
   return null;
 }
 
-/**
- * Εφαρμόζει strict CORS με whitelist. Επιστρέφει true αν το request τελείωσε
- * εδώ (OPTIONS preflight ή rejected origin) — ο caller πρέπει να κάνει return.
- */
+/** Applies strict allow-list CORS; returns true if the request ended here (OPTIONS preflight or rejected origin) and the caller must return. */
 export function applyStrictCors(req: Request, res: Response): boolean {
   const origin = (req.headers.origin as string | undefined) || '';
   const allowed = resolveAllowedOrigin(origin);
@@ -59,7 +46,7 @@ export function applyStrictCors(req: Request, res: Response): boolean {
     res.status(allowed ? 204 : 403).send('');
     return true;
   }
-  // Ξένο origin (και υπάρχει header) → block. Server-to-server calls (origin κενό) επιτρέπονται.
+  // Foreign origin (header present) → block. Server-to-server calls (empty origin) are allowed.
   if (origin && !allowed) {
     logger.warn(`[CORS] blocked origin: ${origin}`);
     res.status(403).json({ error: 'Origin not allowed' });
@@ -72,8 +59,8 @@ export function getClientIp(req: Request): string {
   const xff = req.headers['x-forwarded-for'];
   const raw = Array.isArray(xff) ? xff[0] : xff;
   if (raw) {
-    // Use the rightmost IP — it is appended by GCP's load balancer and cannot be
-    // forged by the client. The leftmost IP is user-supplied and trivially spoofable.
+    // Use the rightmost IP — appended by GCP's load balancer and unforgeable;
+    // the leftmost is user-supplied and trivially spoofable.
     const ips = String(raw).split(',').map((s) => s.trim()).filter(Boolean);
     const rightmost = ips[ips.length - 1];
     if (rightmost) return rightmost;
@@ -81,30 +68,15 @@ export function getClientIp(req: Request): string {
   return (req as unknown as { ip?: string }).ip || 'unknown';
 }
 
-/**
- * Sliding-window rate limiter (Firestore doc per key).
- * Doc schema: rate_limits/{safeKey} → { hits: number[] (ms), updatedAt }
- */
-/**
- * Hard ceiling για το Firestore transaction που υλοποιεί το rate limit.
- * Σε production trace είδαμε «metadata filters: 8.5s» κατά cold-start του grpc client
- * — αν το full transaction κρεμάσει >5s, καλύτερα να αφήσουμε το request να περάσει
- * (fail-open) παρά να τρώει όλο το function deadline (60-120s) και να εκτεθεί ο user
- * σε `DEADLINE_EXCEEDED`. Το ίδιο ίσχυε ήδη για exceptions· τώρα κουμπώνει και στα hangs.
- */
+/** Sliding-window rate limiter; doc schema: rate_limits/{safeKey} → { hits: number[] (ms), updatedAt }. */
+/** Hard ceiling for the rate-limit transaction: hangs >5s (e.g. grpc cold-start) fail-open rather than burning the function deadline into `DEADLINE_EXCEEDED`. */
 const RATE_LIMIT_HARD_TIMEOUT_MS = 5000;
 
 export async function enforceRateLimit(opts: {
   key: string;
   limit: number;
   windowSeconds: number;
-  /**
-   * Όταν true, αν το ίδιο το rate-limit transaction αποτύχει/κρεμάσει
-   * (Firestore timeout/error) επιστρέφουμε allowed:false (deny) αντί για το
-   * default fail-open. Χρήση σε κοστοβόρα paths (geminiProxy, PP-13a): ένα
-   * Firestore outage δεν πρέπει να ανοίγει παράθυρο απεριόριστης χρήσης του
-   * paid key. Default (undefined/false) = fail-open, όπως πριν.
-   */
+  /** On transaction fail/hang, deny instead of fail-open. Used on costly paths (geminiProxy) so a Firestore outage can't open unlimited use of the paid key. */
   failClosed?: boolean;
 }): Promise<{ allowed: boolean; remaining: number; resetInSeconds: number }> {
   const db = getFirestore();
@@ -113,8 +85,8 @@ export async function enforceRateLimit(opts: {
   const now = Date.now();
   const windowStart = now - opts.windowSeconds * 1000;
 
-  // Αποτέλεσμα όταν ο limiter δεν μπορεί να αποφασίσει (timeout/exception).
-  // Default: fail-open ώστε να μην γίνει single point of failure. failClosed: deny.
+  // Result when the limiter cannot decide (timeout/exception).
+  // Default: fail-open so it does not become a single point of failure. failClosed: deny.
   const degraded = {
     allowed: !opts.failClosed,
     remaining: opts.failClosed ? 0 : opts.limit,
@@ -165,9 +137,7 @@ export async function enforceRateLimit(opts: {
   }
 }
 
-/**
- * Επιστρέφει 429 response με informative body.
- */
+/** Returns a 429 response with an informative body. */
 export function sendRateLimitExceeded(res: Response, resetInSeconds: number, scope: string): void {
   res.set('Retry-After', String(resetInSeconds));
   res.status(429).json({

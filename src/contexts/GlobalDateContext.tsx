@@ -1,7 +1,5 @@
-/**
- * Ημερολογιακή περίοδος ανά brand: κάθε brand θυμάται δικό του preset/custom range.
- * Δεν μοιράζεται πλέον ένα global range μεταξύ brands (localStorage ανά brand id).
- */
+/** Per-brand date period: each brand remembers its own preset/custom range
+ * (localStorage keyed by brand id), not a shared global range. */
 import {
   createContext,
   useContext,
@@ -22,7 +20,7 @@ export const GLOBAL_PERIOD_OPTIONS: { key: GlobalPeriod; label: string }[] = [
   { key: 'custom', label: 'Προσαρμοσμένο' },
 ];
 
-/** Παλιά κλειδιά (πριν το per-brand) — μεταφέρονται μία φορά στο πρώτο brand που φορτώνει με κενό map. */
+/** Legacy keys (pre per-brand) — migrated once into the first brand that loads with an empty map. */
 const LS_PERIOD_LEGACY = 'perf_global_period';
 const LS_FROM_LEGACY = 'perf_global_from';
 const LS_TO_LEGACY = 'perf_global_to';
@@ -45,21 +43,18 @@ function pad(n: number) {
   return String(n).padStart(2, '0');
 }
 
-/** YYYY-MM-DD στην **τοπική** ημερολογιακή ημέρα (ίδιο με first-of-month / year strings). */
+/** YYYY-MM-DD in the **local** calendar day (matches first-of-month / year strings). */
 function formatLocalYMD(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-/** Μετατόπιση κατά ημέρες στο **τοπικό** ημερολόγιο (αποφεύγει UTC skew του toISOString). */
+/** Shift by days in the **local** calendar (avoids the UTC skew of toISOString). */
 function addLocalDays(base: Date, deltaDays: number): Date {
   return new Date(base.getFullYear(), base.getMonth(), base.getDate() + deltaDays);
 }
 
-/**
- * Το τέλος περιόδου είναι χθες (ολοκληρωμένα ημερήσια δεδομένα). Στην 1η του μήνα / έτους
- * το χθες πέφτει πριν το start της περιόδου → κενό διάστημα και charts χωρίς σειρά.
- * Clamp ώστε πάντα from ≤ to (τουλάχιστον μία ημέρα).
- */
+/** Period end is yesterday (complete daily data); on the 1st it can fall before period start.
+ * Clamp so that from ≤ to always (at least one day). */
 function clampIsoRange(fromDate: string, toDate: string): { fromDate: string; toDate: string } {
   if (!fromDate || !toDate) {
     const d = fromDate || toDate;
@@ -138,9 +133,7 @@ function clearLegacyKeys() {
   }
 }
 
-/**
- * Φόρτωση αποθηκευμένης περιόδου για brand. Κενό map + παλιά κλειδιά → migrate μία φορά μόνο σε αυτό το brand.
- */
+/** Load the stored period for a brand. Empty map + legacy keys → migrate once into this brand only. */
 function loadSnapshotForBrand(brandId: string): BrandDateSnap {
   const map = readStoredMap();
   const existing = map[brandId];
@@ -194,7 +187,7 @@ export function GlobalDateProvider({ children }: { children: ReactNode }) {
   const [customFrom, setCustomFrom] = useState(DEFAULT_SNAP.customFrom);
   const [customTo, setCustomTo] = useState(DEFAULT_SNAP.customTo);
 
-  /** Συγχρονισμός με αλλαγή brand — πριν το paint ώστε να μη φαίνεται στιγμιαία η περίοδος άλλου brand. */
+  /** Sync on brand change — before paint so another brand's period never flashes. */
   useLayoutEffect(() => {
     if (!brandId) {
       setPeriodState(DEFAULT_SNAP.period);

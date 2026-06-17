@@ -19,7 +19,7 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
 }
 
 describe('productMatchesSalesBasePreset', () => {
-  it('zero_last_7d: απαιτείται authoritative 7d πεδίο ή last_sale_at (όχι συνεπαγωγή από 30d period)', () => {
+  it('zero_last_7d: requires an authoritative 7d field or last_sale_at (not inferred from a 30d period)', () => {
     const product = makeProduct({ qty_sold_period: 0 });
     expect(productMatchesSalesBasePreset(product, 'zero_last_7d')).toBe(false);
     expect(
@@ -27,7 +27,7 @@ describe('productMatchesSalesBasePreset', () => {
     ).toBe(true);
   });
 
-  it('zero_last_30d: απαιτείται authoritative 30d πεδίο ή last_sale_at (όχι μόνο 90d)', () => {
+  it('zero_last_30d: requires an authoritative 30d field or last_sale_at (not 90d alone)', () => {
     const product = makeProduct({ qty_sold_last_90d: 0 });
     expect(productMatchesSalesBasePreset(product, 'zero_last_30d')).toBe(false);
     expect(
@@ -35,12 +35,12 @@ describe('productMatchesSalesBasePreset', () => {
     ).toBe(true);
   });
 
-  it('δεν θεωρεί 30d=0 ως zero_last_90d χωρίς 90d ή παλιό last_sale_at', () => {
+  it('does not treat 30d=0 as zero_last_90d without 90d or an old last_sale_at', () => {
     const product = makeProduct({ qty_sold_period: 0 });
     expect(productMatchesSalesBasePreset(product, 'zero_last_90d')).toBe(false);
   });
 
-  it('αναγνωρίζει stalled όταν 7d=0 με ιστορικό sales (ή ρητό 7d=0 + 90d>0)', () => {
+  it('recognizes stalled when 7d=0 with sales history (or explicit 7d=0 + 90d>0)', () => {
     const product = makeProduct({
       qty_sold_last_7d: 0,
       qty_sold_lifetime: 12,
@@ -48,18 +48,18 @@ describe('productMatchesSalesBasePreset', () => {
     expect(productMatchesSalesBasePreset(product, 'stalled_7_vs_90')).toBe(true);
   });
 
-  it('κρατά fallback από last_sale_at όταν λείπουν όλα τα window πεδία', () => {
+  it('keeps the last_sale_at fallback when all window fields are missing', () => {
     const product = makeProduct({ last_sale_at: '2026-03-01' });
     expect(productMatchesSalesBasePreset(product, 'zero_last_7d')).toBe(true);
     expect(productMatchesSalesBasePreset(product, 'zero_last_30d')).toBe(true);
   });
 
-  it('δεν θεωρεί 30d=0 ως never_sold χωρίς explicit lifetime signal', () => {
+  it('does not treat 30d=0 as never_sold without an explicit lifetime signal', () => {
     const product = makeProduct({ qty_sold_period: 0, revenue_period: 0 });
     expect(productMatchesSalesBasePreset(product, 'never_sold')).toBe(false);
   });
 
-  it('δεν θεωρεί 30d=0 ως cold_last_sale_30d όταν λείπει last_sale_at', () => {
+  it('does not treat 30d=0 as cold_last_sale_30d when last_sale_at is missing', () => {
     const product = makeProduct({ qty_sold_period: 0, revenue_period: 0 });
     expect(productMatchesSalesBasePreset(product, 'cold_last_sale_30d')).toBe(false);
   });

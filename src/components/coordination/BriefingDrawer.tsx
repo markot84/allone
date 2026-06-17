@@ -17,7 +17,7 @@ import { logger } from '../../utils/logger';
 
 interface BriefingDrawerProps {
   strategyName: string;
-  /** Αν δοθεί (π.χ. briefing χωρίς ενεργό σενάριο), αντικαθιστά το «Νέα στρατηγική: …» */
+  /** If provided (e.g. a briefing without an active scenario), replaces the "New strategy: …" title */
   initialTitle?: string;
   onClose: () => void;
   onSent: () => void;

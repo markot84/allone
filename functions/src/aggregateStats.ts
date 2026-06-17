@@ -52,10 +52,8 @@ function classifyStock(p: Record<string, unknown>, supplierTod = 60): string {
 }
 
 async function aggregateProducts(brandId: string): Promise<ProductAggregates> {
-  // A full unprojected .get() holds every product doc in memory at once — at ERP-catalog scale
-  // (~221k docs for etennis after the deleted-products import) that exceeds the function's
-  // 512MiB and the OOM kills the run before any brand after this one is computed. Stream only
-  // the fields the aggregation reads; the numbers produced are identical.
+  // A full .get() loads every product doc at once (~221k post-import) and OOMs the 512MiB function;
+  // stream only the fields the aggregation reads — identical results.
   const query = db()
     .collection('products')
     .where('brandId', '==', brandId)
@@ -87,9 +85,8 @@ async function aggregateProducts(brandId: string): Promise<ProductAggregates> {
 
   for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
     const p = doc.data();
-    // PER-60/PER-130 (8.1b): τα 132.8k discontinued tombstones (ERP-διαγραμμένα, stock 0,
-    // χωρίς stock_age) κατέληγαν ΟΛΑ στο 'low' bucket (BUG-1) και φούσκωναν το totalSkus
-    // 221k αντί ~88k. Firestore ==null ΔΕΝ ταιριάζει absent fields — in-loop skip μόνο.
+    // Skip discontinued tombstones in-loop: they inflate totalSkus/'low', and Firestore ==null
+    // can't match absent fields so they can't be filtered in the query.
     if (p.discontinued_at) continue;
     result.totalSkus++;
     const price = ((p.price as number) ?? (p.list_price as number) ?? (p.compare_at_price as number)) || 0;

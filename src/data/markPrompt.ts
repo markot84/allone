@@ -1,9 +1,7 @@
 import { buildAdvisorySystemPrompt } from './aiAdvisoryFramework';
 
-/**
- * System prompt του Mark — του proactive εμπορικού agent της εφαρμογής.
- * ΚΡΙΣΙΜΟ: το ενεργό brand δηλώνεται ρητά ώστε ο Mark να μη μπερδεύει ποτέ δεδομένα μεταξύ brands.
- */
+/** System prompt for Mark, the app's proactive commercial agent. The active brand
+ *  is stated explicitly so Mark never mixes data between brands. */
 export function buildMarkSystemPrompt(brandName: string | null, brandId: string | null): string {
   const brandLine =
     brandId && brandName

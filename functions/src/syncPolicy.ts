@@ -2,12 +2,7 @@ export type ConnectorSyncMode = 'historical' | 'incremental' | 'snapshot';
 
 export const DEFAULT_HISTORY_YEARS = 3;
 export const DEFAULT_INCREMENTAL_OVERLAP_HOURS = 48;
-/**
- * E-commerce connectors χρειάζονται μεγαλύτερο lookback γιατί ακυρώσεις / refunds
- * μπορεί να γίνουν μέρες μετά (EU δικαίωμα υπαναχώρησης = 14 ημέρες + buffer).
- * 20 ημέρες × 24h = 480h overlap: κάθε incremental sync ξαναδιαβάζει orders
- * με updated_at >= (lastSync − 20d), πιάνοντας ακυρώσεις, refunds, chargebacks.
- */
+/** 20-day (480h) incremental overlap so e-commerce syncs re-read updated_at >= (lastSync − 20d), catching late cancellations, refunds, chargebacks (EU 14-day withdrawal + buffer). */
 export const ECOMMERCE_INCREMENTAL_OVERLAP_HOURS = 480;
 
 export interface SyncWindow {
@@ -43,10 +38,7 @@ export function toYmd(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/**
- * Marketing APIs need a tiny overlap after the first historical import because late conversions
- * can still settle, but we must not re-fetch the whole current year on every nightly sync.
- */
+/** Yesterday→today window: tiny overlap for late-settling conversions without re-fetching the year. */
 export function buildYesterdayToTodayWindow(now: Date = new Date()): { since: string; until: string } {
   const yesterday = new Date(now);
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);
@@ -56,14 +48,10 @@ export function buildYesterdayToTodayWindow(now: Date = new Date()): { since: st
   };
 }
 
-/** Αριθμός διαδοχικών UTC ημερομηνιών (today inclusive) επανάληψης μετά την αρχική ιστορική φόρτωση. */
+/** Number of consecutive UTC days (today inclusive) re-fetched after the initial historical load. */
 export const DEFAULT_INCREMENTAL_ROLLING_LOOKBACK_DAYS = 35;
 
-/**
- * Rolling συμβολοσειρά [since … until] συμπεριλαμβανομένης της σημερινής μέρας (UTC κατά `toYmd`).
- * Χρησιμοποιείται μετά το πρώτο history import ώστε να «κλείνουν» μέρες που έλειψαν από τη Firestore
- * όταν κάποιο sync επέστρεψε μερικό payload (χθες/σήμερα μόνο δεν τις ξανά‑τράβαγε ποτέ).
- */
+/** Rolling [since … until] window including today (UTC, via `toYmd`); backfills days missing from Firestore after a partial payload that a yesterday/today window never re-fetched. */
 export function buildRollingUtcDayWindow(
   inclusiveDayCount: number,
   now: Date = new Date()
@@ -81,16 +69,7 @@ export function toMagentoDateTime(date: Date): string {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
-/**
- * Αν αξίζει να τρέξουν τα βαριά post-sync aggregations (ecommerce summary, stock movement,
- * product intelligence) μετά από ένα connector sync (PER-140).
- *
- * - Επιτυχία ή μερική εισαγωγή (imported > 0): ναι — άλλαξαν δεδομένα.
- * - Καθαρή αποτυχία (success === false, τίποτα imported): όχι — τα aggregates θα ξαναϋπολόγιζαν
- *   τα ίδια δεδομένα, και το φρέσκο syncedAt θα έκρυβε ότι η εισαγωγή απέτυχε.
- * - Queued (background job): όχι εδώ — το aggregation το αναλαμβάνει ο worker όταν τελειώσει.
- * - Providers χωρίς `success` στο result μένουν ανεπηρέαστοι (`!== false`).
- */
+/** Whether heavy post-sync aggregations should run: yes if data changed (success or imported > 0), no on clean failure or queued jobs (the worker aggregates on finish). */
 export function shouldRunPostSyncAggregations(
   result: { success?: boolean; imported?: number; queued?: boolean } | null | undefined
 ): boolean {

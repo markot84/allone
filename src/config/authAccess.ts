@@ -1,12 +1,5 @@
-/**
- * Πολιτική εγγραφής νέων λογαριασμών.
- *
- * - `invite_only` (default): δημόσια εγγραφή email/κωδικό και νέοι χρήστες Google
- *   μόνο όταν η ροή ξεκινά από σύνδεσμο πρόσκλησης (`returnUrl` περιέχει `/invite/`).
- * - `open`: παλιά συμπεριφορά — οποιοσδήποτε μπορεί να κάνει εγγραφή (staging / bootstrap).
- *
- * Source: `VITE_PUBLIC_SIGNUP_MODE` env var (build-time, baked into the bundle).
- */
+// Signup policy from `VITE_PUBLIC_SIGNUP_MODE` (build-time). `invite_only` (default): signup only
+// via invite link (`returnUrl` contains `/invite/`); `open`: anyone (staging / bootstrap).
 export type PublicSignupMode = 'invite_only' | 'open';
 
 export function getPublicSignupMode(): PublicSignupMode {
@@ -14,7 +7,7 @@ export function getPublicSignupMode(): PublicSignupMode {
   return v === 'open' ? 'open' : 'invite_only';
 }
 
-/** Αν το returnUrl μετά το login οδηγεί σε σελίδα αποδοχής πρόσκλησης. */
+/** Whether the post-login returnUrl points to an invite-acceptance page. */
 export function isInviteReturnUrl(returnUrl: string | null | undefined): boolean {
   if (!returnUrl || typeof returnUrl !== 'string') return false;
   try {

@@ -110,10 +110,8 @@ export function useAppWarmup() {
           staleTime: 10 * 60 * 1000,
         })
       );
-      // PER-130 (P3/BUG-6): ο πραγματικός consumer key φέρει το syncVersion
-      // (useBusinessRevenueSummary.ts:36) — το παλιό 2-μερές key ζέσταινε κάτι που κανείς
-      // δεν διάβαζε. Λύνουμε πρώτα το syncVersion (ίδιο key+staleTime με :73 ⇒ reuse του
-      // in-flight phase-1 fetch, χωρίς δεύτερο read) και μετά prefetch με το σωστό key.
+      // The consumer key carries the syncVersion: resolve it first (reusing the in-flight phase-1
+      // fetch, same key+staleTime, no extra read), then prefetch with the correct key.
       prefetch(async () => {
         const sync = await queryClient.fetchQuery({
           queryKey: ['brandSyncVersion', brandId],
@@ -136,10 +134,8 @@ export function useAppWarmup() {
           staleTime: 5 * 60 * 1000,
         })
       );
-      // PER-130 (P7): διαγράφηκε το ['products', brandId, 'count'] prefetch — το key δεν
-      // ταίριαζε με κανέναν consumer (ο πραγματικός φέρει syncVersion), ~221 aggregation
-      // reads/boot στο κενό. Δεν το ξανα-key-άρουμε: το count είναι on-demand Mark query
-      // και το prewarm για κάθε χρήστη είναι η αντίστροφη ανταλλαγή (critic C4).
+      // ['products', brandId, 'count'] prefetch removed: its key matched no consumer (the real one
+      // carries syncVersion); count is an on-demand Mark query, not worth prewarming for every user.
       prefetch(() =>
         queryClient.prefetchQuery({
           queryKey: ['automation_settings', brandId],

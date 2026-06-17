@@ -35,13 +35,12 @@ interface AuthContextValue {
   user: User | null;
   loading: boolean;
   isSuperAdmin: boolean;
-  /** false until the async super-admin lookup for the current user has settled.
-   *  Consumers that branch on `isSuperAdmin` (e.g. the brand list) should wait
-   *  for this to avoid rendering the non-super-admin branch first, then re-rendering. */
+  /** false until the async super-admin lookup settles; consumers branching on
+   *  `isSuperAdmin` should wait to avoid rendering the wrong branch first. */
   isSuperAdminResolved: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
-  /** allowNewUsers: αν false, νέοι λογαριασμοί Google απορρίπτονται (sign out + error). */
+  /** allowNewUsers: if false, new Google accounts are rejected (sign out + error). */
   signInWithGoogle: (options?: { allowNewUsers?: boolean }) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -75,8 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const ensureProfile = async () => {
       const existing = await FirestoreService.getDocument('users', user.uid);
       if (!existing) {
-        // Don't set brandIds here - acceptInvite may have run first (invite flow).
-        // Setting brandIds: [] would overwrite invite data. Leave brandIds for acceptInvite/BrandCreateForm.
+        // Don't set brandIds here — acceptInvite may have run first; setting []
+        // would overwrite invite data. Leave brandIds for acceptInvite/BrandCreateForm.
         await FirestoreService.setDocument('users', user.uid, {
           id: user.uid,
           email: user.email ?? '',
@@ -89,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.uid]);
 
   // Resolve super-admin flag from Firestore appConfig/superAdmins.uids
-  // (single source of truth; same doc the Firestore rules read).
+  // (same doc the Firestore rules read).
   useEffect(() => {
     if (!user?.uid) {
       setIsSuperAdmin(false);
@@ -114,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [user?.uid]);
 
-  /** Πάντα επιτρέπεται για υπάρχοντες λογαριασμούς — η πολιτική signup δεν εφαρμόζεται εδώ. */
+  /** Always allowed for existing accounts — the signup policy does not apply here. */
   const signIn = useCallback(async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password);
   }, []);
@@ -137,8 +136,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const allowNew = options?.allowNewUsers === true;
     const extra = getAdditionalUserInfo(result);
     if (extra?.isNewUser && !allowNew) {
-      // Super-admins (allowlist now in Firestore appConfig/superAdmins) skip the
-      // new-user signup block, mirroring the previous isSuperAdminEmail() check.
+      // Super-admins (allowlist in Firestore appConfig/superAdmins) skip the
+      // new-user signup block.
       const superAdminEmail = result.user.email?.toLowerCase();
       if (superAdminEmail) {
         const { emails } = await loadSuperAdmins();
@@ -151,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const existingProfile = await FirestoreService.getDocument('users', uid);
         hasProfile = existingProfile != null;
       } catch {
-        /* Firestore απέτυχε — μην αποκλείουμε επιστρέφοντα χρήστη λόγω false negative */
+        /* Firestore failed — don't block a returning user due to a false negative */
       }
       if (hasProfile) return;
 

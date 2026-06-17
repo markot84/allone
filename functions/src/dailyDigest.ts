@@ -257,7 +257,7 @@ async function sendDigestForBrand(brandId: string, brandName: string, transporte
       const email = userData?.email || memberDoc.data()?.email;
       if (!email) continue;
 
-      // SEC-M1: strip CR/LF so a crafted brand name can't inject extra mail headers.
+      // Strip CR/LF so a crafted brand name can't inject extra mail headers.
       const safeBrandName = brandName.replace(/[\r\n]+/g, ' ');
       const subject = recentAlerts.length > 0
         ? `[Performance+] ${safeBrandName} — ${recentAlerts.length} νέες ειδοποιήσεις`

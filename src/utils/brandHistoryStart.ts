@@ -1,13 +1,8 @@
-/**
- * Per-brand cutoff ιστορικότητας — π.χ. brand που άλλαξε Magento την 2025-09-01:
- * δεδομένα προ της ημερομηνίας δεν είναι συγκρίσιμα και κρύβονται από όλες τις προβολές
- * (e-commerce orders, GA4 daily metrics, top products, daily charts κ.λπ.).
- *
- * Δεν αγγίζει τίποτα στο Firestore — μόνο read-side clamp.
- */
+/** Per-brand history cutoff: data before `historyStartDate` is hidden from all
+ * views (orders, GA4 metrics, etc.). Read-side clamp only, no Firestore writes. */
 import type { Brand } from '../types';
 
-/** Επιστρέφει YYYY-MM-DD αν το brand έχει `historyStartDate`, αλλιώς null. */
+/** Returns YYYY-MM-DD if the brand has `historyStartDate`, else null. */
 export function getBrandHistoryStartISO(brand: Pick<Brand, 'historyStartDate'> | null | undefined): string | null {
   const raw = brand?.historyStartDate;
   if (!raw) return null;
@@ -16,7 +11,7 @@ export function getBrandHistoryStartISO(brand: Pick<Brand, 'historyStartDate'> |
   return trimmed;
 }
 
-/** Ως Date (UTC midnight). null αν δεν είναι ορισμένο/έγκυρο. */
+/** As a Date (UTC midnight). null if unset/invalid. */
 export function getBrandHistoryStartDate(brand: Pick<Brand, 'historyStartDate'> | null | undefined): Date | null {
   const iso = getBrandHistoryStartISO(brand);
   if (!iso) return null;
@@ -24,11 +19,8 @@ export function getBrandHistoryStartDate(brand: Pick<Brand, 'historyStartDate'> 
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/**
- * Clamp ISO `YYYY-MM-DD` (ή κενό) στο `historyStartDate` του brand.
- * Αν το input είναι παλαιότερο, επιστρέφει το cutoff. Αν δεν υπάρχει cutoff ή το input είναι ισχυρότερο, το αφήνει.
- * Αν το input είναι κενό, επιστρέφει το cutoff (αν υπάρχει).
- */
+/** Clamp ISO `YYYY-MM-DD` (or empty) to the brand's `historyStartDate`:
+ * older input or empty → cutoff; no cutoff or later input → unchanged. */
 export function clampDateByBrandHistory(
   isoDate: string | null | undefined,
   brand: Pick<Brand, 'historyStartDate'> | null | undefined,
@@ -40,10 +32,8 @@ export function clampDateByBrandHistory(
   return input < cutoff ? cutoff : input;
 }
 
-/**
- * True αν το `dateValue` (Date | ISO | timestamp ms) πέφτει εντός του cutoff (>= historyStartDate).
- * Αν δεν υπάρχει cutoff, πάντα true.
- */
+/** True if `dateValue` (Date | ISO | timestamp ms) is >= historyStartDate;
+ * always true when there is no cutoff. */
 export function passesBrandHistory(
   dateValue: Date | string | number | null | undefined,
   brand: Pick<Brand, 'historyStartDate'> | null | undefined,
@@ -64,7 +54,7 @@ export function passesBrandHistory(
   return d.getTime() >= cutoff.getTime();
 }
 
-/** Φιλτράρει array με access στο date πεδίο μέσω accessor. */
+/** Filters an array, accessing the date field via an accessor. */
 export function filterByBrandHistory<T>(
   items: T[],
   getDate: (item: T) => Date | string | number | null | undefined,

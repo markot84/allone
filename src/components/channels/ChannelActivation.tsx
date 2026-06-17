@@ -113,8 +113,8 @@ const FALLBACK_SEGMENT = {
   icon: '',
 };
 
-// Funnel stage palette — επιλεγμένα για μέγιστη οπτική διαφοροποίηση μεταξύ τους
-// (διαφορετικό hue ανά στάδιο, ισορροπημένο contrast σε λευκό background).
+// Funnel stage palette — chosen for maximum visual differentiation
+// (distinct hue per stage, balanced contrast on a white background).
 const STAGE_AWARENESS = { label: 'Awareness', color: '#0EA5E9' };       // sky-500
 const STAGE_CONSIDERATION = { label: 'Consideration', color: '#F59E0B' }; // amber-500
 const STAGE_SALES = { label: 'Sales', color: '#10B981' };                // emerald-500
@@ -273,13 +273,13 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  // Magento product enrichment — γεμίζει image_link, link, description, gtin, mpn,
-  // color, size, item_group_id στο Ads Feed από το ωμό `magento_products` collection.
+  // Magento product enrichment — fills image_link, link, description, gtin, mpn,
+  // color, size, item_group_id in the Ads Feed from the raw `magento_products` collection.
   const { bySku: magentoBySku, bySkuLower: magentoBySkuLower, config: magentoConnector, count: magentoEnrichedCount } = useMagentoProductEnrichment();
   const { getThumbnailUrl } = useProductThumbnails();
 
-  // Provenance snapshot — δίνει στο AI το mix πηγών δεδομένων (connector vs
-  // movement vs procurement vs import) ώστε να calibrate το rationale.
+  // Provenance snapshot — gives the AI the data-source mix (connector vs
+  // movement vs procurement vs import) so it can calibrate the rationale.
   const { coverage: signalCoverage } = useProductSignals(products);
 
   const playContext = usePlayContext();
@@ -296,11 +296,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const [budgetInput, setBudgetInput] = useState('');
   const [editingBudget, setEditingBudget] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
-  /** Background silent upgrade — δείχνουμε διακριτικό indicator, ΟΧΙ full skeleton. */
+  /** Background silent upgrade — show a subtle indicator, NOT a full skeleton. */
   const [isSilentUpgrading, setIsSilentUpgrading] = useState(false);
-  /** Expand state ανά section του Marketing Brief — όλα κλειστά by default. */
+  /** Expand state per Marketing Brief section — all collapsed by default. */
   const [expandedBriefSections, setExpandedBriefSections] = useState<Record<string, boolean>>({});
-  /** Active segment context — οδηγεί τα per-segment campaign messages & marketing briefs. */
+  /** Active segment context — drives the per-segment campaign messages & marketing briefs. */
   const [selectedSegmentName, setSelectedSegmentName] = useState<string | null>(null);
   const monthlyBudget = activeStrategy?.monthlyBudget ?? null;
 
@@ -341,13 +341,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   // Auto-generate AI recommendation if strategy exists but recommendation is missing
   const hasRealStrategyId = !!strategyId && !strategyId.startsWith('default_') && !!scenarioId;
   const autoGenTriggered = useRef(false);
-  /** Πόσες φορές έχουμε ξανατρέξει σιωπηλά για legacy/violating payloads (max 3). */
+  /** How many times we've silently re-run for legacy/violating payloads (max 3). */
   const silentUpgradeAttempts = useRef(0);
   const MAX_SILENT_UPGRADES = 3;
 
-  /**
-   * Δημιουργία AI σύστασης. `silent=true` → δε δείχνει toast (background upgrade).
-   */
+  /** Generate an AI recommendation. `silent=true` → no toast (background upgrade). */
   const generateRecommendation = useCallback(async (silent = false) => {
     if (!strategyId || !scenarioId || !currentBrand) return;
     const scenario = scenarios.find(s => s.id === scenarioId) ?? scenarios[0];
@@ -360,8 +358,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       const savedTriage = (activeStrategy as { triageOrigin?: TriageOrigin } | null)?.triageOrigin ?? null;
       const triagePromptCtx = buildTriagePromptContext(savedTriage);
       const provenancePromptCtx = buildProvenancePromptContext(signalCoverage, products.length);
-      // Critical: pass ALL ranked segments (ideal+good) ώστε το AI να μη διαλέγει
-      // αυθαίρετα ένα μόνο segment. Χρησιμοποιούμε τα weights της ενεργής στρατηγικής.
+      // Critical: pass ALL ranked segments (ideal+good) so the AI doesn't arbitrarily
+      // pick a single segment. We use the active strategy's weights.
       const strategyWeights =
         (activeStrategy as { weights?: Record<string, number> } | null)?.weights ?? scenario.weights;
       const ranked = rankSegments(rfmSegments, strategyWeights);
@@ -400,8 +398,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         activationRecommendation: clean,
         updatedAt: new Date().toISOString(),
       } as Record<string, unknown>);
-      // Critical: refetchActive — αλλιώς το UI κρατά το παλιό payload για 1-2s
-      // μέχρι το επόμενο polling. Με refetchQueries εξαναγκάζουμε άμεση ανανέωση.
+      // Critical: refetchActive — otherwise the UI keeps the old payload for 1-2s
+      // until the next poll. refetchQueries forces an immediate refresh.
       await queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
       await queryClient.refetchQueries({ queryKey: ['activeStrategy'] });
       if (!silent) toast.success('AI συστάσεις δημιουργήθηκαν');
@@ -424,12 +422,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     generateRecommendation();
   }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, generateRecommendation]);
 
-  /**
-   * Σιωπηλή αναβάθμιση legacy payloads:
-   * Αν η σύσταση υπάρχει αλλά λείπουν τα per-segment δεδομένα
-   * (channelPlaybook με priority/budgetSharePct), αναγεννούμε στο background.
-   * Δε δείχνουμε spinner ή toast — όταν τελειώσει, το cache invalidate ανανεώνει το UI.
-   */
+  /** Silent background regenerate of legacy payloads missing per-segment channelPlaybook
+   * (priority/budgetSharePct) — no spinner/toast; cache invalidate refreshes the UI. */
   useEffect(() => {
     if (silentUpgradeAttempts.current >= MAX_SILENT_UPGRADES) return;
     if (!hasRealStrategyId || !aiRecommendation || aiGenerating) return;
@@ -437,11 +431,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     const hasPerSegmentSignal = playbook.some(
       (e) => e.priority === 'primary' || e.priority === 'secondary' || (typeof e.budgetSharePct === 'number' && e.budgetSharePct > 0)
     );
-    // Πρόσθετο upgrade trigger: legacy payloads ή AI που έδωσε <2 segments
-    // (είναι σχεδόν πάντα λάθος — ακόμη και για narrow πολιτικές υπάρχουν 2-4 fitting segments).
+    // Extra upgrade trigger: legacy payloads or AI that returned <2 segments
+    // (almost always wrong — even narrow policies have 2-4 fitting segments).
     const tooFewSegments = (aiRecommendation.targetSegments?.length ?? 0) < 2;
-    // Trigger upgrade αν οποιοδήποτε customer-facing message περιέχει segment names ή internal jargon.
-    // Χρησιμοποιούμε τον κεντρικό sanitizer detector (DRY με render-time sanitization).
+    // Trigger upgrade if any customer-facing message contains segment names or internal jargon.
+    // We use the central sanitizer detector (DRY with render-time sanitization).
     const violatingMessages = playbook.some((e) => containsForbiddenContent(e.message));
     const staleBrandProfileContext = aiRecommendation.brandProfileContextSig !== brandProfileContextSig;
     if (
@@ -457,7 +451,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   const { getStatus, getNote, isIncluded, updateActivation, isSaving } = useChannelActivations(strategyId);
 
-  // Build GLOBAL channel list (fallback όταν δεν έχουμε per-segment playbook)
+  // Build GLOBAL channel list (fallback when there's no per-segment playbook)
   const globalChannels = useMemo(() => {
     if (!aiRecommendation) return [];
     const channels: { name: string; isPrimary: boolean; budget: number | null }[] = [];
@@ -470,15 +464,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     return channels;
   }, [aiRecommendation]);
 
-  /**
-   * Recommended segments για την τρέχουσα εμπορική πολιτική.
-   * Προτεραιότητα: AI `targetSegments` (μόνο ideal+good). Fallback: όλα τα RFM segments
-   * (το AI κανονικά θα συμπληρώσει το πεδίο σε νέα generations).
-   */
+  /** Recommended segments for the current policy: prefer AI `targetSegments` (ideal+good),
+   * fallback to all RFM segments. */
   const recommendedSegments = useMemo(() => {
     const ai = aiRecommendation?.targetSegments;
     if (ai && ai.length > 0) {
-      // join με RFM data για να πάρουμε χρώμα/πελάτες/revenue share
+      // join with RFM data to get color/customers/revenue share
       return ai.map((rs) => {
         const match = rfmSegments.find((s) => s.name === rs.name);
         return {
@@ -505,7 +496,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       }));
   }, [aiRecommendation, rfmSegments]);
 
-  // Auto-select πρώτο recommended segment όταν αλλάζει η σύσταση
+  // Auto-select the first recommended segment when the recommendation changes
   useEffect(() => {
     if (recommendedSegments.length === 0) {
       if (selectedSegmentName !== null) setSelectedSegmentName(null);
@@ -519,7 +510,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     }
   }, [recommendedSegments, selectedSegmentName]);
 
-  /** Επιστρέφει playbook entry για (segment, channel) — fuzzy match στα ονόματα. */
+  /** Returns the playbook entry for (segment, channel) — fuzzy name match. */
   const getPlaybookFor = useCallback(
     (segmentName: string | null, channelName: string) => {
       if (!segmentName || !aiRecommendation?.channelPlaybook) return null;
@@ -543,12 +534,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     [aiRecommendation]
   );
 
-  /**
-   * Channel list ΓΙΑ ΤΟ ΕΠΙΛΕΓΜΕΝΟ SEGMENT.
-   * - Αν υπάρχει playbook entries για το segment → εμφανίζουμε ΜΟΝΟ αυτά (per-segment recommendation)
-   *   με priority/budgetSharePct από το AI.
-   * - Αλλιώς fallback στο global primary/secondary.
-   */
+  /** Channel list for the selected segment: if playbook entries exist, show only those
+   * (with AI priority/budgetSharePct); otherwise fall back to global primary/secondary. */
   const allChannels = useMemo(() => {
     if (!aiRecommendation) return [];
     const playbook = aiRecommendation.channelPlaybook;
@@ -576,10 +563,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     return globalChannels;
   }, [aiRecommendation, selectedSegmentName, globalChannels]);
 
-  /**
-   * Pie chart — αν έχουμε per-segment budgetSharePct, χρησιμοποιούμε αυτό.
-   * Αλλιώς πέφτουμε στο global allocation της στρατηγικής.
-   */
+  /** Pie chart — use per-segment budgetSharePct if present, else the global allocation. */
   const aiPieData = useMemo(() => {
     if (!aiRecommendation) return [];
     const fromPerSegment = allChannels
@@ -678,10 +662,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             : (typeof p.list_price === 'number' && p.list_price > p.price)
               ? `${formatCurrency(p.list_price, 2)} EUR`
               : priceFmt;
-          // Description: Magento prevails (HTML αν υπάρχει). Fallback: name + category.
+          // Description: Magento prevails (HTML if present). Fallback: name + category.
           const descRich = (enrichment?.description || enrichment?.shortDescription || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
           const description = descRich || `${p.name || ''}${productType ? ` — ${productType}` : ''}`;
-          // Link: Magento storefront (αν έχει). Fallback: shop base + sku.
+          // Link: Magento storefront (if present). Fallback: shop base + sku.
           const link = enrichment?.link
             || (magentoConnector.storeWebUrl ? `${magentoConnector.storeWebUrl.replace(/\/+$/, '')}/catalog/product/view/sku/${encodeURIComponent(p.sku || p.id)}` : '');
           return [
@@ -699,7 +683,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             mpn,
             identifierExists,
             productType,
-            '', // google_product_category (απαιτεί manual mapping table — επόμενο step)
+            '', // google_product_category (requires a manual mapping table — next step)
             enrichment?.itemGroupId || '',
             enrichment?.color || '',
             enrichment?.size || '',
@@ -869,7 +853,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const strategyName = scenarioId ? getStrategyName(scenarioId) : null;
   const durationLabel = activeStrategy?.duration === 'ongoing' ? 'Συνεχής' : activeStrategy?.duration ? `${activeStrategy.duration} ημ.` : null;
 
-  // Progress summary — μόνο για κανάλια που συμμετέχουν στην ενέργεια
+  // Progress summary — only for channels participating in the action
   const progressSummary = useMemo(() => {
     if (allChannels.length === 0) return null;
     const active = allChannels.filter((c) => isIncluded(c.name));
@@ -1046,7 +1030,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         </div>
       )}
 
-      {/* Growth Play Panel — εμφανίζεται όταν ο χρήστης έρθει από AI insight με play context */}
+      {/* Growth Play Panel — shown when the user arrives from an AI insight with play context */}
       {playContext && !playDismissed && recommendedSegments.length > 0 && (
         <GrowthPlayPanel
           play={playContext}
@@ -1122,7 +1106,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         </Card>
       )}
 
-      {/* Recommended Segments — μόνο τα segments που ταιριάζουν στη συγκεκριμένη πολιτική */}
+      {/* Recommended Segments — only the segments that fit this specific policy */}
       {recommendedSegments.length > 0 && (
         <Card padding="lg">
           <CardHeader
@@ -1379,7 +1363,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          {/* Συμμετοχή toggle (checkbox) */}
+                          {/* Inclusion toggle (checkbox) */}
                           <button
                             type="button"
                             onClick={() => handleToggleIncluded(ch.name, !included)}
@@ -1430,7 +1414,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                           )}
                         </div>
 
-                        {/* Per-segment campaign message (από AI playbook) */}
+                        {/* Per-segment campaign message (from the AI playbook) */}
                         {selectedSegmentName && playbook?.message && (
                           <div className="mt-2 flex items-start gap-2 p-2.5 rounded-lg bg-[#F5F3FF] border border-[#E9D5FF]">
                             <Megaphone size={13} className="text-[#7C3AED] flex-shrink-0 mt-0.5" />
@@ -1542,10 +1526,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           { key: 'outcome', icon: TrendingUp, color: '#22C55E', label: 'Αποτέλεσμα', tagline: 'Τι περιμένουμε να επιτύχουμε' },
         ] as const;
 
-        // Διαχωρίζει intro (πριν το πρώτο bullet) από τα bullets.
+        // Splits the intro (before the first bullet) from the bullets.
         const splitIntro = (raw: string) => {
           const text = raw.replace(/^(Πελάτες|Κανάλια|Αποτέλεσμα):\s*/i, '').replace(/—/g, ',').trim();
-          // bullets αναγνωρίζονται από • ή - στην αρχή γραμμής
+          // bullets are recognized by • or - at the start of a line
           const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
           const introLines: string[] = [];
           const bulletLines: string[] = [];
@@ -1557,7 +1541,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             } else if (!bulletsStarted) {
               introLines.push(ln);
             } else {
-              // continuation γραμμή του τελευταίου bullet
+              // continuation line of the last bullet
               if (bulletLines.length > 0) {
                 bulletLines[bulletLines.length - 1] += ' ' + ln;
               } else {
@@ -1573,7 +1557,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           ? sections.map((s, i) => ({ ...s, ...splitIntro(parts[i] ?? '') }))
           : [];
 
-        // Σύντομο Campaign Brief: 1ο sentence από κάθε section intro (ή full αν δεν υπάρχει structure)
+        // Short Campaign Brief: first sentence from each section intro (or full if there's no structure)
         const firstSentence = (txt: string) => {
           const text = txt.trim();
           for (let i = 0; i < text.length; i++) {
@@ -1596,7 +1580,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
         return (
           <div className="space-y-4">
-            {/* CAMPAIGN BRIEF — fully expanded, για διοίκηση */}
+            {/* CAMPAIGN BRIEF — fully expanded, for management */}
             <Card padding="none">
               <div className="px-5 py-3.5 flex items-center gap-2 border-b border-[#F0F0F0]">
                 <Sparkles size={13} className="text-[var(--nts-accent)]" />
@@ -1615,7 +1599,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               </div>
             </Card>
 
-            {/* MARKETING BRIEF — 3 sections (Πελάτες / Κανάλια / Αποτέλεσμα) με expand/collapse */}
+            {/* MARKETING BRIEF — 3 sections (Customers / Channels / Outcome) with expand/collapse */}
             {hasStructure && (
               <Card padding="none">
                 <div className="px-5 py-3.5 flex items-center gap-2 border-b border-[#F0F0F0]">
@@ -2121,8 +2105,8 @@ function openBriefPdf(data: BriefData) {
       </div>`;
   }).join('');
 
-  // SEC-H1: split into paragraphs first, then escape each segment before wrapping in our
-  // own <p> tags — so member/AI-controlled rationale text can't inject markup.
+  // Split into paragraphs first, then escape each segment before wrapping in our
+  // own <p> tags — so user/AI-controlled rationale text can't inject markup.
   const rationaleHtml = data.rationale
     ? data.rationale.split('||').map(p => `<p style="margin:6px 0;font-size:12px;color:#4A4A4A;line-height:1.6">${escapeHtml(p.trim())}</p>`).join('')
     : '';
@@ -2196,8 +2180,8 @@ function openBriefPdf(data: BriefData) {
   if (win) {
     win.document.write(html);
     win.document.close();
-    // SEC-H1/PP-19: print from the opener instead of an inline <script> in the written
-    // document, so it survives removing CSP script-src 'unsafe-inline' (SEC-M7).
+    // Print from the opener instead of an inline <script> in the written
+    // document, so it survives removing CSP script-src 'unsafe-inline'.
     let printed = false;
     const doPrint = () => {
       if (printed) return;

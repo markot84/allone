@@ -139,9 +139,8 @@ export function RFMAnalysis() {
   const { currentBrand } = useBrand();
   const { user, isSuperAdmin } = useAuth();
   const { members } = useBrandMembers();
-  // The manual "Refresh Analysis" recompute is an expensive (1200s/2GiB) write of
-  // the shared RFM aggregate and is owner/admin-only on the server. Gate the button
-  // to match so members get a clear affordance instead of a permission-denied (FN-C).
+  // Manual "Refresh Analysis" is an expensive (1200s/2GiB) write of the shared RFM aggregate,
+  // owner/admin-only on the server; gate the button to match.
   const myRole = members.find((m) => m.userId === user?.uid)?.role ?? 'member';
   const canRefreshAnalysis =
     Boolean(isSuperAdmin) ||
@@ -438,7 +437,7 @@ export function RFMAnalysis() {
         }
       />
 
-      {/* Μία συμπαγής γραμμή: πηγή + μεγέθη — χωρίς επανάληψη με κάλυψη όταν είναι καθαρό e-shop */}
+      {/* One compact row: source + sizes — no duplication with coverage when it is purely e-shop */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[#E8EAED] bg-[#FAFBFC] px-3 py-2 text-[12px] text-[#374151]">
         {showDataSourceSelector ? (
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -1162,9 +1161,9 @@ function SegmentCard({ segment, index, isSelected, onSelect, onExport }: Segment
 interface SegmentDetailProps {
   segment: RFMSegment;
   movement?: SegmentMovement;
-  /** Κατάλογος ακόμα φορτώνει — tabs heuristic μέχρι να έρθουν τα *_products. */
+  /** Catalog still loading — tabs are heuristic until *_products arrive. */
   catalogEnriching?: boolean;
-  /** Από πού προέρχονται τα segments — μόνο για empty-state copy (δεν αλλάζει τη λογική των δεδομένων). */
+  /** Where the segments come from — only for empty-state copy (does not change data logic). */
   segmentsDataSource: SegmentsDataSource;
   onExportCustomers?: (fmt: 'xlsx' | 'csv') => void;
   onExportActionPack?: (fmt: 'xlsx' | 'csv') => void;

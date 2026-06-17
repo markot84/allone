@@ -10,7 +10,7 @@ export interface UseAIContentSuggestionsOptions {
   brandProfileText?: string;
   topCategories?: string[];
   segmentNames?: string[];
-  /** Provenance snapshot από caller που έχει `useProductSignals.coverage`. */
+  /** Provenance snapshot from a caller that has `useProductSignals.coverage`. */
   provenance?: ProvenanceContentContext | null;
 }
 
@@ -24,8 +24,8 @@ export function useAIContentSuggestions({
 }: UseAIContentSuggestionsOptions) {
   const { activeStrategy, getStrategyName, isLoading: strategyLoading } = useActiveStrategy();
 
-  // Triage origin: επανερμηνεύεται αυτόματα από το αποθηκευμένο active_strategies
-  // doc — έτσι κάθε caller παίρνει context-aware content "δωρεάν".
+  // Triage origin: re-derived automatically from the saved active_strategies
+  // doc — so every caller gets context-aware content "for free".
   const savedTriage = (activeStrategy as { triageOrigin?: TriageOrigin } | null)?.triageOrigin ?? null;
   const triagePromptCtx = buildTriagePromptContext(savedTriage);
 

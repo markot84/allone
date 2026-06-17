@@ -1,25 +1,5 @@
-/**
- * Coverage for the ROI / attribution helpers in `roiUtils.ts` that the dashboard
- * ROAS chart and trend series depend on. The companion file
- * `campaignMetrics.comparison.test.ts` already covers the Meta `conversionActions`
- * "effective" metrics and the single-day purchase-slice basics, so this file focuses
- * on the parts it leaves uncovered:
- *
- *   - the DAILY and MONTHLY in-period attributed value/spend/conversions builders,
- *   - the PURCHASE-SLICE anti-ROAS-inflation rule (a campaign that reports purchases
- *     at all uses purchase_conversion_value PER DAY; a campaign with no purchase slice
- *     anywhere falls back to conversion_value),
- *   - the campaign-level fallback when dailyMetrics is missing or sums to 0,
- *   - the Meta legacy month-bucket spread (one YYYY-MM-01 row → equal share per day),
- *   - ROAS edge cases (zero spend, zero value, missing days),
- *   - and the remaining exported helpers (organic merges, calendar/month utilities).
- *
- * The purchase-slice design is INTENTIONAL: folding total conversion_value into a day
- * with zero purchases would inflate ROAS ("ROAS πλασματικά υψηλό"). Tests here assert
- * that intent — they must not be relaxed into the inflating behavior.
- *
- * Run: npx vitest run src/utils/roiUtils.test.ts
- */
+/** Coverage for roiUtils.ts daily/monthly attributed value/spend/conversions builders, the
+ * purchase-slice anti-ROAS-inflation rule, fallbacks, Meta legacy month buckets, and organic merges. */
 import { describe, expect, it } from 'vitest';
 import type { Campaign } from '../types';
 import { makeCampaign, makeCampaignDaily } from '../test/helpers';
@@ -55,9 +35,8 @@ function sumMap(m: Map<string, number>): number {
 
 describe('getCampaignDailyAttributedValueInPeriod — purchase-slice semantics', () => {
   it('uses purchase_conversion_value per day for every day once a purchase slice exists (NOT conversion_value)', () => {
-    // Two days; one has real purchases, one has zero purchases but non-zero conversion_value.
-    // Because the campaign reports purchases at all, the 0-purchase day must attribute 0 — the
-    // total conversion_value there is non-purchase noise that would inflate ROAS.
+    // Campaign reports purchases, so the 0-purchase day must attribute 0; its conversion_value
+    // is non-purchase noise that would inflate ROAS.
     const c = makeCampaign({
       channel: 'Meta',
       dailyMetrics: {
@@ -87,8 +66,8 @@ describe('getCampaignDailyAttributedValueInPeriod — purchase-slice semantics',
   });
 
   it('presence of purchase_conversions (count only) on any row also flips the whole campaign to purchase mode', () => {
-    // The slice detector keys off purchase_conversions OR purchase_conversion_value being present
-    // on ANY row — so a value-less purchase count still makes other days use purchase value (0 here).
+    // Slice detector keys off purchase_conversions OR purchase_conversion_value on ANY row, so a
+    // value-less purchase count still makes other days use purchase value (0 here).
     const c = makeCampaign({
       channel: 'Meta',
       dailyMetrics: {
@@ -156,8 +135,8 @@ describe('getCampaignDailyAttributedValueInPeriod — campaign-level fallbacks',
   });
 
   it('dailyMetrics present but all in-period days sum to 0 → falls back to campaign-level effective value on its date', () => {
-    // Days exist but are out of the requested window, so the dailyMetrics sum is 0; the helper
-    // then plants the aggregate effective value on the campaign date if that date is in-period.
+    // In-period dailyMetrics sum to 0, so the helper plants the aggregate effective value on the
+    // campaign date if that date is in-period.
     const c = makeCampaign({
       channel: 'Google Ads',
       start_date: '2026-03-15',
@@ -174,8 +153,8 @@ describe('getCampaignDailyAttributedValueInPeriod — campaign-level fallbacks',
 
 describe('getCampaignDailyAttributedValueInPeriod — Meta legacy month buckets', () => {
   it('spreads a single YYYY-MM-01 month total equally over the overlapping days', () => {
-    // Legacy Meta: one row keyed at the 1st holds the whole month. With a 6-day window the helper
-    // attributes monthTotal * (6/30) and spreads it equally over those 6 days.
+    // Legacy Meta: one row keyed at the 1st holds the whole month; a 6-day window attributes
+    // monthTotal * (6/30) spread equally over those 6 days.
     const c = makeCampaign({
       channel: 'Meta',
       dailyMetrics: {
@@ -220,8 +199,8 @@ describe('getCampaignDailyAttributedSpendInPeriod — ROAS pairing (spend leg)',
   });
 
   it('spend is NOT subject to the purchase slice — it always uses amount_spent even when value is 0', () => {
-    // Critical for ROAS: a day with spend but 0 purchase value must still report its spend,
-    // otherwise that day would silently look like infinite efficiency.
+    // Critical for ROAS: a day with spend but 0 purchase value must still report its spend, else
+    // it looks like infinite efficiency.
     const c = makeCampaign({
       channel: 'Meta',
       dailyMetrics: {
@@ -514,7 +493,7 @@ describe('mergeGa4OrganicDailyWithChannelFallback', () => {
   });
 
   it('distributes the channel organic total over the overlap when GA4 has no data in the period', () => {
-    // No GA4 data; channel total 310 over a 31-day sync; period overlaps 10 days →
+    // No GA4 data; channel total 310 over a 31-day sync, period overlaps 10 days →
     // scaledTotal = 310 * (10/31) = 100, spread over 10 days = 10/day.
     const out = mergeGa4OrganicDailyWithChannelFallback(
       {},

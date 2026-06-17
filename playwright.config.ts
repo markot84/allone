@@ -1,14 +1,5 @@
-/**
- * playwright.config.ts — Configuration for the Performance+ E2E smoke layer.
- *
- * Mirrors the sibling repo (Contlia) approach: a thin, always-runnable smoke
- * suite that hits a *deployed* base URL. There is no local web server here —
- * the tests target an already-running deployment.
- *
- * SAFETY: baseURL defaults to the STAGING deployment and must NEVER point at
- * production (performance-plus-4a5b2 / performanceplus.gr). Override only with
- * E2E_BASE_URL when you intentionally want a different STAGING-class target.
- */
+/** E2E smoke suite hitting a deployed base URL (no local web server).
+ * SAFETY: baseURL defaults to STAGING, must NEVER point at production; override only via E2E_BASE_URL with a STAGING-class target. */
 
 import { defineConfig, devices } from '@playwright/test';
 

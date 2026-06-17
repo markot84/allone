@@ -9,11 +9,8 @@ const INTEREST_EMAIL_TIMEOUT_MS = 20_000;
 /** Fallback if Firestore lookup fails or returns empty. */
 const DEFAULT_TEAM_NOTIFY = 'support@notthesame.gr';
 
-/**
- * Recipient list lives in Firestore at `appConfig/notifications.interestLeadNotifyEmails`
- * (seeded by `.tmp/seed-app-config.mjs`). Cached per cold-start to avoid hitting
- * Firestore on every submission.
- */
+/** Recipients from Firestore `appConfig/notifications.interestLeadNotifyEmails`;
+ * cached per cold-start to avoid hitting Firestore on every submission. */
 const INTEREST_LEAD_NOTIFY_TTL_MS = 5 * 60_000;
 let notifyCache: { emails: string[]; fetchedAt: number } | null = null;
 
@@ -215,9 +212,7 @@ function clamp(s: unknown, max: number): string {
   return s.trim().slice(0, max);
 }
 
-/**
- * Δημόσια υποβολή φόρμας ενδιαφέροντος (landing). Honeypot: πεδίο `hp` πρέπει να είναι κενό.
- */
+/** Public interest-form submission (landing). Honeypot: the `hp` field must be empty. */
 export async function persistInterestLead(
   db: Firestore,
   body: Record<string, unknown>,

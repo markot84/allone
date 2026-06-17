@@ -1,16 +1,5 @@
-/**
- * Shopify Connector
- *
- * Flow:
- * 1. User enters shop domain → redirected to Shopify OAuth
- * 2. Shopify redirects back with auth code → exchanged for permanent access token
- * 3. Token stored in Firestore (connectors/{brandId}.shopify)
- * 4. Sync: πρώτο φόρτωμα 3ετίας παραγγελιών/προϊόντων· μετά incremental (API filters)
- *
- * Required secrets:
- * - SHOPIFY_API_KEY
- * - SHOPIFY_API_SECRET
- */
+/** Shopify Connector: OAuth → permanent access token in connectors/{brandId}.shopify, then
+ * initial 3-year load of orders/products + incremental. Secrets: SHOPIFY_API_KEY, SHOPIFY_API_SECRET. */
 
 import * as admin from 'firebase-admin';
 import { signState } from './oauthState';
@@ -20,7 +9,7 @@ import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { getCustomerEmailIdentity } from './customerIdentity';
 import { buildHistoricalOrIncrementalWindow, ECOMMERCE_INCREMENTAL_OVERLAP_HOURS, coerceSyncDate, subtractHours } from './syncPolicy';
-// SEC-C1: strict shop-domain allow-list (throws on non-myshopify hosts) + SSRF-guarded fetch.
+// Strict shop-domain allow-list (throws on non-myshopify hosts) + SSRF-guarded fetch.
 import { normalizeShopDomain } from './shopifyDomain';
 import { safeFetch } from './urlValidator';
 
@@ -51,9 +40,7 @@ const SCOPES = [
   'read_inventory',
 ].join(',');
 
-/**
- * Generate the OAuth consent URL for Shopify
- */
+/** Generate the OAuth consent URL for Shopify */
 export function getShopifyAuthUrl(
   brandId: string,
   shopDomain: string,
@@ -82,17 +69,14 @@ export function getShopifyAuthUrl(
   return `https://${normalizedDomain}/admin/oauth/authorize?${params.toString()}`;
 }
 
-/**
- * Exchange authorization code for a permanent access token
- */
+/** Exchange authorization code for a permanent access token */
 export async function handleShopifyCallback(
   code: string,
   brandId: string,
   shopDomain: string
 ): Promise<{ success: boolean; error?: string }> {
   const { apiKey, apiSecret } = getCredentials();
-  // SEC-C1: re-validate before the token exchange even though the signed state was
-  // normalized at auth-url time — this call POSTs the global API secret to the host.
+  // Re-validate before the exchange — this call POSTs the global API secret to the host.
   let normalizedDomain: string;
   try {
     normalizedDomain = normalizeShopDomain(shopDomain);
@@ -162,10 +146,8 @@ export async function handleShopifyCallback(
   }
 }
 
-/**
- * Fetch Shopify orders (last 3 years) + products and store in Firestore.
- * Order docs include `customerId` (Shopify customer id — όχι email/όνομα) για RFM από raw orders.
- */
+/** Fetch Shopify orders (last 3 years) + products into Firestore; order docs include
+ * `customerId` (Shopify customer id — not email/name) for RFM from raw orders. */
 export async function fetchShopifyData(brandId: string): Promise<{
   success: boolean;
   imported: number;
@@ -191,8 +173,8 @@ export async function fetchShopifyData(brandId: string): Promise<{
     `[Shopify] ${brandId} orders=${orderWindow.mode} (${ordersSinceIso} → ${orderWindow.windowEnd.toISOString()}) products=${productsUpdatedSinceIso ? 'incremental' : 'full'}`
   );
 
-  // SEC-C1: re-pin the STORED domain on every read — connectors/{brandId} is member-writable,
-  // so a tampered shopDomain must not receive the shop access token (or any request at all).
+  // Re-pin the STORED domain on every read — connectors/{brandId} is member-writable, so a
+  // tampered shopDomain must not receive the shop access token (or any request at all).
   let shopDomain: string;
   try {
     shopDomain = normalizeShopDomain(String(connector.shopDomain || ''));
@@ -211,7 +193,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
   let productsSyncComplete = false;
 
   try {
-    // ── Orders: historical από 3 έτη, στη συνέχεια incremental (updated_at) ──
+    // ── Orders: historical for 3 years, then incremental (updated_at) ──
     let orderPage = 1;
     let hasMore = true;
     let ordersAbort = false;
@@ -219,7 +201,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
 
     while (hasMore) {
       // No `fields` filter: Shopify truncates nested line_items without product_id/variant_id,
-      // which we need for catalog alignment (join to shopify_products).
+      // needed for catalog alignment (join to shopify_products).
       const params = new URLSearchParams({
         status: 'any',
         limit: '250',
@@ -248,9 +230,8 @@ export async function fetchShopifyData(brandId: string): Promise<{
       for (const o of orders) {
         const shopifyCid = o.customer_id != null && o.customer_id !== '' ? String(o.customer_id) : '';
         const emailIdentity = getCustomerEmailIdentity(o.email || o.contact_email);
-        // LOGIC-4: parenthesize the customer-name ternary. Without the parens the `||` chain
-        // binds tighter than `?:`, so any truthy billing/shipping name forced the customer
-        // template branch (→ "undefined undefined" when customer fields were absent).
+        // Parenthesize the customer-name ternary: without parens `||` binds tighter than `?:`,
+        // forcing the customer branch (→ "undefined undefined" when customer fields absent).
         const shopifyName = [o.billing_address?.first_name, o.billing_address?.last_name].filter(Boolean).join(' ').trim()
           || [o.shipping_address?.first_name, o.shipping_address?.last_name].filter(Boolean).join(' ').trim()
           || (o.customer?.first_name && o.customer?.last_name ? `${o.customer?.first_name} ${o.customer?.last_name}`.trim() : '');
@@ -315,7 +296,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
       logger.info(`[Shopify] Orders: ${batchItems.length} imported for brand ${brandId}`);
     }
 
-    // ── Products: πρώτο sync πλήρες catalog, έπειτα μόνο αλλαγές (`updated_at_min`) ──
+    // ── Products: first sync full catalog, then only changes (`updated_at_min`) ──
     let prodPage = 1;
     let prodMore = true;
     let productsAbort = false;

@@ -24,7 +24,7 @@ const CHANNEL_COLORS: Record<string, string> = {
 
 const MAX_DAILY_POINTS = 90;
 
-/** Ετικέτα άξονα ημερών σε μορφή MM-DD (όπως στο reference UI). */
+/** Day-axis label in MM-DD format. */
 function formatChartDayLabelMmDd(ymd: string): string {
   const parts = ymd.split('-');
   const m = parts[1];
@@ -43,9 +43,7 @@ function formatRangeSubtitle(from: string, to: string): string {
 
 type ChannelSv = { spend: number; value: number };
 
-/**
- * Weighted ROAS per channel per time bucket within [dateFrom, dateTo] (daily or monthly if range is long).
- */
+/** Weighted ROAS per channel per time bucket within [dateFrom, dateTo] (daily, or monthly if range is long). */
 export function ChannelPerformanceHistoryCard({
   dateFrom,
   dateTo,

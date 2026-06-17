@@ -194,7 +194,7 @@ export function ContentStrategy() {
 
   return (
     <div className="space-y-8">
-      {/* Ζεστό hero — το content hub της εφαρμογής */}
+      {/* Warm hero — the app's content hub */}
       <div className="relative overflow-hidden rounded-2xl border border-orange-200/55 bg-gradient-to-br from-amber-50 via-orange-50/70 to-[#FFF7ED] shadow-[0_8px_32px_-8px_rgba(234,88,12,0.18)]">
         <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-[var(--nts-accent)]/15 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 -left-10 h-44 w-44 rounded-full bg-rose-300/20 blur-3xl" />
@@ -244,7 +244,7 @@ export function ContentStrategy() {
         </div>
       </div>
 
-      {/* Content Brief for Marketing Team — πρώτο περιεχόμενο όταν υπάρχει */}
+      {/* Content Brief for Marketing Team — shown first when present */}
       {hasStrategy && !suggestionsLoading && brief && (
         <Card padding="lg" className="border border-orange-100/90 bg-white shadow-md shadow-orange-500/[0.06]">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">

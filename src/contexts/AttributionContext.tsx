@@ -5,7 +5,7 @@ import {
 } from '../types';
 
 interface AttributionContextValue {
-  /** Επιλεγμένο Meta attribution window. 'default' = ό,τι επιστρέφει το Meta (account-level). */
+  /** Selected Meta attribution window. 'default' = whatever Meta returns (account-level). */
   metaWindow: MetaAttributionWindow;
   setMetaWindow: (w: MetaAttributionWindow) => void;
 }
@@ -44,7 +44,7 @@ export function AttributionProvider({ children }: { children: ReactNode }) {
 export function useAttribution(): AttributionContextValue {
   const ctx = useContext(AttributionContext);
   if (!ctx) {
-    // Fail-soft: αν δεν υπάρχει provider, χρησιμοποίησε default χωρίς να πετάμε.
+    // Fail-soft: if no provider exists, use the default without throwing.
     return { metaWindow: 'default', setMetaWindow: () => {} };
   }
   return ctx;

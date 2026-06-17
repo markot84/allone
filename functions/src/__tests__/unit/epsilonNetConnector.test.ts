@@ -1,12 +1,9 @@
-/**
- * SEC-M9 — normalizeSmartUrl must pin the API-supplied Epsilon `url2` to an https *.epsilonnet.gr
- * host before the connector reattaches the bearer JWT to it. A compromised/MITM upstream must not
- * be able to redirect the token to an arbitrary host.
- */
+/** normalizeSmartUrl must pin the API-supplied Epsilon `url2` to an https *.epsilonnet.gr host
+ * before the bearer JWT is reattached, so a MITM upstream can't redirect the token elsewhere. */
 import { describe, it, expect } from 'vitest';
 import { normalizeSmartUrl } from '../../epsilonNetConnector';
 
-describe('normalizeSmartUrl (SEC-M9)', () => {
+describe('normalizeSmartUrl', () => {
   it('accepts an https *.epsilonnet.gr host and ensures a trailing slash', () => {
     expect(normalizeSmartUrl('https://smart.epsilonnet.gr/api')).toBe('https://smart.epsilonnet.gr/api/');
     expect(normalizeSmartUrl('https://smart.epsilonnet.gr/')).toBe('https://smart.epsilonnet.gr/');

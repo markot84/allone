@@ -72,10 +72,8 @@ export function useModules() {
     [brandType, enabledModules, isSectionEnabled]
   );
 
-  /**
-   * Επιστρέφει το πιο κατάλληλο προσβάσιμο section για ένα ζητούμενο: το ίδιο αν είναι ενεργό,
-   * αλλιώς το alias του (π.χ. products → procurement σε Enterprise), αλλιώς το γενικό fallback.
-   */
+  /** Resolves a requested section to an accessible one: itself if enabled,
+   * else its alias (e.g. products → procurement), else the generic fallback. */
   const resolveAccessibleSection = useMemo(
     () => (section: string): AppSectionId => {
       if (isSectionEnabled(section)) return section as AppSectionId;

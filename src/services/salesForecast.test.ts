@@ -24,7 +24,7 @@ function info(partial: Partial<CommercialInfo>): CommercialInfo {
 }
 
 describe('buildSalesForecast', () => {
-  it('χωρίς πληροφορίες, η πρόβλεψη ισούται με το baseline', () => {
+  it('with no info, the forecast equals the baseline', () => {
     const f = buildSalesForecast({
       categoryGroups: [{ category: 'Tennis', pastRevenue: 1000, pastUnits: 50 }],
       activeInfo: [],
@@ -35,7 +35,7 @@ describe('buildSalesForecast', () => {
     expect(f.totalForecastRevenue).toBe(1000);
   });
 
-  it('πληροφορία ανόδου σε κατηγορία αυξάνει την πρόβλεψη', () => {
+  it('upward info on a category increases the forecast', () => {
     const f = buildSalesForecast({
       categoryGroups: [
         { category: 'Tennis', pastRevenue: 1000, pastUnits: 50 },
@@ -47,11 +47,11 @@ describe('buildSalesForecast', () => {
     const running = f.categories.find((r) => r.category === 'Running')!;
     expect(tennis.upliftPct).toBeGreaterThan(0);
     expect(tennis.forecastRevenue).toBeGreaterThan(1000);
-    expect(running.upliftPct).toBe(0); // δεν επηρεάζεται
+    expect(running.upliftPct).toBe(0); // not affected
     expect(f.appliedInfoCount).toBe(1);
   });
 
-  it('αναγνωρίζει επωνυμία μέσα στο όνομα κατηγορίας/parent SKU', () => {
+  it('recognizes a brand within the category name / parent SKU', () => {
     const f = buildSalesForecast({
       categoryGroups: [{ category: 'Adidas Originals', pastRevenue: 800, pastUnits: 40 }],
       activeInfo: [info({ brands: ['Adidas'], direction: 'up', magnitude: 'medium', confidence: 'high' })],
@@ -60,7 +60,7 @@ describe('buildSalesForecast', () => {
     expect(f.categories[0].drivers.length).toBeGreaterThan(0);
   });
 
-  it('πληροφορία πτώσης μειώνει την πρόβλεψη', () => {
+  it('downward info reduces the forecast', () => {
     const f = buildSalesForecast({
       categoryGroups: [{ category: 'Ski', pastRevenue: 1000, pastUnits: 30 }],
       activeInfo: [info({ categories: ['Ski'], direction: 'down', magnitude: 'high', confidence: 'high' })],
@@ -69,7 +69,7 @@ describe('buildSalesForecast', () => {
     expect(f.categories[0].forecastRevenue).toBeLessThan(1000);
   });
 
-  it('το uplift περιορίζεται στο +/-60%', () => {
+  it('uplift is capped at +/-60%', () => {
     const many = Array.from({ length: 10 }, (_, i) =>
       info({ id: `i${i}`, categories: ['Tennis'], direction: 'up', magnitude: 'high', confidence: 'high' })
     );

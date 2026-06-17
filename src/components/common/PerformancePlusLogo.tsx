@@ -1,15 +1,11 @@
 import buildInfoJson from '../../generated/buildInfo.json';
 import type { BuildInfo } from '../../types/buildInfo';
 
-// CODE-B1: cast so empty commits/changes arrays don't infer as never[] under `tsc -b`.
+// Cast so empty commits/changes arrays don't infer as never[] under `tsc -b`.
 const buildInfo = buildInfoJson as BuildInfo;
 
-/**
- * `onLight`: η εικόνα Performance.png σε σκούρο pill — ακριβώς όπως εμφανίζεται στο sidebar.
- * `onDark`:  η εικόνα Performance.png απευθείας πάνω σε σκούρο φόντο (sidebar, dark header).
- *
- * Και οι δύο παραλλαγές χρησιμοποιούν το επίσημο asset· δεν υπάρχει SVG/HTML proxy.
- */
+/** `onLight`: Performance.png in a dark pill; `onDark`: Performance.png directly on a dark background.
+ * Both variants use the official asset; there is no SVG/HTML proxy. */
 export interface PerformancePlusLogoProps {
   className?: string;
   height?: number;
@@ -37,7 +33,7 @@ export function PerformancePlusLogo({
     );
   }
 
-  // onLight: logo εντός σκούρου pill — ίδια εμπειρία με το sidebar, ορατό σε ανοιχτά φόντα
+  // onLight: logo inside a dark pill — same as the sidebar, visible on light backgrounds
   const pill = Math.round(height * 0.28);
   const paddingX = Math.round(height * 0.28);
   const paddingY = Math.round(height * 0.14);

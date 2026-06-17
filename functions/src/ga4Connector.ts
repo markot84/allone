@@ -1,12 +1,4 @@
-/**
- * Google Analytics 4 (GA4) Connector
- *
- * Reuses Google OAuth (same client_id/secret as Google Ads) with
- * scope: https://www.googleapis.com/auth/analytics.readonly
- *
- * Fetches GA4 property data: sessions, users, pageviews, events,
- * conversions, bounce rate, etc.
- */
+/** GA4 connector: reuses Google Ads OAuth (analytics.readonly scope); fetches sessions, users, pageviews, events, conversions, bounce rate. */
 
 import * as admin from 'firebase-admin';
 import { signState } from './oauthState';
@@ -30,10 +22,8 @@ const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GA4_DATA_API = 'https://analyticsdata.googleapis.com/v1beta';
 const GA4_ADMIN_API = 'https://analyticsadmin.googleapis.com/v1beta';
 
-/**
- * Normalize GA4 Default Channel Group labels so session vs first-user reports merge reliably.
- * GA may return "(direct)", Greek labels, or "(not set)" vs "Unassigned" — align to a canonical key.
- */
+/** Normalize GA4 Default Channel Group labels to a canonical key so session vs first-user reports merge
+ * reliably across "(direct)", Greek labels, and "(not set)" vs "Unassigned". */
 function normalizeDefaultChannelGroup(name: string): string {
   let s = name
     .normalize('NFKC')
@@ -47,10 +37,8 @@ function normalizeDefaultChannelGroup(name: string): string {
   return s;
 }
 
-/**
- * Map localized GA4 Default Channel Group labels (e.g. Greek UI) to one canonical key for matching
- * across session vs first-user reports when GA returns different languages per query.
- */
+/** Map localized GA4 Default Channel Group labels (e.g. Greek UI) to one canonical key for matching
+ * across session vs first-user reports when GA returns different languages per query. */
 const CHANNEL_LABEL_CANONICAL: Record<string, string> = {
   // Greek (normalized lowercase) -> English canonical
   'οργανική αναζήτηση': 'organic search',
@@ -77,9 +65,7 @@ function canonicalChannelComparable(name: string): string {
   return CHANNEL_LABEL_CANONICAL[n] ?? n;
 }
 
-/**
- * English display keys for channel mix (merge EL/EN variants + match Performance+ CHANNEL_COLORS).
- */
+/** English display keys for channel mix (merge EL/EN variants + match Performance+ CHANNEL_COLORS). */
 const SESSION_DEFAULT_CHANNEL_DISPLAY: Record<string, string> = {
   'organic search': 'Organic Search',
   'organic shopping': 'Organic Shopping',
@@ -180,13 +166,11 @@ type GA4OrganicFallbackRow = {
   sessions: number;
   users: number;
   conversions: number;
-  /** ecommerce totalRevenue for organic landing row (αν το property το επιτρέπει) */
+  /** ecommerce totalRevenue for organic landing row (if the property allows it) */
   totalRevenue?: number;
 };
 
-/**
- * Generate the OAuth consent URL for GA4
- */
+/** Generate the OAuth consent URL for GA4. */
 export function getGA4AuthUrl(
   brandId: string,
   redirectUri: string,
@@ -214,9 +198,7 @@ export function getGA4AuthUrl(
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
 }
 
-/**
- * Exchange auth code for tokens and list GA4 properties
- */
+/** Exchange auth code for tokens and list GA4 properties. */
 export async function handleGA4Callback(
   code: string,
   brandId: string,
@@ -325,10 +307,7 @@ export async function handleGA4Callback(
   }
 }
 
-/**
- * List all GA4 properties accessible with the token.
- * Throws on API errors so caller can surface them to the user.
- */
+/** List all GA4 properties accessible with the token; throws on API errors so caller can surface them. */
 async function listGA4Properties(accessToken: string): Promise<GA4Property[]> {
   const res = await fetch(`${GA4_ADMIN_API}/accountSummaries?pageSize=200`, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -383,9 +362,7 @@ function explainGoogleTokenError(status: number, rawText: string): string {
   return slice ? `Token refresh failed: ${status} — ${slice}` : `Token refresh failed: ${status}`;
 }
 
-/**
- * Refresh the access token
- */
+/** Refresh the access token. */
 async function refreshAccessToken(refreshToken: string): Promise<string> {
   const { clientId, clientSecret } = getCredentials();
   if (!clientId || !clientSecret) {
@@ -424,7 +401,7 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
   return data.access_token;
 }
 
-/** GA4 `date` dimension: συνήθως YYYYMMDD · ορισμένα responses έχουν YYYY-MM-DD. Κλειδί Firestore: YYYY-MM-DD. */
+/** GA4 `date` dimension: usually YYYYMMDD; some responses use YYYY-MM-DD. Firestore key: YYYY-MM-DD. */
 function normalizeGa4DateDimension(raw: unknown): string {
   const s = String(raw ?? '').trim();
   if (/^\d{8}$/.test(s)) {
@@ -446,14 +423,8 @@ export interface GA4PeriodTotals {
   addToCarts: number;
 }
 
-/**
- * GA4-deduplicated totals για ΣΥΓΚΕΚΡΙΜΕΝΗ περίοδο (ένα report ΧΩΡΙΣ date dimension → μία γραμμή).
- *
- * Γιατί χρειάζεται: το `dailyMetrics` αποθηκεύει ημερήσιες τιμές· totalUsers/newUsers ΔΕΝ είναι αθροιστικά
- * (ένας χρήστης που μπήκε 5 μέρες μετράει 1 στο GA4 αλλά 5 στο άθροισμα ημερών). Εδώ ζητάμε από το GA4 το
- * ίδιο deduplicated σύνολο που δείχνει το GA4 UI για το επιλεγμένο εύρος → ακριβής ευθυγράμμιση.
- * Τα start/end είναι YYYY-MM-DD.
- */
+/** GA4-deduplicated period totals (one report without date dimension → single row): `dailyMetrics` totalUsers/newUsers
+ * are NOT additive across days, so ask GA4 for the range total the UI shows. start/end are YYYY-MM-DD. */
 export async function fetchGA4PeriodTotals(
   brandId: string,
   startDate: string,
@@ -497,7 +468,7 @@ export async function fetchGA4PeriodTotals(
     let res = await run([...baseMetrics, { name: 'addToCarts' }]);
     let hasCarts = res.ok;
     if (!res.ok) {
-      // addToCarts μη διαθέσιμο σε ορισμένα properties → retry χωρίς αυτό
+      // addToCarts unavailable on some properties → retry without it
       res = await run(baseMetrics);
       hasCarts = false;
     }
@@ -531,9 +502,7 @@ export async function fetchGA4PeriodTotals(
   }
 }
 
-/**
- * Fetch GA4 analytics data and store in Firestore
- */
+/** Fetch GA4 analytics data and store in Firestore. */
 export async function fetchGA4Data(
   brandId: string
 ): Promise<{ success: boolean; imported: number; error?: string }> {
@@ -553,8 +522,7 @@ export async function fetchGA4Data(
     const accessToken = await refreshAccessToken(refreshTokenPlain);
     const propertyId = conn.propertyId;
 
-    // Fetch last 3 years of data (GA4 free tier default retention is 14 months — older data
-    // returns empty, no error). Daily aggregates fit comfortably in Firestore docs (~150 bytes × 1095 = 165KB).
+    // Fetch last 3 years (free tier retention 14mo, older returns empty); daily aggregates fit Firestore docs.
     const endDate = new Date();
     const startDate = new Date();
     startDate.setUTCFullYear(startDate.getUTCFullYear() - 3);
@@ -700,8 +668,8 @@ export async function fetchGA4Data(
         out[channel].users += users;
         out[channel].newUsers += newUsers;
         out[channel].conversions += conversions;
-        // ΣΗΜΑΝΤΙΚΟ: άθροιση και όχι max — στο source/medium fallback πολλαπλά rows αντιστοιχούν σε ίδιο channel.
-        // Στο sessionDefaultChannelGroup έχουμε μία γραμμή ανά channel οπότε άθροιση == max.
+        // IMPORTANT: sum, not max — in the source/medium fallback multiple rows map to the same channel.
+        // For sessionDefaultChannelGroup there is one row per channel, so summing == max.
         out[channel].totalRevenue += revenue;
       }
       return out;
@@ -826,10 +794,8 @@ export async function fetchGA4Data(
       logger.warn('[GA4] Traffic sources query failed:', { err: e });
     }
 
-    /**
-     * Many properties send purchase `value` on the event but return 0 for purchaseRevenue/totalRevenue
-     * on sessionDefaultChannelGroup alone. Sum eventValue for purchase-like events per channel.
-     */
+    /** Many properties return 0 for purchaseRevenue/totalRevenue on sessionDefaultChannelGroup alone;
+     * sum eventValue for purchase-like events per channel instead. */
     try {
       const purchaseByChannelBody = {
         dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
@@ -1168,7 +1134,7 @@ export async function fetchGA4Data(
       logger.warn('[GA4] Top pages query failed:', { err: e });
     }
 
-    /** Ημερομηνία × κανάλι → metrics (για φίλτρο ημερολογίου στο Web Analytics). */
+    /** Date × channel → metrics (for the calendar filter in Web Analytics). */
     const dailyTrafficByChannel: Record<
       string,
       Record<
@@ -1193,7 +1159,7 @@ export async function fetchGA4Data(
         }
       };
 
-      /** Συγχώνευση rows (ημερομηνία + normalize + revenue index). */
+      /** Merge rows (date + normalize + revenue index). */
       const flushRows = (
         rows: unknown[],
         revenueIdx: number | null,
@@ -1316,7 +1282,7 @@ export async function fetchGA4Data(
         }
       };
 
-      /** Όταν metrics τύπου totalUsers/fail στην 3ετία → GA4 συχνά απαντά 400· sessions-only σχεδόν πάντα OK. */
+      /** When metrics like totalUsers fail over the 3-year window GA4 often returns 400; sessions-only almost always works. */
       const ingestSessionsOnlyForRange = async (
         range: { startDate: string; endDate: string },
         sink: typeof dailyTrafficByChannel
@@ -1443,7 +1409,6 @@ export async function fetchGA4Data(
     });
 
     // Cap dailyTrafficByChannel to last 400 days to stay under 1 MiB per chunk doc.
-    // Worst case: 20 GA4 channels × 400 days × ~108 bytes/channel ≈ 864 KB (safe).
     const dtcKeys = Object.keys(dailyTrafficByChannel).sort();
     const MAX_DTC_DAYS = 400;
     if (dtcKeys.length > MAX_DTC_DAYS) {
@@ -1462,15 +1427,14 @@ export async function fetchGA4Data(
       logger.info(`[GA4] Capped organicSearchFallbackRows to ${MAX_ORGANIC_ROWS} for brand ${brandId}`);
     }
 
-    // Store chunks as serialized JSON strings — deeply nested maps exceed Firestore's
-    // 40,000 index entries/doc limit (550 days × 16 channels × 5 metrics ≈ 44K entries).
+    // Store chunks as serialized JSON strings — deeply nested maps exceed Firestore's 40,000 index entries/doc limit.
     const chunksCol = db.collection(`ga4_data/${brandId}/chunks`);
     await chunksCol.doc('dailyTraffic').set({ json: JSON.stringify(dailyTrafficByChannel) });
     await chunksCol.doc('organicFallback').set({ json: JSON.stringify(organicSearchFallbackRows) });
 
     const dayCount = Object.keys(dailyMetrics).length;
 
-    // Log import_jobs so "Τελευταίο sync" shows in UI
+    // Log import_jobs so "last sync" shows in the UI
     await db.collection('import_jobs').add({
       brandId,
       type: 'analytics',

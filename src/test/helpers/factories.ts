@@ -1,11 +1,5 @@
-/**
- * Shared test data factories (the Contlia pattern: never copy-paste fixtures).
- *
- * Each builder returns a minimal-but-valid object for its type with sensible
- * defaults, and accepts a `Partial<T>` of overrides so a test states only the
- * fields it actually cares about. Keep defaults boring and deterministic — tests
- * assert on what they override, not on incidental default values.
- */
+/** Shared test data factories: minimal-but-valid objects with deterministic
+ *  defaults, plus `Partial<T>` overrides so a test states only what it asserts. */
 import type { Brand, Campaign, Product } from '../../types';
 import type { EcommerceRawLineItem } from '../../services/ecommerceRawOrders';
 
@@ -38,10 +32,8 @@ export function makeCampaign(overrides: Partial<Campaign> = {}): Campaign {
 
 type CampaignDailyMetric = NonNullable<Campaign['dailyMetrics']>[string];
 
-/**
- * One `dailyMetrics[date]` entry. Defaults to zeros so a test sets only the
- * fields under assertion (e.g. just `purchase_conversion_value`).
- */
+/** One `dailyMetrics[date]` entry; defaults to zeros so a test sets only the
+ *  fields under assertion (e.g. just `purchase_conversion_value`). */
 export function makeCampaignDaily(
   overrides: Partial<CampaignDailyMetric> = {},
 ): CampaignDailyMetric {

@@ -63,7 +63,7 @@ type SortDirection = 'asc' | 'desc';
 const PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT = 5000;
 
 const EMPTY_CATEGORY_ID = '__EMPTY_CAT__';
-/** Σταθερές τιμές priority_tag (inventory intelligence) — εμφανίζονται πάντα στο φίλτρο ακόμη κι αν το client catalog δεν φέρει το πεδίο. */
+/** Fixed priority_tag values (inventory intelligence) — always shown in the filter even if the client catalog lacks the field. */
 const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead', 'no_stock'] as const;
 const productStockLevel = (product: Product): number =>
   Number(product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0) || 0;
@@ -78,7 +78,7 @@ const EMPTY_INVENTORY_SUMMARY: InventorySummary = {
   low_stock: { count: 0, percentage: 0 },
 };
 
-/** Skeleton: ίδια δομή με τη σελίδα (κάρτες + πίνακας) — όχι κενή οθόνη κατά τη φόρτωση. */
+/** Skeleton: same structure as the page (cards + table) — no blank screen while loading. */
 function ProductIntelligenceSkeleton() {
   return (
     <div className="space-y-6">
@@ -181,12 +181,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const [showCharts, setShowCharts] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 150;
-  /** Φίλτρο περιόδου (εισαγωγή / πρώτη διαθεσιμότητα) — μόνο για εισαγόμενα SKU, όχι ERP procurement */
+  /** Period filter (import / first availability) — only for imported SKUs, not ERP procurement */
   const [productDateFrom, setProductDateFrom] = useState('');
   const [productDateTo, setProductDateTo] = useState('');
   const [productDateMode, setProductDateMode] = useState<'imported' | 'first_available'>('imported');
 
-  /** Deep link: `#products?stock=low|dead|excess|healthy` ή `#products?filter=high-margin-low-stock` */
+  /** Deep link: `#products?stock=low|dead|excess|healthy` or `#products?filter=high-margin-low-stock` */
   useEffect(() => {
     const applyFromHash = () => {
       const raw = window.location.hash.replace('#', '');
@@ -214,8 +214,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const { isEnterprise } = usePlan();
   const procurementModuleEnabled = currentBrand?.enabledModules?.procurement !== false;
   const { signalsBySku: piProcurementSignals } = useProcurementSignals();
-  // Brand σε Enterprise+Procurement με ανεβασμένα procurement signals → το PI απόθεμα
-  // πρέπει να προέρχεται από procurement (procurement-first).
+  // Brand on Enterprise+Procurement with uploaded procurement signals → PI stock
+  // must come from procurement (procurement-first).
   const expectsProcurementCatalog =
     isEnterprise && procurementModuleEnabled && Object.keys(piProcurementSignals || {}).length > 0;
   const {
@@ -322,8 +322,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     const needsRebuild =
       !aggregate ||
       (aggregate.status === 'ready' && aggregate.totalCount === 0 && aggregate.sourceLabel === 'E-shop catalog') ||
-      // Enterprise+Procurement αλλά το aggregate δεν έχει χτιστεί ακόμη από procurement (π.χ. παλιό
-      // connector-based ή skipped) → κάνε ένα rebuild ώστε να περάσει στην procurement πηγή.
+      // Enterprise+Procurement but the aggregate isn't built from procurement yet (e.g. old
+      // connector-based or skipped) → trigger a rebuild so it switches to the procurement source.
       (expectsProcurementCatalog && aggregate.sourceKind !== 'procurement');
     if (!needsRebuild) return;
     const key = `${brandId}:${aggregate?.syncVersion ?? 'none'}:${aggregate?.totalCount ?? 'missing'}:${aggregate?.sourceKind ?? 'none'}`;
@@ -768,7 +768,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             </p>
           )}
         </div>
-        {/* Filters — φίλτρα τύπου Excel (λίστα τιμών) + εξαγωγή */}
+        {/* Filters — Excel-style filters (value list) + export */}
         <div className="p-4 border-b border-[#E5E5E5]">
           <div className="flex flex-wrap gap-3 items-end">
             <div className="relative flex-1 min-w-[200px]">

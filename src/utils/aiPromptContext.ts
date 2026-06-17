@@ -1,14 +1,5 @@
-/**
- * aiPromptContext — pure helpers που μετατρέπουν triage origin και source coverage
- * σε compact context objects για τα Gemini prompts (channel + content).
- *
- * Σχεδιαστική σημείωση:
- *   - DRY: τα `TriagePromptContext` (channel) και `TriageContentContext` (content)
- *     έχουν ίδια shape — ένας helper εξυπηρετεί και τα δύο.
- *   - Pure: καμία εξάρτηση από hooks. Τρέχει και από services/tests.
- *   - Defensive: clamp ποσοστά σε [0, 100], κόψιμο SKUs σε MAX_TOP_SKUS, καθαρισμός
- *     undefined fields για clean serialization.
- */
+/** Pure helpers turning triage origin and source coverage into compact context
+ * objects for the Gemini prompts; clamps percentages and caps SKUs. */
 import type { TriageOrigin } from '../hooks/useActiveStrategy';
 import { BUCKET_DEFS, type BucketId } from './decisionBuckets';
 
@@ -30,10 +21,8 @@ export interface ProvenancePromptShape {
   totalProducts: number;
 }
 
-/**
- * Build triage prompt context από αποθηκευμένο TriageOrigin (από active_strategies).
- * Περνά το description του bucket (ώστε το LLM να καταλάβει τη ρίζα του προβλήματος).
- */
+/** Build triage prompt context from a stored TriageOrigin (active_strategies);
+ * passes the bucket description so the LLM understands the root problem. */
 export function buildTriagePromptContext(
   origin: TriageOrigin | null | undefined
 ): TriagePromptShape | undefined {
@@ -52,12 +41,7 @@ export function buildTriagePromptContext(
   };
 }
 
-/**
- * Build provenance snapshot από useProductSignals.coverage.
- *
- * @param coverage πόσα SKUs εντοπίστηκαν ανά πηγή (μπορεί να επικαλύπτονται)
- * @param totalProducts σύνολο SKUs στο catalog
- */
+/** Build provenance snapshot from useProductSignals.coverage. */
 export function buildProvenancePromptContext(
   coverage: { connector: number; movement: number; procurement: number; import: number } | null | undefined,
   totalProducts: number | null | undefined
