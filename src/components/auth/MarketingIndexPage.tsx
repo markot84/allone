@@ -2,7 +2,8 @@ import { useRef } from 'react';
 import { ArrowLeft, ArrowRight, BarChart3, Boxes, Brain, CheckCircle2, ClipboardCheck, Database, ExternalLink, Gauge, HelpCircle, Layers3, Mail, Megaphone, PackageCheck, Phone, ShieldCheck, ShoppingBag, Store, TrendingUp, Upload } from 'lucide-react';
 import { InterestForm } from './InterestForm';
 import { PerformancePlusLogo } from '../common';
-import { useGoogleTagManager } from '../../hooks/useGoogleTagManager';
+import { useMarketingTags } from '../../hooks/useMarketingTags';
+import { trackMarketingEvent, trackLeadCta, trackMetaContact, trackGoogleCallConversion } from '../../utils/marketingTracking';
 
 type LandingVariant = 'ceo' | 'ops';
 
@@ -278,24 +279,6 @@ const LANDING_MAX =
 const PREMIUM_SECTION_CARD =
   'relative overflow-hidden rounded-[32px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_24px_60px_rgba(16,24,40,0.12)] md:p-8';
 
-function trackMarketingEvent(action: string, params?: Record<string, string>) {
-  if (typeof window === 'undefined') return;
-  const analyticsWindow = window as Window & {
-    dataLayer?: Array<Record<string, unknown>>;
-    gtag?: (command: 'event', eventName: string, eventParams?: Record<string, unknown>) => void;
-  };
-
-  analyticsWindow.dataLayer?.push({
-    event: 'performance_plus_marketing',
-    action,
-    ...(params || {}),
-  });
-  analyticsWindow.gtag?.('event', action, {
-    event_category: 'marketing_page',
-    ...(params || {}),
-  });
-}
-
 // ─── Sub-components ─────────────────────────────────────────────────────────────
 
 function isPreviewDarkHighlight(index: number) {
@@ -382,8 +365,8 @@ export function MarketingIndexPage({
   const copy = variantCopy[variant];
   void _onVariantChange;
 
-  // GTM φορτώνει ΜΟΝΟ στη marketing/landing σελίδα — όχι στις σελίδες της εφαρμογής.
-  useGoogleTagManager();
+  // Τα marketing tags φορτώνουν ΜΟΝΟ στη marketing/landing σελίδα — όχι στις σελίδες της εφαρμογής.
+  useMarketingTags();
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -450,7 +433,7 @@ export function MarketingIndexPage({
                 <div className="flex flex-wrap gap-3">
                   <a
                     href="#interest"
-                    onClick={() => trackMarketingEvent('cta_click', { placement: 'hero' })}
+                    onClick={() => trackLeadCta('hero')}
                     className={primaryCtaClass}
                   >
                     <HelpCircle size={16} />
@@ -459,7 +442,11 @@ export function MarketingIndexPage({
                   </a>
                   <a
                     href="tel:+302310321625"
-                    onClick={() => trackMarketingEvent('cta_click', { placement: 'hero_phone' })}
+                    onClick={() => {
+                      trackMarketingEvent('cta_click', { placement: 'hero_phone' });
+                      trackMetaContact();
+                      trackGoogleCallConversion();
+                    }}
                     className="inline-flex items-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-white/70 px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)] shadow-[0_8px_20px_rgba(16,24,40,0.06)] transition hover:border-[var(--nts-accent)]/30 hover:shadow-[0_8px_20px_rgba(249,115,22,0.10)]"
                   >
                     <Phone size={16} className="text-[var(--nts-accent)]" aria-hidden />
@@ -848,7 +835,7 @@ export function MarketingIndexPage({
               </div>
               <a
                 href="#interest"
-                onClick={() => trackMarketingEvent('cta_click', { placement: 'final_cta' })}
+                onClick={() => trackLeadCta('final_cta')}
                 className={`${primaryCtaClass} mt-5 w-full`}
               >
                 <HelpCircle size={16} />

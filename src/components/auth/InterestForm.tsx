@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Send } from 'lucide-react';
 import { Card, Button, Spinner, useToast } from '../common';
 import { buildFunctionUrl } from '../../config/firebase';
+import { trackMarketingEvent, trackGoogleFormSubmitConversion, trackLinkedInConversion } from '../../utils/marketingTracking';
 
 const improvementOptions = [
   'ROAS & budget allocation',
@@ -10,24 +11,6 @@ const improvementOptions = [
   'Product launches',
   'Connectors & data unification',
 ];
-
-function trackMarketingFormEvent(action: string, params?: Record<string, string>) {
-  if (typeof window === 'undefined') return;
-  const analyticsWindow = window as Window & {
-    dataLayer?: Array<Record<string, unknown>>;
-    gtag?: (command: 'event', eventName: string, eventParams?: Record<string, unknown>) => void;
-  };
-
-  analyticsWindow.dataLayer?.push({
-    event: 'performance_plus_marketing',
-    action,
-    ...(params || {}),
-  });
-  analyticsWindow.gtag?.('event', action, {
-    event_category: 'marketing_page',
-    ...(params || {}),
-  });
-}
 
 /**
  * Dev: Vite proxy. Prod: απευθείας HTTP function (όχι μέσω Hosting — όριο ~60s στο proxy).
@@ -53,7 +36,7 @@ export function InterestForm() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSending(true);
-    trackMarketingFormEvent('interest_form_submit', {
+    trackMarketingEvent('interest_form_submit', {
       improvement_focus: improvementFocus || 'not_selected',
     });
     try {
@@ -85,6 +68,9 @@ export function InterestForm() {
       if (!res.ok) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
+      // Conversions μόνο σε επιτυχημένη υποβολή (πραγματικό lead).
+      trackGoogleFormSubmitConversion();
+      trackLinkedInConversion();
       toast.success(
         'Η υποβολή ολοκληρώθηκε. Θα επικοινωνήσουμε σύντομα.'
       );
@@ -158,7 +144,7 @@ export function InterestForm() {
                     onClick={() => {
                       const next = selected ? '' : option;
                       setImprovementFocus(next);
-                      trackMarketingFormEvent('interest_focus_select', {
+                      trackMarketingEvent('interest_focus_select', {
                         improvement_focus: next || 'cleared',
                       });
                     }}
