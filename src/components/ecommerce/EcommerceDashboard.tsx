@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { useBrand } from '../../hooks/useBrand';
@@ -75,6 +75,11 @@ type OrderSortField = 'createdAt' | 'total' | 'platform';
 type RowsPerPage = 10 | 20 | 50 | 100 | 'all';
 type ProductScope = 'all' | 'parents_only';
 type TopProductRow = EcommerceTopProduct & { parentSku: string; hasDerivedParent: boolean };
+
+/** Yield to the main thread (next macrotask) so the UI can paint between heavy chunks. */
+const yieldToMain = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+/** Batch size for the chunked, off-thread order aggregations. */
+const ECOMMERCE_AGG_CHUNK = 2000;
 type SalesChannelBreakdownRow = {
   channel: EcommerceSalesChannel;
   label: string;
@@ -241,7 +246,9 @@ function OrderStatusBadge({ status }: { status: string }) {
 export function EcommerceDashboard() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
-  const ecomm = useEcommerceSummary();
+  // This page reads only orders/breakdowns/topProducts/recentOrders, never SKU stats or
+  // stock-movement — opt out of those heavy multi-MB chunk loads (same as DashboardOverview).
+  const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
 
   // Catalog parent SKUs (Magento itemGroupId) group reliably where a catalog exists; otherwise the
   // resolver falls back to a conservative suffix-strip.
@@ -321,8 +328,41 @@ export function EcommerceDashboard() {
   const [prodRows, setProdRows] = useState<RowsPerPage>(20);
   const [prodPage, setProdPage] = useState(1);
 
+  // Order-table build runs getEcommerceOrderNetRevenue per order (O(orders×items)) and froze the
+  // page on wide ranges; same predicate/order, now computed off the render path in chunks.
+  const [oftState, setOftState] = useState<EcommerceRawOrder[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // Clear any prior result so the memo falls back to the recent-orders preview while we
+      // recompute — avoids briefly showing a stale brand/period under the new selection.
+      setOftState(null);
+      if (!rawOrdersLoaded) return;
+      const out: EcommerceRawOrder[] = [];
+      for (let i = 0; i < rawOrders.length; i += ECOMMERCE_AGG_CHUNK) {
+        for (const order of rawOrders.slice(i, i + ECOMMERCE_AGG_CHUNK)) {
+          if (isOmittedFromEcommerceOrderLists(order.status)) continue;
+          const day = (order.createdAt || '').slice(0, 10);
+          if (brandHistoryStartISO && day < brandHistoryStartISO) continue;
+          if (!(day >= effectiveFrom && day <= effectiveTo)) continue;
+          const { revenue, isAllDemo } = getEcommerceOrderNetRevenue(order);
+          if (isAllDemo) continue;
+          out.push({ ...order, total: revenue });
+        }
+        if (i + ECOMMERCE_AGG_CHUNK < rawOrders.length) await yieldToMain();
+        if (cancelled) return;
+      }
+      if (!cancelled) setOftState(out);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [rawOrdersLoaded, rawOrders, effectiveFrom, effectiveTo, brandHistoryStartISO]);
+
   const ordersForTables = useMemo<EcommerceRawOrder[]>(() => {
-    if (!rawOrdersLoaded) {
+    // While the chunked pass is in flight (or before raw orders load), fall back to the capped
+    // recent-orders preview — same as the previous !rawOrdersLoaded branch.
+    if (!rawOrdersLoaded || oftState == null) {
       return filteredRecentOrdersVisible.map((order) => ({
         ...order,
         lineItems: [],
@@ -330,19 +370,8 @@ export function EcommerceDashboard() {
         shippingMethod: order.shippingMethod || '',
       }));
     }
-    return rawOrders
-      .filter((order) => {
-        if (isOmittedFromEcommerceOrderLists(order.status)) return false;
-        const day = (order.createdAt || '').slice(0, 10);
-        if (brandHistoryStartISO && day < brandHistoryStartISO) return false;
-        return day >= effectiveFrom && day <= effectiveTo;
-      })
-      .map((order) => {
-        const { revenue, isAllDemo } = getEcommerceOrderNetRevenue(order);
-        return isAllDemo ? null : { ...order, total: revenue };
-      })
-      .filter((order): order is EcommerceRawOrder => Boolean(order));
-  }, [rawOrdersLoaded, rawOrders, filteredRecentOrdersVisible, effectiveFrom, effectiveTo, brandHistoryStartISO]);
+    return oftState;
+  }, [rawOrdersLoaded, oftState, filteredRecentOrdersVisible]);
 
   const revenueOrdersForTables = useMemo(
     () => ordersForTables.filter((order) => isEcommerceOrderRevenueIncluded(order)),
@@ -479,39 +508,71 @@ export function EcommerceDashboard() {
     ];
   }, [filteredTotalRevenue, filteredOrderCount, filteredAov, filteredDailyRevenue, filteredOrdersByDay, ecomm.connectedPlatforms]);
 
+  // Second O(orders×items) pass that froze the page; accumulate off the render path in chunks
+  // (same loop body), keeping the cheap parent-SKU mapping in the memo below so it re-derives late.
+  const [topProductAgg, setTopProductAgg] = useState<
+    Array<{ sku: string; name: string; revenue: number; quantity: number }> | null
+  >(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setTopProductAgg(null);
+      if (!rawOrdersLoaded || oftState == null) return;
+      const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
+      for (let i = 0; i < revenueOrdersForTables.length; i += ECOMMERCE_AGG_CHUNK) {
+        for (const order of revenueOrdersForTables.slice(i, i + ECOMMERCE_AGG_CHUNK)) {
+          const demoFiltered = (order.lineItems || []).filter((li) => !isEcommerceDemoLineItem(li));
+          const aggregated = aggregateOrderLinesForTopProducts(order.platform, demoFiltered);
+          for (const row of aggregated) {
+            const key = row.sku.trim();
+            if (!key) continue;
+            const existing = productMap.get(key) || { name: row.name, revenue: 0, quantity: 0 };
+            existing.revenue += row.revenue;
+            existing.quantity += row.quantity;
+            if (!existing.name) existing.name = row.name;
+            productMap.set(key, existing);
+          }
+        }
+        if (i + ECOMMERCE_AGG_CHUNK < revenueOrdersForTables.length) await yieldToMain();
+        if (cancelled) return;
+      }
+      if (!cancelled) {
+        setTopProductAgg(
+          [...productMap.entries()].map(([sku, data]) => ({
+            sku,
+            name: data.name,
+            revenue: data.revenue,
+            quantity: data.quantity,
+          }))
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [rawOrdersLoaded, oftState, revenueOrdersForTables]);
+
   const topProductsForTables = useMemo<TopProductRow[]>(() => {
-    if (!rawOrdersLoaded) {
+    // While the chunked aggregation is in flight (or before raw orders load), fall back to the
+    // server `ecomm.topProducts` summary — same as the previous !rawOrdersLoaded branch.
+    if (!rawOrdersLoaded || topProductAgg == null) {
       return ecomm.topProducts.map((product) => ({
         ...product,
         parentSku: parentSkuOf(product.sku),
         hasDerivedParent: hasParentOf(product.sku),
       }));
     }
-    const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
-    for (const order of revenueOrdersForTables) {
-      const demoFiltered = (order.lineItems || []).filter((li) => !isEcommerceDemoLineItem(li));
-      const aggregated = aggregateOrderLinesForTopProducts(order.platform, demoFiltered);
-      for (const row of aggregated) {
-        const key = row.sku.trim();
-        if (!key) continue;
-        const existing = productMap.get(key) || { name: row.name, revenue: 0, quantity: 0 };
-        existing.revenue += row.revenue;
-        existing.quantity += row.quantity;
-        if (!existing.name) existing.name = row.name;
-        productMap.set(key, existing);
-      }
-    }
-    return [...productMap.entries()]
-      .map(([sku, data]) => ({
-        sku,
+    return topProductAgg
+      .map((data) => ({
+        sku: data.sku,
         name: data.name,
         revenue: data.revenue,
         quantity: data.quantity,
-        parentSku: parentSkuOf(sku),
-        hasDerivedParent: hasParentOf(sku),
+        parentSku: parentSkuOf(data.sku),
+        hasDerivedParent: hasParentOf(data.sku),
       }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, [rawOrdersLoaded, revenueOrdersForTables, ecomm.topProducts, parentSkuOf, hasParentOf]);
+  }, [rawOrdersLoaded, topProductAgg, ecomm.topProducts, parentSkuOf, hasParentOf]);
 
   /** Parent SKU only: group by catalog itemGroupId (Magento); where missing, conservatively strip a
    * recognized size/gauge suffix (see resolveParentSku). */
