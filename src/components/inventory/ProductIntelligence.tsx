@@ -313,7 +313,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         }
       })
       .catch((err: unknown) => {
-        piRefreshAttemptRef.current = null;
+        // Do NOT clear piRefreshAttemptRef on failure: a persistently-failing rebuild must not re-arm
+        // the auto-trigger effect into an infinite loop. The manual refresh button remains for retry.
         const msg = err instanceof Error ? err.message : 'Product Intelligence refresh failed';
         toast.error(`Αποτυχία ανανέωσης καταλόγου: ${msg}`);
         logger.warn('[ProductIntelligence] refresh failed:', { err });
