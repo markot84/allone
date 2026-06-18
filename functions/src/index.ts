@@ -86,8 +86,6 @@ import {
   saveMegaventoryCredentials,
   fetchMegaventoryData,
   updateMegaventoryConnectorSettings,
-  backfillMegaventoryCreditNotes,
-  backfillMegaventoryReceiptDates,
   setDb as setMegaventoryDb,
 } from './megaventoryConnector';
 import { decideStaleRecovery, isJobWriteOwned } from './megaventorySyncPlan';
@@ -109,7 +107,6 @@ import {
 } from './entersoftConnector';
 import {
   computeEcommerceSummary,
-  computeBusinessRevenueSummary,
   computeErpSkuVelocity,
   setDb as setEcommerceAggDb,
 } from './ecommerceAggregator';
@@ -3542,82 +3539,6 @@ export const refreshDataAnalysisRfm = onRequest(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshDataAnalysisRfm]', { alertKey: ALERT.dataAnalysisRfmFailed, err: error });
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  }
-);
-
-/** TEMPORARY one-time MV credit-note backfill (owner/admin only): catches up historical credits then
- * recomputes business revenue so net-of-returns reflects immediately. DELETE after prod is backfilled. */
-export const backfillCreditNotes = onRequest(
-  { region: 'europe-west1', timeoutSeconds: 1200, memory: '1GiB' },
-  async (req, res) => {
-    if (applyStrictCors(req, res)) return;
-    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
-
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
-
-    try {
-      const idToken = authHeader.slice(7).trim();
-      const decoded = await admin.auth().verifyIdToken(idToken);
-      const { brandId } = req.body as { brandId?: string };
-      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
-
-      if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να τρέξει το backfill πιστωτικών' });
-        return;
-      }
-
-      // Leave headroom under the 1200s cap for the revenue recompute that follows.
-      const result = await backfillMegaventoryCreditNotes(brandId, { maxRuntimeMs: 16 * 60 * 1000 });
-      let revenueRecomputed = false;
-      if (result.success && result.creditsWritten > 0) {
-        try {
-          await computeBusinessRevenueSummary(brandId);
-          revenueRecomputed = true;
-        } catch (e) {
-          logger.warn(`[backfillCreditNotes] revenue recompute failed for ${brandId}:`, { err: e });
-        }
-      }
-      res.status(result.success ? 200 : 500).json({ brandId, ...result, revenueRecomputed });
-    } catch (error) {
-      logger.error('[backfillCreditNotes]', { err: error });
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  }
-);
-
-/** One-time historical receipt-date backfill (supplier deliveries/purchases) → real stock age. Idempotent
- * + resumable (min-merge per SKU, cursor); re-run until `complete:true`. The Product Intelligence recompute
- * is intentionally decoupled (it overran the cap) — run refreshProductIntelligence after, or wait for the
- * nightly pass. Owner/admin only. */
-export const backfillReceiptDates = onRequest(
-  { region: 'europe-west1', timeoutSeconds: 1200, memory: '1GiB' },
-  async (req, res) => {
-    if (applyStrictCors(req, res)) return;
-    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
-
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
-
-    try {
-      const idToken = authHeader.slice(7).trim();
-      const decoded = await admin.auth().verifyIdToken(idToken);
-      const { brandId } = req.body as { brandId?: string };
-      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
-
-      if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να τρέξει το backfill' });
-        return;
-      }
-
-      // Use most of the 1200s cap for the walk (no inline recompute now); leave headroom for chunk
-      // writes + the response. Re-run until complete; PI picks up the dates on its next refresh.
-      const result = await backfillMegaventoryReceiptDates(brandId, { maxRuntimeMs: 18 * 60 * 1000 });
-      res.status(result.success ? 200 : 500).json({ brandId, ...result });
-    } catch (error) {
-      logger.error('[backfillReceiptDates]', { err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }

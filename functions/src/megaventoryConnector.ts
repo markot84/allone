@@ -1215,12 +1215,15 @@ export async function backfillMegaventoryReceiptDates(
 
   const deadline = opts?.maxRuntimeMs ? Date.now() + opts.maxRuntimeMs : null;
   const datesBySku = new Map<string, string>(Object.entries(await readReceiptDatesChunked(db, brandId)));
+  // Per-type resume state persisted on the connector: each pass continues where the last left off and
+  // skips already-exhausted types, so the walk completes across multiple budget-limited invocations.
+  const progress = { ...((conn.receiptBackfillProgress as Record<string, { cursor?: number | null; done?: boolean }>) ?? {}) };
   const errors: string[] = [];
-  let complete = true;
   for (const rt of receiptTypes) {
-    if (deadline && Date.now() >= deadline) { complete = false; break; }
+    if (progress[rt.id]?.done) continue;
+    if (deadline && Date.now() >= deadline) break;
     const remaining = deadline ? Math.max(0, deadline - Date.now()) : undefined;
-    const { rows, error, exhausted } = await fetchAllMvPages(
+    const { rows, error, nextCursor, exhausted } = await fetchAllMvPages(
       'DocumentGet',
       apiKey,
       [{ FieldName: 'DocumentTypeId', SearchOperator: 'Equals', SearchValue: rt.id }],
@@ -1232,16 +1235,18 @@ export async function backfillMegaventoryReceiptDates(
         pageSize: MV_INVOICE_BACKFILL_PAGE_SIZE,
         maxPages: opts?.maxPagesPerType ?? 300,
         maxRuntimeMs: remaining,
+        initialCursor: progress[rt.id]?.cursor ?? null,
       },
     );
-    if (error) { errors.push(error); complete = false; continue; }
-    if (!exhausted) complete = false;
     const docs = (rows as Record<string, unknown>[]).map((d) => ({ date: isoDate(mvField(d, 'DocumentDate')), lineItems: mvDocumentLineItems(d) }));
     mergeEarliestReceiptDates(datesBySku, docs);
+    if (error) { errors.push(error); progress[rt.id] = { cursor: nextCursor, done: false }; continue; }
+    progress[rt.id] = { cursor: exhausted ? null : nextCursor, done: exhausted };
   }
+  const complete = errors.length === 0 && receiptTypes.every((rt) => progress[rt.id]?.done === true);
   const skuCount = await writeReceiptDatesChunked(db, brandId, Object.fromEntries(datesBySku));
   await db.doc(`connectors/${brandId}`).set(
-    { megaventory: { receiptBackfillComplete: complete, receiptBackfillAt: FieldValue.serverTimestamp(), receiptBackfillSkuCount: skuCount } },
+    { megaventory: { receiptBackfillComplete: complete, receiptBackfillAt: FieldValue.serverTimestamp(), receiptBackfillSkuCount: skuCount, receiptBackfillProgress: progress } },
     { merge: true }
   );
   logger.info(`[Megaventory] Receipt-date backfill for ${brandId}: ${skuCount} SKUs across ${receiptTypes.length} inbound types (complete=${complete}${errors.length ? `, errors=${errors.length}` : ''})`);
@@ -1474,6 +1479,9 @@ export async function fetchMegaventoryData(
       // Credits flow from the SAME DocumentGet stream (incremental & backfill) — they used to be
       // silently dropped, leaving ERP revenue gross (returns invisible).
       const creditDocs = rawDocs.filter((d) => isLikelyCreditDocument(d, documentTypeInfo(d, documentTypesById)));
+      // Inbound supplier-receipt docs from the SAME stream → real stock-age dates, so onboarding needs
+      // no separate backfill (the invoice-backfill walk also covers full history here).
+      const receiptDocs = rawDocs.filter((d) => isLikelyInboundReceiptDocumentType(documentTypeInfo(d, documentTypesById)));
       documentDiagnostics = {
         invoiceBackfillMode: shouldStageInvoiceBackfill ? 'staged' : invoiceBackfillPending ? 'incremental_backfill_pending' : 'incremental',
         invoiceBackfillCursor: invoiceBackfillCursor ?? null,
@@ -1532,6 +1540,15 @@ export async function fetchMegaventoryData(
       counts.invoices = items.length;
       counts.creditNotes = creditItems.length;
       totalImported += allDocItems.length;
+      // Merge earliest supplier-receipt date per SKU into megaventory_receipts (min-merge, idempotent).
+      if (receiptDocs.length) {
+        const receiptDatesBySku = new Map<string, string>(Object.entries(await readReceiptDatesChunked(db, brandId)));
+        mergeEarliestReceiptDates(
+          receiptDatesBySku,
+          receiptDocs.map((d) => ({ date: isoDate(mvField(d, 'DocumentDate')), lineItems: mvDocumentLineItems(d) }))
+        );
+        await writeReceiptDatesChunked(db, brandId, Object.fromEntries(receiptDatesBySku));
+      }
       if (shouldStageInvoiceBackfill) {
         invoiceBackfillProgress = {
           cursor: invoiceBackfillCursor ?? null,
