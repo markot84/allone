@@ -2852,7 +2852,7 @@ export const scheduledDataAnalysisRfm = onSchedule(
 
 /** Product Intelligence aggregate — connector-backed catalogs only; procurement/import brands keep the UI path. */
 export const scheduledProductIntelligence = onSchedule(
-  { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: 'every day 07:40' },
+  { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '4GiB', timeoutSeconds: 1200, schedule: 'every day 07:40' },
   async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
     const snap = await db.collection('connectors').get();
     for (const doc of snap.docs) {
@@ -3545,7 +3545,7 @@ export const refreshDataAnalysisRfm = onRequest(
 );
 
 export const refreshProductIntelligence = onRequest(
-  { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB' },
+  { region: 'europe-west1', timeoutSeconds: 1200, memory: '4GiB' },
   async (req, res) => {
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }

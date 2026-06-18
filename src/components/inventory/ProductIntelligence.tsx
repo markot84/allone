@@ -331,7 +331,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       // connector-based or skipped) → trigger a rebuild so it switches to the procurement source.
       (expectsProcurementCatalog && aggregate.sourceKind !== 'procurement');
     if (!needsRebuild) return;
-    const key = `${brandId}:${aggregate?.syncVersion ?? 'none'}:${aggregate?.totalCount ?? 'missing'}:${aggregate?.sourceKind ?? 'none'}`;
+    // Key on sourceKind only — NOT syncVersion/totalCount, which change on every rebuild. A rebuild
+    // that cannot change the source (e.g. an ERP brand with a stale procurement signal) must attempt
+    // at most once, never re-trigger itself into an infinite loop.
+    const key = `${brandId}:${aggregate?.sourceKind ?? 'none'}`;
     if (piRefreshAttemptRef.current === key) return;
     piRefreshAttemptRef.current = key;
     triggerProductIntelligenceRebuild();
