@@ -43,8 +43,10 @@ async function writeSkuStatsChunked(
   db: Firestore,
   brandId: string,
   skuStats: Record<string, SkuStatsRow>,
-  skuCount: number
+  skuCount: number,
+  opts?: { collection?: string }
 ): Promise<void> {
+  const collection = opts?.collection ?? 'sku_stats';
   const fullJson = JSON.stringify(skuStats);
   const chunkPayloads: { json: string; count: number }[] = [];
 
@@ -72,7 +74,7 @@ async function writeSkuStatsChunked(
     }
   }
 
-  const parentRef = db.doc(`sku_stats/${brandId}`);
+  const parentRef = db.doc(`${collection}/${brandId}`);
   const chunksColl = parentRef.collection('chunks');
 
   const writes = chunkPayloads.map((payload, idx) =>
@@ -555,6 +557,95 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
   logger.info(
     `[EcommerceAgg] Business revenue for ${brandId}: source=${source} docs=${rawRows.length} net €${totalRevenue.toFixed(2)} (gross €${grossTotalRevenue.toFixed(2)} − ${creditNotesApplied} credit notes €${(-creditTotal).toFixed(2)}; unlinked €${(-unlinkedCreditTotal).toFixed(2)})`
   );
+
+  // Note: all-channel per-SKU velocity (computeErpSkuVelocity) is intentionally decoupled from this
+  // synchronous path — it streams the full invoice history and was overrunning refreshAggregates. It
+  // runs nightly before Product Intelligence (scheduledProductIntelligence) and on demand via refreshErpVelocity.
+}
+
+/** Per-SKU all-channel sales velocity, accumulated from ERP documents. Sales add quantity, credit
+ * notes subtract it; cancelled/void docs are ignored. Mirrors the e-shop sku_stats windows so
+ * Product Intelligence overlays it the same way. */
+export type ErpVelocityAccum = {
+  sold: Map<string, number>;
+  sold7: Map<string, number>;
+  sold30: Map<string, number>;
+  sold90: Map<string, number>;
+  lastSale: Map<string, number>;
+};
+
+export function emptyErpVelocityAccum(): ErpVelocityAccum {
+  return { sold: new Map(), sold7: new Map(), sold30: new Map(), sold90: new Map(), lastSale: new Map() };
+}
+
+/** Fold one megaventory_invoices document into the velocity accumulator (exported for unit tests). */
+export function accumulateErpInvoiceVelocity(
+  accum: ErpVelocityAccum,
+  doc: Record<string, unknown>,
+  nowMs: number
+): void {
+  if (/(cancel|void|ακυρ|reject)/i.test(String(doc.status || ''))) return;
+  const sign = doc.kind === 'credit_note' ? -1 : 1;
+  const day = typeof doc.date === 'string' ? doc.date.slice(0, 10) : '';
+  const ts = day ? new Date(`${day}T12:00:00.000Z`).getTime() : NaN;
+  if (!Number.isFinite(ts)) return;
+  const MS_DAY = 24 * 60 * 60 * 1000;
+  const inW7 = ts >= nowMs - 7 * MS_DAY;
+  const inW30 = ts >= nowMs - 30 * MS_DAY;
+  const inW90 = ts >= nowMs - 90 * MS_DAY;
+  const lineItems = Array.isArray(doc.lineItems) ? (doc.lineItems as Record<string, unknown>[]) : [];
+  for (const li of lineItems) {
+    const sku = String(li.sku || '').trim();
+    if (!sku) continue;
+    const qty = (Number(li.quantity) || 0) * sign;
+    if (qty === 0) continue;
+    accum.sold.set(sku, (accum.sold.get(sku) || 0) + qty);
+    if (inW7) accum.sold7.set(sku, (accum.sold7.get(sku) || 0) + qty);
+    if (inW30) accum.sold30.set(sku, (accum.sold30.get(sku) || 0) + qty);
+    if (inW90) accum.sold90.set(sku, (accum.sold90.get(sku) || 0) + qty);
+    if (sign > 0) {
+      const prev = accum.lastSale.get(sku) || 0;
+      if (ts > prev) accum.lastSale.set(sku, ts);
+    }
+  }
+}
+
+/** Stream megaventory_invoices for a brand and persist all-channel per-SKU velocity to
+ * erp_sku_velocity/{brandId} (same chunked shape as sku_stats). Streaming keeps memory bounded
+ * across the full document history. */
+export async function computeErpSkuVelocity(brandId: string): Promise<void> {
+  const db = getDb();
+  // Megaventory-only: it's the backend whose documents carry per-line SKUs. Safe no-op otherwise,
+  // so schedulers/triggers can call it for any brand without a separate gate.
+  const connDoc = await db.doc(`connectors/${brandId}`).get();
+  if (resolveErpRevenueBackend((connDoc.data() || {}) as Record<string, unknown>) !== 'megaventory_invoices') {
+    return;
+  }
+  const nowMs = Date.now();
+  const accum = emptyErpVelocityAccum();
+  let docsRead = 0;
+  const query = db.collection('megaventory_invoices').where('brandId', '==', brandId);
+  for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
+    docsRead += 1;
+    accumulateErpInvoiceVelocity(accum, doc.data(), nowMs);
+  }
+
+  const skuStats: Record<string, SkuStatsRow> = {};
+  for (const sku of accum.sold.keys()) {
+    const lastTs = accum.lastSale.get(sku);
+    skuStats[sku] = {
+      stock: 0, // stock comes from the catalog overlay; velocity store carries sales only
+      sold: Math.max(0, Math.round(accum.sold.get(sku) || 0)),
+      sold7d: Math.max(0, Math.round(accum.sold7.get(sku) || 0)),
+      sold30d: Math.max(0, Math.round(accum.sold30.get(sku) || 0)),
+      sold90d: Math.max(0, Math.round(accum.sold90.get(sku) || 0)),
+      lastSaleAt: lastTs ? new Date(lastTs).toISOString() : null,
+    };
+  }
+  await writeSkuStatsChunked(db, brandId, skuStats, Object.keys(skuStats).length, {
+    collection: 'erp_sku_velocity',
+  });
+  logger.info(`[ErpVelocity] ${brandId}: ${Object.keys(skuStats).length} SKUs from ${docsRead} ERP docs`);
 }
 
 /** Compute and write the e-commerce summary for a brand; call after any connector sync. */

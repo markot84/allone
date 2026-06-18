@@ -247,12 +247,28 @@ const DEFAULT_STOCK_THRESHOLDS: StockThresholds = {
   newStockGraceDays: 60,
 };
 
+/** Per-brand thresholds for the current aggregation run; set at the top of refreshProductIntelligenceAggregate
+ * (brands are processed sequentially, so a module-level value is safe) and read by stockBucket's default. */
+let activeStockThresholds: StockThresholds = DEFAULT_STOCK_THRESHOLDS;
+
+/** Resolve a brand's inventoryThresholds onto a full StockThresholds, each field defaulting when unset/invalid. */
+function resolveStockThresholds(raw: unknown): StockThresholds {
+  const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const pos = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : d);
+  return {
+    velocityWindowDays: pos(r.velocityWindowDays, DEFAULT_STOCK_THRESHOLDS.velocityWindowDays),
+    lowDaysOfCover: pos(r.lowDaysOfCover, DEFAULT_STOCK_THRESHOLDS.lowDaysOfCover),
+    excessDaysOfCover: pos(r.excessDaysOfCover, DEFAULT_STOCK_THRESHOLDS.excessDaysOfCover),
+    newStockGraceDays: pos(r.newStockGraceDays, DEFAULT_STOCK_THRESHOLDS.newStockGraceDays),
+  };
+}
+
 function stockBucket(
   stockLevel: number,
   qtySoldPeriod: number | null,
   qtySoldLifetime: number | null = null,
   shelfAgeDays: number | null = null,
-  t: StockThresholds = DEFAULT_STOCK_THRESHOLDS
+  t: StockThresholds = activeStockThresholds
 ): StockBucket {
   if (stockLevel <= 0) return 'no_stock';
   if (qtySoldPeriod != null && qtySoldPeriod > 0) {
@@ -791,6 +807,39 @@ async function loadSkuStats(brandId: string): Promise<{ rowsRead: number; bySku:
   return { rowsRead: snap.size, bySku };
 }
 
+/** All-channel ERP velocity (erp_sku_velocity/{brandId}); same chunked shape as sku_stats. */
+async function loadErpSkuVelocity(brandId: string): Promise<{ rowsRead: number; bySku: Map<string, SkuStatsRow> }> {
+  const firestore = assertDb();
+  const bySku = new Map<string, SkuStatsRow>();
+  const parent = await firestore.doc(`erp_sku_velocity/${brandId}`).get().catch(() => null);
+  const chunkCount = num(parent?.data()?.chunkCount);
+  if (!parent?.exists || chunkCount <= 0) return { rowsRead: 0, bySku };
+  const snap = await firestore.collection(`erp_sku_velocity/${brandId}/chunks`).orderBy(FieldPath.documentId()).get();
+  for (const doc of snap.docs) {
+    const raw = text(doc.data().skuStatsJson);
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, SkuStatsRow>;
+      for (const [sku, stats] of Object.entries(parsed)) bySku.set(normalizeSku(sku), stats);
+    } catch (error) {
+      logger.warn(`[ProductIntelligence] bad erp_sku_velocity chunk for ${brandId}/${doc.id}:`, { err: error });
+    }
+  }
+  return { rowsRead: snap.size, bySku };
+}
+
+/** Prefer ERP all-channel velocity per SKU; keep e-shop velocity only where the ERP has no row
+ *  (per-capability fallback — ERP sales already include online, so no double counting). */
+function mergeVelocityPreferErp(
+  eshop: Map<string, SkuStatsRow>,
+  erp: Map<string, SkuStatsRow>
+): Map<string, SkuStatsRow> {
+  if (erp.size === 0) return eshop;
+  const merged = new Map(eshop);
+  for (const [sku, row] of erp) merged.set(sku, row);
+  return merged;
+}
+
 function applySkuStatsOverlay(products: Map<string, CompactProduct>, statsBySku: Map<string, SkuStatsRow>): number {
   let applied = 0;
   for (const [sku, product] of products.entries()) {
@@ -830,14 +879,25 @@ async function loadReceiptDates(brandId: string): Promise<Map<string, string>> {
   return bySku;
 }
 
-/** Overlay real supplier-receipt dates: set first_available_date and re-classify no-recent-sales stock by
- * shelf age (dead only beyond the grace window; within grace it is newly received, not dead). */
-function applyReceiptDateOverlay(products: Map<string, CompactProduct>, receiptsBySku: Map<string, string>): number {
+/** Overlay real supplier-receipt dates onto first_available_date so Stock Age reflects when stock arrived.
+ * When all-channel ERP velocity is present (useShelfAgeDead), also reclassify no-recent-sales stock by
+ * shelf age — genuinely old, unsold-in-any-channel stock becomes dead. Without all-channel velocity the
+ * date is set for the Age chart only (shelf age alone would wrongly flag in-store-selling stock as dead). */
+function applyReceiptDateOverlay(
+  products: Map<string, CompactProduct>,
+  receiptsBySku: Map<string, string>,
+  useShelfAgeDead: boolean
+): number {
   if (receiptsBySku.size === 0) return 0;
   let applied = 0;
   for (const [sku, product] of products.entries()) {
     const receiptDate = receiptsBySku.get(sku);
     if (!receiptDate) continue;
+    if (!useShelfAgeDead) {
+      products.set(sku, { ...product, first_available_date: receiptDate });
+      applied += 1;
+      continue;
+    }
     const shelfAge = daysFromIso(receiptDate);
     products.set(sku, {
       ...product,
@@ -931,9 +991,15 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
     : { rowsRead: 0, byProductId: new Map<string, { available: number; physical: number }>() };
   const stockByLocationApplied = hasErp ? applyMegaventoryStockOverlay(bySku, stockResult.byProductId) : 0;
   const skuStats = await loadSkuStats(brandId);
-  const skuStatsApplied = applySkuStatsOverlay(bySku, skuStats.bySku);
-  // Real supplier-receipt dates → stock age + shelf-age dead classification (ERP catalog only).
-  if (hasErp) applyReceiptDateOverlay(bySku, await loadReceiptDates(brandId));
+  // ERP-authoritative brands: all-channel velocity (in-store + online + B2B) wins per SKU; e-shop is
+  // the fallback. Non-ERP brands keep e-shop velocity only.
+  const erpVelocity = hasErp ? await loadErpSkuVelocity(brandId) : { rowsRead: 0, bySku: new Map<string, SkuStatsRow>() };
+  const hasErpVelocity = erpVelocity.bySku.size > 0;
+  const velocityBySku = hasErp ? mergeVelocityPreferErp(skuStats.bySku, erpVelocity.bySku) : skuStats.bySku;
+  const skuStatsApplied = applySkuStatsOverlay(bySku, velocityBySku);
+  // Real supplier-receipt dates → stock age (ERP catalog only); shelf-age dead only when all-channel
+  // ERP velocity backs it, so in-store-only sellers aren't mislabelled dead.
+  if (hasErp) applyReceiptDateOverlay(bySku, await loadReceiptDates(brandId), hasErpVelocity);
   const overlay = hasErp
     ? await loadMegaventoryProductOverlay(brandId, bySku)
     : { rowsRead: 0, overlaysApplied: 0, erpOnlyProducts: 0 };
@@ -946,12 +1012,13 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
       magentoDetailRowsRead +
       stockResult.rowsRead +
       skuStats.rowsRead +
+      erpVelocity.rowsRead +
       overlay.rowsRead,
     megaventoryApiRowsRead: megaventoryApiRowsRead + megaventoryApiCatalogGapRead,
     megaventoryStockRowsRead: stockResult.rowsRead,
     megaventoryRowsRead: overlay.rowsRead,
     magentoDetailRowsRead,
-    skuStatsRowsRead: skuStats.rowsRead,
+    skuStatsRowsRead: skuStats.rowsRead + erpVelocity.rowsRead,
     stockByLocationApplied,
     skuStatsApplied,
     stockOverlaysApplied: overlay.overlaysApplied,
@@ -1351,6 +1418,8 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
   // Per-brand stock source: an explicit setting wins; otherwise the implicit default (procurement
   // gating + connector ERP detection) is preserved unchanged.
   const stockOverride = await readStockSourceOverride(brandId);
+  // Per-brand stock-health thresholds for this run (defaults preserve current behaviour when unset).
+  activeStockThresholds = resolveStockThresholds((await firestore.doc(`brands/${brandId}`).get()).data()?.inventoryThresholds);
 
   // Procurement-first: for Enterprise+Procurement brands stock is authoritative from the uploaded
   // procurement file and OVERRIDES any connector catalog.

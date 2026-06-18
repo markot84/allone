@@ -545,12 +545,17 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     !ecommLatestRevenueDayInPeriod ||
     (!!erpLatestRevenueDayInPeriod && erpLatestRevenueDayInPeriod >= ecommLatestRevenueDayInPeriod);
 
-  /** ERP wins only when current for the period and the e-shop lens is inactive; e-shop revenue
-   *  after the latest ERP day means the ERP summary is stale/incomplete for this view. */
+  /** ERP wins for the total-turnover KPI when current for the period; e-shop revenue after the latest
+   *  ERP day means the ERP summary is stale/incomplete for this view. */
   const hasErpRevenueForPeriod =
-    !prefersEshopPerformance && hasErpBusinessRevenue && erpRevenueInPeriod > 0 && erpDailyCoverageIsCurrentForPeriod;
+    hasErpBusinessRevenue && erpRevenueInPeriod > 0 && erpDailyCoverageIsCurrentForPeriod;
 
-  const hasProcurementTurnoverEstimate = !prefersEshopPerformance && procurementRevenueInPeriod > 0;
+  const hasProcurementTurnoverEstimate = procurementRevenueInPeriod > 0;
+
+  /** The Revenue Performance trend uses the e-shop order-date series when the brand prefers it (avoids
+   *  ERP document-date €0-gaps); the total-turnover KPI keeps its ERP-first cascade regardless. */
+  const chartUsesProcurement = hasProcurementTurnoverEstimate && !prefersEshopPerformance;
+  const chartUsesErp = hasErpRevenueForPeriod && !prefersEshopPerformance;
 
   /** Total revenue source priority: Procurement (Enterprise) -> ERP -> e-shop -> organic + campaigns.
    *  Procurement always wins when 12-month costing data exists. */
@@ -596,9 +601,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     );
   }, [isB2B, hasProcurementTurnoverEstimate, hasErpRevenueForPeriod, enabledModules.procurement]);
 
-  const revenuePerformanceChartLabel = hasProcurementTurnoverEstimate
+  const revenuePerformanceChartLabel = chartUsesProcurement
     ? 'Τζίρος επιχείρησης (Procurement · εκτίμηση 12μ.)'
-    : hasErpRevenueForPeriod
+    : chartUsesErp
       ? 'Τζίρος επιχείρησης (ERP)'
       : enabledModules.ecommerce && ecomm.hasData
         ? REV_PERF_LABEL_ESHOP
@@ -698,7 +703,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     const dayCount = eachDateInclusiveLocal(fromDate, toDate).length;
     if (dayCount === 0) return [];
 
-    if (hasProcurementTurnoverEstimate && costing12m.sum > 0) {
+    if (chartUsesProcurement && costing12m.sum > 0) {
       const dailyRate = costing12m.sum / 365;
       if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
         return eachDateInclusiveLocal(fromDate, toDate).map((d) => ({
@@ -714,7 +719,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       }));
     }
 
-    if (hasErpRevenueForPeriod) {
+    if (chartUsesErp) {
       if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
         const days = eachDateInclusiveLocal(fromDate, toDate);
         const daily = completeDailyRevenueSeries(days, erpRevenueByDayRecord);
@@ -792,9 +797,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     ecomm.hasData,
     ecommHist.monthlyRevenue,
     ecommRevenueByDayRecord,
-    hasProcurementTurnoverEstimate,
+    chartUsesProcurement,
     costing12m.sum,
-    hasErpRevenueForPeriod,
+    chartUsesErp,
     erpRevenueByDayRecord,
   ]);
 
@@ -1638,11 +1643,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           <CardHeader
             title="Revenue Performance"
             subtitle={
-              hasProcurementTurnoverEstimate ? (
+              chartUsesProcurement ? (
                 <p>
                   <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Πηγή: Procurement</strong> — εκτίμηση πραγματικού τζίρου για την επιλεγμένη περίοδο.
                 </p>
-              ) : hasErpRevenueForPeriod ? (
+              ) : chartUsesErp ? (
                 <p>
                   <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Τζίρος επιχείρησης</strong> από συγχρονισμένα ERP παραστατικά για την επιλεγμένη περίοδο.
                 </p>

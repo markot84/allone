@@ -94,6 +94,18 @@ export interface Brand {
   /** Authoritative source for the product catalog + stock (Product Intelligence).
    *  Default when unset: procurement for enterprise+procurement, else ERP if an ERP connector exists, else e-commerce. */
   stockSourceMode?: 'erp' | 'ecommerce' | 'procurement';
+  /** Per-brand stock-health classification thresholds (Product Intelligence). Each falls back to the
+   *  platform default when unset, so existing brands are unchanged until tuned. */
+  inventoryThresholds?: {
+    /** Sales window (days) the velocity figure represents. Default 30. */
+    velocityWindowDays?: number;
+    /** Days-of-cover at/below which stock is "low". Default 30. */
+    lowDaysOfCover?: number;
+    /** Days-of-cover above which stock is "excess". Default 120. */
+    excessDaysOfCover?: number;
+    /** Grace days after receipt before unsold stock counts as "dead". Default 60. */
+    newStockGraceDays?: number;
+  };
 }
 
 export type BrandArchetype =

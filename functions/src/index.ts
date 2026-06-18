@@ -110,6 +110,7 @@ import {
 import {
   computeEcommerceSummary,
   computeBusinessRevenueSummary,
+  computeErpSkuVelocity,
   setDb as setEcommerceAggDb,
 } from './ecommerceAggregator';
 import { shouldRunPostSyncAggregations } from './syncPolicy';
@@ -2859,6 +2860,11 @@ export const scheduledProductIntelligence = onSchedule(
     const snap = await db.collection('connectors').get();
     for (const doc of snap.docs) {
       try {
+        // Refresh all-channel ERP velocity first (no-op for non-Megaventory brands) so PI overlays
+        // current 7/30/90d windows; non-fatal so a velocity hiccup never blocks the PI rebuild.
+        await computeErpSkuVelocity(doc.id).catch((e) =>
+          logger.warn(`[scheduledProductIntelligence] erp velocity failed for ${doc.id} (non-fatal):`, { err: e })
+        );
         await refreshProductIntelligenceAggregate(doc.id);
       } catch (error) {
         logger.warnAlert(`[scheduledProductIntelligence] failed for ${doc.id}:`, { alertKey: ALERT.scheduledProductIntelligenceFailed, err: error });
@@ -3582,8 +3588,10 @@ export const backfillCreditNotes = onRequest(
   }
 );
 
-/** One-time historical receipt-date backfill (supplier deliveries/purchases) → real stock age; re-runs
- * Product Intelligence so the new dates land in the charts. Owner/admin only. */
+/** One-time historical receipt-date backfill (supplier deliveries/purchases) → real stock age. Idempotent
+ * + resumable (min-merge per SKU, cursor); re-run until `complete:true`. The Product Intelligence recompute
+ * is intentionally decoupled (it overran the cap) — run refreshProductIntelligence after, or wait for the
+ * nightly pass. Owner/admin only. */
 export const backfillReceiptDates = onRequest(
   { region: 'europe-west1', timeoutSeconds: 1200, memory: '1GiB' },
   async (req, res) => {
@@ -3604,18 +3612,10 @@ export const backfillReceiptDates = onRequest(
         return;
       }
 
-      // Leave headroom under the 1200s cap for the Product Intelligence recompute that follows.
-      const result = await backfillMegaventoryReceiptDates(brandId, { maxRuntimeMs: 16 * 60 * 1000 });
-      let productIntelligenceRecomputed = false;
-      if (result.success && result.skuCount > 0) {
-        try {
-          await refreshProductIntelligenceAggregate(brandId);
-          productIntelligenceRecomputed = true;
-        } catch (e) {
-          logger.warn(`[backfillReceiptDates] product intelligence recompute failed for ${brandId}:`, { err: e });
-        }
-      }
-      res.status(result.success ? 200 : 500).json({ brandId, ...result, productIntelligenceRecomputed });
+      // Use most of the 1200s cap for the walk (no inline recompute now); leave headroom for chunk
+      // writes + the response. Re-run until complete; PI picks up the dates on its next refresh.
+      const result = await backfillMegaventoryReceiptDates(brandId, { maxRuntimeMs: 18 * 60 * 1000 });
+      res.status(result.success ? 200 : 500).json({ brandId, ...result });
     } catch (error) {
       logger.error('[backfillReceiptDates]', { err: error });
       res.status(500).json({ error: 'Internal server error' });
@@ -3649,6 +3649,39 @@ export const refreshProductIntelligence = onRequest(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshProductIntelligence]', { alertKey: ALERT.productIntelligenceFailed, err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/** POST /refreshErpVelocity (Bearer FIREBASE_ID_TOKEN) — { brandId } → recompute all-channel ERP
+ * per-SKU velocity (erp_sku_velocity). Standalone + heavy (streams full invoice history), kept off the
+ * synchronous refreshAggregates path; run before refreshProductIntelligence to refresh the overlay. */
+export const refreshErpVelocity = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB' },
+  async (req, res) => {
+    if (applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        return;
+      }
+
+      logger.info(`[refreshErpVelocity] brandId=${brandId} uid=${decoded.uid}`);
+      await computeErpSkuVelocity(brandId);
+      res.status(200).json({ success: true, brandId });
+    } catch (error) {
+      logger.error('[refreshErpVelocity]', { err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }

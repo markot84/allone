@@ -1,12 +1,11 @@
 import { useMemo } from 'react';
-import { useBrand } from '../../hooks/useBrand';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
-import { useProductIntelligenceAggregateDoc } from '../../hooks/useProductIntelligenceAggregate';
 import { RevenueSourceSettings } from './RevenueSourceSettings';
 import { SalesChannelRulesEditor } from './SalesChannelRulesEditor';
 import { SourceRoleSettingCard, type SourceRoleOption } from './SourceRoleSettingCard';
+import { StockSourceInfoCard } from './StockSourceInfoCard';
+import { InventoryThresholdsCard } from './InventoryThresholdsCard';
 import { resolveRevenuePerformanceSource } from '../../utils/revenueSource';
-import { resolveStockSourceMode, type StockSourceMode } from '../../utils/stockSource';
 
 /** Per-brand "Data Sources" page: groups the source-role settings (revenue performance, e-shop
  *  classification, sales-channel rules). Add new source roles here as SourceRoleSettingCard cards. */
@@ -39,51 +38,6 @@ export function DataSourcesSettings() {
   const defaultLabel =
     revenuePerfOptions.find((o) => o.id === revenuePerfDefault)?.label ?? revenuePerfDefault;
 
-  // Stock source: default reflects what Product Intelligence currently uses (its resolved authority),
-  // falling back to the shared resolver when the aggregate hasn't been built yet.
-  const { currentBrand } = useBrand();
-  const { aggregate } = useProductIntelligenceAggregateDoc();
-  const piKind = aggregate?.sourceKind;
-  const stockDefault: StockSourceMode =
-    piKind === 'erp'
-      ? 'erp'
-      : piKind === 'procurement'
-        ? 'procurement'
-        : piKind === 'connector_catalog'
-          ? 'ecommerce'
-          : resolveStockSourceMode(undefined, {
-              plan: currentBrand?.plan,
-              procurementModuleEnabled:
-                (currentBrand?.enabledModules as Record<string, unknown> | undefined)?.procurement !== false,
-              hasErpConnector: false,
-            });
-
-  const stockOptions = useMemo<SourceRoleOption[]>(
-    () => [
-      {
-        id: 'erp',
-        label: 'ERP (Megaventory/SoftOne)',
-        description:
-          'Κατάλογος & απόθεμα από το ERP. Κατάλληλο όταν το ERP είναι η κύρια πηγή αποθέματος.',
-      },
-      {
-        id: 'ecommerce',
-        label: 'E-shop πλατφόρμα',
-        description:
-          'Κατάλογος & απόθεμα από την πλατφόρμα e-shop (Magento/Shopify/WooCommerce/OpenCart).',
-        disabled: !hasEshopConnector,
-      },
-      {
-        id: 'procurement',
-        label: 'Αρχείο procurement',
-        description:
-          'Κατάλογος & απόθεμα από το ανεβασμένο αρχείο procurement. Εφαρμόζεται στο επόμενο sync προϊόντων.',
-      },
-    ],
-    [hasEshopConnector]
-  );
-  const stockDefaultLabel = stockOptions.find((o) => o.id === stockDefault)?.label ?? stockDefault;
-
   return (
     <div className="space-y-6">
       <div>
@@ -107,15 +61,9 @@ export function DataSourcesSettings() {
         ]}
       />
 
-      <SourceRoleSettingCard
-        field="stockSourceMode"
-        title="Πηγή αποθέματος & καταλόγου"
-        tooltip="Καθορίζει ποια πηγή είναι υπεύθυνη για τον κατάλογο και το απόθεμα στο Product Intelligence (Stock Status / Stock Age). Εφαρμόζεται στο επόμενο sync προϊόντων."
-        options={stockOptions}
-        defaultId={stockDefault}
-        defaultHint={`Προεπιλογή: ${stockDefaultLabel}`}
-        invalidateKeys={(brandId) => [['productIntelligenceAggregate', brandId]]}
-      />
+      <StockSourceInfoCard />
+
+      <InventoryThresholdsCard />
 
       <RevenueSourceSettings />
       <SalesChannelRulesEditor />
