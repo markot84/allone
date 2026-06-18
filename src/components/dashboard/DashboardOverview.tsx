@@ -36,6 +36,7 @@ import { useCampaigns } from '../../hooks/useCampaigns';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { useBrand } from '../../hooks/useBrand';
+import { prefersEshopRevenuePerformance } from '../../utils/revenueSource';
 import { useProductAggregates, useSegmentAggregates } from '../../hooks/useAggregates';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { useProcurementSignals } from '../../hooks/useProcurementSignals';
@@ -500,6 +501,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
   const hasEcommerceRevenue = enabledModules.ecommerce && ecomm.hasData;
 
+  /** Per-brand Revenue-Performance source. When the e-shop lens is active (default when an e-shop
+   *  connector exists), the trend + total KPI use the e-shop series and never auto-flip to ERP. */
+  const hasEshopConnector = ecomm.connectedPlatforms.length > 0 || ecomm.hasData;
+  const prefersEshopPerformance = prefersEshopRevenuePerformance(
+    currentBrand?.revenuePerformanceSource,
+    hasEshopConnector
+  );
+
   const erpRevenueByDayRecord = businessRevenue.revenueByDayRecord;
   const hasErpBusinessRevenue = businessRevenue.hasErpRevenueData;
 
@@ -536,11 +545,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     !ecommLatestRevenueDayInPeriod ||
     (!!erpLatestRevenueDayInPeriod && erpLatestRevenueDayInPeriod >= ecommLatestRevenueDayInPeriod);
 
-  /** ERP wins only when its daily coverage is current for the period; e-shop revenue after the
-   *  latest ERP day means the ERP summary is stale/incomplete for this view. */
-  const hasErpRevenueForPeriod = hasErpBusinessRevenue && erpRevenueInPeriod > 0 && erpDailyCoverageIsCurrentForPeriod;
+  /** ERP wins only when current for the period and the e-shop lens is inactive; e-shop revenue
+   *  after the latest ERP day means the ERP summary is stale/incomplete for this view. */
+  const hasErpRevenueForPeriod =
+    !prefersEshopPerformance && hasErpBusinessRevenue && erpRevenueInPeriod > 0 && erpDailyCoverageIsCurrentForPeriod;
 
-  const hasProcurementTurnoverEstimate = procurementRevenueInPeriod > 0;
+  const hasProcurementTurnoverEstimate = !prefersEshopPerformance && procurementRevenueInPeriod > 0;
 
   /** Total revenue source priority: Procurement (Enterprise) -> ERP -> e-shop -> organic + campaigns.
    *  Procurement always wins when 12-month costing data exists. */

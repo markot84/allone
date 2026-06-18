@@ -30,8 +30,7 @@ import {
   ChevronDown,
   type LucideProps,
 } from 'lucide-react';
-import { RevenueSourceSettings } from './RevenueSourceSettings';
-import { SalesChannelRulesEditor } from './SalesChannelRulesEditor';
+import { DataSourcesSettings } from './DataSourcesSettings';
 import { logger } from '../../utils/logger';
 import { CLIENT_ALERT } from '../../utils/alertKeys';
 
@@ -2942,9 +2941,8 @@ export function ConnectorsPanel() {
           )}
 
           {canManageConnectors && !loading && (
-            <div className="mb-6 space-y-6">
-              <RevenueSourceSettings />
-              <SalesChannelRulesEditor />
+            <div className="mb-6">
+              <DataSourcesSettings />
             </div>
           )}
 

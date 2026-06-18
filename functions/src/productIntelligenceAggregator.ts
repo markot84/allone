@@ -234,15 +234,38 @@ function asIsoDate(value: unknown): string | undefined {
   return Number.isFinite(d.getTime()) ? d.toISOString() : raw;
 }
 
-function stockBucket(stockLevel: number, qtySoldPeriod: number | null): StockBucket {
+interface StockThresholds {
+  velocityWindowDays: number;
+  lowDaysOfCover: number;
+  excessDaysOfCover: number;
+  newStockGraceDays: number;
+}
+const DEFAULT_STOCK_THRESHOLDS: StockThresholds = {
+  velocityWindowDays: SALES_PERIOD_DAYS,
+  lowDaysOfCover: 30,
+  excessDaysOfCover: 120,
+  newStockGraceDays: 60,
+};
+
+function stockBucket(
+  stockLevel: number,
+  qtySoldPeriod: number | null,
+  qtySoldLifetime: number | null = null,
+  shelfAgeDays: number | null = null,
+  t: StockThresholds = DEFAULT_STOCK_THRESHOLDS
+): StockBucket {
   if (stockLevel <= 0) return 'no_stock';
-  // No period/velocity signal → classify by stock-presence only, not 'dead'.
+  if (qtySoldPeriod != null && qtySoldPeriod > 0) {
+    const daysOfStock = stockLevel / (qtySoldPeriod / t.velocityWindowDays);
+    if (daysOfStock <= t.lowDaysOfCover) return 'low';
+    if (daysOfStock > t.excessDaysOfCover) return 'excess';
+    return 'healthy';
+  }
+  // No recent sales. With a real receipt date, 'dead' means sitting beyond the grace window; within grace
+  // it's newly received, not dead. Without an age signal, keep the stock-presence/lifetime fallback.
+  if (shelfAgeDays != null) return shelfAgeDays > t.newStockGraceDays ? 'dead' : 'healthy';
   if (qtySoldPeriod == null) return 'healthy';
-  if (qtySoldPeriod <= 0) return 'dead';
-  const daysOfStock = stockLevel / (qtySoldPeriod / SALES_PERIOD_DAYS);
-  if (daysOfStock <= 30) return 'low';
-  if (daysOfStock > 120) return 'excess';
-  return 'healthy';
+  return qtySoldLifetime != null && qtySoldLifetime > 0 ? 'dead' : 'healthy';
 }
 
 function marginTier(marginPercentage: number): CompactProduct['margin_tier'] {
@@ -281,8 +304,9 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     firstPositive(row.qty_sold_period, row.qtySoldPeriod, row.qty_sold_last_30d, row.qtySold);
   const hasPeriodField =
     row.qty_sold_period != null || row.qtySoldPeriod != null || row.qty_sold_last_30d != null || row.qtySold != null;
+  const qtySoldLifetime = firstPositive(row.qty_sold_lifetime, row.qtySoldLifetime);
   const margin = num(row.margin_percentage) || (price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0);
-  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null);
+  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null, qtySoldLifetime);
   const product: CompactProduct = {
     id: docId,
     ...(text(row.productId ?? row.ProductID ?? row.ProductId) ? { productId: text(row.productId ?? row.ProductID ?? row.ProductId) } : {}),
@@ -420,6 +444,18 @@ async function shouldUseProcurementCatalog(brandId: string): Promise<boolean> {
     return modules.procurement !== false;
   } catch {
     return false;
+  }
+}
+
+/** Per-brand stock source override (brands/{brandId}.stockSourceMode). Null when unset/invalid → keep
+ * the implicit default (procurement gating + connector ERP detection), so existing brands are unchanged. */
+async function readStockSourceOverride(brandId: string): Promise<'erp' | 'ecommerce' | 'procurement' | null> {
+  try {
+    const snap = await assertDb().doc(`brands/${brandId}`).get();
+    const mode = snap.exists ? (snap.data() || {}).stockSourceMode : undefined;
+    return mode === 'erp' || mode === 'ecommerce' || mode === 'procurement' ? mode : null;
+  } catch {
+    return null;
   }
 }
 
@@ -768,7 +804,50 @@ function applySkuStatsOverlay(products: Map<string, CompactProduct>, statsBySku:
       ...(qtySoldPeriod > 0 ? { qty_sold_period: Math.round(qtySoldPeriod * 100) / 100 } : {}),
       ...(num(stats.sold) > 0 ? { qty_sold_lifetime: Math.round(num(stats.sold) * 100) / 100 } : {}),
       ...(stats.lastSaleAt ? { last_sale_at: stats.lastSaleAt } : {}),
-      priority_tag: stockBucket(product.stock_level, qtySoldPeriod),
+      priority_tag: stockBucket(product.stock_level, qtySoldPeriod, num(stats.sold)),
+    });
+    applied += 1;
+  }
+  return applied;
+}
+
+/** Read the chunked supplier-receipt dates (megaventory_receipts/{brandId}) → normalized sku → YYYY-MM-DD. */
+async function loadReceiptDates(brandId: string): Promise<Map<string, string>> {
+  const firestore = assertDb();
+  const bySku = new Map<string, string>();
+  const parent = await firestore.doc(`megaventory_receipts/${brandId}`).get().catch(() => null);
+  if (!parent?.exists || num(parent.data()?.chunkCount) <= 0) return bySku;
+  const snap = await firestore.collection(`megaventory_receipts/${brandId}/chunks`).orderBy(FieldPath.documentId()).get();
+  for (const doc of snap.docs) {
+    const raw = text(doc.data().receiptDatesJson);
+    if (!raw) continue;
+    try {
+      for (const [sku, date] of Object.entries(JSON.parse(raw) as Record<string, string>)) bySku.set(normalizeSku(sku), date);
+    } catch (error) {
+      logger.warn(`[ProductIntelligence] bad receipt chunk for ${brandId}/${doc.id}:`, { err: error });
+    }
+  }
+  return bySku;
+}
+
+/** Overlay real supplier-receipt dates: set first_available_date and re-classify no-recent-sales stock by
+ * shelf age (dead only beyond the grace window; within grace it is newly received, not dead). */
+function applyReceiptDateOverlay(products: Map<string, CompactProduct>, receiptsBySku: Map<string, string>): number {
+  if (receiptsBySku.size === 0) return 0;
+  let applied = 0;
+  for (const [sku, product] of products.entries()) {
+    const receiptDate = receiptsBySku.get(sku);
+    if (!receiptDate) continue;
+    const shelfAge = daysFromIso(receiptDate);
+    products.set(sku, {
+      ...product,
+      first_available_date: receiptDate,
+      priority_tag: stockBucket(
+        product.stock_level,
+        product.qty_sold_period ?? null,
+        product.qty_sold_lifetime ?? null,
+        shelfAge >= 0 ? shelfAge : null
+      ),
     });
     applied += 1;
   }
@@ -853,6 +932,8 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
   const stockByLocationApplied = hasErp ? applyMegaventoryStockOverlay(bySku, stockResult.byProductId) : 0;
   const skuStats = await loadSkuStats(brandId);
   const skuStatsApplied = applySkuStatsOverlay(bySku, skuStats.bySku);
+  // Real supplier-receipt dates → stock age + shelf-age dead classification (ERP catalog only).
+  if (hasErp) applyReceiptDateOverlay(bySku, await loadReceiptDates(brandId));
   const overlay = hasErp
     ? await loadMegaventoryProductOverlay(brandId, bySku)
     : { rowsRead: 0, overlaysApplied: 0, erpOnlyProducts: 0 };
@@ -1267,9 +1348,14 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
   const firestore = assertDb();
   const ref = firestore.doc(`product_intelligence/${brandId}`);
 
+  // Per-brand stock source: an explicit setting wins; otherwise the implicit default (procurement
+  // gating + connector ERP detection) is preserved unchanged.
+  const stockOverride = await readStockSourceOverride(brandId);
+
   // Procurement-first: for Enterprise+Procurement brands stock is authoritative from the uploaded
   // procurement file and OVERRIDES any connector catalog.
-  if (await shouldUseProcurementCatalog(brandId)) {
+  const useProcurement = stockOverride ? stockOverride === 'procurement' : await shouldUseProcurementCatalog(brandId);
+  if (useProcurement) {
     const procProducts = await loadProcurementCatalog(brandId);
     if (procProducts.length > 0) {
       await ref.set(
@@ -1322,6 +1408,8 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
   }
 
   const connector = await hasConnectorCatalog(brandId);
+  // Explicit setting picks ERP vs e-shop catalog; unset → connector detection (current behaviour).
+  const useErp = stockOverride ? stockOverride === 'erp' : connector.hasErp;
   if (!connector.connected) {
     await ref.set({
       brandId,
@@ -1342,7 +1430,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
   try {
     const [syncVersion, catalogResult] = await Promise.all([
       computeBrandSyncVersion(brandId),
-      loadConnectorProducts(brandId, connector.hasErp),
+      loadConnectorProducts(brandId, useErp),
     ]);
     const {
       products,
@@ -1365,7 +1453,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       brandId,
       status: 'ready',
       sourceLabel: connector.sourceLabel,
-      sourceKind: connector.hasErp ? 'erp' : 'connector_catalog',
+      sourceKind: useErp ? 'erp' : 'connector_catalog',
       totalCount: products.length,
       syncVersion: syncVersion.version,
       latestSyncAt: syncVersion.latestSyncAt,

@@ -87,6 +87,7 @@ import {
   fetchMegaventoryData,
   updateMegaventoryConnectorSettings,
   backfillMegaventoryCreditNotes,
+  backfillMegaventoryReceiptDates,
   setDb as setMegaventoryDb,
 } from './megaventoryConnector';
 import { decideStaleRecovery, isJobWriteOwned } from './megaventorySyncPlan';
@@ -3576,6 +3577,47 @@ export const backfillCreditNotes = onRequest(
       res.status(result.success ? 200 : 500).json({ brandId, ...result, revenueRecomputed });
     } catch (error) {
       logger.error('[backfillCreditNotes]', { err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/** One-time historical receipt-date backfill (supplier deliveries/purchases) → real stock age; re-runs
+ * Product Intelligence so the new dates land in the charts. Owner/admin only. */
+export const backfillReceiptDates = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 1200, memory: '1GiB' },
+  async (req, res) => {
+    if (applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+
+      if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να τρέξει το backfill' });
+        return;
+      }
+
+      // Leave headroom under the 1200s cap for the Product Intelligence recompute that follows.
+      const result = await backfillMegaventoryReceiptDates(brandId, { maxRuntimeMs: 16 * 60 * 1000 });
+      let productIntelligenceRecomputed = false;
+      if (result.success && result.skuCount > 0) {
+        try {
+          await refreshProductIntelligenceAggregate(brandId);
+          productIntelligenceRecomputed = true;
+        } catch (e) {
+          logger.warn(`[backfillReceiptDates] product intelligence recompute failed for ${brandId}:`, { err: e });
+        }
+      }
+      res.status(result.success ? 200 : 500).json({ brandId, ...result, productIntelligenceRecomputed });
+    } catch (error) {
+      logger.error('[backfillReceiptDates]', { err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }

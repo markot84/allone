@@ -88,6 +88,12 @@ export interface Brand {
   historyStartDate?: string;
   /** E-shop order filter for `ecommerce_summary`: `eshop_classified` (default, `direct_eshop` only) | `eshop_all` (all non-cancelled). Legacy `erp` reads as `eshop_classified`. */
   revenueSourceMode?: 'eshop_classified' | 'eshop_all' | 'erp';
+  /** Source + dating for the Dashboard "Revenue Performance" chart + total-revenue KPI.
+   *  Default when unset: e-shop by order date if an e-shop connector exists, else ERP by document date. */
+  revenuePerformanceSource?: 'eshop_order_date' | 'erp_document_date';
+  /** Authoritative source for the product catalog + stock (Product Intelligence).
+   *  Default when unset: procurement for enterprise+procurement, else ERP if an ERP connector exists, else e-commerce. */
+  stockSourceMode?: 'erp' | 'ecommerce' | 'procurement';
 }
 
 export type BrandArchetype =

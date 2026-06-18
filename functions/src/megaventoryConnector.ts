@@ -727,6 +727,21 @@ function isLikelyCreditDocumentType(type: MvDocumentTypeInfo): boolean {
   return /(credit|return|refund|πιστωτ|επιστροφ)/i.test(text);
 }
 
+/** Type-level inbound-receipt check: supplier deliveries/purchases that bring stock IN — their earliest
+ * date per SKU is the real first-available (stock-age) anchor. Used to pre-select DocumentTypeIds for the
+ * receipt backfill. Excludes returns/credits, quotes, and inter-branch transfers (not a supplier receipt). */
+export function isLikelyInboundReceiptDocumentType(type: MvDocumentTypeInfo): boolean {
+  const text = `${type.abbreviation.toUpperCase()} ${type.description.toLocaleLowerCase('el-GR')}`;
+  if (/(credit|return|refund|πιστωτ|επιστροφ|_cr\b|quote|proforma|προσφορ|προτιμολ|ενδοδιακ|intercompany|transfer)/i.test(text)) {
+    return false;
+  }
+  return (
+    (/προμηθευτ/i.test(text) && /(αποστολ|αγορ)/i.test(text)) ||
+    /παραλαβ/i.test(text) ||
+    /(goods\s*receipt|inbound|(supplier|purchase)\s*(invoice|delivery|receipt))/i.test(text)
+  );
+}
+
 /** Map a raw MV credit document → Firestore credit_note row (negate amounts since MV stores positive magnitudes; keep `parentDocumentId` for netting).
  * Shared by live sync and backfill so they never drift. */
 function mapMvCreditDocument(
@@ -1121,6 +1136,116 @@ export async function backfillMegaventoryCreditNotes(
     complete,
     durationMs: Date.now() - start,
   };
+}
+
+/** Earliest receipt date per SKU from inbound documents. ISO YYYY-MM-DD strings compare lexicographically,
+ * so the minimum is the earliest. Mutates `into`. Exported for unit tests. */
+export function mergeEarliestReceiptDates(
+  into: Map<string, string>,
+  docs: Array<{ date: string; lineItems: Array<Record<string, unknown>> }>
+): void {
+  for (const d of docs) {
+    const date = (d.date || '').slice(0, 10);
+    if (!date) continue;
+    for (const li of d.lineItems || []) {
+      const sku = String((li.sku as unknown) ?? '').trim();
+      if (!sku) continue;
+      const cur = into.get(sku);
+      if (!cur || date < cur) into.set(sku, date);
+    }
+  }
+}
+
+const RECEIPTS_CHUNK_BYTES = 900_000;
+
+/** Read the chunked receipt-date map (sku → earliest YYYY-MM-DD) for merge across backfill passes. */
+async function readReceiptDatesChunked(db: Firestore, brandId: string): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const snap = await db.doc(`megaventory_receipts/${brandId}`).collection('chunks').get();
+  for (const d of snap.docs) {
+    const json = (d.data() as { receiptDatesJson?: string }).receiptDatesJson;
+    if (!json) continue;
+    try { Object.assign(out, JSON.parse(json)); } catch { /* skip bad chunk */ }
+  }
+  return out;
+}
+
+/** Persist sku → earliest receipt date under megaventory_receipts/{brandId}/chunks (parent holds metadata). */
+async function writeReceiptDatesChunked(db: Firestore, brandId: string, datesBySku: Record<string, string>): Promise<number> {
+  const skus = Object.keys(datesBySku).sort();
+  const chunks: string[] = [];
+  let bucket: Record<string, string> = {};
+  let bytes = 2;
+  for (const sku of skus) {
+    const eb = JSON.stringify({ [sku]: datesBySku[sku] }).length - 2;
+    if (bytes + eb > RECEIPTS_CHUNK_BYTES && Object.keys(bucket).length) { chunks.push(JSON.stringify(bucket)); bucket = {}; bytes = 2; }
+    bucket[sku] = datesBySku[sku];
+    bytes += eb + 1;
+  }
+  if (Object.keys(bucket).length) chunks.push(JSON.stringify(bucket));
+  const parent = db.doc(`megaventory_receipts/${brandId}`);
+  const chunksCol = parent.collection('chunks');
+  const existing = await chunksCol.get();
+  const batch = db.batch();
+  existing.docs.forEach((d) => batch.delete(d.ref));
+  chunks.forEach((json, i) => batch.set(chunksCol.doc(String(i)), { receiptDatesJson: json }));
+  batch.set(parent, { brandId, chunkCount: chunks.length, skuCount: skus.length, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await batch.commit();
+  return skus.length;
+}
+
+/** Historical receipt-date backfill: walk only inbound supplier DocumentTypeIds, derive earliest receipt
+ * date per SKU (the real stock-age anchor), and merge into megaventory_receipts. Idempotent (min-merge);
+ * resumable (re-run picks up remaining types). Mirrors backfillMegaventoryCreditNotes. */
+export async function backfillMegaventoryReceiptDates(
+  brandId: string,
+  opts?: { maxRuntimeMs?: number; maxPagesPerType?: number },
+): Promise<{ success: boolean; error?: string; receiptTypesScanned: number; skuCount: number; complete: boolean; durationMs: number }> {
+  const start = Date.now();
+  const db = getDb();
+  const base = { receiptTypesScanned: 0, skuCount: 0, complete: false, durationMs: 0 };
+  const conn = (await db.doc(`connectors/${brandId}`).get()).data()?.megaventory as Record<string, unknown> | undefined;
+  if (!conn?.connected || !conn?.apiKey) return { success: false, error: 'Megaventory not connected', ...base, durationMs: Date.now() - start };
+  const apiKey = decryptToken(conn.apiKey as string);
+  if (!apiKey) return { success: false, error: 'Megaventory apiKey unavailable — reconnect required', ...base, durationMs: Date.now() - start };
+
+  const { types, error: typeErr } = await fetchDocumentTypes(apiKey);
+  if (typeErr) return { success: false, error: typeErr, ...base, durationMs: Date.now() - start };
+  const receiptTypes = types.filter((t) => t.id && isLikelyInboundReceiptDocumentType(t));
+
+  const deadline = opts?.maxRuntimeMs ? Date.now() + opts.maxRuntimeMs : null;
+  const datesBySku = new Map<string, string>(Object.entries(await readReceiptDatesChunked(db, brandId)));
+  const errors: string[] = [];
+  let complete = true;
+  for (const rt of receiptTypes) {
+    if (deadline && Date.now() >= deadline) { complete = false; break; }
+    const remaining = deadline ? Math.max(0, deadline - Date.now()) : undefined;
+    const { rows, error, exhausted } = await fetchAllMvPages(
+      'DocumentGet',
+      apiKey,
+      [{ FieldName: 'DocumentTypeId', SearchOperator: 'Equals', SearchValue: rt.id }],
+      {
+        responseArrayKey: 'mvDocuments',
+        cursorField: 'DocumentId',
+        idKeys: ['DocumentId', 'DocumentID'],
+        label: `DocumentGet receipt type ${rt.id}`,
+        pageSize: MV_INVOICE_BACKFILL_PAGE_SIZE,
+        maxPages: opts?.maxPagesPerType ?? 300,
+        maxRuntimeMs: remaining,
+      },
+    );
+    if (error) { errors.push(error); complete = false; continue; }
+    if (!exhausted) complete = false;
+    const docs = (rows as Record<string, unknown>[]).map((d) => ({ date: isoDate(mvField(d, 'DocumentDate')), lineItems: mvDocumentLineItems(d) }));
+    mergeEarliestReceiptDates(datesBySku, docs);
+  }
+  const skuCount = await writeReceiptDatesChunked(db, brandId, Object.fromEntries(datesBySku));
+  await db.doc(`connectors/${brandId}`).set(
+    { megaventory: { receiptBackfillComplete: complete, receiptBackfillAt: FieldValue.serverTimestamp(), receiptBackfillSkuCount: skuCount } },
+    { merge: true }
+  );
+  logger.info(`[Megaventory] Receipt-date backfill for ${brandId}: ${skuCount} SKUs across ${receiptTypes.length} inbound types (complete=${complete}${errors.length ? `, errors=${errors.length}` : ''})`);
+  return { success: errors.length === 0, ...(errors.length ? { error: errors[0] } : {}), receiptTypesScanned: receiptTypes.length, skuCount, complete, durationMs: Date.now() - start };
 }
 
 /** Full sync (last 90 days) from the manual button + nightly schedule; revenue source = Invoices, Megaventory as master. */
