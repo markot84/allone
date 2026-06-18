@@ -593,7 +593,14 @@ async function loadCatalogCollection(
       const product = productFromRow(doc.id, row, sourceKind);
       if (!product) continue;
       const key = normalizeSku(product.sku);
-      if (!key || bySku.has(key)) continue;
+      if (!key) continue;
+      const existing = bySku.get(key);
+      if (existing) {
+        // Prefer a doc carrying a productId (the stock overlay matches on it); upgrade a productId-less
+        // entry (e.g. a gap-fill catalog doc) when a real mirror for the same SKU shows up.
+        if (!existing.productId && product.productId) bySku.set(key, product);
+        continue;
+      }
       bySku.set(key, product);
     }
     if (snap.size < READ_PAGE_SIZE) break;
@@ -624,7 +631,14 @@ async function appendProductsBySource(
       const product = productFromRow(doc.id, doc.data(), 'erp');
       if (!product) continue;
       const key = normalizeSku(product.sku);
-      if (!key || bySku.has(key)) continue;
+      if (!key) continue;
+      const existing = bySku.get(key);
+      if (existing) {
+        // Prefer a doc carrying a productId (the stock overlay matches on it); upgrade a productId-less
+        // entry (e.g. a gap-fill catalog doc) when a real mirror for the same SKU shows up.
+        if (!existing.productId && product.productId) bySku.set(key, product);
+        continue;
+      }
       bySku.set(key, product);
     }
     if (snap.size < READ_PAGE_SIZE) break;
