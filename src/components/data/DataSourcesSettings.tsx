@@ -22,14 +22,14 @@ export function DataSourcesSettings() {
         id: 'eshop_order_date',
         label: 'E-shop κατά ημ. παραγγελίας',
         description:
-          'Ο τζίρος του e-shop (Magento) με ημερομηνία παραγγελίας. Προτείνεται για brands με e-shop.',
+          'Ο τζίρος του e-shop με ημερομηνία παραγγελίας. Προτείνεται για brands με e-shop.',
         disabled: !hasEshopConnector,
       },
       {
         id: 'erp_document_date',
         label: 'ERP κατά ημ. παραστατικού',
         description:
-          'Ο τζίρος όλης της επιχείρησης από το ERP, με ημερομηνία παραστατικού/τιμολογίου. Κατάλληλο για brands χωρίς e-shop.',
+          'Ο τζίρος όλης της επιχείρησης από το ERP, με ημερομηνία παραστατικού/τιμολογίου.',
       },
     ],
     [hasEshopConnector]
