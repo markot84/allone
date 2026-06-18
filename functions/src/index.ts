@@ -88,7 +88,7 @@ import {
   updateMegaventoryConnectorSettings,
   setDb as setMegaventoryDb,
 } from './megaventoryConnector';
-import { decideStaleRecovery, isJobWriteOwned } from './megaventorySyncPlan';
+import { decideStaleRecovery, isJobWriteOwned, MAX_STALE_RESUMES } from './megaventorySyncPlan';
 import { randomUUID } from 'crypto';
 import {
   saveSoftOneCredentials,
@@ -1867,16 +1867,31 @@ export const processMegaventorySyncJobs = onSchedule(
       const data = doc.data();
       const updatedAt = data.updatedAt?.toDate?.() as Date | undefined;
       if (!updatedAt || Date.now() - updatedAt.getTime() <= STALE_RUNNING_MS) continue;
-      // A stale-recovered job that timed out before finalizing is ALWAYS a failure — never inherit
-      // data.result.success from a prior pass (that masked failures and livelocked the brand).
-      const recovery = decideStaleRecovery();
-      logger.warn(`[MegaventoryJob] Recovering stale running job ${doc.id} → failed (timed out)`);
+      // ≥40min stale ⇒ past the 30min hard cap ⇒ the pass is definitely dead (no concurrent writer).
+      // Resume it from checkpoints (catalog-complete + invoice/deleted cursors persist) instead of
+      // failing outright; bounded by MAX_STALE_RESUMES so a genuinely-stuck brand can't livelock.
+      const staleResumes = Number(data.staleRecoveryAttempts ?? 0);
+      const recovery = decideStaleRecovery(staleResumes);
+      if (recovery.action === 'resume') {
+        logger.warn(`[MegaventoryJob] Stale running job ${doc.id} → re-enqueue to resume from checkpoint (${staleResumes + 1}/${MAX_STALE_RESUMES})`);
+        await doc.ref.update({
+          status: 'pending',
+          claimToken: FieldValue.delete(),
+          staleRecoveryAttempts: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+          continuationAttempts: FieldValue.delete(),
+        });
+        continue;
+      }
+      // Never inherit a prior pass's result.success (that masked failures and livelocked the brand).
+      logger.warn(`[MegaventoryJob] Recovering stale running job ${doc.id} → failed (timed out, ${staleResumes} resumes exhausted)`);
       await doc.ref.update({
         status: recovery.status,
         completedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         error: recovery.error,
         continuationAttempts: FieldValue.delete(),
+        staleRecoveryAttempts: FieldValue.delete(),
       });
       if (recovery.resetCatalogState && typeof data.brandId === 'string') {
         await resetMegaventoryResumableState(db, data.brandId);
@@ -1985,6 +2000,7 @@ export const processMegaventorySyncJobs = onSchedule(
         completedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         continuationAttempts: FieldValue.delete(),
+        staleRecoveryAttempts: FieldValue.delete(),
         ...(completedClean
           ? { error: FieldValue.delete() }
           : { error: result.error || `Sync did not complete within ${MAX_CONTINUATIONS} continuation passes` }),

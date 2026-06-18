@@ -55,12 +55,24 @@ export function planProcessing(current: ProcessingStage | string | null | undefi
 
 /** A job stuck `running` past the stale threshold MUST resolve to `failed` (never inherit a prior
  * pass's `success`); reset flags clear connector state so the brand isn't livelocked next sync. */
-export function decideStaleRecovery(): {
-  status: 'failed';
-  error: string;
-  resetCatalogState: true;
-} {
+/** Max times a stale (killed-mid-pass) job is re-enqueued to resume from its checkpoints before we
+ * give up and fail it. Bounds livelock; each resume makes forward progress (catalog-complete +
+ * invoice/deleted cursors persist across passes). */
+export const MAX_STALE_RESUMES = 6;
+
+export type StaleRecovery =
+  | { action: 'resume' }
+  | { action: 'fail'; status: 'failed'; error: string; resetCatalogState: true };
+
+/** A pass stale ≥40min is past the 30min hard cap ⇒ definitely dead (no concurrent writer), so it is
+ * safe to RESUME from checkpoints instead of failing outright. Bounded by MAX_STALE_RESUMES; once
+ * exhausted, fail + reset so a stuck brand can't livelock and never inherits a prior pass success. */
+export function decideStaleRecovery(staleRecoveryAttempts = 0): StaleRecovery {
+  if (staleRecoveryAttempts < MAX_STALE_RESUMES) {
+    return { action: 'resume' };
+  }
   return {
+    action: 'fail',
     status: 'failed',
     error: 'Megaventory sync timed out before job finalization',
     resetCatalogState: true,

@@ -1773,6 +1773,14 @@ export async function fetchMegaventoryData(
         counts.products = items.length;
         totalImported += items.length;
         logger.info(`[Megaventory] Products: ${items.length} imported (cursor pass) for ${brandId}, exhausted=${exhausted}`);
+        // Checkpoint catalog progress NOW (not only at pass-end): if a later stage (stock walk /
+        // deleted reconcile) is killed at the hard cap, a resumed pass skips the full ProductGet
+        // re-walk and gives the heavy downstream the whole budget. Idempotent with the pass-end write.
+        await db.doc(`connectors/${brandId}`).update(
+          exhausted
+            ? { 'megaventory.productCatalogComplete': true, 'megaventory.productCatalogCursor': FieldValue.delete() }
+            : { 'megaventory.productCatalogCursor': productCatalogNextCursor ?? FieldValue.delete() }
+        );
       }
     }
 

@@ -6,6 +6,7 @@ import {
   planAfterCatalog,
   planProcessing,
   decideStaleRecovery,
+  MAX_STALE_RESUMES,
   shouldResetCatalogState,
   PROCESSING_ORDER,
   type ProcessingStage,
@@ -78,12 +79,21 @@ describe('planProcessing (sub-stage split)', () => {
   });
 });
 
-describe('decideStaleRecovery (false-completion bug)', () => {
-  it('ALWAYS marks a timed-out stale job failed — never inherits a prior pass success', () => {
-    const d = decideStaleRecovery();
-    expect(d.status).toBe('failed');
-    expect(d.resetCatalogState).toBe(true);
-    expect(d.error).toMatch(/timed out/i);
+describe('decideStaleRecovery (bounded resume, then fail)', () => {
+  it('resumes a fresh stale job from checkpoint instead of failing outright', () => {
+    expect(decideStaleRecovery(0).action).toBe('resume');
+  });
+  it('keeps resuming while under the bound', () => {
+    expect(decideStaleRecovery(MAX_STALE_RESUMES - 1).action).toBe('resume');
+  });
+  it('fails + resets once resumes are exhausted — never livelocks, never inherits prior success', () => {
+    const d = decideStaleRecovery(MAX_STALE_RESUMES);
+    expect(d.action).toBe('fail');
+    if (d.action === 'fail') {
+      expect(d.status).toBe('failed');
+      expect(d.resetCatalogState).toBe(true);
+      expect(d.error).toMatch(/timed out/i);
+    }
   });
 });
 
