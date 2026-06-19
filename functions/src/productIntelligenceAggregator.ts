@@ -986,10 +986,14 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
   const bySku = new Map<string, CompactProduct>();
   let megaventoryApiRowsRead = 0;
   let megaventoryApiCatalogGapRead = 0;
+  let softoneRowsRead = 0;
   if (hasErp) {
     const catalog = await loadMegaventoryErpCatalog(brandId, bySku);
     megaventoryApiRowsRead = catalog.apiProductsRead;
     megaventoryApiCatalogGapRead = catalog.apiCatalogGapRead;
+    // SoftOne ERP catalog: softone_items carries normalized sku/name/stock_level. Empty query (0 rows)
+    // for non-SoftOne brands, so this is a no-op there.
+    softoneRowsRead = await loadCatalogCollection(brandId, 'softone_items', 'erp', bySku);
   }
   const ecommerceCatalogRowsRead = hasErp
     ? 0
@@ -1022,6 +1026,7 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
     sourceRowsRead:
       megaventoryApiRowsRead +
       megaventoryApiCatalogGapRead +
+      softoneRowsRead +
       ecommerceCatalogRowsRead +
       magentoDetailRowsRead +
       stockResult.rowsRead +

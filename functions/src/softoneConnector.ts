@@ -557,6 +557,10 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
           stockQty: erpNum(r['ITEM.MTRL_ITEMTRDATA_QTY1']),
           stockOnOrder: erpNum(r['ITEM.SoOrdered']),
           stockReserved: erpNum(r['ITEM.SoReserved']),
+          // Product-model field names so the Product Intelligence aggregator consumes softone_items directly.
+          sku: r['ITEM.CODE'],
+          name: r['ITEM.NAME'],
+          stock_level: erpNum(r['ITEM.MTRL_ITEMTRDATA_QTY1']),
           source: 'softone_api',
         },
       }));
