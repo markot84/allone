@@ -20,6 +20,16 @@ function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
 }
 
+/** PER-107: parse a WooCommerce order's creation time as epoch ms (UTC). Prefer `date_created_gmt`
+ * (no timezone suffix → treat as UTC, matching how `after` is sent as a UTC ISO string); fall back
+ * to the offset-bearing `date_created`. Used to advance the historical backfill resume cursor. */
+export function parseWooCreatedMs(o: { date_created_gmt?: unknown; date_created?: unknown }): number {
+  const gmt = typeof o?.date_created_gmt === 'string' ? o.date_created_gmt.trim() : '';
+  if (gmt) return Date.parse(/([zZ]|[+-]\d{2}:?\d{2})$/.test(gmt) ? gmt : `${gmt}Z`);
+  const local = typeof o?.date_created === 'string' ? o.date_created.trim() : '';
+  return local ? Date.parse(local) : NaN;
+}
+
 /** Validate WooCommerce credentials and save them. */
 export async function saveWooCredentials(
   brandId: string,
@@ -117,6 +127,13 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
   }
 
   const orderWindow = buildHistoricalOrIncrementalWindow(connector || {}, 'lastOrdersSyncAt', 'historyLoadedUntilYear', 3, ECOMMERCE_INCREMENTAL_OVERLAP_HOURS);
+  // PER-107: resume a partial historical backfill from the last imported order instead of
+  // restarting at the 3-year mark every run (Magento pattern). The cursor moves windowStart
+  // forward; a run that finishes without hitting the page cap marks history complete.
+  const ordersHistoryCursor = coerceSyncDate(connector?.ordersHistoryCursor);
+  if (orderWindow.mode === 'historical' && ordersHistoryCursor && ordersHistoryCursor > orderWindow.windowStart) {
+    orderWindow.windowStart = ordersHistoryCursor;
+  }
   const ordersSinceIso = orderWindow.windowStart.toISOString();
   const lastProdSync = coerceSyncDate(connector?.lastProductsSyncAt);
   const productsModifiedSinceIso = lastProdSync
@@ -141,10 +158,12 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
   let productsSyncComplete = false;
 
   try {
-    // Orders: historical by creation date, then incremental via modified_after
+    // Orders: historical by creation date (oldest→newest so the cursor advances), then incremental via modified_after
     let orderPage = 1;
     let hasMore = true;
-    let ordersAbort = false;
+    let ordersOk = true;
+    let ordersBackfillIncomplete = false;
+    let lastOrderCreatedAt: Date | null = null;
     const orderItems: { id: string; data: Record<string, unknown> }[] = [];
 
     while (hasMore) {
@@ -152,7 +171,13 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
         per_page: '100',
         page: String(orderPage),
         orderby: 'date',
-        order: 'desc',
+        // PER-107: historical backfill walks oldest→newest so the resume cursor moves forward
+        // each run; incremental stays newest-first.
+        order: orderWindow.mode === 'incremental' ? 'desc' : 'asc',
+        // PER-107: compare after/modified_after against GMT columns so they align with our UTC ISO
+        // bounds and the UTC-derived resume cursor — otherwise WooCommerce filters against store-local
+        // time and a negative-UTC-offset store would skip a multi-hour band at each resume.
+        dates_are_gmt: 'true',
       });
       if (orderWindow.mode === 'incremental') {
         params.set('modified_after', ordersSinceIso);
@@ -163,7 +188,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
       const res = await safeFetch(`${storeUrl}/wp-json/wc/v3/orders?${params}`, { headers: baseHeaders });
       if (!res.ok) {
         logger.error(`[WooCommerce] Orders fetch failed (${res.status})`, { alertKey: ALERT.woocommerceSyncFailed });
-        ordersAbort = true;
+        ordersOk = false;
         break;
       }
 
@@ -171,6 +196,11 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
       if (!Array.isArray(orders) || orders.length === 0) { hasMore = false; break; }
 
       for (const o of orders) {
+        // PER-107: track the newest creation time imported this run → the forward resume cursor.
+        const createdMs = parseWooCreatedMs(o);
+        if (!Number.isNaN(createdMs) && (lastOrderCreatedAt === null || createdMs > lastOrderCreatedAt.getTime())) {
+          lastOrderCreatedAt = new Date(createdMs);
+        }
         const wooCid = o.customer_id != null && Number(o.customer_id) > 0 ? String(o.customer_id) : '';
         const emailIdentity = getCustomerEmailIdentity(o.billing?.email || o.shipping?.email);
         const wooName = [o.billing?.first_name, o.billing?.last_name].filter(Boolean).join(' ').trim()
@@ -210,13 +240,16 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
       hasMore = orderPage < totalPages;
       orderPage++;
       if (orderPage > 30) {
-        ordersAbort = true;
-        logger.warnAlert(`[WooCommerce] Orders page safety cap (${orderPage}) for ${brandId}`, { alertKey: ALERT.woocommerceSyncFailed });
+        if (hasMore) {
+          // PER-107: more history remains — stop this run; the persisted cursor resumes it next run.
+          ordersBackfillIncomplete = true;
+          logger.warnAlert(`[WooCommerce] Orders page cap (${orderPage}) for ${brandId} — will resume next run`, { alertKey: ALERT.woocommerceSyncFailed });
+        }
         break;
       }
     }
 
-    ordersSyncComplete = !ordersAbort;
+    ordersSyncComplete = ordersOk && !ordersBackfillIncomplete;
 
     if (orderItems.length > 0) {
       for (let i = 0; i < orderItems.length; i += 500) {
@@ -307,9 +340,20 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
     }
 
     const connectorPatch: Record<string, unknown> = {};
-    if (ordersSyncComplete) {
+    if (orderWindow.mode === 'historical' && ordersBackfillIncomplete && lastOrderCreatedAt) {
+      // PER-107: partial backfill — persist the resume cursor EVERY run, stepping 1s BACK from the
+      // newest imported order. `after` is exclusive and Woo timestamps are second-granular, so
+      // stepping back re-includes the boundary second next run; the idempotent woo_<id> upsert
+      // absorbs the re-read, and we never skip orders sharing that second cut off by the page cap.
+      connectorPatch['woocommerce.ordersHistoryCursor'] = new Date(lastOrderCreatedAt.getTime() - 1000);
+    } else if (orderWindow.mode === 'historical' && ordersBackfillIncomplete) {
+      // Incomplete but no parseable order date to anchor the cursor (should not happen with real Woo
+      // data) — surface it rather than silently re-loading the same first pages forever.
+      logger.warnAlert(`[WooCommerce] Backfill incomplete but no parseable order date for ${brandId} — resume cursor not advanced`, { alertKey: ALERT.woocommerceSyncFailed });
+    } else if (ordersSyncComplete) {
       connectorPatch['woocommerce.lastOrdersSyncAt'] = FieldValue.serverTimestamp();
       if (orderWindow.mode === 'historical') {
+        connectorPatch['woocommerce.ordersHistoryCursor'] = FieldValue.delete();
         connectorPatch['woocommerce.historyLoadedUntilYear'] = orderWindow.historyStartYear;
       }
     }
