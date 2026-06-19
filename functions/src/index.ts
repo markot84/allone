@@ -1849,7 +1849,7 @@ export const processMegaventorySyncJobs = onSchedule(
     schedule: 'every 1 minutes',
     region: 'europe-west1',
     timeoutSeconds: 1800, // onSchedule hard cap is 1800s (30min). Completing >30min brands relies on the budget+continuation below (re-enqueued across passes), not a longer single run.
-    memory: '2GiB',
+    memory: '4GiB', // prod-scale: post-ingestion custom-report/procurement normalization OOM'd at 2GiB after the heavy stages now run to completion.
     secrets: ['CONNECTOR_TOKEN_KEY'],
   },
   async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
