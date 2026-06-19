@@ -616,6 +616,8 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
           sku: r['ITEM.CODE'],
           name: r['ITEM.NAME'],
           stock_level: erpNum(r['ITEM.MTRL_ITEMTRDATA_QTY1']),
+          // Retail price (fallback wholesale) for inventory value; the unit lives in MTRUNIT1, not here.
+          price: erpNum(r['ITEM.PRICER']) || erpNum(r['ITEM.PRICEW']),
           source: 'softone_api',
         },
       }));

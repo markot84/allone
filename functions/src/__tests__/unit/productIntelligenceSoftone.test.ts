@@ -13,6 +13,7 @@ const softoneRow = {
   stock_level: 51.5,
   sku: '0-1-5-3-3-094',
   name: 'LDPE ΣΥΣΚ/ΣΙΑ ΦΑΚΕΛΟΣ Α/Τ 25Χ35',
+  price: 149,
   brandId: 'safeblock',
   source: 'softone_api',
 };
@@ -24,6 +25,7 @@ describe('productFromRow — SoftOne items', () => {
     expect(p?.sku).toBe('0-1-5-3-3-094');
     expect(p?.name).toBe('LDPE ΣΥΣΚ/ΣΙΑ ΦΑΚΕΛΟΣ Α/Τ 25Χ35');
     expect(p?.stock_level).toBe(51.5);
+    expect(p?.price).toBe(149); // inventory value = stock × price → no longer €0
     expect(p?.source).toBe('erp');
     expect(p?.priority_tag).toBeTruthy();
   });
