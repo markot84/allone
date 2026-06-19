@@ -471,7 +471,7 @@ async function readSoftOneSalesOrderRows(db: Firestore, brandId: string): Promis
       ),
       shippingMethod: '',
       customerEmail: softOneCustomerText(d),
-      lineItems: [],
+      lineItems: Array.isArray(d.lineItems) ? (d.lineItems as OrderRow['lineItems']) : [],
     });
   }
   return rows;
@@ -610,24 +610,63 @@ export function accumulateErpInvoiceVelocity(
   }
 }
 
-/** Stream megaventory_invoices for a brand and persist all-channel per-SKU velocity to
+/** Fold one softone_sales_documents document into the velocity accumulator (exported for unit tests).
+ * SALDOC are sales (sign +1); cancelled/void skipped. SKU = lineItems[].sku (the SALDOC ITELINES item
+ * code), quantity = lineItems[].quantity. */
+export function accumulateSoftOneDocVelocity(
+  accum: ErpVelocityAccum,
+  doc: Record<string, unknown>,
+  nowMs: number
+): void {
+  if (/(cancel|void|ακυρ|reject)/i.test(String(doc['SALDOC.STATUS'] ?? doc.STATUS ?? ''))) return;
+  const raw = String(doc.documentDate ?? doc['SALDOC.TRNDATE'] ?? '').trim();
+  const day = /^\d{4}-\d{2}-\d{2}/.test(raw)
+    ? raw.slice(0, 10)
+    : /^\d{8}$/.test(raw)
+      ? `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`
+      : '';
+  const ts = day ? new Date(`${day}T12:00:00.000Z`).getTime() : NaN;
+  if (!Number.isFinite(ts)) return;
+  const MS_DAY = 24 * 60 * 60 * 1000;
+  const inW7 = ts >= nowMs - 7 * MS_DAY;
+  const inW30 = ts >= nowMs - 30 * MS_DAY;
+  const inW90 = ts >= nowMs - 90 * MS_DAY;
+  const lineItems = Array.isArray(doc.lineItems) ? (doc.lineItems as Record<string, unknown>[]) : [];
+  for (const li of lineItems) {
+    const sku = String(li.sku || '').trim();
+    if (!sku) continue;
+    const qty = Number(li.quantity) || 0;
+    if (qty === 0) continue;
+    accum.sold.set(sku, (accum.sold.get(sku) || 0) + qty);
+    if (inW7) accum.sold7.set(sku, (accum.sold7.get(sku) || 0) + qty);
+    if (inW30) accum.sold30.set(sku, (accum.sold30.get(sku) || 0) + qty);
+    if (inW90) accum.sold90.set(sku, (accum.sold90.get(sku) || 0) + qty);
+    const prev = accum.lastSale.get(sku) || 0;
+    if (ts > prev) accum.lastSale.set(sku, ts);
+  }
+}
+
+/** Stream the ERP document collection for a brand and persist all-channel per-SKU velocity to
  * erp_sku_velocity/{brandId} (same chunked shape as sku_stats). Streaming keeps memory bounded
  * across the full document history. */
 export async function computeErpSkuVelocity(brandId: string): Promise<void> {
   const db = getDb();
-  // Megaventory-only: it's the backend whose documents carry per-line SKUs. Safe no-op otherwise,
-  // so schedulers/triggers can call it for any brand without a separate gate.
+  // ERP backends whose documents carry per-line SKUs (Megaventory invoices, SoftOne SALDOC lines).
+  // Safe no-op for other backends, so schedulers/triggers can call it for any brand without a gate.
   const connDoc = await db.doc(`connectors/${brandId}`).get();
-  if (resolveErpRevenueBackend((connDoc.data() || {}) as Record<string, unknown>) !== 'megaventory_invoices') {
+  const backend = resolveErpRevenueBackend((connDoc.data() || {}) as Record<string, unknown>);
+  if (backend !== 'megaventory_invoices' && backend !== 'softone_sales_documents') {
     return;
   }
   const nowMs = Date.now();
   const accum = emptyErpVelocityAccum();
   let docsRead = 0;
-  const query = db.collection('megaventory_invoices').where('brandId', '==', brandId);
+  const collection = backend === 'softone_sales_documents' ? 'softone_sales_documents' : 'megaventory_invoices';
+  const query = db.collection(collection).where('brandId', '==', brandId);
   for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
     docsRead += 1;
-    accumulateErpInvoiceVelocity(accum, doc.data(), nowMs);
+    if (backend === 'softone_sales_documents') accumulateSoftOneDocVelocity(accum, doc.data(), nowMs);
+    else accumulateErpInvoiceVelocity(accum, doc.data(), nowMs);
   }
 
   const skuStats: Record<string, SkuStatsRow> = {};

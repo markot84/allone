@@ -478,6 +478,61 @@ export interface SoftOneSyncResult {
   error?: string;
 }
 
+export interface SoftOneSalesLine {
+  sku: string;
+  name: string;
+  quantity: number;
+  price: number;
+  rowTotal: number;
+}
+
+/** Parse the ITELINES grid out of a getData OBJECT=SALDOC response (the SALDOC browser carries only
+ * headers). Item code = MTRL_ITEM_CODE (joins softone_items.sku); quantity = QTY1; value = NETLINEVAL. */
+export function parseSoftOneSalesLines(getDataResponse: Record<string, unknown> | null | undefined): SoftOneSalesLine[] {
+  const data = (getDataResponse?.data ?? {}) as Record<string, unknown>;
+  const lines = (data.ITELINES ?? data.MTRLINES) as Record<string, unknown>[] | undefined;
+  if (!Array.isArray(lines)) return [];
+  const out: SoftOneSalesLine[] = [];
+  for (const l of lines) {
+    const sku = String(l['MTRL_ITEM_CODE'] ?? l['MTRL_MTRL_CODE'] ?? l['MTRL'] ?? '').trim();
+    if (!sku) continue;
+    out.push({
+      sku,
+      name: String(l['MTRL_ITEM_NAME'] ?? l['MTRL_MTRL_NAME'] ?? '').trim(),
+      quantity: erpNum(l['QTY1'] ?? l['QTY']),
+      price: erpNum(l['PRICE'] ?? l['MTRL_ITEM_PRICER']),
+      rowTotal: erpNum(l['NETLINEVAL'] ?? l['LINEVAL']),
+    });
+  }
+  return out;
+}
+
+async function fetchSoftOneSalesDocLines(
+  serviceUrl: string,
+  clientID: string,
+  appId: string,
+  internalId: string
+): Promise<SoftOneSalesLine[]> {
+  if (!internalId) return [];
+  const call = await softoneCall(serviceUrl, { service: 'getData', clientID, appId, OBJECT: 'SALDOC', KEY: internalId });
+  return parseSoftOneSalesLines(call.data);
+}
+
+/** Run `fn` over `items` with bounded concurrency (keeps per-document getData fan-out from either
+ * serializing slowly or overwhelming the endpoint). Preserves input order in the result. */
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T, idx: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, limit), items.length || 1) }, worker));
+  return out;
+}
+
 export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResult> {
   const db = getDb();
   const docSnap = await db.doc(`connectors/${brandId}`).get();
@@ -577,11 +632,17 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
         errors.push(sRes.error);
       }
       else {
+        // Per-document line items (the SALDOC browser carries only headers): getData per doc, keyed by the
+        // internal id in ZOOMINFO ('SERIES;ID'). Needed for per-SKU sales velocity.
+        const lineItemsByIdx = await mapWithConcurrency(sRes.rows, 5, (r) =>
+          fetchSoftOneSalesDocLines(serviceUrl, clientID, appId, String(r.ZOOMINFO ?? '').split(';').pop() ?? '')
+        );
         const items = sRes.rows.map((r, idx) => ({
           id: `s1_sd_${sanitizeFirestoreDocId(String(r['SALDOC.FINDOC'] || r.FINDOC || r['SALDOC.SERIES'] || idx) + '_' + idx)}`,
           data: {
             ...r,
             documentDate: erpIsoDate(r['SALDOC.TRNDATE'] ?? r.TRNDATE),
+            lineItems: lineItemsByIdx[idx] ?? [],
             source: 'softone_api',
           },
         }));

@@ -7,6 +7,7 @@ import {
   assembleBrowserRows,
   isRetryableSoftOneStatus,
   planSoftOneRetry,
+  parseSoftOneSalesLines,
 } from '../../softoneConnector';
 
 const ab = (bytes: number[]): ArrayBuffer => Uint8Array.from(bytes).buffer;
@@ -181,5 +182,31 @@ describe('planSoftOneRetry', () => {
     expect(planSoftOneRetry({ attempt: 1, status: 503, threw: false }).retry).toBe(true);
     expect(planSoftOneRetry({ attempt: 1, status: 400, threw: false }).retry).toBe(false);
     expect(planSoftOneRetry({ attempt: 1, status: 200, threw: false }).retry).toBe(false);
+  });
+});
+
+describe('parseSoftOneSalesLines', () => {
+  it('extracts sku/qty/price/value from a getData SALDOC ITELINES grid', () => {
+    const resp = {
+      success: true,
+      data: {
+        ITELINES: [
+          { MTRL: '2546', MTRL_ITEM_CODE: 'RS10164-45', MTRL_ITEM_NAME: 'BOOT 45', QTY1: '2', PRICE: '120.16', NETLINEVAL: '102.14' },
+          { MTRL_ITEM_CODE: 'X-1', QTY1: '1', NETLINEVAL: '10' },
+        ],
+      },
+    };
+    const lines = parseSoftOneSalesLines(resp);
+    expect(lines.length).toBe(2);
+    expect(lines[0]).toEqual({ sku: 'RS10164-45', name: 'BOOT 45', quantity: 2, price: 120.16, rowTotal: 102.14 });
+    expect(lines[1].sku).toBe('X-1');
+  });
+
+  it('falls back to MTRLINES, skips lines with no item code, tolerates null/empty', () => {
+    expect(parseSoftOneSalesLines(null)).toEqual([]);
+    expect(parseSoftOneSalesLines({ data: {} })).toEqual([]);
+    const r = parseSoftOneSalesLines({ data: { MTRLINES: [{ MTRL_MTRL_CODE: 'M1', QTY: '4' }, { QTY: '9' }] } });
+    expect(r.length).toBe(1);
+    expect(r[0]).toMatchObject({ sku: 'M1', quantity: 4 });
   });
 });
