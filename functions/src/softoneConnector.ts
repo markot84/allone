@@ -30,6 +30,14 @@ function normalizeServiceUrl(raw: string): string {
   return `${base}/s1services`;
 }
 
+/** SoftOne serves Windows-1253 (Greek ANSI); decode the raw bytes as such unless the response
+ * explicitly declares UTF-8. Decoding as UTF-8 (fetch default) destroys Greek text into U+FFFD. */
+export function decodeSoftOneBody(buf: ArrayBuffer, contentType?: string | null): string {
+  const ct = (contentType ?? '').toLowerCase();
+  const charset = /charset=[^;]*utf-?8/.test(ct) ? 'utf-8' : 'windows-1253';
+  return new TextDecoder(charset).decode(buf);
+}
+
 async function softoneCall(serviceUrl: string, body: Record<string, unknown>): Promise<{
   ok: boolean;
   status: number;
@@ -45,7 +53,7 @@ async function softoneCall(serviceUrl: string, body: Record<string, unknown>): P
       body: JSON.stringify(body),
       signal: ctrl.signal,
     });
-    const raw = await res.text();
+    const raw = decodeSoftOneBody(await res.arrayBuffer(), res.headers.get('content-type'));
     let data: Record<string, unknown> | null = null;
     try {
       data = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
