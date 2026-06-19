@@ -30,6 +30,11 @@ const OPENCART_MAX_PAGES_INCREMENTAL = 80;
 const OPENCART_MAX_EMPTY_ORDER_PAGES = 25;
 const OPENCART_RETRYABLE_HTTP = new Set([429, 500, 502, 503, 504]);
 const OPENCART_PAGE_DELAY_MS = 200;
+// PER-108: max per-order detail fetches per HISTORICAL backfill run. Historical orders are now
+// enriched for line items + tax (previously gated off → empty lineItems / totalTax:0), and each
+// enrichment is an extra API round-trip, so bound them per run to stay under the function
+// timeout; the page cursor resumes the rest next run. Incremental sync stays unbounded.
+const OPENCART_ORDER_ENRICH_BUDGET = 400;
 
 function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -454,6 +459,38 @@ async function mapPool<T, R>(items: T[], poolSize: number, worker: (item: T) => 
   return results;
 }
 
+/** PER-108 enrichment policy. Historical backfill now enriches line items + tax too (was gated
+ * off → empty lineItems / zero tax), but bounded per run (budget) at low concurrency so the extra
+ * per-order detail calls stay under the function timeout; the page cursor resumes the rest. */
+export function opencartEnrichPlan(mode: string): { enrich: boolean; budget: number; concurrency: number } {
+  return mode === 'historical'
+    ? { enrich: true, budget: OPENCART_ORDER_ENRICH_BUDGET, concurrency: 2 }
+    : { enrich: true, budget: Infinity, concurrency: 4 };
+}
+
+/** Resolve one order's line items + tax. When the list row carries none (historical rows do),
+ * fall back to the per-order detail call. `didFetch` reports whether a detail call was spent, so
+ * the caller can charge it against the per-run enrichment budget. */
+export async function enrichOcOrder(
+  o: Record<string, unknown>,
+  enrich: boolean,
+  fetchDetail: (orderId: string) => Promise<{ lineItems: Record<string, unknown>[]; tax: number }>,
+): Promise<{ o: Record<string, unknown>; lineItems: Record<string, unknown>[]; tax: number; didFetch: boolean }> {
+  let lineItems = parseOpenCartOrderProductsToLineItems(o);
+  let tax = extractOcTaxAmount(o);
+  let didFetch = false;
+  if (enrich && lineItems.length === 0) {
+    const oid = String(o.order_id || o.orderId || '');
+    if (oid) {
+      const detail = await fetchDetail(oid);
+      lineItems = detail.lineItems;
+      if (tax === 0) tax = detail.tax;
+      didFetch = true;
+    }
+  }
+  return { o, lineItems, tax, didFetch };
+}
+
 /** Fetch OpenCart orders (last 3 years) + products into Firestore; stores customer email for
  * audience exports and `customerEmailHash` for analytics/matching. */
 export async function fetchOpenCartData(brandId: string): Promise<{
@@ -589,7 +626,11 @@ export async function fetchOpenCartData(brandId: string): Promise<{
   const runIncrementalBoth = productsCatalogComplete && ordersHistoryComplete;
   const pageBudget =
     runIncrementalBoth ? OPENCART_MAX_PAGES_INCREMENTAL : OPENCART_MAX_PAGES_BACKFILL;
-  const enrichOrderDetails = orderWindow.mode !== 'historical';
+  // PER-108: enrich line items + tax for historical orders too (was gated off → empty). The plan
+  // bounds the per-run enrichment cost and uses low concurrency for the heavier historical leg.
+  const { enrich: enrichOrderDetails, budget: orderEnrichBudget, concurrency: enrichConcurrency } =
+    opencartEnrichPlan(orderWindow.mode);
+  let ordersEnrichedThisRun = 0;
 
   logger.info(
     `[OpenCart] ${brandId} legs products=${runProductsLeg} orders=${runOrdersLeg} incrementalBoth=${runIncrementalBoth} pageBudget=${pageBudget}`
@@ -740,19 +781,20 @@ export async function fetchOpenCartData(brandId: string): Promise<{
       }
       consecutiveEmptyFilteredPages = 0;
 
-      const enriched = await mapPool(pageCandidates, enrichOrderDetails ? 4 : 1, async (o: Record<string, unknown>) => {
-        let lineItems = parseOpenCartOrderProductsToLineItems(o);
-        let tax = extractOcTaxAmount(o);
-        if (enrichOrderDetails && lineItems.length === 0) {
-          const oid = String(o.order_id || o.orderId || '');
-          if (oid) {
-            const detail = await fetchOcOrderDetail(oid);
-            lineItems = detail.lineItems;
-            if (tax === 0) tax = detail.tax;
-          }
-        }
-        return { o, lineItems, tax };
-      });
+      // PER-108: bound per-run enrichment in historical backfill — stop before this page and
+      // resume from it next run so the extra per-order detail calls don't blow the timeout.
+      if (ordersEnrichedThisRun >= orderEnrichBudget) {
+        ordersAbort = true;
+        ordersCursorNext = orderPage;
+        ordersAbortReason = `enrich budget (${ordersEnrichedThisRun} order details) — run sync again`;
+        logger.warnAlert(`[OpenCart] Orders enrich budget reached at page ${orderPage} for ${brandId} — will resume next run`, { alertKey: ALERT.opencartSyncFailed });
+        break;
+      }
+
+      const enriched = await mapPool(pageCandidates, enrichConcurrency, (o: Record<string, unknown>) =>
+        enrichOcOrder(o, enrichOrderDetails, fetchOcOrderDetail)
+      );
+      ordersEnrichedThisRun += enriched.filter((e) => e.didFetch).length;
 
       const pageOrderItems: { id: string; data: Record<string, unknown> }[] = [];
       for (const { o, lineItems, tax } of enriched) {
