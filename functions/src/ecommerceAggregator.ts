@@ -363,7 +363,14 @@ function softOneCustomerText(d: Record<string, unknown>): string {
   return '';
 }
 
-function softOneSalesDocNetAmount(d: Record<string, unknown>): number {
+export function softOneSalesDocNetAmount(d: Record<string, unknown>): number {
+  // Net of the ingested line items (NETLINEVAL per line, stored as rowTotal) — the accurate source.
+  // The SALDOC browser header has no net field, only SALDOC.SUMAMNT, so summing lines is preferred.
+  const lines = Array.isArray(d.lineItems) ? (d.lineItems as Array<Record<string, unknown>>) : [];
+  if (lines.length) {
+    const lineNet = lines.reduce((sum, li) => sum + parseNumeric(li.rowTotal), 0);
+    if (lineNet !== 0) return Math.abs(lineNet);
+  }
   const keys = [
     'SALDOC.NETAMOUNT',
     'SALDOC.NETVALUE',
@@ -378,10 +385,11 @@ function softOneSalesDocNetAmount(d: Record<string, unknown>): number {
     const v = parseNumeric(d[k]);
     if (v !== 0) return Math.abs(v);
   }
-  const gross = parseNumeric(d['SALDOC.TOTALAMOUNT'] ?? d['TOTALAMOUNT'] ?? d['SALDOC.TOTAL'] ?? d['TOTAL']);
+  // Header fallback: the SALDOC browser returns the document amount as SALDOC.SUMAMNT.
+  const gross = parseNumeric(d['SALDOC.SUMAMNT'] ?? d['SUMAMNT'] ?? d['SALDOC.TOTALAMOUNT'] ?? d['TOTALAMOUNT'] ?? d['SALDOC.TOTAL'] ?? d['TOTAL']);
   const vat = parseNumeric(d['SALDOC.VATAMOUNT'] ?? d['VATAMOUNT']);
   if (gross > 0 && vat >= 0) return Math.max(0, gross - vat);
-  return Math.abs(parseNumeric(d['SALDOC.TOTALNET']));
+  return Math.abs(parseNumeric(d['SALDOC.SUMAMNT'] ?? d['SALDOC.TOTALNET']));
 }
 
 async function readMegaventoryInvoiceOrderRows(db: Firestore, brandId: string): Promise<OrderRow[]> {
