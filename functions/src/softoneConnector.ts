@@ -170,30 +170,97 @@ async function softoneOpenSession(
   };
 }
 
-/** Column keys from getBrowserInfo for mapping getBrowserData rows */
-function columnKeysFromBrowserInfo(info: Record<string, unknown>): string[] {
+/** SoftOne getBrowserData rows carry a leading hidden ZOOMINFO key cell, so map by `fields` (the full
+ * row schema) not `columns` (visible-only — shifts every value by one). A multi-section browser repeats
+ * ZOOMINFO, splitting `fields` into one key-group per section. */
+export function fieldGroupsFromBrowserInfo(info: Record<string, unknown>): string[][] {
+  const fields = info.fields as Record<string, unknown>[] | undefined;
+  const nameAt = (f: Record<string, unknown> | undefined, i: number) => String((f && (f.name || f.fullname)) || `col_${i}`);
+  if (Array.isArray(fields) && fields.length) {
+    // A multi-section browser repeats its leading key column once per section; split on that marker
+    // (derived from the schema, not a hardcoded name, so it generalizes across SoftOne tenants).
+    const marker = nameAt(fields[0], 0);
+    const groups: string[][] = [];
+    let cur: string[] = [];
+    fields.forEach((f, i) => {
+      const name = nameAt(f, i);
+      if (i > 0 && name === marker && cur.length) {
+        groups.push(cur);
+        cur = [name];
+      } else {
+        cur.push(name);
+      }
+    });
+    if (cur.length) groups.push(cur);
+    return groups;
+  }
   const cols = info.columns as Record<string, unknown>[] | undefined;
   if (Array.isArray(cols) && cols.length) {
-    return cols.map((c, i) => String(c.dataIndex || c.header || `col_${i}`));
+    return [cols.map((c, i) => String(c.dataIndex || c.header || `col_${i}`))];
   }
-  const fields = info.fields as Record<string, unknown>[] | undefined;
-  if (Array.isArray(fields) && fields.length) {
-    return fields.map((f, i) => String(f.name || f.fullname || `col_${i}`));
-  }
-  return [];
+  return [[]];
 }
 
-function mapBrowserRows(keys: string[], rows: unknown[][]): Record<string, unknown>[] {
-  const out: Record<string, unknown>[] = [];
-  for (const row of rows) {
-    if (!Array.isArray(row)) continue;
-    const o: Record<string, unknown> = {};
-    row.forEach((cell, i) => {
-      o[keys[i] || `col_${i}`] = cell;
-    });
-    out.push(o);
+function mapRow(keys: string[], row: unknown[]): Record<string, unknown> {
+  const o: Record<string, unknown> = {};
+  row.forEach((cell, i) => {
+    o[keys[i] || `col_${i}`] = cell;
+  });
+  return o;
+}
+
+const isBlank = (v: unknown): boolean => v === '' || v === null || v === undefined;
+
+/** Assemble getBrowserData rows into records. One key-group ⇒ straight positional map. Multiple groups ⇒
+ * the rows are the sections concatenated (the same items streamed once per section, different columns
+ * each). Section boundaries are detected structurally — the leading key cell (column 0) restarts the
+ * catalog at each section — so unequal/short/ragged sections stay aligned (we do NOT assume each section
+ * is exactly total/k rows). Rows merge per item by that key (then FLD-1, then row order). For columns a
+ * later section repeats, first-non-blank wins, so a trailing blank/0 never clobbers an earlier value. */
+export function assembleBrowserRows(
+  groups: string[][],
+  raw: unknown[][],
+  _total: number,
+  label = 'SoftOne',
+): Record<string, unknown>[] {
+  const rows = raw.filter((r): r is unknown[] => Array.isArray(r));
+  const k = groups.length;
+  if (k <= 1 || rows.length === 0) {
+    return rows.map((row) => mapRow(groups[0] ?? [], row));
   }
-  return out;
+  // Sections restart the catalog: the leading key cell (col 0) returns to the first item's key, and the
+  // per-section row counter (col 1, e.g. FLD-1/A·A) returns to its first value. Use the key when present,
+  // else the counter — so a blank key still splits correctly.
+  const at = (row: unknown[], i: number): string => String(row[i] ?? '').trim();
+  const firstKey = at(rows[0], 0);
+  const firstCounter = at(rows[0], 1);
+  const useKey = !!firstKey;
+  if (!useKey && !firstCounter) {
+    logger.warn(`[SoftOne] ${label}: multi-section browser with no key or row-counter — sections may misalign`);
+  }
+  const byKey = new Map<string, Record<string, unknown>>();
+  const order: string[] = [];
+  let section = 0;
+  rows.forEach((row, idx) => {
+    const restart = idx > 0 && (useKey ? at(row, 0) === firstKey : !!firstCounter && at(row, 1) === firstCounter);
+    if (restart) section = Math.min(section + 1, k - 1);
+    const keys = groups[section] ?? groups[0];
+    const mapped = mapRow(keys, row);
+    // Merge by the key column, else the row counter (both identify the item across sections), else order.
+    const mergeKey =
+      String(mapped[keys[0]] ?? '').trim() || String(mapped[keys[1]] ?? '').trim() || `__ord_${idx}`;
+    let rec = byKey.get(mergeKey);
+    if (!rec) {
+      rec = {};
+      byKey.set(mergeKey, rec);
+      order.push(mergeKey);
+    }
+    for (const [kk, vv] of Object.entries(mapped)) {
+      if (!(kk in rec)) rec[kk] = vv;
+      else if (!isBlank(vv) && isBlank(rec[kk])) rec[kk] = vv; // upgrade blank→value; first non-blank wins
+    }
+  });
+  return order.map((key) => byKey.get(key)!);
 }
 
 async function fetchBrowserAll(
@@ -222,16 +289,14 @@ async function fetchBrowserAll(
   const reqID = String(info.reqID || '');
   if (!reqID) return { rows: [], error: `${label}: missing reqID` };
 
-  const keys = columnKeysFromBrowserInfo(info);
+  const groups = fieldGroupsFromBrowserInfo(info);
   const total = erpNum(info.totalcount);
-  const out: Record<string, unknown>[] = [];
 
+  const raw: unknown[][] = [];
   const initialRows = info.rows as unknown[][] | undefined;
-  if (Array.isArray(initialRows) && initialRows.length) {
-    out.push(...mapBrowserRows(keys, initialRows));
-  }
+  if (Array.isArray(initialRows) && initialRows.length) raw.push(...initialRows);
 
-  let start = out.length;
+  let start = raw.length;
   while (start < total) {
     const dataCall = await softoneCall(serviceUrl, {
       service: 'getBrowserData',
@@ -243,17 +308,24 @@ async function fetchBrowserAll(
     });
     const errD = softoneError(dataCall, `${label} getBrowserData`);
     if (errD) {
-      if (out.length) logger.warnAlert(`[SoftOne] ${errD} — partial ${out.length} rows`, { alertKey: ALERT.softoneSyncFailed });
+      if (raw.length) logger.warnAlert(`[SoftOne] ${errD} — partial ${raw.length} rows`, { alertKey: ALERT.softoneSyncFailed });
       break;
     }
     const chunk = (dataCall.data?.rows as unknown[][]) || [];
     if (!chunk.length) break;
-    out.push(...mapBrowserRows(keys, chunk));
+    raw.push(...chunk);
     start += chunk.length;
-    if (chunk.length < 500) break;
+    // Don't stop on a short page: a multi-section browser would lose whole projections (stock/VAT).
+    // The `start < total` guard and the empty-chunk break above terminate the loop.
   }
 
-  return { rows: out };
+  if (total > 0 && raw.length === 0) {
+    logger.warnAlert(`[SoftOne] ${label}: 0/${total} rows fetched`, { alertKey: ALERT.softoneSyncFailed });
+  } else if (total > 0 && raw.length < total) {
+    logger.warn(`[SoftOne] ${label}: fetched ${raw.length}/${total} rows — incomplete`);
+  }
+
+  return { rows: assembleBrowserRows(groups, raw, total, label) };
 }
 
 export interface SoftOneTestResult {
@@ -449,6 +521,10 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
         id: `s1_i_${sanitizeFirestoreDocId(String(r['ITEM.CODE'] || r.CODE || r['MTRL.CODE'] || idx))}`,
         data: {
           ...r,
+          // Normalized stock from the balance projection (blank cell = genuine zero).
+          stockQty: erpNum(r['ITEM.MTRL_ITEMTRDATA_QTY1']),
+          stockOnOrder: erpNum(r['ITEM.SoOrdered']),
+          stockReserved: erpNum(r['ITEM.SoReserved']),
           source: 'softone_api',
         },
       }));
