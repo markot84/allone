@@ -299,13 +299,9 @@ describe('import.ts — product feed parsing & routing (previewFileForProducts)'
       expect(parseFloat(mapped.price)).toBeCloseTo(451.62);
     });
 
-    // SUSPECTED BUG: the Skroutz feed config lists `ean → sku` as the LAST alias,
-    // and mapFeedRowToAppRow assigns each alias unconditionally (last-wins). So
-    // when a product has BOTH a unique_id and an EAN, the canonical unique_id
-    // ('DJI-POCKET-3') is clobbered by the EAN in the mapped `sku`. The comment
-    // in feedSourceConfig ("unique_id required") and the `ean` alias clearly
-    // intend EAN as a *fallback* for when unique_id is absent, not an override.
-    it.skip('SUSPECTED BUG: prefers unique_id over ean for the mapped sku', async () => {
+    // PER-100: `ean → sku` is the last Skroutz alias, so with first-non-empty-wins
+    // the canonical unique_id wins and EAN stays a fallback when unique_id is absent.
+    it('prefers unique_id over ean for the mapped sku (PER-100)', async () => {
       const result = await previewFileForProducts(xmlFile(SKROUTZ_FEED_XML), 'skroutz');
       // Intended: the stable merchant id wins over the barcode.
       expect(result.mappedSample[0].sku).toBe('DJI-POCKET-3');

@@ -438,7 +438,7 @@ function parseSkroutzFeedXml(xmlText: string): Record<string, string>[] {
   for (let i = 0; i < products.length; i++) {
     const p = products[i];
     const row: Record<string, string> = {
-      unique_id: childText(p, 'unique_id', 'UniqueID', 'id', 'sku', 'mpn'),
+      unique_id: childText(p, 'unique_id', 'uid', 'UniqueID', 'id', 'sku', 'mpn'),
       name: childText(p, 'name', 'title'),
       price: childText(p, 'price', 'Price', 'price_with_vat', 'final_price', 'price_vat'),
       link: childText(p, 'link', 'url', 'permalink'),
@@ -600,6 +600,9 @@ function mapFeedRowToAppRow(row: Record<string, string>, feedSourceType: FeedSou
   const rowByNorm = Object.fromEntries(Object.entries(row).map(([k, v]) => [norm(k), v]));
 
   for (const { feedColumn, appField } of config.columnAliases) {
+    // Aliases are priority/fallback (config order): first non-empty wins, so a
+    // later alias (Skroutz `ean`) never clobbers an earlier one (`unique_id`→sku).
+    if (appRow[appField] !== undefined && appRow[appField] !== '') continue;
     const feedKey = norm(feedColumn);
     const val = row[feedColumn] ?? rowByNorm[feedKey] ?? '';
     if (val === undefined || val === '') continue;

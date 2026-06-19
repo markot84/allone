@@ -59,8 +59,10 @@ export const FEED_SOURCE_CONFIG: Record<FeedSourceType, FeedSourceInfo> = {
       { feedColumn: 'price', appField: 'price', required: true },
       { feedColumn: 'sale_price', appField: 'sale_price' },
       { feedColumn: 'description', appField: 'description' },
-      { feedColumn: 'product_type', appField: 'category' },
+      // Both map to `category`; first non-empty alias wins, so keep
+      // google_product_category first to preserve the historical winner.
       { feedColumn: 'google_product_category', appField: 'category' },
+      { feedColumn: 'product_type', appField: 'category' },
       { feedColumn: 'availability', appField: 'stock_level' },
       { feedColumn: 'brand', appField: 'brand' },
       { feedColumn: 'image_link', appField: 'image_url' },
@@ -96,6 +98,7 @@ export const FEED_SOURCE_CONFIG: Record<FeedSourceType, FeedSourceInfo> = {
     icon: createElement(LucideStoreIcon, { size: 20, className: 'text-orange-600' }),
     columnAliases: [
       { feedColumn: 'unique_id', appField: 'sku', required: true },
+      { feedColumn: 'uid', appField: 'sku' },
       { feedColumn: 'id', appField: 'sku' },
       { feedColumn: 'name', appField: 'name', required: true },
       { feedColumn: 'title', appField: 'name' },
