@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useBrand } from './useBrand';
 import { useBrandSyncVersion } from './useBrandSyncVersion';
 import {
@@ -27,7 +27,13 @@ export function useProductIntelligenceAggregateDoc() {
     refetchOnWindowFocus: false,
   });
   return {
-    aggregate: aggregateQuery.data?.status === 'ready' ? aggregateQuery.data : null,
+    // Keep the last-good aggregate visible while a recompute runs: the backend merges status:'running'
+    // onto the prior data, so returning it (instead of null) lets the page show data + a "refreshing"
+    // banner instead of blanking to skeletons and re-triggering a rebuild. Consumers gate on isBuilding.
+    aggregate:
+      aggregateQuery.data?.status === 'ready' || aggregateQuery.data?.status === 'running'
+        ? aggregateQuery.data
+        : null,
     isLoading: aggregateQuery.isPending,
     isBuilding: aggregateQuery.data?.status === 'running',
     error: aggregateQuery.error,
@@ -83,6 +89,9 @@ export function useProductIntelligenceAggregate(
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: false,
+    // Keep the previous page visible while a new query loads (page change, or post-recompute
+    // syncVersion bump) so the table never blanks mid-recompute.
+    placeholderData: keepPreviousData,
   });
 
   return {

@@ -510,6 +510,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     );
   }
 
+  // Non-blocking recompute: once any page data exists, keep it on screen (+ a "refreshing" banner)
+  // instead of blanking to skeletons while a rebuild runs. Skeleton shows only on the genuine first
+  // load (no page yet); keepPreviousData on the page query holds the table steady across syncVersions.
+  const isRecomputing = piRebuilding || serverIntelligence.isBuilding;
+  const showFirstLoadSkeleton = (effectiveSourceLoading || piRebuilding) && !serverIntelligence.page;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -521,12 +527,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           </p>
         }
         meta={
-          effectiveSourceLoading || piRebuilding ? (
-            <p className="text-xs font-medium text-[var(--nts-accent)] sm:text-sm flex items-center gap-2">
-              <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" aria-hidden />
-              {piRebuilding ? 'Ανανέωση καταλόγου από e-shop…' : 'Φόρτωση inventory…'}
-            </p>
-          ) : hasServerAggregate ? (
+          hasServerAggregate ? (
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[#22C55E] sm:text-sm">
               <span>
                 Showing {formatNumber(paginatedProducts.length)} of {formatNumber(serverFilteredTotal || displayTotalSkus)} active {serverIntelligence.aggregate?.sourceLabel === 'ERP' ? 'ERP' : 'catalog'} product(s)
@@ -536,7 +537,17 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 value={productDataSourceLabel}
                 tone={serverIntelligence.aggregate?.sourceLabel === 'ERP' ? 'warning' : 'success'}
               />
+              {isRecomputing ? (
+                <span className="flex items-center gap-1 text-[var(--nts-accent)]">
+                  <Loader2 className="h-3 w-3 animate-spin flex-shrink-0" aria-hidden /> ανανέωση…
+                </span>
+              ) : null}
             </div>
+          ) : effectiveSourceLoading || piRebuilding ? (
+            <p className="text-xs font-medium text-[var(--nts-accent)] sm:text-sm flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" aria-hidden />
+              {piRebuilding ? 'Ανανέωση καταλόγου…' : 'Φόρτωση inventory…'}
+            </p>
           ) : null
         }
         actions={
@@ -588,10 +599,17 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         }
       />
 
-      {effectiveSourceLoading || piRebuilding ? (
+      {showFirstLoadSkeleton ? (
         <ProductIntelligenceSkeleton />
       ) : (
         <>
+      {/* Non-blocking refresh banner: keep the last-good data on screen while the catalog recomputes. */}
+      {isRecomputing ? (
+        <div className="flex items-center gap-2 rounded-lg border border-[var(--nts-accent)]/30 bg-[var(--nts-accent)]/5 px-4 py-2.5 text-xs font-medium text-[var(--nts-accent)] sm:text-sm">
+          <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" aria-hidden />
+          <span>Ο κατάλογος ανανεώνεται — εμφανίζονται τα τελευταία γνωστά στοιχεία, θα ενημερωθούν αυτόματα.</span>
+        </div>
+      ) : null}
       {/* Inventory Alerts */}
       <AlertsBanner filterGroup="inventory" maxAlerts={2} compact onNavigate={onSectionChange} />
 
