@@ -1,7 +1,13 @@
 /** decodeSoftOneBody must read SoftOne's Windows-1253 (Greek ANSI) bytes correctly — decoding as
  * UTF-8 (the fetch default) corrupts Greek into U+FFFD. */
 import { describe, it, expect } from 'vitest';
-import { decodeSoftOneBody, fieldGroupsFromBrowserInfo, assembleBrowserRows } from '../../softoneConnector';
+import {
+  decodeSoftOneBody,
+  fieldGroupsFromBrowserInfo,
+  assembleBrowserRows,
+  isRetryableSoftOneStatus,
+  planSoftOneRetry,
+} from '../../softoneConnector';
 
 const ab = (bytes: number[]): ArrayBuffer => Uint8Array.from(bytes).buffer;
 
@@ -153,5 +159,27 @@ describe('assembleBrowserRows', () => {
     const groups = [['ZOOMINFO', 'A'], ['ZOOMINFO', 'B']];
     const out = assembleBrowserRows(groups, [['x', '1'], ['y', '2'], ['z', '3']], 3, 'X');
     expect(out.length).toBe(3);
+  });
+});
+
+describe('isRetryableSoftOneStatus', () => {
+  it('retries network reset (0), rate-limit (429) and 5xx', () => {
+    for (const s of [0, 429, 500, 502, 503]) expect(isRetryableSoftOneStatus(s)).toBe(true);
+  });
+  it('does not retry success or 4xx (auth/bad-request are permanent)', () => {
+    for (const s of [200, 400, 401, 403, 404]) expect(isRetryableSoftOneStatus(s)).toBe(false);
+  });
+});
+
+describe('planSoftOneRetry', () => {
+  it('retries a thrown network error with exponential backoff until the cap', () => {
+    expect(planSoftOneRetry({ attempt: 1, status: 0, threw: true })).toEqual({ retry: true, delayMs: 800 });
+    expect(planSoftOneRetry({ attempt: 2, status: 0, threw: true })).toEqual({ retry: true, delayMs: 1600 });
+    expect(planSoftOneRetry({ attempt: 3, status: 0, threw: true })).toEqual({ retry: false, delayMs: 0 }); // cap
+  });
+  it('retries a transient status but not a permanent one', () => {
+    expect(planSoftOneRetry({ attempt: 1, status: 503, threw: false }).retry).toBe(true);
+    expect(planSoftOneRetry({ attempt: 1, status: 400, threw: false }).retry).toBe(false);
+    expect(planSoftOneRetry({ attempt: 1, status: 200, threw: false }).retry).toBe(false);
   });
 });

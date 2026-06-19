@@ -22,6 +22,29 @@ function getDb(): Firestore {
 
 const S1_TIMEOUT_MS = 120_000;
 const S1_UA = 'PerformancePlus-SoftOneConnector/1.0';
+const S1_MAX_ATTEMPTS = 3;
+const S1_RETRY_BASE_MS = 800;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Transient HTTP statuses worth retrying (network reset/abort = 0, rate-limit, server-side 5xx). */
+export function isRetryableSoftOneStatus(status: number): boolean {
+  return status === 0 || status === 429 || status >= 500;
+}
+
+/** Retry policy for one SoftOne transport attempt: retry network errors (`threw`) and transient
+ * statuses with exponential backoff, up to the attempt cap. Pure ⇒ unit-testable. */
+export function planSoftOneRetry(args: {
+  attempt: number;
+  status: number;
+  threw: boolean;
+  maxAttempts?: number;
+}): { retry: boolean; delayMs: number } {
+  const max = args.maxAttempts ?? S1_MAX_ATTEMPTS;
+  const transient = args.threw || isRetryableSoftOneStatus(args.status);
+  const retry = transient && args.attempt < max;
+  return { retry, delayMs: retry ? S1_RETRY_BASE_MS * 2 ** (args.attempt - 1) : 0 };
+}
 
 function normalizeServiceUrl(raw: string): string {
   const base = normalizeHttpBase(raw, false);
@@ -44,29 +67,38 @@ async function softoneCall(serviceUrl: string, body: Record<string, unknown>): P
   data: Record<string, unknown> | null;
   raw: string;
 }> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), S1_TIMEOUT_MS);
-  try {
-    const res = await safeFetch(serviceUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': S1_UA },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
-    const raw = decodeSoftOneBody(await res.arrayBuffer(), res.headers.get('content-type'));
-    let data: Record<string, unknown> | null = null;
+  let last = { ok: false, status: 0, data: null as Record<string, unknown> | null, raw: '' };
+  for (let attempt = 1; attempt <= S1_MAX_ATTEMPTS; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), S1_TIMEOUT_MS);
+    let threw = false;
     try {
-      data = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
-    } catch {
-      data = null;
+      const res = await safeFetch(serviceUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': S1_UA },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+      const raw = decodeSoftOneBody(await res.arrayBuffer(), res.headers.get('content-type'));
+      let data: Record<string, unknown> | null = null;
+      try {
+        data = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+      } catch {
+        data = null;
+      }
+      last = { ok: res.ok, status: res.status, data, raw };
+    } catch (err) {
+      threw = true;
+      last = { ok: false, status: 0, data: null, raw: err instanceof Error ? err.message : String(err) };
+    } finally {
+      clearTimeout(timer);
     }
-    return { ok: res.ok, status: res.status, data, raw };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, status: 0, data: null, raw: msg };
-  } finally {
-    clearTimeout(timer);
+    const plan = planSoftOneRetry({ attempt, status: last.status, threw });
+    if (!plan.retry) return last;
+    logger.warn(`[SoftOne] transient call failure (attempt ${attempt}/${S1_MAX_ATTEMPTS}, status ${last.status}) — retry in ${plan.delayMs}ms`);
+    await sleep(plan.delayMs);
   }
+  return last;
 }
 
 function softoneError(call: { data: Record<string, unknown> | null; raw: string; status: number; ok?: boolean }, label: string): string | null {
