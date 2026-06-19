@@ -64,8 +64,11 @@ describe('buildErpHistoricalDecisionEvents', () => {
       periodFrom: '2025-01-01',
       periodTo: '2025-01-31',
       orders: [
+        // 10 → 10.05 is a 0.5% move, below the 1% MIN_CHANGE_PCT noise filter in
+        // priceChangeImpact, so it must produce no price event. (The threshold
+        // value itself is product-owned business logic, not asserted here.)
         order('2024-12-10', 'SKU-A', 10, 4),
-        order('2025-01-10', 'SKU-A', 10.2, 4),
+        order('2025-01-10', 'SKU-A', 10.05, 4),
       ],
       costBySku: new Map([['SKU-A', 6]]),
     });
