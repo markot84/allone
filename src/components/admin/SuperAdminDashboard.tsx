@@ -30,6 +30,7 @@ import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import buildInfoJson from '../../generated/buildInfo.json';
 import type { BuildInfo } from '../../types/buildInfo';
 import { logger } from '../../utils/logger';
+import { sanitizeClipboardText } from '../../utils/spreadsheetSafe';
 
 // Cast so empty commits/changes arrays don't infer as never[] under `tsc -b`.
 const buildInfo = buildInfoJson as BuildInfo;
@@ -1273,7 +1274,7 @@ function BuildInfoPanel() {
   const copyChangesForUsers = async () => {
     const lines = buildInfo.changes.map((c, i) => `${i + 1}. ${c}`).join('\n');
     const text = `${APP_NAME} v${buildInfo.version} — Νέα Ενημέρωση\n\n${lines}\n\nΥποστήριξη: ${SUPPORT_EMAIL}`;
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(sanitizeClipboardText(text));
     setCopiedAll(true);
     setTimeout(() => setCopiedAll(false), 2000);
   };
@@ -1470,7 +1471,7 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
 
   const copyToClipboard = async (entry: ChangelogEntry) => {
     const text = `${APP_NAME} v${entry.version}\n${entry.title}\n\n${entry.changes.map((c, i) => `${i + 1}. ${c}`).join('\n')}\n\nΥποστήριξη: ${SUPPORT_EMAIL}`;
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(sanitizeClipboardText(text));
     setCopiedId(entry.id);
     setTimeout(() => setCopiedId(null), 2000);
   };

@@ -1,6 +1,7 @@
 import type { Product } from '../types';
 import { getStockAgeDays } from './productUtils';
 import { safeBrandName } from '../services/reportExport';
+import { sanitizeSpreadsheetCell, sanitizeRow } from './spreadsheetSafe';
 
 const HEADERS = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'] as const;
 
@@ -24,11 +25,12 @@ export function downloadProductIntelligenceCsv(products: Product[], brandName?: 
   const date = new Date().toISOString().split('T')[0];
   const rows = rowsFromProducts(products);
   const csvContent = [
-    ['Brand', brandName || '—'].join(','),
+    ['Brand', sanitizeSpreadsheetCell(brandName || '—')].join(','),
     ['Generated', date].join(','),
     '',
     HEADERS.join(','),
-    ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+    // Neutralize formula injection (SEC-M5) per cell before CSV quoting.
+    ...rows.map((row) => row.map((cell) => `"${String(sanitizeSpreadsheetCell(cell)).replace(/"/g, '""')}"`).join(',')),
   ].join('\n');
 
   const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -60,7 +62,7 @@ export async function downloadProductIntelligenceXlsx(products: Product[], brand
     getStockAgeDays(p),
     p.priority_tag || '',
   ]);
-  const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...rows]);
+  const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...rows].map(sanitizeRow));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Products');
   XLSX.writeFile(wb, `${brand}_products_export_${date}.xlsx`);

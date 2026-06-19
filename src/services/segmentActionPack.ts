@@ -7,6 +7,7 @@ import { deriveBehavioralProfile, derivePredictiveMetrics } from './behavioralEn
 import { safeBrandName } from './reportExport';
 import { formatNumber } from '../utils/format';
 import { SegmentCustomersService } from './firestore';
+import { sanitizeSpreadsheetCell, sanitizeRow } from '../utils/spreadsheetSafe';
 
 // ── Campaign template data per segment archetype ────────────────────────────
 
@@ -94,7 +95,8 @@ function getTemplatesForSegment(segment: RFMSegment): CampaignTemplate[] {
 export type ExportFormat = 'xlsx' | 'csv';
 
 function csvEscape(val: string | number): string {
-  const s = String(val ?? '');
+  // Neutralize formula injection (SEC-M5) before CSV quoting.
+  const s = String(sanitizeSpreadsheetCell(val ?? ''));
   if (s.includes(',') || s.includes('"') || s.includes('\n')) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
@@ -114,6 +116,11 @@ function downloadCsv(content: string, filename: string) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+/** aoa_to_sheet with SEC-M5 formula-injection sanitization applied to every cell. */
+function sanitizeSheet(XLSX: typeof import('xlsx'), rows: unknown[][]) {
+  return XLSX.utils.aoa_to_sheet(rows.map(sanitizeRow));
 }
 
 // ── Export functions ─────────────────────────────────────────────────────────
@@ -235,13 +242,13 @@ export async function exportSegmentActionPack(
 
   const XLSX = await import('xlsx');
   const wb = XLSX.utils.book_new();
-  const ws1 = XLSX.utils.aoa_to_sheet(profileRows);
+  const ws1 = sanitizeSheet(XLSX,profileRows);
   ws1['!cols'] = [{ wch: 25 }, { wch: 35 }, { wch: 20 }];
   XLSX.utils.book_append_sheet(wb, ws1, 'Segment Profile');
-  const ws2 = XLSX.utils.aoa_to_sheet(channelPlanRows);
+  const ws2 = sanitizeSheet(XLSX,channelPlanRows);
   ws2['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 30 }];
   XLSX.utils.book_append_sheet(wb, ws2, 'Channel Plan');
-  const ws3 = XLSX.utils.aoa_to_sheet(templateRows);
+  const ws3 = sanitizeSheet(XLSX,templateRows);
   ws3['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 22 }, { wch: 30 }, { wch: 40 }, { wch: 18 }, { wch: 30 }];
   XLSX.utils.book_append_sheet(wb, ws3, 'Campaign Templates');
   XLSX.writeFile(wb, `${brand}_ActionPack_${segName}_${date}.xlsx`);
@@ -303,13 +310,13 @@ export async function exportAllSegmentActionPacks(
 
   const XLSX = await import('xlsx');
   const wb = XLSX.utils.book_new();
-  const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+  const wsSummary = sanitizeSheet(XLSX,summaryRows);
   wsSummary['!cols'] = [{ wch: 25 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
   XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
   segments.forEach((seg, i) => {
     const sheetName = seg.name.substring(0, 28).replace(/[[\]:*?/\\]/g, '');
-    const ws = XLSX.utils.aoa_to_sheet(segmentBlocks[i]);
+    const ws = sanitizeSheet(XLSX,segmentBlocks[i]);
     ws['!cols'] = [{ wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 28 }, { wch: 35 }, { wch: 18 }, { wch: 28 }];
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
   });
@@ -399,13 +406,13 @@ export async function exportStrategyPlan(data: StrategyExportData & { format?: E
 
   const XLSX = await import('xlsx');
   const wb = XLSX.utils.book_new();
-  const ws1 = XLSX.utils.aoa_to_sheet(overviewRows);
+  const ws1 = sanitizeSheet(XLSX,overviewRows);
   ws1['!cols'] = [{ wch: 25 }, { wch: 20 }, { wch: 12 }, { wch: 15 }];
   XLSX.utils.book_append_sheet(wb, ws1, 'Strategy Overview');
-  const ws2 = XLSX.utils.aoa_to_sheet(segRows);
+  const ws2 = sanitizeSheet(XLSX,segRows);
   ws2['!cols'] = [{ wch: 25 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 25 }];
   XLSX.utils.book_append_sheet(wb, ws2, 'Segments');
-  const ws3 = XLSX.utils.aoa_to_sheet(allTemplateRows);
+  const ws3 = sanitizeSheet(XLSX,allTemplateRows);
   ws3['!cols'] = [{ wch: 20 }, { wch: 16 }, { wch: 20 }, { wch: 20 }, { wch: 28 }, { wch: 38 }, { wch: 16 }, { wch: 28 }];
   XLSX.utils.book_append_sheet(wb, ws3, 'Campaign Templates');
   XLSX.writeFile(wb, `${brand}_StrategyPlan_${data.scenarioName.replace(/\s+/g, '_')}_${date}.xlsx`);
@@ -450,7 +457,7 @@ export async function exportSegmentCustomerList(
   } else {
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([
+    const ws = sanitizeSheet(XLSX,[
       [`CUSTOMER LIST — ${segment.name}`, '', '', '', '', '', '', ''],
       ['Brand', brandName || '—', '', 'Total', customers.length, '', '', ''],
       ['Generated', date, '', '', '', '', '', ''],
@@ -510,7 +517,7 @@ export async function exportAllSegmentCustomerLists(
       if (customers.length === 0) continue;
       totalCount += customers.length;
       const rows = customers.map(c => [c.customerId, c.email || '', (c as { name?: string }).name || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const ws = sanitizeSheet(XLSX,[headers, ...rows]);
       ws['!cols'] = [{ wch: 22 }, { wch: 28 }, { wch: 20 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
       XLSX.utils.book_append_sheet(wb, ws, seg.name.substring(0, 28).replace(/[[\]:*?/\\]/g, ''));
     }

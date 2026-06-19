@@ -7,6 +7,7 @@ import { useProductSource } from '../../hooks/useProductSource';
 import { PageHeader, Card, CardHeader, Button } from '../common';
 import { Plus, Trash2, Pencil, Download, FileText } from 'lucide-react';
 import type { Offer, OfferLineItem, OfferStatus } from '../../types';
+import { sanitizeSpreadsheetCell } from '../../utils/spreadsheetSafe';
 
 const STATUS_META: Record<OfferStatus, { label: string; variant: 'secondary' | 'warning' | 'success' | 'error' }> = {
   draft: { label: 'Πρόχειρο', variant: 'secondary' },
@@ -105,7 +106,7 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
       ['Περιγραφή', 'Ποσότητα', 'Τιμή μονάδας', 'Έκπτωση%', 'Σύνολο'],
       ...offer.lines.map((l) => [l.description, l.quantity, l.unitPrice, l.discount, (l.quantity * l.unitPrice * (1 - l.discount / 100)).toFixed(2)]),
     ];
-    const csv = rows.map((r) => r.join(',')).join('\n');
+    const csv = rows.map((r) => r.map(sanitizeSpreadsheetCell).join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

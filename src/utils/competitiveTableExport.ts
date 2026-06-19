@@ -1,5 +1,6 @@
 import type { PriceBenchmark } from '../hooks/usePriceBenchmarks';
 import type { PriceInsight } from '../hooks/usePriceInsights';
+import { sanitizeSpreadsheetCell, sanitizeRow } from './spreadsheetSafe';
 
 export type InventoryCell = { stock: number | null; sold: number | null } | null;
 
@@ -11,7 +12,8 @@ function salesStockRatio(inv: InventoryCell): number | '' {
 }
 
 function escapeCsvCell(v: string): string {
-  const s = String(v);
+  // Neutralize formula injection (SEC-M5) before CSV quoting so the apostrophe lands inside quotes.
+  const s = String(sanitizeSpreadsheetCell(v));
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
@@ -108,7 +110,7 @@ export async function exportBenchmarksXlsx(
       ];
     }),
   ];
-  const ws = XLSX.utils.aoa_to_sheet(data);
+  const ws = XLSX.utils.aoa_to_sheet(data.map(sanitizeRow));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Benchmarks');
   XLSX.writeFile(wb, filename);
@@ -203,7 +205,7 @@ export async function exportInsightsXlsx(
       ];
     }),
   ];
-  const ws = XLSX.utils.aoa_to_sheet(data);
+  const ws = XLSX.utils.aoa_to_sheet(data.map(sanitizeRow));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Price Insights');
   XLSX.writeFile(wb, filename);

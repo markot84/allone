@@ -76,6 +76,7 @@ import { Tooltip } from '../common';
 import type { SeasonalPeriod } from '../../data/seasonalPeriods';
 import type { Product, PriceBenchmarkStrategyScope, SalesBaseScope } from '../../types';
 import { logger } from '../../utils/logger';
+import { sanitizeSpreadsheetCell, sanitizeRow } from '../../utils/spreadsheetSafe';
 
 
 const PreviewCell = memo(function PreviewCell({
@@ -1268,12 +1269,13 @@ export function WeightConfigurator({
 
     if (format === 'csv') {
       const csvContent = [
-        ['Brand', currentBrand?.name || '—'].join(','),
+        ['Brand', sanitizeSpreadsheetCell(currentBrand?.name || '—')].join(','),
         ['Generated', date].join(','),
-        ['Scenario', selectedScenario || '—'].join(','),
+        ['Scenario', sanitizeSpreadsheetCell(selectedScenario || '—')].join(','),
         '',
         headers.join(','),
-        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        // Neutralize formula injection (SEC-M5) per cell before CSV quoting.
+        ...rows.map(row => row.map(cell => `"${String(sanitizeSpreadsheetCell(cell)).replace(/"/g, '""')}"`).join(','))
       ].join('\n');
 
       const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1291,7 +1293,7 @@ export function WeightConfigurator({
       try {
         const XLSX = await import('xlsx');
         const metaRows = [['Brand', currentBrand?.name || '—'], ['Generated', date], ['Scenario', selectedScenario || '—'], [''], headers];
-        const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...rows]);
+        const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...rows].map(sanitizeRow));
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Products');
         XLSX.writeFile(wb, `${brand}_product_feed_${selectedScenario}_${date}.xlsx`);

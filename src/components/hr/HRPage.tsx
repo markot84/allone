@@ -6,6 +6,7 @@ import { EmployeeRoster } from './EmployeeRoster';
 import { PayrollOverview } from './PayrollOverview';
 import { LeaveTracker } from './LeaveTracker';
 import { TaskPerformance } from './TaskPerformance';
+import { sanitizeSpreadsheetCell } from '../../utils/spreadsheetSafe';
 
 type HRTab = 'roster' | 'payroll' | 'leaves' | 'performance';
 
@@ -29,7 +30,7 @@ export function HRPage({ totalRevenue }: HRPageProps = {}) {
       ['Ονοματεπώνυμο', 'Ρόλος', 'Τμήμα', 'Μηνιαίο κόστος', 'Ημ/νία έναρξης', 'Κατάσταση'],
       ...employees.map((e) => [e.name, e.role, e.department, `€${e.monthlyCost}`, e.startDate, e.status]),
     ];
-    const csv = rows.map((r) => r.join(',')).join('\n');
+    const csv = rows.map((r) => r.map(sanitizeSpreadsheetCell).join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

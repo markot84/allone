@@ -27,6 +27,7 @@ import {
   filterCampaignsByScheduleDateOverlap,
 } from '../../utils/campaignDateRangeMetrics';
 import type { Campaign } from '../../types';
+import { sanitizeSpreadsheetCell } from '../../utils/spreadsheetSafe';
 
 /** Euro sign as ASCII-safe escape (avoids mojibake if source encoding drifts). */
 const EUR = '\u20AC';
@@ -511,7 +512,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       getDisplayConversions(c, convFilterActive) ? ((c.amount_spent || 0) / getDisplayConversions(c, convFilterActive)).toFixed(2) : '',
       c.start_date || '', c.end_date || '',
     ]);
-    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(sanitizeSpreadsheetCell(v)).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

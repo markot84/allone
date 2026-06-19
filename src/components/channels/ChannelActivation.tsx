@@ -71,6 +71,7 @@ import { FirestoreService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
 import { getModuleLabel, effectiveBrandTypeForModules } from '../../config/modules';
 import { getProductStrategyLabels } from '../../utils/adsFeedStrategyLabels';
+import { sanitizeSpreadsheetCell, sanitizeRow } from '../../utils/spreadsheetSafe';
 import { useMagentoProductEnrichment } from '../../hooks/useMagentoProductEnrichment';
 import type { ChannelRecommendation, BudgetAction } from '../../types';
 
@@ -717,7 +718,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     const brand = safeBrandName(currentBrand?.name);
     const date = new Date().toISOString().split('T')[0];
     if (format === 'csv') {
-      const csvContent = [['Brand', currentBrand?.name || '—'].join(','), ['Generated', date].join(','), ['Feed Type', feedType].join(','), '', headers.join(','), ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))].join('\n');
+      const csvContent = [['Brand', sanitizeSpreadsheetCell(currentBrand?.name || '—')].join(','), ['Generated', date].join(','), ['Feed Type', sanitizeSpreadsheetCell(feedType)].join(','), '', headers.join(','), ...rows.map(row => row.map(cell => `"${String(sanitizeSpreadsheetCell(cell)).replace(/"/g, '""')}"`).join(','))].join('\n');
       const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.setAttribute('href', URL.createObjectURL(blob));
@@ -730,7 +731,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       try {
         const XLSX = await import('xlsx');
         const metaRows = [['Brand', currentBrand?.name || '—'], ['Generated', date], ['Feed Type', feedType], [''], headers];
-        const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...rows]);
+        const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...rows].map(sanitizeRow));
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Products');
         XLSX.writeFile(wb, `${brand}_${feedType.toLowerCase().replace(/\s+/g, '_')}_export_${date}.xlsx`);
@@ -811,12 +812,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
     if (format === 'csv') {
       const csvContent = [
-        ['Brand', currentBrand?.name || '—'].join(','),
+        ['Brand', sanitizeSpreadsheetCell(currentBrand?.name || '—')].join(','),
         ['Generated', date].join(','),
         ['Scope', hasInventoryPlay ? 'Dead stock - active stock only' : 'Active stock only'].join(','),
         '',
         headers.join(','),
-        ...values.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+        ...values.map((row) => row.map((cell) => `"${String(sanitizeSpreadsheetCell(cell)).replace(/"/g, '""')}"`).join(',')),
       ].join('\n');
       const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
@@ -840,7 +841,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         [''],
         headers,
       ];
-      const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...values]);
+      const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...values].map(sanitizeRow));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Action Products');
       XLSX.writeFile(wb, `${brand}_${scope}_${date}.xlsx`);

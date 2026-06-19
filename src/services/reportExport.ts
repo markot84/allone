@@ -7,6 +7,7 @@ import type { Product, RFMSegment, Campaign } from '../types';
 import { getStockAgeDays } from '../utils/productUtils';
 import { formatCurrencyCompact, formatNumber } from '../utils/format';
 import { getDisplayConversionValue, getDisplayConversions } from '../utils/roiUtils';
+import { sanitizeRow } from '../utils/spreadsheetSafe';
 
 export type ReportFormat = 'excel' | 'pdf';
 
@@ -180,6 +181,8 @@ async function exportReportToExcel(
   data: ReportExportData
 ): Promise<void> {
   const XLSX = await import('xlsx');
+  // Neutralize formula injection (SEC-M5) on every cell before building a sheet.
+  const aoaSafe = (rows: unknown[][]) => XLSX.utils.aoa_to_sheet(rows.map(sanitizeRow));
   const date = new Date().toISOString().split('T')[0];
   const brand = safeBrandName(data.brandName);
 
@@ -190,7 +193,7 @@ async function exportReportToExcel(
   switch (reportId) {
     case 'executive': {
       const { campaigns, organicRevenue, campaignValue, ecommerceRevenue, totalRevenue } = getExecutiveRevenueBreakdown(data);
-      ws = XLSX.utils.aoa_to_sheet([
+      ws = aoaSafe([
         ['Executive Summary', ''],
         ['Brand', data.brandName || '—'],
         ['Generated', date],
@@ -209,7 +212,7 @@ async function exportReportToExcel(
     }
     case 'segment': {
       const segments = data.segments ?? [];
-      ws = XLSX.utils.aoa_to_sheet([
+      ws = aoaSafe([
         ['Brand', data.brandName || '—'],
         ['Generated', date],
         [''],
@@ -222,7 +225,7 @@ async function exportReportToExcel(
     }
     case 'inventory': {
       const products = data.products ?? [];
-      ws = XLSX.utils.aoa_to_sheet([
+      ws = aoaSafe([
         ['Brand', data.brandName || '—'],
         ['Generated', date],
         [''],
@@ -253,7 +256,7 @@ async function exportReportToExcel(
         byChannel[ch].value += getDisplayConversionValue(c, false);
         byChannel[ch].count += 1;
       });
-      ws = XLSX.utils.aoa_to_sheet([
+      ws = aoaSafe([
         ['Brand', data.brandName || '—'],
         ['Generated', date],
         [''],
@@ -272,7 +275,7 @@ async function exportReportToExcel(
     }
     case 'campaign': {
       const campaigns = data.campaigns ?? [];
-      ws = XLSX.utils.aoa_to_sheet([
+      ws = aoaSafe([
         ['Brand', data.brandName || '—'],
         ['Generated', date],
         [''],
@@ -295,7 +298,7 @@ async function exportReportToExcel(
     }
     case 'product': {
       const products = data.products ?? [];
-      ws = XLSX.utils.aoa_to_sheet([
+      ws = aoaSafe([
         ['Brand', data.brandName || '—'],
         ['Generated', date],
         [''],

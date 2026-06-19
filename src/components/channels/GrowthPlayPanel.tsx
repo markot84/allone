@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import type { RFMSegment, ChannelRecommendation } from '../../types';
 import { logger } from '../../utils/logger';
+import { sanitizeRow } from '../../utils/spreadsheetSafe';
 
 export type PlayContext = 'cross_sell' | 'upsell' | 'winback' | null;
 
@@ -496,7 +497,7 @@ function ExportButton({
           }
         }
 
-        const ws = XLSX.utils.aoa_to_sheet(rows);
+        const ws = XLSX.utils.aoa_to_sheet(rows.map(sanitizeRow));
         ws['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 16 }, { wch: 60 }];
         XLSX.utils.book_append_sheet(wb, ws, seg.name.substring(0, 28).replace(/[[\]:*?/\\]/g, ''));
       }

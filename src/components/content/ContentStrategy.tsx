@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Card, Badge, Spinner, FormattedProse, toPlainProseText, PageHeader } from '../common';
 import { logger } from '../../utils/logger';
+import { sanitizeClipboardText } from '../../utils/spreadsheetSafe';
 // Data is now read from activeStrategy.contentSuggestions (persisted on strategy save)
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useBrand } from '../../hooks/useBrand';
@@ -74,7 +75,7 @@ export function ContentStrategy() {
 
   const handleCopyBrief = () => {
     if (!brief) return;
-    navigator.clipboard.writeText(toPlainProseText(brief)).then(() => {
+    navigator.clipboard.writeText(sanitizeClipboardText(toPlainProseText(brief))).then(() => {
       setBriefCopied(true);
       setTimeout(() => setBriefCopied(false), 2000);
     });
@@ -186,7 +187,7 @@ export function ContentStrategy() {
 
   const handleCopyAll = () => {
     if (!buildFullExportText) return;
-    navigator.clipboard.writeText(buildFullExportText).then(() => {
+    navigator.clipboard.writeText(sanitizeClipboardText(buildFullExportText)).then(() => {
       setAllCopied(true);
       setTimeout(() => setAllCopied(false), 2500);
     });
