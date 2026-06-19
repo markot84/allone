@@ -25,6 +25,26 @@ function getDb(): Firestore {
 
 const SHOPIFY_API_VERSION = '2024-01';
 
+// Shopify removed offset (`page`) pagination in API 2019-07; the offset param is silently
+// ignored, so paging by it re-fetches the first 250 records forever. All list endpoints now
+// advertise the next page in the `Link` header as `<…?limit=&page_info=…>; rel="next"`.
+// Returns the `page_info` cursor of the `rel="next"` link, or null when there is no next page.
+export function parseLinkHeaderNext(res: Pick<Response, 'headers'>): string | null {
+  const link = res.headers.get('link');
+  if (!link) return null;
+  const match = link.match(/<([^>]+)>\s*;\s*rel="next"/i);
+  if (!match) return null;
+  try {
+    return new URL(match[1]).searchParams.get('page_info');
+  } catch {
+    return null;
+  }
+}
+
+// Per-run page cap: bounds a single invocation's runtime (~PAGE_CAP*250 records). Larger
+// backfills resume next run from the persisted page_info cursor.
+const SHOPIFY_PAGE_CAP = 20;
+
 function getCredentials() {
   const raw = (s?: string) => (s?.trim().split(/\s+/)[0] || '');
   return {
@@ -193,39 +213,42 @@ export async function fetchShopifyData(brandId: string): Promise<{
   let productsSyncComplete = false;
 
   try {
-    // ── Orders: historical for 3 years, then incremental (updated_at) ──
-    let orderPage = 1;
+    // ── Orders: historical for 3 years, then incremental (updated_at). Cursor pagination via
+    //    the `Link` header (offset `page` is ignored — see parseLinkHeaderNext). A stored
+    //    ordersSyncPageCursor resumes a backfill that previously tripped the per-run page cap. ──
     let hasMore = true;
     let ordersAbort = false;
+    let ordersCursorNext: string | null = null; // page_info to persist if we trip the page cap
+    let ordersResumeStale = false; // a stored cursor Shopify rejects → clear it, restart next run
+    // page_info embeds the original query, so resume pages must send ONLY limit + page_info.
+    let ordersPageInfo: string | null = connector.ordersSyncPageCursor ? String(connector.ordersSyncPageCursor) : null;
+    let ordersPageCount = 0;
     const batchItems: { id: string; data: Record<string, unknown> }[] = [];
 
     while (hasMore) {
-      // No `fields` filter: Shopify truncates nested line_items without product_id/variant_id,
-      // needed for catalog alignment (join to shopify_products).
-      const params = new URLSearchParams({
-        status: 'any',
-        limit: '250',
-        page: String(orderPage),
-      });
-      if (orderWindow.mode === 'incremental') {
-        params.set('updated_at_min', ordersSinceIso);
+      let params: URLSearchParams;
+      if (ordersPageInfo) {
+        // Cursor page: Shopify rejects every param except `limit` alongside `page_info`.
+        params = new URLSearchParams({ limit: '250', page_info: ordersPageInfo });
       } else {
-        params.set('created_at_min', ordersSinceIso);
+        // First page: full window filter. No `fields` filter — Shopify truncates nested
+        // line_items without product_id/variant_id, needed for catalog alignment.
+        params = new URLSearchParams({ status: 'any', limit: '250' });
+        params.set(orderWindow.mode === 'incremental' ? 'updated_at_min' : 'created_at_min', ordersSinceIso);
       }
 
       const res = await safeFetch(`${baseUrl}/orders.json?${params}`, { headers });
       if (!res.ok) {
         const errText = await res.text();
         logger.error(`[Shopify] Orders fetch failed (${res.status}):`, { alertKey: ALERT.shopifySyncFailed, err: errText.slice(0, 300) });
+        // A stored resume cursor rejected on its first use is stale/expired — clear it so the
+        // next run restarts cleanly from the time window instead of stalling forever.
+        if (ordersPageCount === 0 && ordersPageInfo) ordersResumeStale = true;
         ordersAbort = true;
         break;
       }
 
       const { orders = [] } = await res.json();
-      if (orders.length === 0) {
-        hasMore = false;
-        break;
-      }
 
       for (const o of orders) {
         const shopifyCid = o.customer_id != null && o.customer_id !== '' ? String(o.customer_id) : '';
@@ -272,11 +295,13 @@ export async function fetchShopifyData(brandId: string): Promise<{
         });
       }
 
-      hasMore = orders.length === 250;
-      orderPage++;
-      if (orderPage > 20) {
+      ordersPageInfo = parseLinkHeaderNext(res);
+      hasMore = ordersPageInfo != null;
+      ordersPageCount++;
+      if (hasMore && ordersPageCount >= SHOPIFY_PAGE_CAP) {
+        ordersCursorNext = ordersPageInfo; // resume from here on the next run
         ordersAbort = true;
-        logger.warnAlert(`[Shopify] Orders paging safety cap (${orderPage}) for ${brandId} — rerun to continue`, { alertKey: ALERT.shopifySyncFailed });
+        logger.warnAlert(`[Shopify] Orders paging cap (${ordersPageCount}) for ${brandId} — will resume next run`, { alertKey: ALERT.shopifySyncFailed });
         break;
       }
     }
@@ -296,33 +321,39 @@ export async function fetchShopifyData(brandId: string): Promise<{
       logger.info(`[Shopify] Orders: ${batchItems.length} imported for brand ${brandId}`);
     }
 
-    // ── Products: first sync full catalog, then only changes (`updated_at_min`) ──
-    let prodPage = 1;
+    // ── Products: first sync full catalog, then only changes (`updated_at_min`). Same cursor
+    //    pagination + resume-cursor handling as orders (offset `page` is ignored by Shopify). ──
     let prodMore = true;
     let productsAbort = false;
+    let productsCursorNext: string | null = null;
+    let productsResumeStale = false;
+    let productsPageInfo: string | null = connector.productsSyncPageCursor ? String(connector.productsSyncPageCursor) : null;
+    let prodPageCount = 0;
     const prodItems: { id: string; data: Record<string, unknown> }[] = [];
 
     while (prodMore) {
-      const params = new URLSearchParams({
-        limit: '250',
-        page: String(prodPage),
-        fields: 'id,title,handle,product_type,vendor,status,tags,variants,created_at,updated_at',
-      });
-      if (productsUpdatedSinceIso) {
-        params.set('updated_at_min', productsUpdatedSinceIso);
+      let params: URLSearchParams;
+      if (productsPageInfo) {
+        // Cursor page: only limit + page_info (page_info embeds the original fields/filter).
+        params = new URLSearchParams({ limit: '250', page_info: productsPageInfo });
+      } else {
+        params = new URLSearchParams({
+          limit: '250',
+          fields: 'id,title,handle,product_type,vendor,status,tags,variants,created_at,updated_at',
+        });
+        if (productsUpdatedSinceIso) {
+          params.set('updated_at_min', productsUpdatedSinceIso);
+        }
       }
 
       const res = await safeFetch(`${baseUrl}/products.json?${params}`, { headers });
       if (!res.ok) {
+        if (prodPageCount === 0 && productsPageInfo) productsResumeStale = true;
         productsAbort = true;
         break;
       }
 
       const { products = [] } = await res.json();
-      if (products.length === 0) {
-        prodMore = false;
-        break;
-      }
 
       for (const p of products) {
         prodItems.push({
@@ -350,11 +381,13 @@ export async function fetchShopifyData(brandId: string): Promise<{
         });
       }
 
-      prodMore = products.length === 250;
-      prodPage++;
-      if (prodPage > 20) {
+      productsPageInfo = parseLinkHeaderNext(res);
+      prodMore = productsPageInfo != null;
+      prodPageCount++;
+      if (prodMore && prodPageCount >= SHOPIFY_PAGE_CAP) {
+        productsCursorNext = productsPageInfo;
         productsAbort = true;
-        logger.warnAlert(`[Shopify] Products paging safety cap for ${brandId}`, { alertKey: ALERT.shopifySyncFailed });
+        logger.warnAlert(`[Shopify] Products paging cap (${prodPageCount}) for ${brandId} — will resume next run`, { alertKey: ALERT.shopifySyncFailed });
         break;
       }
     }
@@ -380,9 +413,19 @@ export async function fetchShopifyData(brandId: string): Promise<{
       if (orderWindow.mode === 'historical') {
         connectorPatch['shopify.historyLoadedUntilYear'] = orderWindow.historyStartYear;
       }
+      connectorPatch['shopify.ordersSyncPageCursor'] = FieldValue.delete();
+    } else if (ordersCursorNext != null) {
+      connectorPatch['shopify.ordersSyncPageCursor'] = String(ordersCursorNext);
+    } else if (ordersResumeStale) {
+      connectorPatch['shopify.ordersSyncPageCursor'] = FieldValue.delete();
     }
     if (productsSyncComplete) {
       connectorPatch['shopify.lastProductsSyncAt'] = FieldValue.serverTimestamp();
+      connectorPatch['shopify.productsSyncPageCursor'] = FieldValue.delete();
+    } else if (productsCursorNext != null) {
+      connectorPatch['shopify.productsSyncPageCursor'] = String(productsCursorNext);
+    } else if (productsResumeStale) {
+      connectorPatch['shopify.productsSyncPageCursor'] = FieldValue.delete();
     }
     if (Object.keys(connectorPatch).length > 0) {
       await db.doc(`connectors/${brandId}`).update(connectorPatch);
