@@ -537,6 +537,15 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 value={productDataSourceLabel}
                 tone={serverIntelligence.aggregate?.sourceLabel === 'ERP' ? 'warning' : 'success'}
               />
+              {(() => {
+                // Warehouse filter the stock numbers reflect (empty = all warehouses → no pill).
+                const labels = serverIntelligence.aggregate?.stockLocationLabels?.length
+                  ? serverIntelligence.aggregate.stockLocationLabels
+                  : serverIntelligence.aggregate?.stockLocations ?? [];
+                return labels.length ? (
+                  <DataSourcePill label="Αποθήκη" value={labels.join(', ')} tone="success" />
+                ) : null;
+              })()}
               {isRecomputing ? (
                 <span className="flex items-center gap-1 text-[var(--nts-accent)]">
                   <Loader2 className="h-3 w-3 animate-spin flex-shrink-0" aria-hidden /> ανανέωση…
