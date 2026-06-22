@@ -1697,7 +1697,6 @@ function MegaventoryCustomReportSettingsInline({
   brandId,
   initialReportId,
   initialEnabled,
-  knownLocations,
   initialStockLocations,
   canManage,
   onSaved,
@@ -1705,7 +1704,6 @@ function MegaventoryCustomReportSettingsInline({
   brandId: string;
   initialReportId: string;
   initialEnabled: boolean;
-  knownLocations: { id: string; name: string }[];
   initialStockLocations: string[];
   canManage: boolean;
   onSaved: () => void;
@@ -1713,6 +1711,9 @@ function MegaventoryCustomReportSettingsInline({
   const [reportId, setReportId] = useState(initialReportId);
   const [enabled, setEnabled] = useState(initialEnabled);
   const [stockLocations, setStockLocations] = useState<string[]>(initialStockLocations);
+  const [locations, setLocations] = useState<{ id: string; name: string }[]>([]);
+  const [locLoading, setLocLoading] = useState(false);
+  const [locError, setLocError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
 
@@ -1721,6 +1722,36 @@ function MegaventoryCustomReportSettingsInline({
     setEnabled(initialEnabled);
     setStockLocations(initialStockLocations);
   }, [initialReportId, initialEnabled, initialStockLocations]);
+
+  // Warehouses are fetched live from Megaventory (InventoryLocationGet) when the panel opens — no sync
+  // needed first, and the names (e.g. ΚΑΠ) aren't present in the synced stock rows.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setLocLoading(true);
+      setLocError(null);
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) throw new Error('Not authenticated');
+        const res = await fetch(`${FUNCTIONS_BASE}/megaventoryListLocations`, {
+          method: 'POST',
+          headers: await connectorRequestHeaders(token),
+          body: JSON.stringify({ brandId }),
+        });
+        const result = await res.json();
+        if (cancelled) return;
+        if (res.ok && result.success) setLocations(result.locations ?? []);
+        else setLocError(result.error || 'Αποτυχία φόρτωσης αποθηκών');
+      } catch (err) {
+        if (!cancelled) setLocError(err instanceof Error ? err.message : 'Αποτυχία φόρτωσης αποθηκών');
+      } finally {
+        if (!cancelled) setLocLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId]);
 
   const handleSaveSettings = async () => {
     if (!canManage || saving) return;
@@ -1787,14 +1818,20 @@ function MegaventoryCustomReportSettingsInline({
         />
         <span>Να συμπεριλαμβάνεται το custom report στο Sync (χειροκίνητο / νυχτερινό)</span>
       </label>
-      {knownLocations.length > 0 && (
-        <div className="mb-3 rounded-md border border-[#E5E7EB] bg-white p-2.5">
-          <p className="mb-1 text-xs font-medium text-[#374151]">Αποθήκες stock</p>
-          <p className="mb-2 text-xs text-[#6B7280]">
-            Επίλεξε ποιες αποθήκες μετράνε στο διαθέσιμο stock. Καμία επιλογή = όλες οι αποθήκες. Η αλλαγή επανυπολογίζει όλο το stock.
-          </p>
+      <div className="mb-3 rounded-md border border-[#E5E7EB] bg-white p-2.5">
+        <p className="mb-1 text-xs font-medium text-[#374151]">Αποθήκες stock</p>
+        <p className="mb-2 text-xs text-[#6B7280]">
+          Επίλεξε ποιες αποθήκες μετράνε στο διαθέσιμο stock. Καμία επιλογή = όλες οι αποθήκες. Η αλλαγή επανυπολογίζει όλο το stock.
+        </p>
+        {locLoading ? (
+          <p className="text-xs text-[#6B7280]">Φόρτωση αποθηκών…</p>
+        ) : locError ? (
+          <p className="text-xs text-[#B91C1C]">{locError}</p>
+        ) : locations.length === 0 ? (
+          <p className="text-xs text-[#6B7280]">Δεν βρέθηκαν αποθήκες.</p>
+        ) : (
           <div className="flex flex-col gap-1.5">
-            {knownLocations.map((loc) => {
+            {locations.map((loc) => {
               const checked = stockLocations.includes(loc.id);
               return (
                 <label key={loc.id} className="flex cursor-pointer items-center gap-2 text-sm text-[#374151]">
@@ -1814,8 +1851,8 @@ function MegaventoryCustomReportSettingsInline({
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
       <button
         type="button"
         onClick={() => void handleSaveSettings()}
@@ -3316,7 +3353,6 @@ export function ConnectorsPanel() {
                             String((state as any).customReportId ?? '4919').trim() || '4919'
                           }
                           initialEnabled={(state as any).customReportEnabled !== false}
-                          knownLocations={((state as any).knownStockLocations ?? []) as { id: string; name: string }[]}
                           initialStockLocations={((state as any).stockLocations ?? []) as string[]}
                           canManage={canManageConnectors}
                           onSaved={() => {

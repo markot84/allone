@@ -931,6 +931,41 @@ export async function saveMegaventoryCredentials(
   return { success: true, accountName: test.accountName, currency: test.currency };
 }
 
+/** Authoritative warehouse list from Megaventory (InventoryLocationGet) — id + human name for the
+ * stock-filter settings UI. Queried on demand (no prior sync needed); the stock rows only carry the
+ * location ID, so the names must come from this endpoint. */
+export async function listMegaventoryLocations(
+  brandId: string
+): Promise<{ ok: boolean; locations: { id: string; name: string }[]; error?: string }> {
+  const conn = (await getDb().doc(`connectors/${brandId}`).get()).data()?.megaventory as Record<string, unknown> | undefined;
+  if (!conn?.connected || !conn?.apiKey) {
+    return { ok: false, locations: [], error: 'Το Megaventory δεν είναι συνδεδεμένο.' };
+  }
+  const apiKey = decryptToken(conn.apiKey as string);
+  if (!apiKey) return { ok: false, locations: [], error: 'Μη διαθέσιμο API key — απαιτείται επανασύνδεση.' };
+
+  const call = await mvCall('InventoryLocationGet', apiKey, {});
+  const err = asMvError(call, 'InventoryLocationGet');
+  if (err) return { ok: false, locations: [], error: err };
+
+  const rows = mvArrayField(call.body as Record<string, unknown>, 'mvInventoryLocations', 'InventoryLocations') as Record<string, unknown>[];
+  const seen = new Set<string>();
+  const locations: { id: string; name: string }[] = [];
+  for (const r of rows) {
+    const row = r as Record<string, unknown>;
+    // Skip deleted / in-transit pseudo-locations — never valid stock-filter options.
+    if (mvField(row, 'InventoryLocationIsDeleted') === true || mvField(row, 'InventoryLocationIsTransit') === true) continue;
+    const id = String(mvField(row, 'InventoryLocationID', 'InventoryLocationId') ?? '').trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const abbr = String(mvField(row, 'InventoryLocationAbbreviation') ?? '').trim();
+    const name = String(mvField(row, 'InventoryLocationName') ?? '').trim();
+    locations.push({ id, name: abbr || name || id });
+  }
+  locations.sort((a, b) => a.name.localeCompare(b.name));
+  return { ok: true, locations };
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function num(value: unknown): number {
@@ -1904,15 +1939,8 @@ export async function fetchMegaventoryData(
       // warehouses. rollUpStockTotalsByProduct still emits a {0,0} entry for products absent from the
       // filtered warehouse(s) so the merge-write ZEROES them instead of leaving a stale all-location
       // total. Raw megaventory_stock rows above keep every location — the filter only narrows the
-      // per-product roll-up. The separate pass records the distinct warehouses for the settings UI.
+      // per-product roll-up. (Warehouse names for the settings UI come from listMegaventoryLocations.)
       const locationFilter = includedStockLocationIds(conn);
-      const seenLocations = new Map<string, string>();
-      for (const s of stocks) {
-        const locId = String(s.inventoryLocationID || s.InventoryLocationId || '');
-        if (locId && !seenLocations.has(locId)) {
-          seenLocations.set(locId, String(s.inventoryLocationAbbreviation || s.InventoryLocationName || '').trim());
-        }
-      }
       const totals = rollUpStockTotalsByProduct(stocks, locationFilter);
       // merge-write: rows for productIds without a mirror create sku-less stubs that gap-fill
       // skips (deleted products return zero stock rows, so stubs stay a rare edge, not pollution)
@@ -1926,14 +1954,6 @@ export async function fetchMegaventoryData(
         },
       }));
       if (totalItems.length) await writeBatch(db, 'megaventory_products', brandId, totalItems);
-      // Persist the distinct warehouses seen so the settings UI can offer them as filter options
-      // (read straight from the connector doc — no extra API round-trip).
-      if (seenLocations.size) {
-        const known = Array.from(seenLocations.entries())
-          .map(([id, name]) => ({ id, name }))
-          .sort((a, b) => a.name.localeCompare(b.name));
-        await db.doc(`connectors/${brandId}`).update({ 'megaventory.knownStockLocations': known }).catch(() => {});
-      }
       stockDoneThisPass = true;
       logger.info(`[Megaventory] Stock rows: ${items.length} imported for brand ${brandId}; totals merged onto ${totalItems.length} product mirrors`);
     }

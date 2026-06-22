@@ -86,6 +86,7 @@ import {
   saveMegaventoryCredentials,
   fetchMegaventoryData,
   updateMegaventoryConnectorSettings,
+  listMegaventoryLocations,
   setDb as setMegaventoryDb,
 } from './megaventoryConnector';
 import { decideStaleRecovery, isJobWriteOwned, MAX_STALE_RESUMES } from './megaventorySyncPlan';
@@ -3682,6 +3683,37 @@ export const queryProductIntelligence = onRequest(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error('[queryProductIntelligence]', { alertKey: ALERT.productIntelligenceFailed, err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/** On-demand warehouse list for the Megaventory stock-filter settings UI (no prior sync required). */
+export const megaventoryListLocations = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 60, memory: '256MiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
+  async (req, res) => {
+    if (applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        return;
+      }
+
+      const result = await listMegaventoryLocations(brandId);
+      if (!result.ok) { res.status(400).json({ error: result.error || 'Αποτυχία φόρτωσης αποθηκών' }); return; }
+      res.status(200).json({ success: true, locations: result.locations });
+    } catch (error) {
+      logger.error('[megaventoryListLocations]', { err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
