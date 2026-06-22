@@ -3703,13 +3703,19 @@ export const megaventoryListLocations = onRequest(
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
 
+    let uid: string;
     try {
-      const idToken = authHeader.slice(7).trim();
-      const decoded = await admin.auth().verifyIdToken(idToken);
+      uid = (await admin.auth().verifyIdToken(authHeader.slice(7).trim())).uid;
+    } catch {
+      // Invalid/expired token is a normal client occurrence — 401, never an alertable error.
+      res.status(401).json({ error: 'Invalid auth' });
+      return;
+    }
+    try {
       const { brandId } = req.body as { brandId?: string };
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
-      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+      if (!(await verifyBrandMembership(uid, brandId))) {
         res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
         return;
       }
@@ -3718,7 +3724,8 @@ export const megaventoryListLocations = onRequest(
       if (!result.ok) { res.status(400).json({ error: result.error || 'Αποτυχία φόρτωσης αποθηκών' }); return; }
       res.status(200).json({ success: true, locations: result.locations });
     } catch (error) {
-      logger.error('[megaventoryListLocations]', { err: error });
+      // A warehouse-list fetch failing only degrades the settings panel — warn (non-alerting), not error.
+      logger.warn('[megaventoryListLocations] failed', { err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
