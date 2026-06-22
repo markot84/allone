@@ -62,6 +62,21 @@ function getCredentials() {
   };
 }
 
+// TikTok app_id is a numeric string; the Marketing API's Go backend parses it with
+// strconv.ParseInt and rejects anything non-integer (e.g. the "pending" placeholder set
+// while the app awaits approval) with a confusing "invalid syntax" error on TikTok's own
+// portal. Validate up front so we never send a user there with a malformed app_id.
+function isValidTikTokAppId(appId: string): boolean {
+  return /^\d+$/.test(appId);
+}
+
+export class TikTokNotConfiguredError extends Error {
+  constructor(message = 'TikTok app is not configured (TIKTOK_APP_ID is missing or not a numeric app id).') {
+    super(message);
+    this.name = 'TikTokNotConfiguredError';
+  }
+}
+
 function toYmd(d: Date): string {
   return d.toISOString().split('T')[0];
 }
@@ -202,6 +217,9 @@ export function getTikTokAuthUrl(
   oauthInitiatedByUid?: string
 ): string {
   const { appId } = getCredentials();
+  if (!isValidTikTokAppId(appId)) {
+    throw new TikTokNotConfiguredError();
+  }
   const payload: Record<string, string> = {
     brandId,
     provider: 'tiktok',
@@ -224,8 +242,8 @@ export async function handleTikTokCallback(
   redirectUri: string
 ): Promise<{ success: boolean; data?: TikTokCallbackData; error?: string }> {
   const { appId, secret } = getCredentials();
-  if (!appId || !secret) {
-    return { success: false, error: 'Missing TikTok app credentials' };
+  if (!isValidTikTokAppId(appId) || !secret) {
+    return { success: false, error: 'Missing or invalid TikTok app credentials' };
   }
 
   const tokenResult = await postTikTokOAuth(TIKTOK_TOKEN_URL, {

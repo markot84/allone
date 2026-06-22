@@ -1009,7 +1009,15 @@ export const connectorAuth = onRequest(
       } else if (provider === 'meta') {
         authUrl = getMetaAuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
       } else if (provider === 'tiktok') {
-        authUrl = getTikTokAuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
+        // getTikTokAuthUrl throws when TIKTOK_APP_ID is missing/placeholder (e.g. "pending"
+        // while the Marketing API app awaits approval) — surface a clear error instead of
+        // bouncing the user to TikTok's portal, which rejects a non-numeric app_id.
+        try {
+          authUrl = getTikTokAuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
+        } catch {
+          res.status(400).json({ error: 'Το TikTok app δεν έχει ρυθμιστεί ακόμη (εκκρεμεί έγκριση Marketing API / λείπει το app_id).' });
+          return;
+        }
       } else if (provider === 'merchant') {
         authUrl = getMerchantAuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
       } else if (provider === 'ga4') {
