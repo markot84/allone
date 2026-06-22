@@ -748,25 +748,19 @@ async function overlayMagentoCatalogDetails(brandId: string, bySku: Map<string, 
   return read;
 }
 
-/** Brand warehouse filter for the stock overlay — mirrors the connector's includedStockLocationIds.
- * null = all warehouses (no filter). */
-async function loadMegaventoryStockLocationFilter(brandId: string): Promise<Set<string> | null> {
-  const snap = await assertDb().doc(`connectors/${brandId}`).get().catch(() => null);
-  const conn = snap?.data()?.megaventory as Record<string, unknown> | undefined;
-  const raw = conn?.stockLocations;
-  if (!Array.isArray(raw)) return null;
-  const ids = raw.map((v) => String(v ?? '').trim()).filter((v) => v.length > 0);
-  return ids.length ? new Set(ids) : null;
-}
-
-async function loadMegaventoryStockByProductId(brandId: string, includedLocations: Set<string> | null): Promise<{ rowsRead: number; byProductId: Map<string, { available: number; physical: number }> }> {
+/** Per-product stock totals for the PI overlay, read from the pre-summed megaventory_products mirrors
+ * (availableStockTotal/physicalStockTotal — already warehouse-filtered by the connector roll-up /
+ * light recompute, incl. {0,0} zero-emit). Replaces the old full re-scan of the per-location
+ * megaventory_stock collection (hundreds of thousands of docs → Firestore DEADLINE on large brands).
+ * The warehouse filter now lives solely in the connector totals, so there's no re-filtering here. */
+export async function loadMegaventoryStockByProductId(brandId: string): Promise<{ rowsRead: number; byProductId: Map<string, { available: number; physical: number }> }> {
   const firestore = assertDb();
   const byProductId = new Map<string, { available: number; physical: number }>();
   let cursor: QueryDocumentSnapshot | null = null;
   let rowsRead = 0;
   for (;;) {
     let query = firestore
-      .collection('megaventory_stock')
+      .collection('megaventory_products')
       .where('brandId', '==', brandId)
       .orderBy(FieldPath.documentId())
       .limit(READ_PAGE_SIZE);
@@ -777,15 +771,13 @@ async function loadMegaventoryStockByProductId(brandId: string, includedLocation
       const row = doc.data();
       const productId = text(row.productId ?? row.ProductID ?? row.ProductId);
       if (!productId) continue;
-      const current = byProductId.get(productId) ?? { available: 0, physical: 0 };
-      // Register the product even when its location is excluded so applyMegaventoryStockOverlay zeroes
-      // products with no stock in the filtered warehouse(s) instead of leaving a stale catalog value.
-      const locId = String(row.locationId ?? row.inventoryLocationID ?? row.InventoryLocationId ?? '');
-      if (!includedLocations || includedLocations.has(locId)) {
-        current.available += num(row.availableStock ?? row.productAvailableStockQty ?? row.ProductAvailableStockQty);
-        current.physical += num(row.physicalStock ?? row.productPhysicalStockQty ?? row.ProductPhysicalStockQty);
-      }
-      byProductId.set(productId, current);
+      // Only products that received a stock roll-up carry totals; others have no stock rows → leave the
+      // catalog value as-is (matches the old behaviour where absent-from-stock products were untouched).
+      if (row.availableStockTotal === undefined && row.physicalStockTotal === undefined) continue;
+      byProductId.set(productId, {
+        available: num(row.availableStockTotal),
+        physical: num(row.physicalStockTotal),
+      });
     }
     if (snap.size < READ_PAGE_SIZE) break;
     cursor = snap.docs[snap.docs.length - 1] ?? null;
@@ -1020,9 +1012,10 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
         loadEcommerceCatalogCollection(brandId, 'opencart_products', bySku),
       ])).reduce((sum, rowsRead) => sum + rowsRead, 0);
   const magentoDetailRowsRead = hasErp ? await overlayMagentoCatalogDetails(brandId, bySku) : 0;
-  const stockLocationFilter = hasErp ? await loadMegaventoryStockLocationFilter(brandId) : null;
+  // #8: stock totals come from the pre-summed (already warehouse-filtered) megaventory_products mirrors
+  // — no per-location re-scan of megaventory_stock (the old DEADLINE-prone read on large brands).
   const stockResult = hasErp
-    ? await loadMegaventoryStockByProductId(brandId, stockLocationFilter)
+    ? await loadMegaventoryStockByProductId(brandId)
     : { rowsRead: 0, byProductId: new Map<string, { available: number; physical: number }>() };
   const stockByLocationApplied = hasErp ? applyMegaventoryStockOverlay(bySku, stockResult.byProductId) : 0;
   const skuStats = await loadSkuStats(brandId);
