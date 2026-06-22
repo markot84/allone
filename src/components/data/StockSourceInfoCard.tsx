@@ -62,6 +62,29 @@ export function StockSourceInfoCard() {
         )}
       </div>
 
+      {(() => {
+        const labels = aggregate?.stockLocationLabels?.length
+          ? aggregate.stockLocationLabels
+          : aggregate?.stockLocations ?? [];
+        if (!labels.length && !isBuilding) return null;
+        return (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {labels.length > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[12px] font-semibold text-[#0F766E] bg-[#0F766E]/10">
+                Απόθεμα: {labels.join(', ')}
+                <Tooltip
+                  content="Τα νούμερα αποθέματος (Stock Status, αξία, ημέρες επάρκειας) αφορούν μόνο τις επιλεγμένες αποθήκες. Ρυθμίζεται στις ρυθμίσεις του Megaventory connector."
+                  size={12}
+                />
+              </span>
+            )}
+            {isBuilding && (
+              <span className="text-[11px] text-[var(--nts-medium-gray)]">Ενημέρωση δεδομένων…</span>
+            )}
+          </div>
+        );
+      })()}
+
       <p className="text-[12px] text-[var(--nts-medium-gray)] leading-relaxed mt-3">
         Αντλείται αυτόματα από το ERP όταν υπάρχει· διαφορετικά από την πλατφόρμα e-shop. Οι πωλήσεις
         (ταχύτητα/dead stock) υπολογίζονται από όλα τα κανάλια — φυσικά καταστήματα και e-shop.

@@ -1554,6 +1554,17 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
     const pagesByBucket = await writePageDocs(brandId, products);
     const competitiveInventory = await writeCompetitiveInventoryLookup(brandId, products);
     const charts = chartDataForProducts(products);
+    // Which warehouses this aggregate reflects (empty = all) → drives the UI badge so ΚΑΠ-only numbers
+    // aren't misleading. Read straight from the connector, independent of how the filter is applied
+    // internally, so it survives the #1A refactor.
+    const connSnap = await assertDb().doc(`connectors/${brandId}`).get();
+    const mvConn = connSnap.data()?.megaventory as { stockLocations?: unknown; stockLocationLabels?: unknown } | undefined;
+    const stockLocationsForBadge = Array.isArray(mvConn?.stockLocations)
+      ? (mvConn!.stockLocations as unknown[]).map((v) => String(v ?? '').trim()).filter((v) => v.length > 0)
+      : [];
+    const stockLocationLabelsForBadge = Array.isArray(mvConn?.stockLocationLabels)
+      ? (mvConn!.stockLocationLabels as unknown[]).map((v) => String(v ?? '').trim()).filter((v) => v.length > 0)
+      : [];
     const payload = {
       brandId,
       status: 'ready',
@@ -1575,6 +1586,8 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       stockOverlaysApplied,
       erpOnlyProducts,
       stockSource: 'megaventory',
+      stockLocations: stockLocationsForBadge,
+      stockLocationLabels: stockLocationLabelsForBadge,
       pageSize: TABLE_PAGE_SIZE,
       pagesByBucket,
       categories: categoryCounts(products),

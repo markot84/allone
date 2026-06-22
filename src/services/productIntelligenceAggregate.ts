@@ -11,6 +11,10 @@ export type ProductIntelligenceAggregate = {
   sourceLabel: string;
   sourceKind: 'erp' | 'connector_catalog' | 'procurement';
   stockSource?: string;
+  /** Megaventory warehouses (InventoryLocationID) this aggregate reflects; empty/absent = all. */
+  stockLocations?: string[];
+  /** Display names for stockLocations, in the same order — for the UI warehouse badge. */
+  stockLocationLabels?: string[];
   totalCount: number;
   syncVersion?: string;
   latestSyncAt?: string | null;

@@ -87,6 +87,8 @@ import {
   fetchMegaventoryData,
   updateMegaventoryConnectorSettings,
   listMegaventoryLocations,
+  recomputeMegaventoryProductTotals,
+  mergeMegaventoryApiCatalogProducts,
   setDb as setMegaventoryDb,
 } from './megaventoryConnector';
 import { decideStaleRecovery, isJobWriteOwned, MAX_STALE_RESUMES } from './megaventorySyncPlan';
@@ -1981,6 +1983,42 @@ export const processMegaventorySyncJobs = onSchedule(
         return;
       }
 
+      // stock_filter_recompute: a warehouse-filter change. Re-derive per-product totals from the
+      // already-synced megaventory_stock (no ERP re-fetch) → gap-fill → summary → PI. Minutes vs a
+      // full re-ingestion. Falls back to a normal sync if stock was never synced for this brand.
+      if (job.mode === 'stock_filter_recompute') {
+        const stockSynced = await admin.firestore().collection('megaventory_stock').where('brandId', '==', job.brandId).limit(1).get();
+        if (stockSynced.empty) {
+          logger.warn(`[MegaventoryJob] stock_filter_recompute for ${job.brandId} but no megaventory_stock — falling back to full sync`);
+          // fall through to the normal fetchMegaventoryData path below
+        } else {
+          logger.info(`[MegaventoryJob] Stock-filter recompute for ${job.brandId} (no ERP re-sync)`);
+          let recErr: string | null = null;
+          try {
+            await recomputeMegaventoryProductTotals(job.brandId);
+            await mergeMegaventoryApiCatalogProducts(admin.firestore(), job.brandId, []);
+            await computeEcommerceSummary(job.brandId);
+            await refreshProductIntelligenceAggregate(job.brandId);
+          } catch (e) {
+            recErr = e instanceof Error ? e.message : String(e);
+            logger.warnAlert(`[MegaventoryJob] stock-filter recompute failed for ${job.brandId}: ${recErr}`, { alertKey: ALERT.syncJobProcessingFailed });
+          }
+          const finalized = await updateJobIfOwned({
+            status: recErr ? 'failed' : 'completed',
+            claimToken: FieldValue.delete(),
+            result: { success: !recErr, stockFilterRecompute: true },
+            error: recErr ?? FieldValue.delete(),
+            completedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            continuationAttempts: FieldValue.delete(),
+          });
+          if (!finalized) {
+            logger.warn(`[MegaventoryJob] ${job.brandId} lost stock-filter-recompute job ownership before finalization`);
+          }
+          return;
+        }
+      }
+
       logger.info(`[MegaventoryJob] Starting Megaventory refresh for ${job.brandId}`);
       const result = await fetchMegaventoryData(job.brandId, { mode: 'manual' });
       // Soft-budget exhausted before finishing → re-enqueue for the every-1-min scheduler to
@@ -2184,18 +2222,20 @@ export const connectorSaveCredentials = onRequest(
         });
         res.status(200).json(result);
       } else if (provider === 'megaventory') {
-        const { apiKey: mvKey, megaventorySettingsOnly, customReportId, customReportEnabled, stockLocations } = req.body as {
+        const { apiKey: mvKey, megaventorySettingsOnly, customReportId, customReportEnabled, stockLocations, stockLocationLabels } = req.body as {
           apiKey?: string;
           megaventorySettingsOnly?: boolean;
           customReportId?: string;
           customReportEnabled?: boolean;
           stockLocations?: string[];
+          stockLocationLabels?: string[];
         };
         if (megaventorySettingsOnly) {
           const updated = await updateMegaventoryConnectorSettings(brandId, {
             customReportId: customReportId !== undefined ? customReportId : undefined,
             customReportEnabled: customReportEnabled !== undefined ? customReportEnabled : undefined,
             stockLocations: stockLocations !== undefined ? stockLocations : undefined,
+            stockLocationLabels: stockLocationLabels !== undefined ? stockLocationLabels : undefined,
           });
           if (!updated.ok) {
             res.status(400).json({ success: false, error: updated.error || 'Αποτυχία ενημέρωσης' });
@@ -2203,24 +2243,18 @@ export const connectorSaveCredentials = onRequest(
           }
           let recomputeQueued = false;
           if (updated.stockLocationsChanged) {
-            // The warehouse filter changes every per-product stock total → recompute ALL stock: reset
-            // stock + processing state (raw per-location megaventory_stock rows stay intact) and enqueue
-            // a background sync that re-aggregates and re-runs gap-fill → RFM → finalize.
-            const db = admin.firestore();
-            await db.doc(`connectors/${brandId}`).update({
-              'megaventory.stockIngestComplete': FieldValue.delete(),
-              'megaventory.ingestionComplete': FieldValue.delete(),
-              'megaventory.processingStage': FieldValue.delete(),
-            }).catch(() => {});
+            // The warehouse filter only changes the per-product roll-up — the per-location data is
+            // already in megaventory_stock. Enqueue a LIGHT recompute (no ERP re-ingest): re-derive
+            // totals from megaventory_stock → gap-fill → summary → PI. Minutes, not a full re-sync.
             const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
-            await db.collection('connector_sync_jobs').doc(jobId).set({
+            await admin.firestore().collection('connector_sync_jobs').doc(jobId).set({
               brandId,
               provider,
               status: 'pending',
               requestedBy: decoded.uid,
               requestedAt: FieldValue.serverTimestamp(),
               updatedAt: FieldValue.serverTimestamp(),
-              mode: 'manual_full_refresh',
+              mode: 'stock_filter_recompute',
             }, { merge: true });
             recomputeQueued = true;
           }

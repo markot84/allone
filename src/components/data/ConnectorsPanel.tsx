@@ -1770,6 +1770,8 @@ function MegaventoryCustomReportSettingsInline({
           customReportId: reportId.trim(),
           customReportEnabled: enabled,
           stockLocations,
+          // Names of the selected warehouses → stored for the PI badge (so it can label the filter).
+          stockLocationLabels: stockLocations.map((id) => locations.find((l) => l.id === id)?.name || id),
         }),
       });
 

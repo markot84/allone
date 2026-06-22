@@ -2,7 +2,7 @@
  * Sync: historical backfill, then incremental docs + snapshot reference data (invoices/orders/products/stock/suppliers + optional Custom Report). */
 
 import * as admin from 'firebase-admin';
-import { type Firestore, FieldValue } from 'firebase-admin/firestore';
+import { type Firestore, type QueryDocumentSnapshot, FieldValue, FieldPath } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
@@ -320,6 +320,7 @@ export async function updateMegaventoryConnectorSettings(
     customReportId?: string | null;
     customReportEnabled?: boolean | null;
     stockLocations?: string[] | null;
+    stockLocationLabels?: string[] | null;
   }
 ): Promise<{ ok: boolean; error?: string; stockLocationsChanged?: boolean }> {
   const db = getDb();
@@ -356,6 +357,15 @@ export async function updateMegaventoryConnectorSettings(
       patch['megaventory.stockLocations'] = next.length ? next : FieldValue.delete();
       stockLocationsChanged = true;
     }
+  }
+
+  // Display names for the selected warehouses (UI provides them) so the PI badge can label the active
+  // filter without a lookup. Cosmetic — rides along with the selection.
+  if (updates.stockLocationLabels !== undefined) {
+    const labels = Array.isArray(updates.stockLocationLabels)
+      ? updates.stockLocationLabels.map((s) => String(s ?? '').trim()).filter((s) => s.length > 0)
+      : [];
+    patch['megaventory.stockLocationLabels'] = labels.length ? labels : FieldValue.delete();
   }
 
   if (Object.keys(patch).length === 0) {
@@ -893,7 +903,7 @@ export async function testMegaventoryConnection(apiKey: string): Promise<Megaven
 export async function saveMegaventoryCredentials(
   brandId: string,
   apiKey: string,
-  options?: { customReportId?: string; customReportEnabled?: boolean; stockLocations?: string[] }
+  options?: { customReportId?: string; customReportEnabled?: boolean; stockLocations?: string[]; stockLocationLabels?: string[] }
 ): Promise<{ success: boolean; accountName?: string; currency?: string; error?: string }> {
   const key = normalizeApiKey(apiKey);
   const test = await testMegaventoryConnection(key);
@@ -923,6 +933,11 @@ export async function saveMegaventoryCredentials(
     const ids = normalizeStockLocations(options.stockLocations);
     if (ids.length) megaventory.stockLocations = ids;
     else delete megaventory.stockLocations;
+  }
+  if (options?.stockLocationLabels !== undefined) {
+    const labels = options.stockLocationLabels.map((s) => String(s ?? '').trim()).filter((s) => s.length > 0);
+    if (labels.length) megaventory.stockLocationLabels = labels;
+    else delete megaventory.stockLocationLabels;
   }
 
   await ref.set({ megaventory }, { merge: true });
@@ -964,6 +979,59 @@ export async function listMegaventoryLocations(
   }
   locations.sort((a, b) => a.name.localeCompare(b.name));
   return { ok: true, locations };
+}
+
+/** Light recompute for a warehouse-filter change: re-derive per-product stock totals from the
+ *  already-synced megaventory_stock rows under the brand's current stockLocations — NO Megaventory
+ *  API round-trip. Mirrors the stock-ingestion roll-up exactly (filter + {0,0} zero-emit for products
+ *  absent from the included warehouse(s)), so the downstream gap-fill + PI pick up the new basis in
+ *  minutes instead of a full re-ingestion. Raw megaventory_stock (all locations) is never touched. */
+export async function recomputeMegaventoryProductTotals(brandId: string): Promise<{ products: number }> {
+  const db = getDb();
+  const conn = (await db.doc(`connectors/${brandId}`).get()).data()?.megaventory as Record<string, unknown> | undefined;
+  const filter = includedStockLocationIds(conn);
+
+  const totals = new Map<string, { available: number; physical: number }>();
+  let cursor: QueryDocumentSnapshot | null = null;
+  for (;;) {
+    let q = db
+      .collection('megaventory_stock')
+      .where('brandId', '==', brandId)
+      .orderBy(FieldPath.documentId())
+      .limit(2000);
+    if (cursor) q = q.startAfter(cursor);
+    const snap = await q.get();
+    for (const doc of snap.docs) {
+      const d = doc.data();
+      const pid = String(d.productId || '');
+      if (!pid) continue;
+      const locId = String(d.locationId || '');
+      const cur = totals.get(pid) ?? { available: 0, physical: 0 };
+      if (!filter || filter.has(locId)) {
+        cur.available += num(d.availableStock);
+        cur.physical += num(d.physicalStock);
+      }
+      totals.set(pid, cur); // registered even when excluded → merge-write zeroes it
+    }
+    if (snap.size < 2000) break;
+    cursor = snap.docs[snap.docs.length - 1] ?? null;
+    if (!cursor) break;
+  }
+
+  const items = Array.from(totals.entries()).map(([pid, t]) => ({
+    id: `mv_p_${pid}`,
+    data: {
+      productId: pid,
+      stockOnHand: t.available > 0 ? t.available : t.physical,
+      availableStockTotal: t.available,
+      physicalStockTotal: t.physical,
+    },
+  }));
+  if (items.length) await writeBatch(db, 'megaventory_products', brandId, items);
+  logger.info(
+    `[Megaventory] Stock-filter recompute for ${brandId}: ${items.length} product totals re-derived from megaventory_stock (no API call)`
+  );
+  return { products: items.length };
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -1021,7 +1089,7 @@ async function writeBatch(
 }
 
 /** Clears previous gap-fill docs before the catalog is rewritten from ProductGet. */
-async function mergeMegaventoryApiCatalogProducts(
+export async function mergeMegaventoryApiCatalogProducts(
   db: Firestore,
   brandId: string,
   customReportSnapshotRows: Record<string, unknown>[],
