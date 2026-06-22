@@ -1861,6 +1861,7 @@ export const processMegaventorySyncJobs = onSchedule(
     region: 'europe-west1',
     timeoutSeconds: 1800, // onSchedule hard cap is 1800s (30min). Completing >30min brands relies on the budget+continuation below (re-enqueued across passes), not a longer single run.
     memory: '4GiB', // prod-scale: post-ingestion custom-report/procurement normalization OOM'd at 2GiB after the heavy stages now run to completion.
+    cpu: 2, // more I/O concurrency for the heavy Firestore read/write stages (stock-filter recompute, gap-fill); the 30-min cap is worked around by the per-stage checkpointing, not raw speed.
     secrets: ['CONNECTOR_TOKEN_KEY'],
   },
   async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
@@ -1924,7 +1925,7 @@ export const processMegaventorySyncJobs = onSchedule(
     const claimToken = randomUUID();
     const job = await db.runTransaction(async (tx) => {
       const latest = await tx.get(jobRef);
-      const data = latest.data() as { brandId?: string; status?: string; continuationAttempts?: number; mode?: string } | undefined;
+      const data = latest.data() as { brandId?: string; status?: string; continuationAttempts?: number; mode?: string; filterStage?: string } | undefined;
       if (!latest.exists || data?.status !== 'pending' || !data.brandId) return null;
       tx.update(jobRef, {
         status: 'running',
@@ -1932,7 +1933,7 @@ export const processMegaventorySyncJobs = onSchedule(
         startedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return { brandId: data.brandId, continuationAttempts: Number(data.continuationAttempts ?? 0), mode: data.mode };
+      return { brandId: data.brandId, continuationAttempts: Number(data.continuationAttempts ?? 0), mode: data.mode, filterStage: data.filterStage };
     });
 
     if (!job) return;
@@ -1984,38 +1985,57 @@ export const processMegaventorySyncJobs = onSchedule(
       }
 
       // stock_filter_recompute: a warehouse-filter change. Re-derive per-product totals from the
-      // already-synced megaventory_stock (no ERP re-fetch) → gap-fill → summary → PI. Minutes vs a
-      // full re-ingestion. Falls back to a normal sync if stock was never synced for this brand.
+      // already-synced megaventory_stock (no ERP re-fetch), CHECKPOINTED across passes
+      // (totals → gapfill → finalize) so no single sub-stage hits the 30-min onSchedule cap on large
+      // brands (e.g. e-tennis ~88k SKUs / ~350k stock rows). Falls back to a normal sync if stock was
+      // never synced for this brand.
       if (job.mode === 'stock_filter_recompute') {
         const stockSynced = await admin.firestore().collection('megaventory_stock').where('brandId', '==', job.brandId).limit(1).get();
         if (stockSynced.empty) {
           logger.warn(`[MegaventoryJob] stock_filter_recompute for ${job.brandId} but no megaventory_stock — falling back to full sync`);
           // fall through to the normal fetchMegaventoryData path below
         } else {
-          logger.info(`[MegaventoryJob] Stock-filter recompute for ${job.brandId} (no ERP re-sync)`);
-          let recErr: string | null = null;
+          const stage = job.filterStage || 'totals';
+          logger.info(`[MegaventoryJob] Stock-filter recompute for ${job.brandId} — stage=${stage}`);
+          // Each pass does ONE heavy step then re-enqueues the next, so the scheduler resumes it next
+          // minute — keeping every pass well inside the 30-min cap.
+          const advance = (next: string) => updateJobIfOwned({
+            status: 'pending', filterStage: next, claimToken: FieldValue.delete(),
+            updatedAt: FieldValue.serverTimestamp(), continuationAttempts: FieldValue.delete(),
+          });
           try {
-            await recomputeMegaventoryProductTotals(job.brandId);
-            await mergeMegaventoryApiCatalogProducts(admin.firestore(), job.brandId, []);
+            if (stage === 'totals') {
+              await recomputeMegaventoryProductTotals(job.brandId);
+              if (!(await advance('gapfill'))) logger.warn(`[MegaventoryJob] ${job.brandId} lost ownership after stock-filter 'totals'`);
+              return;
+            }
+            if (stage === 'gapfill') {
+              await mergeMegaventoryApiCatalogProducts(admin.firestore(), job.brandId, []);
+              if (!(await advance('finalize'))) logger.warn(`[MegaventoryJob] ${job.brandId} lost ownership after stock-filter 'gapfill'`);
+              return;
+            }
+            // stage === 'finalize'
             await computeEcommerceSummary(job.brandId);
             await refreshProductIntelligenceAggregate(job.brandId);
+            const finalized = await updateJobIfOwned({
+              status: 'completed', filterStage: FieldValue.delete(), claimToken: FieldValue.delete(),
+              result: { success: true, stockFilterRecompute: true },
+              error: FieldValue.delete(), completedAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(), continuationAttempts: FieldValue.delete(),
+            });
+            if (!finalized) logger.warn(`[MegaventoryJob] ${job.brandId} lost ownership before stock-filter finalization`);
+            return;
           } catch (e) {
-            recErr = e instanceof Error ? e.message : String(e);
-            logger.warnAlert(`[MegaventoryJob] stock-filter recompute failed for ${job.brandId}: ${recErr}`, { alertKey: ALERT.syncJobProcessingFailed });
+            const recErr = e instanceof Error ? e.message : String(e);
+            logger.warnAlert(`[MegaventoryJob] stock-filter recompute (${stage}) failed for ${job.brandId}: ${recErr}`, { alertKey: ALERT.syncJobProcessingFailed });
+            await updateJobIfOwned({
+              status: 'failed', filterStage: FieldValue.delete(), claimToken: FieldValue.delete(),
+              result: { success: false, stockFilterRecompute: true, stage }, error: recErr,
+              completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+              continuationAttempts: FieldValue.delete(),
+            });
+            return;
           }
-          const finalized = await updateJobIfOwned({
-            status: recErr ? 'failed' : 'completed',
-            claimToken: FieldValue.delete(),
-            result: { success: !recErr, stockFilterRecompute: true },
-            error: recErr ?? FieldValue.delete(),
-            completedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-            continuationAttempts: FieldValue.delete(),
-          });
-          if (!finalized) {
-            logger.warn(`[MegaventoryJob] ${job.brandId} lost stock-filter-recompute job ownership before finalization`);
-          }
-          return;
         }
       }
 
