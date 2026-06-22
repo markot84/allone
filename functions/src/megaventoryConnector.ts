@@ -319,8 +319,9 @@ export async function updateMegaventoryConnectorSettings(
   updates: {
     customReportId?: string | null;
     customReportEnabled?: boolean | null;
+    stockLocations?: string[] | null;
   }
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; stockLocationsChanged?: boolean }> {
   const db = getDb();
   const snap = await db.doc(`connectors/${brandId}`).get();
   if (!snap.exists) return { ok: false, error: 'Δεν υπάρχουν ρυθμίσεις Megaventory.' };
@@ -345,12 +346,24 @@ export async function updateMegaventoryConnectorSettings(
     patch['megaventory.customReportEnabled'] = Boolean(updates.customReportEnabled);
   }
 
+  // Warehouse filter for stock roll-ups. Report whether it actually changed so the caller triggers a
+  // full stock recompute only when needed (an unchanged save must not re-run the heavy sync).
+  let stockLocationsChanged = false;
+  if (updates.stockLocations !== undefined) {
+    const prev = normalizeStockLocations(mv.stockLocations).sort();
+    const next = updates.stockLocations === null ? [] : normalizeStockLocations(updates.stockLocations).sort();
+    if (next.join('|') !== prev.join('|')) {
+      patch['megaventory.stockLocations'] = next.length ? next : FieldValue.delete();
+      stockLocationsChanged = true;
+    }
+  }
+
   if (Object.keys(patch).length === 0) {
-    return { ok: true };
+    return { ok: true, stockLocationsChanged: false };
   }
 
   await db.doc(`connectors/${brandId}`).update(patch);
-  return { ok: true };
+  return { ok: true, stockLocationsChanged };
 }
 
 /** *Get endpoints with ReturnTopNRecords return top N descending by primary id; next page = same filters + And LessThan min(id) of the previous page. */
@@ -571,6 +584,47 @@ function normalizeInventoryStockRows(raw: any[]): any[] {
     }
   }
   return out;
+}
+
+/** Brand warehouse filter for per-product stock roll-ups. Returns null when no filter is configured
+ * (empty/absent megaventory.stockLocations) so the all-warehouses path is an exact no-op. Matches on
+ * InventoryLocationID (stable). Raw per-location megaventory_stock rows are never filtered. */
+function includedStockLocationIds(conn: Record<string, unknown> | undefined): Set<string> | null {
+  const ids = normalizeStockLocations(conn?.stockLocations);
+  return ids.length ? new Set(ids) : null;
+}
+
+/** Dedupe + trim a stockLocations list (InventoryLocationID strings); drops blanks. */
+export function normalizeStockLocations(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  for (const v of value) {
+    const id = String(v ?? '').trim();
+    if (id) seen.add(id);
+  }
+  return Array.from(seen);
+}
+
+/** Roll per-location stock rows up to per-product {available, physical} totals, honoring a warehouse
+ * filter (null = all warehouses). A product whose locations are ALL excluded still gets a {0,0} entry,
+ * so the merge-write that consumes this map ZEROES it instead of leaving a stale all-location total. */
+export function rollUpStockTotalsByProduct(
+  stocks: any[],
+  locationFilter: Set<string> | null
+): Map<string, { available: number; physical: number }> {
+  const totals = new Map<string, { available: number; physical: number }>();
+  for (const s of stocks) {
+    const pid = String(s.productID || s.ProductId || '');
+    if (!pid) continue;
+    const locId = String(s.inventoryLocationID || s.InventoryLocationId || '');
+    const cur = totals.get(pid) ?? { available: 0, physical: 0 };
+    if (!locationFilter || locationFilter.has(locId)) {
+      cur.available += num(s.productAvailableStockQty || s.ProductAvailableStockQty);
+      cur.physical += num(s.productPhysicalStockQty || s.ProductPhysicalStockQty);
+    }
+    totals.set(pid, cur);
+  }
+  return totals;
 }
 
 type MvDocumentTypeInfo = {
@@ -839,7 +893,7 @@ export async function testMegaventoryConnection(apiKey: string): Promise<Megaven
 export async function saveMegaventoryCredentials(
   brandId: string,
   apiKey: string,
-  options?: { customReportId?: string; customReportEnabled?: boolean }
+  options?: { customReportId?: string; customReportEnabled?: boolean; stockLocations?: string[] }
 ): Promise<{ success: boolean; accountName?: string; currency?: string; error?: string }> {
   const key = normalizeApiKey(apiKey);
   const test = await testMegaventoryConnection(key);
@@ -864,6 +918,11 @@ export async function saveMegaventoryCredentials(
   }
   if (options?.customReportEnabled !== undefined) {
     megaventory.customReportEnabled = Boolean(options.customReportEnabled);
+  }
+  if (options?.stockLocations !== undefined) {
+    const ids = normalizeStockLocations(options.stockLocations);
+    if (ids.length) megaventory.stockLocations = ids;
+    else delete megaventory.stockLocations;
   }
 
   await ref.set({ megaventory }, { merge: true });
@@ -1841,15 +1900,20 @@ export async function fetchMegaventoryData(
 
       // Per-product stock totals → megaventory_products mirrors. ProductGet has NO stock fields, so this walk is the ONLY
       // source for stockOnHand (copied to products.stock_level by gap-fill): available when positive, else physical.
-      const totals = new Map<string, { available: number; physical: number }>();
+      // Per-product totals honor the brand's warehouse filter (megaventory.stockLocations); null = all
+      // warehouses. rollUpStockTotalsByProduct still emits a {0,0} entry for products absent from the
+      // filtered warehouse(s) so the merge-write ZEROES them instead of leaving a stale all-location
+      // total. Raw megaventory_stock rows above keep every location — the filter only narrows the
+      // per-product roll-up. The separate pass records the distinct warehouses for the settings UI.
+      const locationFilter = includedStockLocationIds(conn);
+      const seenLocations = new Map<string, string>();
       for (const s of stocks) {
-        const pid = String(s.productID || s.ProductId || '');
-        if (!pid) continue;
-        const cur = totals.get(pid) ?? { available: 0, physical: 0 };
-        cur.available += num(s.productAvailableStockQty || s.ProductAvailableStockQty);
-        cur.physical += num(s.productPhysicalStockQty || s.ProductPhysicalStockQty);
-        totals.set(pid, cur);
+        const locId = String(s.inventoryLocationID || s.InventoryLocationId || '');
+        if (locId && !seenLocations.has(locId)) {
+          seenLocations.set(locId, String(s.inventoryLocationAbbreviation || s.InventoryLocationName || '').trim());
+        }
       }
+      const totals = rollUpStockTotalsByProduct(stocks, locationFilter);
       // merge-write: rows for productIds without a mirror create sku-less stubs that gap-fill
       // skips (deleted products return zero stock rows, so stubs stay a rare edge, not pollution)
       const totalItems = Array.from(totals.entries()).map(([pid, t]) => ({
@@ -1862,6 +1926,14 @@ export async function fetchMegaventoryData(
         },
       }));
       if (totalItems.length) await writeBatch(db, 'megaventory_products', brandId, totalItems);
+      // Persist the distinct warehouses seen so the settings UI can offer them as filter options
+      // (read straight from the connector doc — no extra API round-trip).
+      if (seenLocations.size) {
+        const known = Array.from(seenLocations.entries())
+          .map(([id, name]) => ({ id, name }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        await db.doc(`connectors/${brandId}`).update({ 'megaventory.knownStockLocations': known }).catch(() => {});
+      }
       stockDoneThisPass = true;
       logger.info(`[Megaventory] Stock rows: ${items.length} imported for brand ${brandId}; totals merged onto ${totalItems.length} product mirrors`);
     }

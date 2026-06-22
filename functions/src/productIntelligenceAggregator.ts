@@ -748,7 +748,18 @@ async function overlayMagentoCatalogDetails(brandId: string, bySku: Map<string, 
   return read;
 }
 
-async function loadMegaventoryStockByProductId(brandId: string): Promise<{ rowsRead: number; byProductId: Map<string, { available: number; physical: number }> }> {
+/** Brand warehouse filter for the stock overlay — mirrors the connector's includedStockLocationIds.
+ * null = all warehouses (no filter). */
+async function loadMegaventoryStockLocationFilter(brandId: string): Promise<Set<string> | null> {
+  const snap = await assertDb().doc(`connectors/${brandId}`).get().catch(() => null);
+  const conn = snap?.data()?.megaventory as Record<string, unknown> | undefined;
+  const raw = conn?.stockLocations;
+  if (!Array.isArray(raw)) return null;
+  const ids = raw.map((v) => String(v ?? '').trim()).filter((v) => v.length > 0);
+  return ids.length ? new Set(ids) : null;
+}
+
+async function loadMegaventoryStockByProductId(brandId: string, includedLocations: Set<string> | null): Promise<{ rowsRead: number; byProductId: Map<string, { available: number; physical: number }> }> {
   const firestore = assertDb();
   const byProductId = new Map<string, { available: number; physical: number }>();
   let cursor: QueryDocumentSnapshot | null = null;
@@ -767,8 +778,13 @@ async function loadMegaventoryStockByProductId(brandId: string): Promise<{ rowsR
       const productId = text(row.productId ?? row.ProductID ?? row.ProductId);
       if (!productId) continue;
       const current = byProductId.get(productId) ?? { available: 0, physical: 0 };
-      current.available += num(row.availableStock ?? row.productAvailableStockQty ?? row.ProductAvailableStockQty);
-      current.physical += num(row.physicalStock ?? row.productPhysicalStockQty ?? row.ProductPhysicalStockQty);
+      // Register the product even when its location is excluded so applyMegaventoryStockOverlay zeroes
+      // products with no stock in the filtered warehouse(s) instead of leaving a stale catalog value.
+      const locId = String(row.locationId ?? row.inventoryLocationID ?? row.InventoryLocationId ?? '');
+      if (!includedLocations || includedLocations.has(locId)) {
+        current.available += num(row.availableStock ?? row.productAvailableStockQty ?? row.ProductAvailableStockQty);
+        current.physical += num(row.physicalStock ?? row.productPhysicalStockQty ?? row.ProductPhysicalStockQty);
+      }
       byProductId.set(productId, current);
     }
     if (snap.size < READ_PAGE_SIZE) break;
@@ -1004,8 +1020,9 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
         loadEcommerceCatalogCollection(brandId, 'opencart_products', bySku),
       ])).reduce((sum, rowsRead) => sum + rowsRead, 0);
   const magentoDetailRowsRead = hasErp ? await overlayMagentoCatalogDetails(brandId, bySku) : 0;
+  const stockLocationFilter = hasErp ? await loadMegaventoryStockLocationFilter(brandId) : null;
   const stockResult = hasErp
-    ? await loadMegaventoryStockByProductId(brandId)
+    ? await loadMegaventoryStockByProductId(brandId, stockLocationFilter)
     : { rowsRead: 0, byProductId: new Map<string, { available: number; physical: number }>() };
   const stockByLocationApplied = hasErp ? applyMegaventoryStockOverlay(bySku, stockResult.byProductId) : 0;
   const skuStats = await loadSkuStats(brandId);

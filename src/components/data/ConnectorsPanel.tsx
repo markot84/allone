@@ -1697,24 +1697,30 @@ function MegaventoryCustomReportSettingsInline({
   brandId,
   initialReportId,
   initialEnabled,
+  knownLocations,
+  initialStockLocations,
   canManage,
   onSaved,
 }: {
   brandId: string;
   initialReportId: string;
   initialEnabled: boolean;
+  knownLocations: { id: string; name: string }[];
+  initialStockLocations: string[];
   canManage: boolean;
   onSaved: () => void;
 }) {
   const [reportId, setReportId] = useState(initialReportId);
   const [enabled, setEnabled] = useState(initialEnabled);
+  const [stockLocations, setStockLocations] = useState<string[]>(initialStockLocations);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
     setReportId(initialReportId);
     setEnabled(initialEnabled);
-  }, [initialReportId, initialEnabled]);
+    setStockLocations(initialStockLocations);
+  }, [initialReportId, initialEnabled, initialStockLocations]);
 
   const handleSaveSettings = async () => {
     if (!canManage || saving) return;
@@ -1732,12 +1738,17 @@ function MegaventoryCustomReportSettingsInline({
           megaventorySettingsOnly: true,
           customReportId: reportId.trim(),
           customReportEnabled: enabled,
+          stockLocations,
         }),
       });
 
       const result = await res.json();
       if (res.ok && !result.error) {
-        toast.success('Οι ρυθμίσεις custom report αποθηκεύτηκαν.');
+        toast.success(
+          result.recomputeQueued
+            ? 'Οι ρυθμίσεις αποθηκεύτηκαν. Ο επανυπολογισμός όλου του stock ξεκίνησε στο background.'
+            : 'Οι ρυθμίσεις custom report αποθηκεύτηκαν.'
+        );
         onSaved();
       } else {
         toast.error(result.error || 'Αποτυχία αποθήκευσης');
@@ -1776,6 +1787,35 @@ function MegaventoryCustomReportSettingsInline({
         />
         <span>Να συμπεριλαμβάνεται το custom report στο Sync (χειροκίνητο / νυχτερινό)</span>
       </label>
+      {knownLocations.length > 0 && (
+        <div className="mb-3 rounded-md border border-[#E5E7EB] bg-white p-2.5">
+          <p className="mb-1 text-xs font-medium text-[#374151]">Αποθήκες stock</p>
+          <p className="mb-2 text-xs text-[#6B7280]">
+            Επίλεξε ποιες αποθήκες μετράνε στο διαθέσιμο stock. Καμία επιλογή = όλες οι αποθήκες. Η αλλαγή επανυπολογίζει όλο το stock.
+          </p>
+          <div className="flex flex-col gap-1.5">
+            {knownLocations.map((loc) => {
+              const checked = stockLocations.includes(loc.id);
+              return (
+                <label key={loc.id} className="flex cursor-pointer items-center gap-2 text-sm text-[#374151]">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) =>
+                      setStockLocations((prev) =>
+                        e.target.checked ? [...prev, loc.id] : prev.filter((id) => id !== loc.id)
+                      )
+                    }
+                    disabled={!canManage || saving}
+                    className="h-4 w-4 shrink-0 rounded border-2 border-[#D1D5DB] text-[var(--nts-accent,#f97316)] accent-[var(--nts-accent,#f97316)] disabled:opacity-50"
+                  />
+                  <span>{loc.name || loc.id}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <button
         type="button"
         onClick={() => void handleSaveSettings()}
@@ -3276,6 +3316,8 @@ export function ConnectorsPanel() {
                             String((state as any).customReportId ?? '4919').trim() || '4919'
                           }
                           initialEnabled={(state as any).customReportEnabled !== false}
+                          knownLocations={((state as any).knownStockLocations ?? []) as { id: string; name: string }[]}
+                          initialStockLocations={((state as any).stockLocations ?? []) as string[]}
                           canManage={canManageConnectors}
                           onSaved={() => {
                             void fetchStates();

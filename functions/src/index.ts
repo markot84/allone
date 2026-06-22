@@ -2183,22 +2183,47 @@ export const connectorSaveCredentials = onRequest(
         });
         res.status(200).json(result);
       } else if (provider === 'megaventory') {
-        const { apiKey: mvKey, megaventorySettingsOnly, customReportId, customReportEnabled } = req.body as {
+        const { apiKey: mvKey, megaventorySettingsOnly, customReportId, customReportEnabled, stockLocations } = req.body as {
           apiKey?: string;
           megaventorySettingsOnly?: boolean;
           customReportId?: string;
           customReportEnabled?: boolean;
+          stockLocations?: string[];
         };
         if (megaventorySettingsOnly) {
           const updated = await updateMegaventoryConnectorSettings(brandId, {
             customReportId: customReportId !== undefined ? customReportId : undefined,
             customReportEnabled: customReportEnabled !== undefined ? customReportEnabled : undefined,
+            stockLocations: stockLocations !== undefined ? stockLocations : undefined,
           });
           if (!updated.ok) {
             res.status(400).json({ success: false, error: updated.error || 'Αποτυχία ενημέρωσης' });
             return;
           }
-          res.status(200).json({ success: true });
+          let recomputeQueued = false;
+          if (updated.stockLocationsChanged) {
+            // The warehouse filter changes every per-product stock total → recompute ALL stock: reset
+            // stock + processing state (raw per-location megaventory_stock rows stay intact) and enqueue
+            // a background sync that re-aggregates and re-runs gap-fill → RFM → finalize.
+            const db = admin.firestore();
+            await db.doc(`connectors/${brandId}`).update({
+              'megaventory.stockIngestComplete': FieldValue.delete(),
+              'megaventory.ingestionComplete': FieldValue.delete(),
+              'megaventory.processingStage': FieldValue.delete(),
+            }).catch(() => {});
+            const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+            await db.collection('connector_sync_jobs').doc(jobId).set({
+              brandId,
+              provider,
+              status: 'pending',
+              requestedBy: decoded.uid,
+              requestedAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+              mode: 'manual_full_refresh',
+            }, { merge: true });
+            recomputeQueued = true;
+          }
+          res.status(200).json({ success: true, recomputeQueued });
           return;
         }
         if (!mvKey) {
