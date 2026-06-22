@@ -2875,7 +2875,9 @@ export const scheduledSyncWebAnalytics = onSchedule(
 /** ERP connectors — 06:00. The 1800s cap can't be raised, so large e-shops get more RAM/CPU and
  * `megaventory.lastSyncAt` is written early (post-import) so the UI shows fresh even if post-steps lag. */
 export const scheduledSyncErp = onSchedule(
-  { ...nightlyConnectorScheduleBase, schedule: 'every day 06:00', memory: '2GiB' as const, cpu: 2 },
+  // 4GiB: the ERP wave's post-ingestion normalization/aggregation OOM'd at 2GiB (SIGABRT/signal 6),
+  // mirroring the processMegaventorySyncJobs bump for the same heavy stages.
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 06:00', memory: '4GiB' as const, cpu: 2 },
   async () => runNightlyConnectorWaveJob('erp', 'scheduledSyncErp')
 );
 
@@ -3505,7 +3507,8 @@ export const sendInviteEmail = onRequest(
 // ── Aggregate Stats: On-Demand (callable) ───────────────────────────────────
 
 export const refreshAggregates = onRequest(
-  { region: 'europe-west1', timeoutSeconds: 540, memory: '2GiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
+  // 4GiB: the ~220k-SKU Product Intelligence aggregate OOM'd at 2GiB (SIGABRT/signal 6).
+  { region: 'europe-west1', timeoutSeconds: 540, memory: '4GiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
@@ -3659,7 +3662,9 @@ export const refreshErpVelocity = onRequest(
 );
 
 export const queryProductIntelligence = onRequest(
-  { region: 'europe-west1', timeoutSeconds: 120, memory: '1GiB' },
+  // 2GiB: at 1GiB the dashboard query GC-stalled on large brands (e-tennis), surfacing as Firestore
+  // DEADLINE_EXCEEDED on the read; the heavy PI writers already run at 4GiB.
+  { region: 'europe-west1', timeoutSeconds: 120, memory: '2GiB' },
   async (req, res) => {
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
