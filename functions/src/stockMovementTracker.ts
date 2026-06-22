@@ -108,6 +108,38 @@ async function readJsonChunks<T>(
   return Object.keys(merged).length ? merged : null;
 }
 
+/** Per-(sku, location) stock for a day: sku → locationId → {a: available, p: physical}. */
+export type PerLocationSnapshot = Record<string, Record<string, { a: number; p: number }>>;
+
+/** Brand warehouse filter from connectors/{brandId}.megaventory.stockLocations; null = all warehouses.
+ *  Mirrors the connector's includedStockLocationIds so snapshot folding matches the live roll-up. */
+export function parseStockLocationsFilter(megaventory: unknown): Set<string> | null {
+  const raw = (megaventory as { stockLocations?: unknown } | undefined)?.stockLocations;
+  if (!Array.isArray(raw)) return null;
+  const ids = raw.map((v) => String(v ?? '').trim()).filter((v) => v.length > 0);
+  return ids.length ? new Set(ids) : null;
+}
+
+/** Fold a per-location snapshot down to sku → effective stock, honoring a warehouse filter (null =
+ *  all). Sums available + physical over the selected locations, then effective = available>0 ?
+ *  available : physical — IDENTICAL to the connector's rollUpStockTotalsByProduct/stockOnHand, so a
+ *  folded snapshot matches products.stock_level for the same selection. */
+export function foldPerLocationSnapshot(rec: PerLocationSnapshot, filter: Set<string> | null): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const sku of Object.keys(rec)) {
+    let a = 0;
+    let p = 0;
+    const locs = rec[sku];
+    for (const loc of Object.keys(locs)) {
+      if (filter && !filter.has(loc)) continue;
+      a += locs[loc]?.a || 0;
+      p += locs[loc]?.p || 0;
+    }
+    out[sku] = Math.round(a > 0 ? a : p);
+  }
+  return out;
+}
+
 /** Reads stock from the `products` collection (import-based brands). Uses `.select()` projection +
  *  stream to avoid downloading whole product-intelligence docs for 2 fields and materializing in memory. */
 async function readImportedStockBySku(
@@ -152,6 +184,77 @@ async function readDiscontinuedSkus(db: Firestore, brandId: string): Promise<Set
   return out;
 }
 
+/** Reads raw per-(sku, location) stock from megaventory_stock (unfiltered — every warehouse), so the
+ *  snapshot stays faithful to the connector and any stockLocations selection folds at read time. */
+async function readMegaventoryStockByLocation(db: Firestore, brandId: string): Promise<PerLocationSnapshot> {
+  const out: PerLocationSnapshot = {};
+  const query = db
+    .collection('megaventory_stock')
+    .where('brandId', '==', brandId)
+    .select('sku', 'locationId', 'availableStock', 'physicalStock');
+  for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
+    const d = doc.data();
+    const sku = String(d.sku || '').trim();
+    const loc = String(d.locationId || '').trim();
+    if (!sku || !loc) continue;
+    const a = typeof d.availableStock === 'number' ? d.availableStock : 0;
+    const p = typeof d.physicalStock === 'number' ? d.physicalStock : 0;
+    if (a === 0 && p === 0) continue; // skip empty cells — keeps the snapshot bounded
+    const bySku = (out[sku] ??= {});
+    const cur = (bySku[loc] ??= { a: 0, p: 0 });
+    cur.a += a;
+    cur.p += p;
+  }
+  return out;
+}
+
+/** ERP per-location snapshot (Megaventory): stores sku → {loc: {a,p}} so history is correct under any
+ *  warehouse selection, now and after future flips. */
+async function captureMegaventoryPerLocationSnapshot(
+  db: Firestore,
+  brandId: string,
+  dateKey: string
+): Promise<{ skuCount: number; source: 'connector' | 'import' | 'mixed' | 'none'; dateKey: string; bytesJson: number }> {
+  const perLoc = await readMegaventoryStockByLocation(db, brandId);
+  // Discontinued SKUs never enter the snapshot (else their later zeroing looks like a sale).
+  for (const sku of await readDiscontinuedSkus(db, brandId)) delete perLoc[sku];
+
+  const rounded: PerLocationSnapshot = {};
+  for (const sku of Object.keys(perLoc)) {
+    const locs = perLoc[sku];
+    const rec: Record<string, { a: number; p: number }> = {};
+    for (const loc of Object.keys(locs)) rec[loc] = { a: Math.round(locs[loc].a), p: Math.round(locs[loc].p) };
+    rounded[sku] = rec;
+  }
+  const skuCount = Object.keys(rounded).length;
+  if (skuCount === 0) {
+    logger.info(`[StockMovement] No megaventory_stock for ${brandId} — skipping per-location snapshot`);
+    return { skuCount: 0, source: 'none', dateKey, bytesJson: 0 };
+  }
+  const json = JSON.stringify(rounded);
+  const chunkCount = await writeJsonChunks(
+    db,
+    `stock_snapshots/${brandId}/days/${dateKey}/chunks`,
+    'skuLocationStockJson',
+    rounded
+  );
+  await db.doc(`stock_snapshots/${brandId}/days/${dateKey}`).set(
+    {
+      perLocation: true,
+      skuStockJson: FieldValue.delete(), // clear any legacy flat payload from an earlier capture today
+      stockSnapshotChunkCount: chunkCount,
+      skuCount,
+      source: 'connector',
+      capturedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+  logger.info(
+    `[StockMovement] Per-location snapshot for ${brandId} (${dateKey}): ${skuCount} SKUs, ${(json.length / 1024).toFixed(1)}KB`
+  );
+  return { skuCount, source: 'connector', dateKey, bytesJson: json.length };
+}
+
 /** Captures the current stock snapshot for a brand; idempotent per day (overwrites the same doc). */
 export async function captureStockSnapshot(brandId: string): Promise<{
   skuCount: number;
@@ -165,6 +268,11 @@ export async function captureStockSnapshot(brandId: string): Promise<{
   // 1) Connector platforms (if any)
   const connDoc = await db.doc(`connectors/${brandId}`).get();
   const connData = connDoc.data() || {};
+  // Megaventory brands: capture per-location so any warehouse (stockLocations) selection folds
+  // correctly — both now and after future flips. Other brands keep the flat sku→total snapshot.
+  if ((connData.megaventory as { connected?: boolean } | undefined)?.connected) {
+    return captureMegaventoryPerLocationSnapshot(db, brandId, dateKey);
+  }
   const connectedPlatforms = ECOMMERCE_PROVIDERS.filter((p) => connData[p]?.connected);
 
   let connectorMap = new Map<string, number>();
@@ -237,12 +345,30 @@ interface SnapshotDoc {
   stockSnapshotChunkCount?: number;
   skuCount?: number;
   source?: string;
+  perLocation?: boolean;
 }
 
-async function readSnapshot(db: Firestore, brandId: string, dateKey: string): Promise<Record<string, number> | null> {
+/** Reads a day's snapshot folded to sku → effective stock. Per-location snapshots fold with `filter`
+ *  (so a warehouse flip re-folds all of history); legacy flat snapshots return as stored (their
+ *  location dimension was already collapsed — they self-heal as they age out of the windows). */
+async function readSnapshot(
+  db: Firestore,
+  brandId: string,
+  dateKey: string,
+  filter: Set<string> | null
+): Promise<Record<string, number> | null> {
   const snap = await db.doc(`stock_snapshots/${brandId}/days/${dateKey}`).get();
   if (!snap.exists) return null;
   const data = snap.data() as SnapshotDoc;
+  if (data.perLocation) {
+    if (!data.stockSnapshotChunkCount) return null;
+    const rec = await readJsonChunks<Record<string, { a: number; p: number }>>(
+      db,
+      `stock_snapshots/${brandId}/days/${dateKey}/chunks`,
+      'skuLocationStockJson'
+    );
+    return rec ? foldPerLocationSnapshot(rec, filter) : null;
+  }
   if (data.skuStockJson) {
     try {
       return JSON.parse(data.skuStockJson) as Record<string, number>;
@@ -259,10 +385,11 @@ async function findClosestSnapshot(
   db: Firestore,
   brandId: string,
   targetDateKey: string,
-  toleranceDays = 3
+  toleranceDays = 3,
+  filter: Set<string> | null = null
 ): Promise<{ dateKey: string; data: Record<string, number> } | null> {
   // Try exact match first
-  const exact = await readSnapshot(db, brandId, targetDateKey);
+  const exact = await readSnapshot(db, brandId, targetDateKey, filter);
   if (exact) return { dateKey: targetDateKey, data: exact };
 
   // Search ± tolerance days around target (preferred: older = "cleaner" baseline)
@@ -272,13 +399,13 @@ async function findClosestSnapshot(
     const earlier = new Date(target);
     earlier.setUTCDate(earlier.getUTCDate() - offset);
     const earlierKey = todayKey(earlier);
-    const earlierData = await readSnapshot(db, brandId, earlierKey);
+    const earlierData = await readSnapshot(db, brandId, earlierKey, filter);
     if (earlierData) return { dateKey: earlierKey, data: earlierData };
 
     const later = new Date(target);
     later.setUTCDate(later.getUTCDate() + offset);
     const laterKey = todayKey(later);
-    const laterData = await readSnapshot(db, brandId, laterKey);
+    const laterData = await readSnapshot(db, brandId, laterKey, filter);
     if (laterData) return { dateKey: laterKey, data: laterData };
   }
   return null;
@@ -299,16 +426,21 @@ export async function computeStockMovement(brandId: string): Promise<{
   const db = getDb();
   const todayKeyStr = todayKey();
 
-  const todayData = await readSnapshot(db, brandId, todayKeyStr);
+  // Current warehouse selection — folds every per-location snapshot to the same basis, so today vs
+  // baseline deltas (and thus velocity) are warehouse-consistent and re-fold on any future flip.
+  const connData = (await db.doc(`connectors/${brandId}`).get()).data() || {};
+  const locFilter = parseStockLocationsFilter(connData.megaventory);
+
+  const todayData = await readSnapshot(db, brandId, todayKeyStr, locFilter);
   if (!todayData) {
     // No snapshot for today — try capturing first.
     logger.warn(`[StockMovement] No today snapshot for ${brandId} — skipping movement computation`);
     return { skuCount: 0, baselineDate: null, windowsAvailable: { d7: false, d30: false, d90: false } };
   }
 
-  const snap7 = await findClosestSnapshot(db, brandId, dateKeyDaysAgo(7), 3);
-  const snap30 = await findClosestSnapshot(db, brandId, dateKeyDaysAgo(30), 5);
-  const snap90 = await findClosestSnapshot(db, brandId, dateKeyDaysAgo(90), 10);
+  const snap7 = await findClosestSnapshot(db, brandId, dateKeyDaysAgo(7), 3, locFilter);
+  const snap30 = await findClosestSnapshot(db, brandId, dateKeyDaysAgo(30), 5, locFilter);
+  const snap90 = await findClosestSnapshot(db, brandId, dateKeyDaysAgo(90), 10, locFilter);
 
   // Find earliest snapshot for "lifetime tracking" baseline
   const allSnapshots = await db
