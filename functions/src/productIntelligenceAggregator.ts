@@ -1332,6 +1332,15 @@ async function loadBucketProductsFromPages(brandId: string, bucket: PageBucket, 
   return products;
 }
 
+/** The table may serve from the existing page docs when the aggregate is `ready`, OR while a recompute
+ * is `running` provided a prior build left page docs behind (pagesByBucket present). This mirrors the
+ * UI's "keep last-good data visible during a refresh" behaviour and prevents a long/orphaned `running`
+ * state (e.g. a crashed nightly refresh) from blanking the table indefinitely. */
+function canServeAggregateQuery(status: string | undefined, hasPages: boolean): boolean {
+  if (status === 'ready') return true;
+  return status === 'running' && hasPages;
+}
+
 export async function queryProductIntelligenceRows(params: ProductIntelligenceQueryParams): Promise<ProductIntelligenceQueryResult> {
   const firestore = assertDb();
   const aggregateSnap = await firestore.doc(`product_intelligence/${params.brandId}`).get();
@@ -1342,7 +1351,7 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
     totalCount?: number;
     pagesByBucket?: Record<PageBucket, number>;
   } | undefined;
-  if (!aggregateSnap.exists || aggregate?.status !== 'ready') {
+  if (!aggregateSnap.exists || !aggregate || !canServeAggregateQuery(aggregate.status, !!aggregate.pagesByBucket)) {
     throw new Error('Product Intelligence aggregate is not ready');
   }
 
@@ -1648,4 +1657,4 @@ export async function refreshCompetitiveInventoryLookup(brandId: string): Promis
 
 
 /** Test-only export — unit tests exercise the real code, not copies. */
-export const __test = { productFromRow, stockBucket, summaryForProducts };
+export const __test = { productFromRow, stockBucket, summaryForProducts, canServeAggregateQuery };
