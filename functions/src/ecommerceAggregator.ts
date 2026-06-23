@@ -298,14 +298,13 @@ async function readPlatformOrders(db: Firestore, brandId: string, platform: stri
   const collection = COLLECTION_MAP[platform];
   if (!collection) return [];
 
-  const snap = await db
-    .collection(collection)
-    .where('brandId', '==', brandId)
-    .get();
+  // Stream rather than .get(): on large brands the orders collection is ~100k+ docs, and holding the
+  // whole snapshot alongside the result array drove the aggregate-refresh heap-OOM.
+  const query = db.collection(collection).where('brandId', '==', brandId);
 
   const rows: OrderRow[] = [];
 
-  for (const doc of snap.docs) {
+  for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
     const d = doc.data();
     const createdAt = d.createdAt || '';
 
@@ -393,9 +392,11 @@ export function softOneSalesDocNetAmount(d: Record<string, unknown>): number {
 }
 
 async function readMegaventoryInvoiceOrderRows(db: Firestore, brandId: string): Promise<OrderRow[]> {
-  const snap = await db.collection('megaventory_invoices').where('brandId', '==', brandId).get();
+  // Stream rather than .get(): on large brands megaventory_invoices is ~100k+ docs, and holding the
+  // whole snapshot alongside the result array was a heap-OOM driver in the aggregate refresh.
+  const query = db.collection('megaventory_invoices').where('brandId', '==', brandId);
   const rows: OrderRow[] = [];
-  for (const doc of snap.docs) {
+  for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
     const d = doc.data();
     // Credit notes are not sales — netted separately via readMegaventoryCreditNoteRows.
     if (d.kind === 'credit_note') continue;
@@ -432,13 +433,12 @@ type MegaventoryCreditNoteRow = {
 /** Megaventory credit notes for netting: subtracted only when `parentDocumentId` is a recorded
  * sales document; supplier credit notes (purchase-doc parent) are left out. */
 async function readMegaventoryCreditNoteRows(db: Firestore, brandId: string): Promise<MegaventoryCreditNoteRow[]> {
-  const snap = await db
+  const query = db
     .collection('megaventory_invoices')
     .where('brandId', '==', brandId)
-    .where('kind', '==', 'credit_note')
-    .get();
+    .where('kind', '==', 'credit_note');
   const rows: MegaventoryCreditNoteRow[] = [];
-  for (const doc of snap.docs) {
+  for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
     const d = doc.data();
     const net = parseNumeric(d.netAmount);
     if (!(net < 0)) continue;
@@ -454,9 +454,10 @@ async function readMegaventoryCreditNoteRows(db: Firestore, brandId: string): Pr
 }
 
 async function readSoftOneSalesOrderRows(db: Firestore, brandId: string): Promise<OrderRow[]> {
-  const snap = await db.collection('softone_sales_documents').where('brandId', '==', brandId).get();
+  // Stream rather than .get() — keeps peak bounded to the result rows, not the full snapshot.
+  const query = db.collection('softone_sales_documents').where('brandId', '==', brandId);
   const rows: OrderRow[] = [];
-  for (const doc of snap.docs) {
+  for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
     const d = doc.data();
     const net = softOneSalesDocNetAmount(d);
     if (!(net > 0)) continue;

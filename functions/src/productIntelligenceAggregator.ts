@@ -400,14 +400,14 @@ function overlayFromMegaventoryProduct(row: Record<string, unknown>): StockOverl
 }
 
 function applyStockOverlay(product: CompactProduct, overlay: StockOverlay): CompactProduct {
+  // Mutate in place rather than spreading a fresh object — called once per ERP catalog row (~90k on
+  // large brands); the product is owned solely by the catalog map at this stage.
   const finalQtySold = overlay.qty_sold_period ?? product.qty_sold_period ?? 0;
-  const next: CompactProduct = {
-    ...product,
-    stock_level: overlay.stock_level,
-    stock_capacity: overlay.stock_capacity,
-    priority_tag: stockBucket(overlay.stock_level, finalQtySold),
-    source: 'erp',
-  };
+  const next = product;
+  next.stock_level = overlay.stock_level;
+  next.stock_capacity = overlay.stock_capacity;
+  next.priority_tag = stockBucket(overlay.stock_level, finalQtySold);
+  next.source = 'erp';
   if (overlay.price != null) next.price = overlay.price;
   if (overlay.cost_price != null) next.cost_price = overlay.cost_price;
   if (overlay.list_price != null) next.list_price = overlay.list_price;
@@ -788,20 +788,17 @@ export async function loadMegaventoryStockByProductId(brandId: string): Promise<
 
 function applyMegaventoryStockOverlay(products: Map<string, CompactProduct>, stockByProductId: Map<string, { available: number; physical: number }>): number {
   let applied = 0;
-  for (const [sku, product] of products.entries()) {
+  for (const product of products.values()) {
     if (!product.productId) continue;
     const stock = stockByProductId.get(product.productId);
     if (!stock) continue;
     const stockLevel = stock.available > 0 ? stock.available : stock.physical;
     const qtySold = product.qty_sold_period ?? 0;
-    products.set(sku, {
-      ...product,
-      stock_level: Math.round(stockLevel * 100) / 100,
-      stock_on_hand: Math.round(stock.physical * 100) / 100,
-      available_stock: Math.round(stock.available * 100) / 100,
-      stock_capacity: Math.max(Math.round(stockLevel * 2 * 100) / 100, Math.round(stockLevel * 100) / 100, 1),
-      priority_tag: stockBucket(stockLevel, qtySold),
-    });
+    product.stock_level = Math.round(stockLevel * 100) / 100;
+    product.stock_on_hand = Math.round(stock.physical * 100) / 100;
+    product.available_stock = Math.round(stock.available * 100) / 100;
+    product.stock_capacity = Math.max(Math.round(stockLevel * 2 * 100) / 100, Math.round(stockLevel * 100) / 100, 1);
+    product.priority_tag = stockBucket(stockLevel, qtySold);
     applied += 1;
   }
   return applied;
@@ -857,26 +854,27 @@ function mergeVelocityPreferErp(
   erp: Map<string, SkuStatsRow>
 ): Map<string, SkuStatsRow> {
   if (erp.size === 0) return eshop;
-  const merged = new Map(eshop);
-  for (const [sku, row] of erp) merged.set(sku, row);
-  return merged;
+  // Mutate the e-shop map in place instead of copying it: at large-brand scale (~137k SKUs) a full
+  // Map copy is a big transient allocation that pushed the rebuild toward the heap ceiling. The caller
+  // doesn't reuse the e-shop map after this, so the mutation is safe.
+  for (const [sku, row] of erp) eshop.set(sku, row);
+  return eshop;
 }
 
 function applySkuStatsOverlay(products: Map<string, CompactProduct>, statsBySku: Map<string, SkuStatsRow>): number {
   let applied = 0;
+  // Mutate the catalog entries in place — spreading a fresh object per matched SKU across the whole
+  // catalog (~90k) doubled the live product objects during the pass; the map owns these exclusively here.
   for (const [sku, product] of products.entries()) {
     const stats = statsBySku.get(sku);
     if (!stats) continue;
     const sold30 = num(stats.sold30d);
     const sold90 = num(stats.sold90d);
     const qtySoldPeriod = sold30 > 0 ? sold30 : sold90 > 0 ? sold90 / 3 : 0;
-    products.set(sku, {
-      ...product,
-      ...(qtySoldPeriod > 0 ? { qty_sold_period: Math.round(qtySoldPeriod * 100) / 100 } : {}),
-      ...(num(stats.sold) > 0 ? { qty_sold_lifetime: Math.round(num(stats.sold) * 100) / 100 } : {}),
-      ...(stats.lastSaleAt ? { last_sale_at: stats.lastSaleAt } : {}),
-      priority_tag: stockBucket(product.stock_level, qtySoldPeriod, num(stats.sold)),
-    });
+    if (qtySoldPeriod > 0) product.qty_sold_period = Math.round(qtySoldPeriod * 100) / 100;
+    if (num(stats.sold) > 0) product.qty_sold_lifetime = Math.round(num(stats.sold) * 100) / 100;
+    if (stats.lastSaleAt) product.last_sale_at = stats.lastSaleAt;
+    product.priority_tag = stockBucket(product.stock_level, qtySoldPeriod, num(stats.sold));
     applied += 1;
   }
   return applied;
@@ -915,22 +913,16 @@ function applyReceiptDateOverlay(
   for (const [sku, product] of products.entries()) {
     const receiptDate = receiptsBySku.get(sku);
     if (!receiptDate) continue;
-    if (!useShelfAgeDead) {
-      products.set(sku, { ...product, first_available_date: receiptDate });
-      applied += 1;
-      continue;
-    }
-    const shelfAge = daysFromIso(receiptDate);
-    products.set(sku, {
-      ...product,
-      first_available_date: receiptDate,
-      priority_tag: stockBucket(
+    product.first_available_date = receiptDate;
+    if (useShelfAgeDead) {
+      const shelfAge = daysFromIso(receiptDate);
+      product.priority_tag = stockBucket(
         product.stock_level,
         product.qty_sold_period ?? null,
         product.qty_sold_lifetime ?? null,
         shelfAge >= 0 ? shelfAge : null
-      ),
-    });
+      );
+    }
     applied += 1;
   }
   return applied;
@@ -1657,4 +1649,11 @@ export async function refreshCompetitiveInventoryLookup(brandId: string): Promis
 
 
 /** Test-only export — unit tests exercise the real code, not copies. */
-export const __test = { productFromRow, stockBucket, summaryForProducts, canServeAggregateQuery };
+export const __test = {
+  productFromRow,
+  stockBucket,
+  summaryForProducts,
+  canServeAggregateQuery,
+  mergeVelocityPreferErp,
+  applySkuStatsOverlay,
+};
