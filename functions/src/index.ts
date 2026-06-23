@@ -124,6 +124,7 @@ import {
   refreshCompetitiveInventoryLookup,
   queryProductIntelligenceRows,
   setDb as setProductIntelligenceDb,
+  classifyAggregateRecovery,
 } from './productIntelligenceAggregator';
 import {
   captureStockSnapshot,
@@ -2603,6 +2604,83 @@ export const healthWatch = onSchedule(
 
       logger.info(`[HealthWatch] checked ${NIGHTLY_JOB_KEYS.length} jobs, ${alerted} alert(s)`);
     })
+);
+
+// A crashed/OOM'd rebuild leaves product_intelligence/{brandId} stranded in 'running' (table serves
+// last-good but never refreshes) or 'failed' (table blanks). 35min > the rebuild functions' own
+// timeout, so anything 'running' older than that is provably dead — no live writer to disturb.
+const PI_STALE_RUNNING_MS = 35 * 60 * 1000;
+const PI_SELF_HEAL_COOLDOWN_MS = 35 * 60 * 1000;
+const PI_SELF_HEAL_MAX_ATTEMPTS = 3;
+
+/** Re-enqueue a PI rebuild for a brand, idempotently — skips if a job is already queued/running. */
+async function enqueuePiRebuild(brandId: string): Promise<boolean> {
+  const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+  const jobRef = admin.firestore().collection('connector_sync_jobs').doc(jobId);
+  return admin.firestore().runTransaction(async (tx) => {
+    const status = (await tx.get(jobRef)).data()?.status as string | undefined;
+    if (status === 'pending' || status === 'running') return false;
+    tx.set(jobRef, {
+      brandId,
+      provider: 'megaventory',
+      status: 'pending',
+      requestedBy: 'pi_watchdog',
+      requestedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      mode: 'post_refresh_only',
+    }, { merge: true });
+    return true;
+  });
+}
+
+export const productIntelligenceWatchdog = onSchedule(
+  { timeZone: 'Europe/Athens', region: 'europe-west1', schedule: 'every 15 minutes' },
+  async () =>
+    runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
+      const now = Date.now();
+      const snap = await db
+        .collection('product_intelligence')
+        .select('status', 'updatedAt', 'piSelfHealAttempts', 'piSelfHealAt')
+        .get();
+      let healed = 0;
+      let gaveUp = 0;
+      for (const doc of snap.docs) {
+        const d = doc.data();
+        const decision = classifyAggregateRecovery(
+          {
+            status: d.status as string | undefined,
+            updatedAtMs: tsToMillis(d.updatedAt),
+            selfHealAttempts: Number(d.piSelfHealAttempts ?? 0),
+            selfHealAtMs: tsToMillis(d.piSelfHealAt),
+            nowMs: now,
+          },
+          { staleMs: PI_STALE_RUNNING_MS, cooldownMs: PI_SELF_HEAL_COOLDOWN_MS, maxAttempts: PI_SELF_HEAL_MAX_ATTEMPTS },
+        );
+        if (decision === 'ok' || decision === 'cooldown') continue;
+        const brandId = doc.id;
+        if (decision === 'giveup') {
+          logger.alert(`[PIWatchdog] ${brandId} stuck (${d.status}) — self-heal cap reached, manual intervention needed`, {
+            alertKey: ALERT.productIntelligenceFailed,
+            brandId,
+          });
+          gaveUp++;
+          continue;
+        }
+        // decision === 'heal'
+        try {
+          const queued = await enqueuePiRebuild(brandId);
+          await doc.ref.set(
+            { piSelfHealAttempts: FieldValue.increment(1), piSelfHealAt: FieldValue.serverTimestamp() },
+            { merge: true },
+          );
+          logger.warn(`[PIWatchdog] ${brandId} stuck (${d.status}) → ${queued ? 'enqueued PI rebuild' : 'rebuild already queued'} (attempt ${Number(d.piSelfHealAttempts ?? 0) + 1})`);
+          healed++;
+        } catch (err) {
+          logger.warnAlert(`[PIWatchdog] failed to self-heal ${brandId}:`, { alertKey: ALERT.productIntelligenceFailed, err });
+        }
+      }
+      logger.info(`[PIWatchdog] scanned ${snap.size} aggregates, healed=${healed}, gaveUp=${gaveUp}`);
+    }),
 );
 
 /** Bounded concurrency (lighter Google API hammering during the nightly batch). */

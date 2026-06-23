@@ -1333,6 +1333,22 @@ function canServeAggregateQuery(status: string | undefined, hasPages: boolean): 
   return status === 'running' && hasPages;
 }
 
+/** Watchdog decision for an aggregate left in a bad state by a crashed/timed-out rebuild. A 'running'
+ * older than staleMs is provably dead (it exceeds the rebuild functions' own timeout, so no live writer
+ * exists), and 'failed' is terminal-bad — both warrant a re-triggered rebuild, bounded by a cooldown and
+ * an attempt cap so a brand that keeps failing can't livelock the worker. */
+export function classifyAggregateRecovery(
+  s: { status: string | undefined; updatedAtMs: number | null; selfHealAttempts: number; selfHealAtMs: number | null; nowMs: number },
+  opts: { staleMs: number; cooldownMs: number; maxAttempts: number },
+): 'ok' | 'heal' | 'cooldown' | 'giveup' {
+  const stuckRunning = s.status === 'running' && s.updatedAtMs != null && s.nowMs - s.updatedAtMs >= opts.staleMs;
+  const bad = s.status === 'failed' || stuckRunning;
+  if (!bad) return 'ok';
+  if (s.selfHealAttempts >= opts.maxAttempts) return 'giveup';
+  if (s.selfHealAtMs != null && s.nowMs - s.selfHealAtMs < opts.cooldownMs) return 'cooldown';
+  return 'heal';
+}
+
 export async function queryProductIntelligenceRows(params: ProductIntelligenceQueryParams): Promise<ProductIntelligenceQueryResult> {
   const firestore = assertDb();
   const aggregateSnap = await firestore.doc(`product_intelligence/${params.brandId}`).get();
@@ -1590,6 +1606,9 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       computedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       error: FieldValue.delete(),
+      // A clean rebuild clears the watchdog's self-heal tracking so the attempt cap resets.
+      piSelfHealAttempts: FieldValue.delete(),
+      piSelfHealAt: FieldValue.delete(),
     };
     await ref.set(payload, { merge: true });
     logger.info(
@@ -1656,4 +1675,5 @@ export const __test = {
   canServeAggregateQuery,
   mergeVelocityPreferErp,
   applySkuStatsOverlay,
+  classifyAggregateRecovery,
 };
