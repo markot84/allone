@@ -1926,7 +1926,7 @@ export const processMegaventorySyncJobs = onSchedule(
     const claimToken = randomUUID();
     const job = await db.runTransaction(async (tx) => {
       const latest = await tx.get(jobRef);
-      const data = latest.data() as { brandId?: string; status?: string; continuationAttempts?: number; mode?: string; filterStage?: string } | undefined;
+      const data = latest.data() as { brandId?: string; status?: string; continuationAttempts?: number; mode?: string; filterStage?: string; refreshVelocity?: boolean } | undefined;
       if (!latest.exists || data?.status !== 'pending' || !data.brandId) return null;
       tx.update(jobRef, {
         status: 'running',
@@ -1934,7 +1934,7 @@ export const processMegaventorySyncJobs = onSchedule(
         startedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return { brandId: data.brandId, continuationAttempts: Number(data.continuationAttempts ?? 0), mode: data.mode, filterStage: data.filterStage };
+      return { brandId: data.brandId, continuationAttempts: Number(data.continuationAttempts ?? 0), mode: data.mode, filterStage: data.filterStage, refreshVelocity: Boolean(data.refreshVelocity) };
     });
 
     if (!job) return;
@@ -1960,6 +1960,14 @@ export const processMegaventorySyncJobs = onSchedule(
         logger.info(`[MegaventoryJob] Post-refresh-only job for ${job.brandId} (nightly wave handoff)`);
         let piError: string | null = null;
         try {
+          if (job.refreshVelocity) {
+            // Refresh all-channel ERP velocity windows before the rebuild (no-op for non-Megaventory
+            // brands); non-fatal so a velocity hiccup never blocks the PI rebuild. Runs here, in the
+            // worker's own budget, instead of inline in scheduledProductIntelligence's 20-min loop.
+            await computeErpSkuVelocity(job.brandId).catch((e) =>
+              logger.warn(`[MegaventoryJob] erp velocity failed for ${job.brandId} (non-fatal):`, { err: e }),
+            );
+          }
           const piResult = await refreshProductIntelligenceAggregate(job.brandId);
           logger.info(
             `[MegaventoryJob] Product intelligence refreshed for ${job.brandId}: totalCount=${piResult.totalCount ?? 0}`
@@ -2613,8 +2621,12 @@ const PI_STALE_RUNNING_MS = 35 * 60 * 1000;
 const PI_SELF_HEAL_COOLDOWN_MS = 35 * 60 * 1000;
 const PI_SELF_HEAL_MAX_ATTEMPTS = 3;
 
-/** Re-enqueue a PI rebuild for a brand, idempotently — skips if a job is already queued/running. */
-async function enqueuePiRebuild(brandId: string): Promise<boolean> {
+/** Enqueue a post_refresh_only PI rebuild for a brand, idempotently — skips if a job is already
+ * queued/running. refreshVelocity asks the worker to refresh ERP velocity windows before the rebuild. */
+async function enqueuePiRebuild(
+  brandId: string,
+  opts?: { refreshVelocity?: boolean; requestedBy?: string },
+): Promise<boolean> {
   const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
   const jobRef = admin.firestore().collection('connector_sync_jobs').doc(jobId);
   return admin.firestore().runTransaction(async (tx) => {
@@ -2624,10 +2636,12 @@ async function enqueuePiRebuild(brandId: string): Promise<boolean> {
       brandId,
       provider: 'megaventory',
       status: 'pending',
-      requestedBy: 'pi_watchdog',
+      requestedBy: opts?.requestedBy ?? 'pi_watchdog',
       requestedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       mode: 'post_refresh_only',
+      // Always set explicitly so a re-used job doc never inherits a stale flag from a prior enqueue.
+      refreshVelocity: opts?.refreshVelocity ? true : FieldValue.delete(),
     }, { merge: true });
     return true;
   });
@@ -3038,19 +3052,20 @@ export const scheduledDataAnalysisRfm = onSchedule(
 export const scheduledProductIntelligence = onSchedule(
   { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '4GiB', timeoutSeconds: 1200, schedule: 'every day 07:40' },
   async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
+    // Hand each brand's heavy velocity + PI rebuild to the worker (its own 30-min budget, one brand
+    // per claim) instead of running them inline. The old serial inline loop (~17min/brand for e-tennis)
+    // overran this function's 20-min cap and stranded whichever brand was mid-rebuild, which the
+    // watchdog then had to clean up every morning. Enqueuing is fast and can't time out.
     const snap = await db.collection('connectors').get();
+    let enqueued = 0;
     for (const doc of snap.docs) {
       try {
-        // Refresh all-channel ERP velocity first (no-op for non-Megaventory brands) so PI overlays
-        // current 7/30/90d windows; non-fatal so a velocity hiccup never blocks the PI rebuild.
-        await computeErpSkuVelocity(doc.id).catch((e) =>
-          logger.warn(`[scheduledProductIntelligence] erp velocity failed for ${doc.id} (non-fatal):`, { err: e })
-        );
-        await refreshProductIntelligenceAggregate(doc.id);
+        if (await enqueuePiRebuild(doc.id, { refreshVelocity: true, requestedBy: 'scheduled_pi' })) enqueued += 1;
       } catch (error) {
-        logger.warnAlert(`[scheduledProductIntelligence] failed for ${doc.id}:`, { alertKey: ALERT.scheduledProductIntelligenceFailed, err: error });
+        logger.warnAlert(`[scheduledProductIntelligence] enqueue failed for ${doc.id}:`, { alertKey: ALERT.scheduledProductIntelligenceFailed, err: error });
       }
     }
+    logger.info(`[scheduledProductIntelligence] handed ${enqueued}/${snap.docs.length} brand PI rebuilds to the worker`);
   })
 );
 
