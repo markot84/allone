@@ -162,15 +162,16 @@ export function trackMarketingEvent(action: string, params?: Record<string, stri
 
 // ── Conversion events ────────────────────────────────────────────────────────
 
-/** Meta Pixel `Lead` — "Book a demo" button. */
+/** Meta Pixel `Lead` — fired on a successful interest-form submission (a real lead, PER-156),
+ * not on the "Book a demo" CTA click. */
 export function trackMetaLead(): void {
   window.fbq?.('track', 'Lead');
 }
 
-/** "Book a demo" CTA — GA4 `cta_click` + Meta `Lead`. */
+/** "Book a demo" CTA — GA4 `cta_click` only. The Meta `Lead` now fires on a successful form
+ * submit (PER-156), so the button click no longer counts as a lead. */
 export function trackLeadCta(placement: string): void {
   trackMarketingEvent('cta_click', { placement });
-  trackMetaLead();
 }
 
 /** Meta Pixel `Contact` — phone button. */

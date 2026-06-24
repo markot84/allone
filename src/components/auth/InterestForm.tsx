@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Send } from 'lucide-react';
 import { Card, Button, Spinner, useToast } from '../common';
 import { buildFunctionUrl } from '../../config/firebase';
-import { trackMarketingEvent, trackGoogleFormSubmitConversion, trackLinkedInConversion } from '../../utils/marketingTracking';
+import { trackMarketingEvent, trackGoogleFormSubmitConversion, trackLinkedInConversion, trackMetaLead } from '../../utils/marketingTracking';
 
 const improvementOptions = [
   'ROAS & budget allocation',
@@ -67,6 +67,7 @@ export function InterestForm() {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
       // Conversions only on a successful submit (a real lead).
+      trackMetaLead();
       trackGoogleFormSubmitConversion();
       trackLinkedInConversion();
       toast.success(
