@@ -392,13 +392,26 @@ export const SegmentsService = {
   delete: (id: string) => FirestoreService.deleteDocument('segments', id),
 };
 
+/** Dedupe a customer list by customerId (keeps first occurrence); rows without a customerId are kept. */
+export function dedupeCustomersById<T extends { customerId?: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((c) => {
+    if (!c.customerId) return true;
+    if (seen.has(c.customerId)) return false;
+    seen.add(c.customerId);
+    return true;
+  });
+}
+
 export const SegmentCustomersService = {
   async getForSegment(brandId: string, segmentId: string): Promise<{ customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]> {
     const docs = await FirestoreService.getDocuments<{
       segmentId: string;
       customers: { customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
     }>('segment_customers', [where('segmentId', '==', segmentId)], brandId, { forceServer: true });
-    return docs.flatMap(d => d.customers || []);
+    // Dedupe by customerId — a brand can carry rows from multiple RFM writers (megaventory_rfm +
+    // data_analysis_rfm) for the same segment.
+    return dedupeCustomersById(docs.flatMap(d => d.customers || []));
   },
   async getAllBySegment(brandId: string): Promise<Map<string, { customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]>> {
     const docs = await FirestoreService.getDocuments<{
@@ -411,6 +424,7 @@ export const SegmentCustomersService = {
       existing.push(...(d.customers || []));
       map.set(d.segmentId, existing);
     }
+    for (const [segId, list] of map) map.set(segId, dedupeCustomersById(list));
     return map;
   },
   async getSummariesBySegment(brandId: string): Promise<Map<string, { segmentName?: string; count: number; monetary: number }>> {

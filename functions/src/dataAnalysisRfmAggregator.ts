@@ -11,6 +11,76 @@ export function setDb(firestore: Firestore): void {
   db = firestore;
 }
 
+// Per-segment customers are persisted here (chunked) instead of being embedded in the RFM aggregate
+// doc — embedding ~200×segments×scopes bloated that doc to ~5MB and froze the Data Analysis page on
+// read. The customer-list export already reads `segment_customers` as its primary source. Distinct
+// `source` from the Megaventory RFM writer so both can coexist for a brand (export dedupes by id).
+const SEGMENT_CUSTOMERS_SOURCE = 'data_analysis_rfm';
+const SEGMENT_WRITE_BATCH_SIZE = 450;
+const SEGMENT_CUSTOMER_CHUNK_SIZE = 500;
+
+function sanitizeFirestoreDocId(raw: string): string {
+  let s = String(raw ?? '').trim();
+  if (!s) s = '_';
+  s = s.replace(/[/\\]/g, '_');
+  if (s === '.' || s === '..') s = '_dot_';
+  return s.length > 1500 ? s.slice(0, 1500) : s;
+}
+
+/** Remove this writer's prior segment_customers rows for a brand so a re-run leaves no orphans when
+ * segment membership changes. Source-scoped, so the Megaventory RFM writer's rows are untouched. */
+async function deleteOwnSegmentCustomerRows(firestore: Firestore, brandId: string): Promise<number> {
+  let deleted = 0;
+  for (;;) {
+    const snap = await firestore
+      .collection('segment_customers')
+      .where('brandId', '==', brandId)
+      .where('source', '==', SEGMENT_CUSTOMERS_SOURCE)
+      .limit(SEGMENT_WRITE_BATCH_SIZE)
+      .get();
+    if (snap.empty) break;
+    const batch = firestore.batch();
+    for (const doc of snap.docs) batch.delete(doc.ref);
+    await batch.commit();
+    deleted += snap.size;
+    if (snap.size < SEGMENT_WRITE_BATCH_SIZE) break;
+  }
+  return deleted;
+}
+
+type SegmentCustomerRow = { customerId: string; email?: string; recency: number; frequency: number; monetary: number; rfmScore: string };
+
+async function writeSegmentCustomers(
+  firestore: Firestore,
+  brandId: string,
+  segments: Array<{ id: string; name: string; customers?: SegmentCustomerRow[] }>,
+): Promise<number> {
+  let docs = 0;
+  let batch = firestore.batch();
+  let ops = 0;
+  for (const segment of segments) {
+    const customers = segment.customers ?? [];
+    for (let i = 0; i < customers.length; i += SEGMENT_CUSTOMER_CHUNK_SIZE) {
+      const chunk = customers.slice(i, i + SEGMENT_CUSTOMER_CHUNK_SIZE);
+      const docId = sanitizeFirestoreDocId(`${brandId}_${SEGMENT_CUSTOMERS_SOURCE}_${segment.id}_${Math.floor(i / SEGMENT_CUSTOMER_CHUNK_SIZE)}`);
+      batch.set(firestore.collection('segment_customers').doc(docId), {
+        segmentId: segment.id,
+        segmentName: segment.name,
+        totalInSegment: customers.length,
+        customers: chunk,
+        brandId,
+        source: SEGMENT_CUSTOMERS_SOURCE,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      docs += 1;
+      ops += 1;
+      if (ops >= SEGMENT_WRITE_BATCH_SIZE) { await batch.commit(); batch = firestore.batch(); ops = 0; }
+    }
+  }
+  if (ops > 0) await batch.commit();
+  return docs;
+}
+
 type RevenueSourceMode = 'eshop_classified' | 'eshop_all' | 'erp';
 type RfmStatus = 'running' | 'ready' | 'failed';
 type RfmScopeId = 'identified' | 'all';
@@ -1230,10 +1300,25 @@ export async function refreshDataAnalysisRfmAggregate(brandId: string): Promise<
     const { orders, pages } = await loadMagentoOrders(brandId, since.toISOString().slice(0, 10), rules);
     const identified = computeScope(orders, catalog, false);
     const all = computeScope(orders, catalog, true);
+    // Persist per-segment customers out-of-doc (chunked) so the aggregate stays small enough to read
+    // without freezing the Data Analysis page; the customer-list export reads segment_customers.
+    // Identified scope = real (email-bearing) customers — the meaningful set for the lists.
+    await deleteOwnSegmentCustomerRows(firestore, brandId);
+    await writeSegmentCustomers(firestore, brandId, identified.segments);
     const segmentMigration = computeAdaptiveSegmentMigration(orders);
     const segmentPeriodComparison = computeAdaptiveSegmentPeriodComparison(orders);
     const isErpBacked = mode === 'erp' || hasErpConnector;
     const sourceLabel = isErpBacked ? 'ERP' : 'E-shop orders';
+    // Drop the per-segment customers from the doc (they now live in segment_customers) — keeps the
+    // aggregate small; everything else the page reads (counts, behavioral, charts) stays.
+    const stripCustomers = (scope: typeof identified) => ({
+      ...scope,
+      segments: scope.segments.map((seg) => {
+        const copy: Record<string, unknown> = { ...seg };
+        delete copy.customers;
+        return copy;
+      }),
+    });
     const payload = {
       brandId,
       status: 'ready' satisfies RfmStatus,
@@ -1249,7 +1334,7 @@ export async function refreshDataAnalysisRfmAggregate(brandId: string): Promise<
       catalogSkus: catalog.size,
       segmentMigration,
       segmentPeriodComparison,
-      scopes: { identified, all },
+      scopes: { identified: stripCustomers(identified), all: stripCustomers(all) },
       computedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       error: FieldValue.delete(),
