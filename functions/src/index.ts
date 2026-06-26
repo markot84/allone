@@ -136,6 +136,7 @@ import {
   refreshProcurementSignals,
   setDb as setProcurementSignalsDb,
 } from './procurementSignals';
+import { refreshMarketingPlanInsightAggregate } from './marketingPlan/aggregate';
 import {
   getGA4AuthUrl,
   handleGA4Callback,
@@ -1971,6 +1972,12 @@ export const processMegaventorySyncJobs = onSchedule(
           const piResult = await refreshProductIntelligenceAggregate(job.brandId);
           logger.info(
             `[MegaventoryJob] Product intelligence refreshed for ${job.brandId}: totalCount=${piResult.totalCount ?? 0}`
+          );
+          // PER-157: rebuild the marketing_plan_insight aggregate now that products + signals have
+          // settled. Non-fatal — a marketing-plan hiccup must never fail the PI handoff; the page
+          // falls back to local compute when the doc is stale.
+          await refreshMarketingPlanInsightAggregate(job.brandId).catch((e) =>
+            logger.warn(`[MegaventoryJob] marketing_plan_insight refresh failed for ${job.brandId} (non-fatal):`, { err: e }),
           );
         } catch (e) {
           piError = e instanceof Error ? e.message : String(e);
@@ -3974,6 +3981,42 @@ export const refreshSignals = onRequest(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshSignals]', { alertKey: ALERT.procurementSignalsFailed, err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/** POST /refreshMarketingPlanInsight — Body: { brandId }. Rebuilds marketing_plan_insight/{brandId}
+ * (all presets) server-side so the Marketing Plan page reads a compact doc instead of loading the
+ * ~222k-product catalog (PER-157). 4GiB: streams the projected catalog + runs the insight 6×. */
+export const refreshMarketingPlanInsight = onRequest(
+  // 4GiB to match the heavy aggregators: the build holds the ~222k-product array + a per-preset
+  // name-bridge index, and the global NODE_OPTIONS=--max-old-space-size=3072 needs a >3GiB container
+  // (1GiB OOM'd at 1078MiB on e-tennis). Same heap home as the nightly PI worker.
+  { region: 'europe-west1', timeoutSeconds: 540, memory: '4GiB', cpu: 2 },
+  async (req, res) => {
+    if (applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
+        return;
+      }
+
+      const result = await refreshMarketingPlanInsightAggregate(brandId);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      logger.error('[refreshMarketingPlanInsight]', { err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }

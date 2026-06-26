@@ -579,6 +579,13 @@ service cloud.firestore {
       allow read: if isBrandMember(brandId);
       allow write: if false;
     }
+
+    // PER-157: server-precomputed Marketing Plan insight (all presets, JSON blob). Read-only for
+    // members; written only by the marketing_plan_insight Cloud Function (admin SDK bypasses rules).
+    match /marketing_plan_insight/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
     // E-commerce connector data (Shopify, WooCommerce, OpenCart, Magento)
     match /shopify_orders/{docId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));

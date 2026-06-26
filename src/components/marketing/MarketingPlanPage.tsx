@@ -12,6 +12,7 @@ import { useGA4Data } from '../../hooks/useGA4Data';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useProcurementSignals } from '../../hooks/useProcurementSignals';
 import { useProducts } from '../../hooks/useProducts';
+import { useMarketingPlanInsight } from '../../hooks/useMarketingPlanInsight';
 import { useSegments } from '../../hooks/useSegments';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import {
@@ -236,7 +237,8 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const ga4 = useGA4Data();
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const procurementSignals = useProcurementSignals();
-  const { products: inventoryProducts, isLoading: inventoryLoading } = useProducts();
+  // PER-157: server-precomputed insight (all presets). When present we DON'T load the 222k catalog.
+  const insightDoc = useMarketingPlanInsight();
   const segments = useSegments({ variant: 'data_analysis', skipOrderHydration: true });
   const { benchmarks: priceBenchmarks } = usePriceBenchmarks({ maxDocs: 200 });
   const commercialInfo = useCommercialInfo();
@@ -314,6 +316,16 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const effectiveCachedPlanEntry = cachedPlanEntry ?? remotePlanCacheQuery.data ?? null;
   const cacheLookupPending = !effectiveCachedPlanEntry && remotePlanCacheQuery.isLoading;
 
+  // PER-157: the precomputed insight for the current preset (or null → fall back to local compute).
+  const serverInsight = insightDoc.byPreset?.[preset] ?? null;
+  // Heavy inputs (222k catalog + last-year orders) are loaded ONLY when we must compute locally:
+  // no draft cache, the insight doc isn't (yet) usable. This is what removes the freeze.
+  const needHeavyInputs =
+    !effectiveCachedPlanEntry && !cacheLookupPending && !insightDoc.isLoading && !serverInsight;
+  const { products: inventoryProducts, isLoading: inventoryLoadingRaw } = useProducts({ enabled: needHeavyInputs });
+  // When gated off, react-query keeps the query "pending"; treat it as not-loading for readiness.
+  const inventoryLoading = needHeavyInputs && inventoryLoadingRaw;
+
   const lastYearOrdersQuery = useQuery({
     queryKey: ['marketingPlanLastYearOrders', brandId, lastYearFrom, lastYearTo, platformsKey],
     queryFn: async () => {
@@ -331,7 +343,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       writeLastYearOrdersCache(brandId, lastYearFrom, lastYearTo, platformsKey, orders);
       return orders;
     },
-    enabled: !!brandId && contextReady && !ecomm.isLoading && !effectiveCachedPlanEntry && !cacheLookupPending,
+    enabled: !!brandId && contextReady && !ecomm.isLoading && needHeavyInputs,
     staleTime: PLAN_CACHE_TTL_MS,
     gcTime: 60 * 60 * 1000,
     refetchOnMount: false,
@@ -397,13 +409,17 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   // saves permanently empty. "Settled" = has data (even []) or failed/expired — never blocks UI.
   const lastYearOrdersSettled = lastYearOrdersQuery.data !== undefined || lastYearOrdersQuery.isError;
 
-  // Base data ready → the plan is computed once (per brand/preset/context) and kept.
+  // Base data ready → the plan is computed once (per brand/preset/context) and kept. With a server
+  // insight we're ready as soon as the doc + context settle; otherwise we wait for the heavy inputs.
   const baseDataReady =
-    !!brandId && contextReady && !cacheLookupPending && !inventoryLoading &&
-    !procurementSignals.isLoading && lastYearOrdersSettled;
+    !!brandId && contextReady && !cacheLookupPending && !insightDoc.isLoading &&
+    (serverInsight
+      ? true
+      : !inventoryLoading && !procurementSignals.isLoading && lastYearOrdersSettled);
   const loadingContext =
     !effectiveCachedPlanEntry &&
-    (cacheLookupPending || !contextReady || inventoryLoading || procurementSignals.isLoading || !lastYearOrdersSettled);
+    (cacheLookupPending || insightDoc.isLoading || !contextReady ||
+      (!serverInsight && (inventoryLoading || procurementSignals.isLoading || !lastYearOrdersSettled)));
 
   // The plan draft lives in the React Query cache (navigation) + localStorage (reload) with a
   // daily staleTime, so the heavy analysis + AI does NOT re-run on every page entry.
@@ -419,7 +435,9 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     initialData: () => effectiveCachedPlanEntry?.plan,
     initialDataUpdatedAt: () => effectiveCachedPlanEntry?.savedAt,
     queryFn: async () => {
-      const insight = buildMarketingPlanInsight({
+      // PER-157: prefer the server-precomputed insight (no 222k client load / no main-thread freeze);
+      // fall back to the local compute only when the doc is unavailable/stale.
+      const insight = serverInsight ?? buildMarketingPlanInsight({
         period,
         lastYearOrders: lastYearOrdersQuery.data ?? [],
         inventoryProducts,
@@ -513,18 +531,23 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   // SKU coverage = the plan's full active "universe": the ERP catalog (`products`) when larger
   // than the procurement signals subset, so the KPI shows all active SKUs, not just the report's.
   const skuCoverage = useMemo(() => {
+    // Server path: the doc carries the full universe (totalSkusCovered / productCount) — no catalog load.
+    if (serverInsight) return serverInsight.totalSkusCovered || insightDoc.productCount || null;
     const signalCount = Object.keys(procurementSignals.signalsBySku).length;
     const universe = Math.max(signalCount, inventoryProducts.length);
     return universe > 0 ? universe : null;
-  }, [procurementSignals.signalsBySku, inventoryProducts.length]);
+  }, [serverInsight, insightDoc.productCount, procurementSignals.signalsBySku, inventoryProducts.length]);
 
   // Loading/analysis stages for the progress loader (so the user sees progress, not a vague spinner).
   const planStages = useMemo<PlanStage[]>(() => {
-    const salesDone = !lastYearOrdersQuery.isLoading;
-    const salesSkipped = lastYearOrdersQuery.isError;
-    const inventoryDone = !inventoryLoading;
-    const erpDone = !procurementSignals.isLoading;
+    // Server path: products/orders/signals were precomputed → these stages are already done; show
+    // the doc's counts instead of (unloaded) client data.
+    const salesDone = serverInsight ? true : !lastYearOrdersQuery.isLoading;
+    const salesSkipped = serverInsight ? false : lastYearOrdersQuery.isError;
+    const inventoryDone = serverInsight ? true : !inventoryLoading;
+    const erpDone = serverInsight ? true : !procurementSignals.isLoading;
     const synthesisDone = !!draft;
+    const inventoryCount = serverInsight ? insightDoc.productCount : inventoryProducts.length;
     const raw: Omit<PlanStage, 'active'>[] = [
       {
         id: 'sales',
@@ -532,15 +555,17 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         detail: `${lastYearFrom} → ${lastYearTo}`,
         meta: salesSkipped
           ? 'Παραλείφθηκε προσωρινά λόγω καθυστέρησης'
-          : salesDone && lastYearOrdersQuery.data
-            ? `${formatNumber(lastYearOrdersQuery.data.length)} παραγγελίες`
-            : undefined,
+          : serverInsight
+            ? `${formatNumber(serverInsight.evidence.orders)} παραγγελίες`
+            : salesDone && lastYearOrdersQuery.data
+              ? `${formatNumber(lastYearOrdersQuery.data.length)} παραγγελίες`
+              : undefined,
         done: salesDone,
       },
       {
         id: 'inventory',
         label: 'Τρέχον απόθεμα (product catalog)',
-        meta: inventoryDone ? `${formatNumber(inventoryProducts.length)} προϊόντα` : undefined,
+        meta: inventoryDone && inventoryCount ? `${formatNumber(inventoryCount)} προϊόντα` : undefined,
         done: inventoryDone,
       },
       {
@@ -567,6 +592,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       return { ...s, active };
     });
   }, [
+    serverInsight, insightDoc.productCount,
     lastYearOrdersQuery.isLoading, lastYearOrdersQuery.isError, lastYearOrdersQuery.data, inventoryLoading,
     inventoryProducts.length, procurementSignals.isLoading, skuCoverage,
     draft, generating, lastYearFrom, lastYearTo,

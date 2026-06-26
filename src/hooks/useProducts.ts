@@ -10,6 +10,10 @@ import { logger } from '../utils/logger';
 type UseProductsOptions = {
   maxDocs?: number;
   inStockOnly?: boolean;
+  /** Gate the (potentially unbounded) fetch. Defaults to true. PER-157 sets this false on the
+   *  Marketing Plan page when the server-precomputed insight is used, so the ~222k-doc catalog is
+   *  never loaded in the common case. */
+  enabled?: boolean;
 };
 
 export function useProducts(options: UseProductsOptions = {}) {
@@ -17,11 +21,13 @@ export function useProducts(options: UseProductsOptions = {}) {
   const brandId = currentBrand?.id ?? null;
   const maxDocs = options.maxDocs;
   const inStockOnly = options.inStockOnly ?? false;
+  const enabled = options.enabled ?? true;
   const syncVersionQuery = useBrandSyncVersion(brandId);
   const syncVersion = syncVersionQuery.data?.version ?? 'pending';
 
   const { data: firestoreProducts = [], isPending } = useQuery({
     queryKey: ['products', brandId, syncVersion, maxDocs ?? 'all', inStockOnly ? 'in-stock' : 'all-stock'],
+    enabled,
     queryFn: async () => {
       if (!brandId) return [] as Product[];
       const constraints = [
@@ -47,7 +53,7 @@ export function useProducts(options: UseProductsOptions = {}) {
     queryFn: () => (brandId ? ProductsService.getCount(brandId) : Promise.resolve(0)),
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
-    enabled: !!brandId && !!maxDocs,
+    enabled: enabled && !!brandId && !!maxDocs,
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData,
   });
