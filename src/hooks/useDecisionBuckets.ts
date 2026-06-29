@@ -107,7 +107,9 @@ export function useDecisionBuckets(
   thresholds: BucketThresholds = DEFAULT_THRESHOLDS,
   options: UseDecisionBucketsOptions = {}
 ): UseDecisionBucketsResult {
-  const productSource = useProductSource({ maxProducts: options.maxProducts });
+  // PER-167: when the caller injects products (e.g. WeightConfigurator's bounded in-stock set), do
+  // NOT also fetch the full ~222k catalog here — the unconditional fetch was the page's slow load.
+  const productSource = useProductSource({ maxProducts: options.maxProducts, enabled: !options.products });
   const products = options.products ?? productSource.products;
   const productsLoading = options.products ? false : productSource.isLoading;
   const { getSignal, isLoading: signalsLoading } = useProductSignals(products);

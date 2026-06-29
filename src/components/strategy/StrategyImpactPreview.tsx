@@ -15,7 +15,7 @@ import {
   Infinity
 } from 'lucide-react';
 import { Button } from '../common';
-import { useProductSource } from '../../hooks/useProductSource';
+import { useBoundedProductSource } from '../../hooks/useBoundedProductSource';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useContent } from '../../hooks/useContent';
 import { calculateCompositeScore, type CompositeScoreContext } from '../../utils/compositeScore';
@@ -171,7 +171,7 @@ export function StrategyImpactSummary({
   onConfirm, onCancel, onDetails, initialDuration, impactProductFilter, scoreContext,
 }: StrategyImpactSummaryProps) {
   const [duration, setDuration] = useState<number | 'ongoing'>(initialDuration);
-  const { products } = useProductSource();
+  const { products } = useBoundedProductSource();
   const impacts = useProductImpacts(
     products,
     currentWeights,
@@ -347,7 +347,7 @@ export function StrategyImpactModal({
   impactProductFilter,
   scoreContext,
 }: StrategyImpactModalProps) {
-  const { products } = useProductSource();
+  const { products } = useBoundedProductSource();
   const { campaigns: campaignsFromHook } = useCampaigns();
   const { contentItems: contentFromHook } = useContent();
   const campaigns = campaignsFromHook ?? [];

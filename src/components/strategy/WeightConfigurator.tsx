@@ -31,8 +31,7 @@ import { CustomToolsCard } from './CustomToolsCard';
 import { MixedStrategyPanel, type MixConfig, computeBlendedWeights } from './MixedStrategyPanel';
 import { SeasonalBanner } from './SeasonalBanner';
 import { SeasonalPeriodsModal } from './SeasonalPeriodsModal';
-import { useProductSource } from '../../hooks/useProductSource';
-import { useInStockProducts } from '../../hooks/useInStockProducts';
+import { useBoundedProductSource } from '../../hooks/useBoundedProductSource';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { useProductSignals } from '../../hooks/useProductSignals';
 import { buildTriagePromptContext, buildProvenancePromptContext } from '../../utils/aiPromptContext';
@@ -275,20 +274,18 @@ export function WeightConfigurator({
 }: { onSectionChange?: (section: string) => void } = {}) {
   const { currentBrand } = useBrand();
   // PER-167: score the bounded in-stock set (~14k) from the precomputed PI bucket pages instead of
-  // loading + scoring the full ~222k catalog on the main thread (the freeze). The local catalog is
-  // fetched only as a fallback when the aggregate isn't ready (e.g. a brand with no Product Intelligence).
-  const inStock = useInStockProducts();
-  const useLocalFallback = !inStock.isLoading && !inStock.ready;
+  // loading + scoring the full ~222k catalog on the main thread (the freeze). useBoundedProductSource
+  // falls back to the full catalog only when the aggregate isn't ready (e.g. a brand with no PI).
   const {
     products: sourceProducts,
     hasImported: sourceHasImported,
     usingProcurement,
     sourceLabel: sourceProductDataSourceLabel,
     sourceKind: sourceProductSourceKind,
-  } = useProductSource({ enabled: useLocalFallback });
+  } = useBoundedProductSource();
   // staticFirstPage: read ONLY .aggregate; avoids the unfiltered CF (~1.5k reads) per mount.
   const serverProductIntelligence = useProductIntelligenceAggregate('all', 1, {}, { staticFirstPage: true });
-  const products = inStock.ready ? inStock.products : sourceProducts;
+  const products = sourceProducts;
   const hasImported = sourceHasImported || !!serverProductIntelligence.aggregate;
   const productDataSourceLabel = serverProductIntelligence.aggregate?.sourceLabel ?? sourceProductDataSourceLabel;
   const productSourceKind = serverProductIntelligence.aggregate ? 'erp' : sourceProductSourceKind;
