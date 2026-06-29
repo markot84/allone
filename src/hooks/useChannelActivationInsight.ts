@@ -57,7 +57,10 @@ export function useChannelActivationInsight(options: { loadDead?: boolean } = {}
     queryFn: async (): Promise<ProductIntelligenceAggregate | null> => {
       if (!brandId) return null;
       const agg = await fetchProductIntelligenceAggregate(brandId, null);
-      return agg && agg.status === 'ready' ? agg : null;
+      // Serve whenever pages exist — including while a rebuild is `running`/`failed` (the previous
+      // build's pages stay readable, see writePageDocs write-then-cleanup). Only a brand with no
+      // Product Intelligence (no pages) returns null → caller falls back to the local list.
+      return agg && agg.pagesByBucket ? agg : null;
     },
     enabled: !!brandId,
     ...QUERY_OPTS,

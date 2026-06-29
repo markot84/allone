@@ -1271,13 +1271,8 @@ function bucketRows(products: CompactProduct[], bucket: PageBucket): CompactProd
 
 async function writePageDocs(brandId: string, products: CompactProduct[]): Promise<Record<PageBucket, number>> {
   const firestore = assertDb();
-  const old = await firestore.collection('product_intelligence_pages').where('brandId', '==', brandId).get();
-  for (let i = 0; i < old.docs.length; i += PAGE_WRITE_BATCH_SIZE) {
-    const batch = firestore.batch();
-    old.docs.slice(i, i + PAGE_WRITE_BATCH_SIZE).forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-  }
 
+  // Build the full new page set first.
   const pagesByBucket = {} as Record<PageBucket, number>;
   const writes: Array<{ id: string; data: Record<string, unknown> }> = [];
   for (const bucket of BUCKETS) {
@@ -1299,6 +1294,11 @@ async function writePageDocs(brandId: string, products: CompactProduct[]): Promi
     }
   }
 
+  // WRITE-THEN-CLEANUP (PER-166/167): overwrite the new pages IN PLACE first, so the previous build's
+  // pages stay readable throughout the rebuild. Readers serving the aggregate while status='running'
+  // therefore never see a missing-page window (which would yield partial data or, for the strategy /
+  // channel pages, a fall back to loading the full ~222k catalog). Only AFTER the new set is committed
+  // do we delete the now-stale leftovers from a previous, larger build.
   for (let i = 0; i < writes.length; i += PAGE_WRITE_BATCH_SIZE) {
     const batch = firestore.batch();
     writes.slice(i, i + PAGE_WRITE_BATCH_SIZE).forEach((item) => {
@@ -1306,7 +1306,24 @@ async function writePageDocs(brandId: string, products: CompactProduct[]): Promi
     });
     await batch.commit();
   }
+
+  const newIds = new Set(writes.map((w) => w.id));
+  const existing = await firestore.collection('product_intelligence_pages').where('brandId', '==', brandId).get();
+  const byId = new Map(existing.docs.map((doc) => [doc.id, doc.ref]));
+  const staleRefs = stalePageIds([...byId.keys()], newIds).map((id) => byId.get(id)!);
+  for (let i = 0; i < staleRefs.length; i += PAGE_WRITE_BATCH_SIZE) {
+    const batch = firestore.batch();
+    staleRefs.slice(i, i + PAGE_WRITE_BATCH_SIZE).forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
   return pagesByBucket;
+}
+
+/** Pages to delete after a write-then-cleanup rebuild: existing page docs NOT in the freshly-written
+ *  set. Pages present in both are overwritten in place and must NEVER be deleted — otherwise readers
+ *  serving the aggregate mid-rebuild would see a missing-page gap. */
+export function stalePageIds(existingIds: string[], keptIds: Set<string>): string[] {
+  return existingIds.filter((id) => !keptIds.has(id));
 }
 
 async function loadBucketProductsFromPages(brandId: string, bucket: PageBucket, pageCount: number): Promise<CompactProduct[]> {
@@ -1673,6 +1690,7 @@ export const __test = {
   stockBucket,
   summaryForProducts,
   canServeAggregateQuery,
+  stalePageIds,
   mergeVelocityPreferErp,
   applySkuStatsOverlay,
   classifyAggregateRecovery,

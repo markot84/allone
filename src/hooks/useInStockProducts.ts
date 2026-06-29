@@ -32,7 +32,10 @@ export function useInStockProducts() {
     queryFn: async (): Promise<Product[] | null> => {
       if (!brandId) return null;
       const agg = await fetchProductIntelligenceAggregate(brandId, null);
-      if (!agg || agg.status !== 'ready') return null; // not ready → caller falls back
+      // Serve whenever pages exist — including while a rebuild is `running` or after one `failed`
+      // (the previous build's pages stay readable, see writePageDocs write-then-cleanup). Only a brand
+      // with no Product Intelligence at all (no pages) falls back to the full catalog.
+      if (!agg || !agg.pagesByBucket) return null;
       const lists = await Promise.all(
         IN_STOCK_BUCKETS.map((b) => loadBucket(brandId, b, agg.pagesByBucket?.[b] ?? 0))
       );
