@@ -878,6 +878,7 @@ export const logClientError = onRequest(
 
         // Re-emit through the structured logger so it hits the alertable metric. `source: 'client'`
         // lets operators filter browser-origin alerts from backend ones.
+        const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
         logger.error(message, {
           alertKey,
           source: 'client',
@@ -887,6 +888,10 @@ export const logClientError = onRequest(
           name: cap(ctx.name, 120),
           code: cap(ctx.code, 120),
           stack: cap(ctx.stack, 4000),
+          // Source location (window.onerror without an Error object → no stack): the only triage handle.
+          fileName: cap(ctx.source, 300),
+          line: num(ctx.line),
+          col: num(ctx.col),
         });
 
         res.status(200).json({ ok: true, dropped: false });

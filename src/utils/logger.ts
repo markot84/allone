@@ -123,6 +123,11 @@ function forwardClientError(message: string, ctx: LogContext): void {
             stack: typeof errObj?.stack === 'string' ? errObj.stack : undefined,
             name: typeof errObj?.name === 'string' ? errObj.name : undefined,
             code: errObj?.code != null ? String(errObj.code) : undefined,
+            // Source location (window.onerror): forwarded so a non-Error window error — which has no
+            // stack — is still triageable from the file:line:col.
+            source: typeof c.source === 'string' ? c.source : undefined,
+            line: typeof c.line === 'number' ? c.line : undefined,
+            col: typeof c.col === 'number' ? c.col : undefined,
             // Correlate the server-side log line back to this browser session.
             requestId: getClientRequestId(),
           },

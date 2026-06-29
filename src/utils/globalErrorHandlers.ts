@@ -35,7 +35,11 @@ export function installGlobalErrorHandlers(): void {
   window.addEventListener('error', (event: ErrorEvent) => {
     const msg = event.message || 'window.onerror';
     if (!shouldReport(`error:${msg}`)) return;
-    logger.error('Uncaught window error', {
+    // Bake the real message + location into the headline: window.onerror often fires with no Error
+    // object (cross-origin "Script error.", null error), so without this the log reads as a bare
+    // "Uncaught window error" with no actionable payload.
+    const where = event.filename ? ` (${event.filename}:${event.lineno}:${event.colno})` : '';
+    logger.error(`Uncaught window error: ${msg}${where}`, {
       alertKey: CLIENT_ALERT.windowError,
       err: event.error instanceof Error ? event.error : undefined,
       message: msg,
@@ -49,7 +53,7 @@ export function installGlobalErrorHandlers(): void {
     const reason = event.reason;
     const msg = reason instanceof Error ? reason.message : String(reason ?? 'unhandledrejection');
     if (!shouldReport(`reject:${msg}`)) return;
-    logger.error('Unhandled promise rejection', {
+    logger.error(`Unhandled promise rejection: ${msg}`, {
       alertKey: CLIENT_ALERT.unhandledRejection,
       err: reason instanceof Error ? reason : undefined,
       message: msg,
