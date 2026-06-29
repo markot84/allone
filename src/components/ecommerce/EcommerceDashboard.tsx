@@ -928,6 +928,9 @@ export function EcommerceDashboard() {
               {displaySalesChannelBreakdown.map((row) => {
                 const color = SALES_CHANNEL_COLORS[row.channel] || '#6B7280';
                 const includedPct = row.revenue > 0 ? (row.includedRevenue / row.revenue) * 100 : 0;
+                // ECOM Phase 3.5: a fully-excluded channel made money but contributes €0 to the KPI —
+                // don't headline a bare €0 (reads as "no sales"); show its real revenue, marked excluded.
+                const fullyExcluded = row.includedRevenue <= 0 && row.revenue > 0;
                 return (
                   <div key={row.channel} className="rounded-xl border border-[#E5E7EB] bg-white p-3">
                     <div className="flex items-center justify-between gap-2 mb-2">
@@ -937,20 +940,34 @@ export function EcommerceDashboard() {
                       </div>
                       <span className="text-[10px] text-[#6B7280] whitespace-nowrap">{formatNumber(row.orders)} total orders</span>
                     </div>
-                    <p className="mb-0.5 text-[10px] text-[#6B7280]">Μετράει στα e-shop KPI</p>
-                    <div className="text-sm font-bold text-[#111827] tabular-nums">
-                      {formatCurrencyCompact(row.includedRevenue)}
-                    </div>
-                    <p className="mt-0.5 text-[10px] text-[#9CA3AF]">
-                      {formatNumber(row.includedOrders)} core orders
-                    </p>
-                    <div className="mt-2 h-1.5 bg-[#F3F4F6] rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${includedPct}%`, backgroundColor: color }} />
-                    </div>
-                    {row.excludedOrders > 0 && (
-                      <p className="mt-1.5 text-[10px] text-[#9CA3AF]">
-                        Εξαιρείται από KPI: {formatCurrencyCompact(row.excludedRevenue)} / {formatNumber(row.excludedOrders)} orders
-                      </p>
+                    {fullyExcluded ? (
+                      <>
+                        <p className="mb-0.5 text-[10px] text-[#9CA3AF]">Εξαιρείται από e-shop KPI</p>
+                        <div className="text-sm font-bold text-[#9CA3AF] tabular-nums">
+                          {formatCurrencyCompact(row.revenue)}
+                        </div>
+                        <p className="mt-0.5 text-[10px] text-[#9CA3AF]">
+                          {formatNumber(row.orders)} orders · €0 στα KPI
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mb-0.5 text-[10px] text-[#6B7280]">Μετράει στα e-shop KPI</p>
+                        <div className="text-sm font-bold text-[#111827] tabular-nums">
+                          {formatCurrencyCompact(row.includedRevenue)}
+                        </div>
+                        <p className="mt-0.5 text-[10px] text-[#9CA3AF]">
+                          {formatNumber(row.includedOrders)} core orders
+                        </p>
+                        <div className="mt-2 h-1.5 bg-[#F3F4F6] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${includedPct}%`, backgroundColor: color }} />
+                        </div>
+                        {row.excludedOrders > 0 && (
+                          <p className="mt-1.5 text-[10px] text-[#9CA3AF]">
+                            Εξαιρείται από KPI: {formatCurrencyCompact(row.excludedRevenue)} / {formatNumber(row.excludedOrders)} orders
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 );
