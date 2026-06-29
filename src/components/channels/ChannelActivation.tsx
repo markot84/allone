@@ -43,6 +43,7 @@ import { Card, CardHeader, Badge, Button, Spinner, PageHeader, ModalHeader, Prod
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import { useToast } from '../common/Toast';
 import { useProductSource } from '../../hooks/useProductSource';
+import { useChannelActivationInsight } from '../../hooks/useChannelActivationInsight';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useBrand } from '../../hooks/useBrand';
 import { CommercialInfoBanner } from '../commercial-info/CommercialInfoBanner';
@@ -262,6 +263,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   );
   const pageTitle = getModuleLabel('channels', effectiveBrandTypeForModules(currentBrand));
   const { products, isLoading: productsLoading } = useProductSource();
+  // PER-166: dead-stock list from the server PI aggregate (same classification as the dashboard).
+  // Falls back to the local client classification below when the aggregate isn't ready.
+  const channelInsight = useChannelActivationInsight();
   const { isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
   const { segments: rfmSegments, dataCoverage } = useSegments();
   const {
@@ -320,13 +324,21 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   );
 
   const deadStockActionProducts = useMemo(
-    () => activeStockProducts.filter((p) => {
-      const tag = String(p.priority_tag || '').toLowerCase();
-      if (tag === 'dead' || tag === 'low' || tag === 'healthy' || tag === 'excess') return tag === 'dead';
-      return classifyStockHealth(p) === 'dead';
-    }),
-    [activeStockProducts]
+    () => {
+      // PER-166: prefer the server PI `dead` bucket — it matches the dashboard's dead-stock count.
+      // The local fallback can't (raw products carry no qty_sold_period → it tags all stock as dead).
+      if (channelInsight.ready) return channelInsight.deadProducts;
+      return activeStockProducts.filter((p) => {
+        const tag = String(p.priority_tag || '').toLowerCase();
+        if (tag === 'dead' || tag === 'low' || tag === 'healthy' || tag === 'excess') return tag === 'dead';
+        return classifyStockHealth(p) === 'dead';
+      });
+    },
+    [channelInsight.ready, channelInsight.deadProducts, activeStockProducts]
   );
+
+  // True while the active dead-stock source is still loading (server aggregate, or the local fallback).
+  const deadStockLoading = channelInsight.isLoading || (!channelInsight.ready && productsLoading);
 
   const feedProducts = inventoryPlayContext === 'dead_stock' ? deadStockActionProducts : activeStockProducts;
   const decisionProductRows = useMemo(
@@ -1048,7 +1060,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <Card padding="lg" className="border-amber-200 bg-amber-50/50">
           <CardHeader
             title="Dead stock action products"
-            subtitle={productsLoading
+            subtitle={deadStockLoading
               ? 'Φόρτωση προϊόντων…'
               : `${formatNumber(decisionProductRows.length)} parent/model rows από ${formatNumber(feedProducts.length)} ενεργά variants με απόθεμα`}
             icon={<Package size={18} className="text-amber-700" />}
@@ -1066,7 +1078,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           <p className="mb-4 text-xs leading-relaxed text-[#6B7280]">
             Η λίστα είναι decision-level: αποκλείει zero-stock / inactive ιστορικά SKUs και ομαδοποιεί sizes κάτω από parent/model ώστε η ομάδα να βλέπει τι πρέπει να ξεστοκάρει πραγματικά.
           </p>
-          {productsLoading ? (
+          {deadStockLoading ? (
             <div className="space-y-2 rounded-xl border border-amber-100 bg-white p-4">
               <Skeleton className="h-4 w-3/4" />
               <Skeleton className="h-4 w-2/3" />
