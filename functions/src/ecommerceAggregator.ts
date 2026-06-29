@@ -697,6 +697,54 @@ export async function computeErpSkuVelocity(brandId: string): Promise<void> {
 }
 
 /** Compute and write the e-commerce summary for a brand; call after any connector sync. */
+/** channel -> dateKey -> value. */
+type ChannelDailyMap = Record<string, Record<string, number>>;
+
+/**
+ * Per-day(-or-month)-per-channel rollup for the Sales Channel card. Written to its own
+ * `ecommerce_channel_daily/{brandId}` doc so the client sums the picker window WITHOUT the unreliable
+ * raw-orders fetch (PER-170) and WITHOUT bloating the 1MB `ecommerce_summary` doc. Mirrors the
+ * all-time `*BySalesChannel` maps, just keyed by day. Granularity degrades day→month for a brand
+ * whose day×channel grid would risk the 1MB cap; the client reads `granularity` to slice the window.
+ */
+function buildChannelDailyRollup(visibleOrders: OrderRow[]): {
+  granularity: 'day' | 'month';
+  revenue: ChannelDailyMap;
+  includedRevenue: ChannelDailyMap;
+  orders: ChannelDailyMap;
+  includedOrders: ChannelDailyMap;
+} {
+  const channels = new Set<string>();
+  const days = new Set<string>();
+  for (const o of visibleOrders) {
+    channels.add(o.salesChannel || 'direct_eshop');
+    days.add(o.createdAt?.slice(0, 10) || 'unknown');
+  }
+  // ponytail: per-day stays exact for normal histories (~1.3k days × ~4 channels ≈ 0.5MB); a very
+  // long / many-channel brand degrades to per-month so the doc can't approach the 1MB cap.
+  const granularity: 'day' | 'month' = days.size * channels.size > 7000 ? 'month' : 'day';
+  const keyLen = granularity === 'day' ? 10 : 7;
+  const revenue: ChannelDailyMap = {};
+  const includedRevenue: ChannelDailyMap = {};
+  const orders: ChannelDailyMap = {};
+  const includedOrders: ChannelDailyMap = {};
+  const bump = (m: ChannelDailyMap, ch: string, k: string, v: number) => {
+    if (!m[ch]) m[ch] = {};
+    m[ch][k] = (m[ch][k] || 0) + v;
+  };
+  for (const o of visibleOrders) {
+    const ch = o.salesChannel || 'direct_eshop';
+    const k = o.createdAt?.slice(0, keyLen) || 'unknown';
+    bump(revenue, ch, k, o.totalPrice);
+    bump(orders, ch, k, 1);
+    if (o.revenueIncluded) {
+      bump(includedRevenue, ch, k, o.totalPrice);
+      bump(includedOrders, ch, k, 1);
+    }
+  }
+  return { granularity, revenue, includedRevenue, orders, includedOrders };
+}
+
 export async function computeEcommerceSummary(brandId: string): Promise<void> {
   const db = getDb();
 
@@ -970,6 +1018,15 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
   } catch {
     // ignore
   }
+  // PER-170: per-day-per-channel rollup in its own doc (own 1MB budget) for the period-correct
+  // Sales Channel card. Non-fatal — a rollup hiccup must never fail the main summary write.
+  try {
+    const channelDaily = buildChannelDailyRollup(visibleOrders);
+    await db.doc(`ecommerce_channel_daily/${brandId}`).set({ ...channelDaily, updatedAt: FieldValue.serverTimestamp() });
+  } catch (e) {
+    logger.warn(`[EcommerceAgg] channel-daily rollup failed for ${brandId} (non-fatal):`, { err: e });
+  }
+
   logger.info(
     `[EcommerceAgg] Summary for ${brandId}: ${orderCount} orders, €${totalRevenue.toFixed(2)} revenue, sources=${revenueSummaryPlatforms.join(',')}`
   );

@@ -528,6 +528,12 @@ service cloud.firestore {
       allow read: if isBrandMember(brandId);
       allow write: if false;
     }
+    // Per-day-per-channel rollup — split from ecommerce_summary to keep it under the 1MB doc limit
+    // (PER-170); client sums the picker window for the Sales Channel card. Server-write only.
+    match /ecommerce_channel_daily/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
     // Business-wide revenue from ERP invoices / SALDOC (server-write only)
     match /business_revenue_summary/{brandId} {
       allow read: if isBrandMember(brandId);

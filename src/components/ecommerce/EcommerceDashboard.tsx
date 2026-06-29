@@ -39,6 +39,7 @@ import {
 } from 'recharts';
 import { Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
 import { useEcommerceSummary, type EcommerceTopProduct } from '../../hooks/useEcommerceSummary';
+import { useEcommerceChannelDaily, sumChannelDailyWindow } from '../../hooks/useEcommerceChannelDaily';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import { aggregateOrderLinesForTopProducts } from '../../utils/productLineStats';
 import { resolveParentSku, hasDerivedParentSku } from '../../utils/parentSku';
@@ -249,6 +250,7 @@ export function EcommerceDashboard() {
   // This page reads only orders/breakdowns/topProducts/recentOrders, never SKU stats or
   // stock-movement — opt out of those heavy multi-MB chunk loads (same as DashboardOverview).
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
+  const channelDaily = useEcommerceChannelDaily();
 
   // Catalog parent SKUs (Magento itemGroupId) group reliably where a catalog exists; otherwise the
   // resolver falls back to a conservative suffix-strip.
@@ -444,14 +446,17 @@ export function EcommerceDashboard() {
     [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.platformBreakdown],
   );
 
-  // ECOM Phase 1: the period-correct channel split comes ONLY from raw orders windowed to the picker.
-  // The old fallback to the all-time `ecommerce_summary.*BySalesChannel` maps had no period filter, so
-  // on large brands (where raw orders are still loading) it rendered ALL-TIME totals as if they were
-  // the selected period — misleading. Until the server emits per-day-per-channel rollups (see
-  // internal/ECOMMERCE-NET-TURNOVER-PLAN.md), show a loading state instead of an all-time number.
+  // ECOM Phase 2 (PER-170): the period-correct channel split is summed client-side from the server
+  // per-day-per-channel rollup (ecommerce_channel_daily) over the picker window — NO raw-orders fetch,
+  // so it renders on large brands (e.g. 80k+ orders) where the client order fetch never completes and
+  // the card went blank under Phase 1. Backward-compat: if the rollup doc isn't built yet, fall back to
+  // the Phase-1 raw-orders period breakdown (never an all-time number — that misled as period data).
   const displaySalesChannelBreakdown = useMemo<SalesChannelBreakdownRow[]>(
-    () => periodMetricsFromRawOrders?.salesChannelBreakdown ?? [],
-    [periodMetricsFromRawOrders],
+    () =>
+      sumChannelDailyWindow(channelDaily, effectiveFrom, effectiveTo) ??
+      periodMetricsFromRawOrders?.salesChannelBreakdown ??
+      [],
+    [channelDaily, effectiveFrom, effectiveTo, periodMetricsFromRawOrders],
   );
 
   const kpis: KPICardData[] = useMemo(() => {
