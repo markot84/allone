@@ -32,6 +32,7 @@ import { MixedStrategyPanel, type MixConfig, computeBlendedWeights } from './Mix
 import { SeasonalBanner } from './SeasonalBanner';
 import { SeasonalPeriodsModal } from './SeasonalPeriodsModal';
 import { useProductSource } from '../../hooks/useProductSource';
+import { useInStockProducts } from '../../hooks/useInStockProducts';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { useProductSignals } from '../../hooks/useProductSignals';
 import { buildTriagePromptContext, buildProvenancePromptContext } from '../../utils/aiPromptContext';
@@ -273,16 +274,21 @@ export function WeightConfigurator({
   onSectionChange,
 }: { onSectionChange?: (section: string) => void } = {}) {
   const { currentBrand } = useBrand();
+  // PER-167: score the bounded in-stock set (~14k) from the precomputed PI bucket pages instead of
+  // loading + scoring the full ~222k catalog on the main thread (the freeze). The local catalog is
+  // fetched only as a fallback when the aggregate isn't ready (e.g. a brand with no Product Intelligence).
+  const inStock = useInStockProducts();
+  const useLocalFallback = !inStock.isLoading && !inStock.ready;
   const {
     products: sourceProducts,
     hasImported: sourceHasImported,
     usingProcurement,
     sourceLabel: sourceProductDataSourceLabel,
     sourceKind: sourceProductSourceKind,
-  } = useProductSource();
+  } = useProductSource({ enabled: useLocalFallback });
   // staticFirstPage: read ONLY .aggregate; avoids the unfiltered CF (~1.5k reads) per mount.
   const serverProductIntelligence = useProductIntelligenceAggregate('all', 1, {}, { staticFirstPage: true });
-  const products = sourceProducts;
+  const products = inStock.ready ? inStock.products : sourceProducts;
   const hasImported = sourceHasImported || !!serverProductIntelligence.aggregate;
   const productDataSourceLabel = serverProductIntelligence.aggregate?.sourceLabel ?? sourceProductDataSourceLabel;
   const productSourceKind = serverProductIntelligence.aggregate ? 'erp' : sourceProductSourceKind;
@@ -1100,9 +1106,10 @@ export function WeightConfigurator({
     setHasManualWeightChanges(false);
   }, []);
 
-  // Calculate prioritized products (strategy-specific score logic)
-  // Use debounced weights for expensive calculations, limit to top 100 for preview
-  const prioritizedProducts = useMemo(() => {
+  // Calculate prioritized products (strategy-specific score logic).
+  // PER-167: score ONCE here; the preview (top 100) and the export (full) both derive from this
+  // single sorted array instead of re-scoring the catalog twice on every weight change.
+  const scoredProducts = useMemo(() => {
     const previewingSalesPending = pendingScenarioChange === 'sales_base';
     const previewingPriceBenchPending = pendingScenarioChange === 'price_benchmark';
     if (!selectedScenario && !previewingSalesPending && !previewingPriceBenchPending) return [];
@@ -1149,7 +1156,7 @@ export function WeightConfigurator({
       })
       .sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0));
 
-    return scored.slice(0, 100);
+    return scored;
   }, [
     products,
     salesBaseProducts,
@@ -1164,6 +1171,9 @@ export function WeightConfigurator({
     benchmarkScoreContext,
     getWeightsForScenario,
   ]);
+
+  // Top 100 for the preview; the full sorted list for export — both from the single scoring pass above.
+  const prioritizedProducts = useMemo(() => scoredProducts.slice(0, 100), [scoredProducts]);
 
   const previewTotalPages = Math.max(1, Math.ceil(prioritizedProducts.length / PREVIEW_PAGE_SIZE));
   const paginatedPreviewProducts = prioritizedProducts.slice(
@@ -1182,62 +1192,8 @@ export function WeightConfigurator({
     triageScopeCount,
   ]);
 
-  // Full list for export (only calculated when needed)
-  const allPrioritizedProducts = useMemo(() => {
-    const previewingSalesPending = pendingScenarioChange === 'sales_base';
-    const previewingPriceBenchPending = pendingScenarioChange === 'price_benchmark';
-    if (!selectedScenario && !previewingSalesPending && !previewingPriceBenchPending) return [];
-
-    const strategyId: string | undefined = previewingSalesPending
-      ? 'sales_base'
-      : previewingPriceBenchPending
-        ? 'price_benchmark'
-        : (selectedScenario ?? undefined);
-
-    const weightsForScore = previewingSalesPending
-      ? getWeightsForScenario('sales_base')
-      : previewingPriceBenchPending
-        ? getWeightsForScenario('price_benchmark')
-        : debouncedWeights;
-
-    let source = products;
-    if (strategyId === 'sales_base') {
-      source = filterProductsBySalesBaseScope(salesBaseProducts, salesBaseScopeForPreview);
-    }
-    if (strategyId === 'price_benchmark') {
-      source = filterProductsByPriceBenchmarkScope(products, priceBenchmarkScopeForPreview, benchmarks);
-    }
-    source = filterProductsByTriageScope(source);
-
-    const scoreCtx: CompositeScoreContext | undefined =
-      strategyId === 'price_benchmark' ? benchmarkScoreContext : undefined;
-
-    return source
-      .map((p) => ({
-        ...p,
-        composite_score: calculateCompositeScore(
-          p,
-          weightsForScore,
-          undefined,
-          strategyId,
-          undefined,
-          scoreCtx,
-        ),
-      }))
-      .sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0));
-  }, [
-    products,
-    salesBaseProducts,
-    debouncedWeights,
-    selectedScenario,
-    pendingScenarioChange,
-    salesBaseScopeForPreview,
-    priceBenchmarkScopeForPreview,
-    benchmarks,
-    filterProductsByTriageScope,
-    benchmarkScoreContext,
-    getWeightsForScenario,
-  ]);
+  // Full list for export — the same single scoring pass (PER-167: no second re-score of the catalog).
+  const allPrioritizedProducts = scoredProducts;
 
   // Generate product feed function
   const generateProductFeed = async (format: 'csv' | 'xlsx') => {
