@@ -585,6 +585,9 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
             lowStock: productIntelligence.aggregate.summary.low_stock.count,
             excessStock: productIntelligence.aggregate.summary.excess_stock.count,
             excessStockValue: productIntelligence.aggregate.summary.excess_stock.value,
+            // PER-165: forward the (cost-based) margin distribution so the assistant stops claiming
+            // it can't see the cost — the data is in the aggregate it already holds.
+            marginDistribution: productIntelligence.aggregate.charts?.marginDistribution,
           }
         : undefined,
       segments: {

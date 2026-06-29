@@ -64,6 +64,8 @@ export type AssistantTenantPack = {
     lowStock?: number;
     excessStock?: number;
     excessStockValue?: number;
+    /** Margin distribution by % range (counts). margin = (price − cost) / price per SKU. */
+    marginDistribution?: Array<{ name: string; count: number }>;
   };
   segments: {
     dataSource: string;
@@ -265,6 +267,13 @@ export function formatTenantPackForPrompt(pack: AssistantTenantPack): string {
   if (pack.inventory) {
     lines.push(
       `Inventory Intelligence${pack.inventory.sourceLabel ? ` (${pack.inventory.sourceLabel})` : ''}: προϊόντα=${pack.inventory.totalProducts}, αξία≈€${Math.round(pack.inventory.totalValue ?? 0)}, healthy=${pack.inventory.healthyStock ?? '—'}, dead=${pack.inventory.deadStock ?? '—'}${pack.inventory.deadStockValue != null ? ` (αξία≈€${Math.round(pack.inventory.deadStockValue)})` : ''}, low=${pack.inventory.lowStock ?? '—'}, excess=${pack.inventory.excessStock ?? '—'}${pack.inventory.excessStockValue != null ? ` (αξία≈€${Math.round(pack.inventory.excessStockValue)})` : ''}`
+    );
+    // Margin IS available and cost-based — so the assistant must not claim it can't see the cost.
+    const md = pack.inventory.marginDistribution;
+    lines.push(
+      `Περιθώριο (margin): υπολογίζεται ανά SKU ως (τιμή − κόστος αγοράς) / τιμή × 100 — είναι cost-based και το κόστος υπάρχει ανά προϊόν (όχι αυθαίρετο).` +
+      (md && md.length ? ` Κατανομή ανά εύρος %: ${md.map((b) => `${b.name}: ${b.count}`).join(', ')}.` : '') +
+      ` Σημ.: λίγα είδη χωρίς πραγματικό κόστος (π.χ. δωροεπιταγές) εμφανίζονται ~100% — μη αντιπροσωπευτικά.`
     );
   }
 
