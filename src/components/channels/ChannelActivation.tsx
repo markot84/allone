@@ -261,7 +261,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     [brandProfileText]
   );
   const pageTitle = getModuleLabel('channels', effectiveBrandTypeForModules(currentBrand));
-  const { products } = useProductSource();
+  const { products, isLoading: productsLoading } = useProductSource();
   const { isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
   const { segments: rfmSegments, dataCoverage } = useSegments();
   const {
@@ -1048,7 +1048,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <Card padding="lg" className="border-amber-200 bg-amber-50/50">
           <CardHeader
             title="Dead stock action products"
-            subtitle={`${formatNumber(decisionProductRows.length)} parent/model rows από ${formatNumber(feedProducts.length)} ενεργά variants με απόθεμα`}
+            subtitle={productsLoading
+              ? 'Φόρτωση προϊόντων…'
+              : `${formatNumber(decisionProductRows.length)} parent/model rows από ${formatNumber(feedProducts.length)} ενεργά variants με απόθεμα`}
             icon={<Package size={18} className="text-amber-700" />}
             action={
               <div className="flex flex-wrap gap-2">
@@ -1064,7 +1066,13 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           <p className="mb-4 text-xs leading-relaxed text-[#6B7280]">
             Η λίστα είναι decision-level: αποκλείει zero-stock / inactive ιστορικά SKUs και ομαδοποιεί sizes κάτω από parent/model ώστε η ομάδα να βλέπει τι πρέπει να ξεστοκάρει πραγματικά.
           </p>
-          {decisionProductRows.length === 0 ? (
+          {productsLoading ? (
+            <div className="space-y-2 rounded-xl border border-amber-100 bg-white p-4">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          ) : decisionProductRows.length === 0 ? (
             <div className="rounded-xl border border-dashed border-amber-200 bg-white p-5 text-sm text-[#6B7280]">
               Δεν βρέθηκαν ενεργά dead-stock προϊόντα με διαθέσιμο απόθεμα για αυτή την ενέργεια.
             </div>
