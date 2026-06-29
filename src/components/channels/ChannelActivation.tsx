@@ -262,10 +262,13 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     [brandProfileText]
   );
   const pageTitle = getModuleLabel('channels', effectiveBrandTypeForModules(currentBrand));
-  const { products, isLoading: productsLoading } = useProductSource();
-  // PER-166: dead-stock list from the server PI aggregate (same classification as the dashboard).
-  // Falls back to the local client classification below when the aggregate isn't ready.
-  const channelInsight = useChannelActivationInsight();
+  const inventoryPlayContext = useInventoryPlayContext();
+  // PER-166: the server PI aggregate drives the dead-stock list + the Ads-feed counts, so the page
+  // no longer loads the ~222k-product catalog on mount. The local source is fetched only as a
+  // fallback when the aggregate isn't ready (e.g. a brand with no Product Intelligence).
+  const channelInsight = useChannelActivationInsight({ loadDead: inventoryPlayContext === 'dead_stock' });
+  const useLocalFallback = !channelInsight.isLoading && !channelInsight.ready;
+  const { products, isLoading: productsLoading } = useProductSource({ enabled: useLocalFallback });
   const { isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
   const { segments: rfmSegments, dataCoverage } = useSegments();
   const {
@@ -288,7 +291,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const { coverage: signalCoverage } = useProductSignals(products);
 
   const playContext = usePlayContext();
-  const inventoryPlayContext = useInventoryPlayContext();
   const [playDismissed, setPlayDismissed] = useState(false);
   // Reset dismiss when playContext changes (new navigation from AI insights)
   useEffect(() => { if (playContext) setPlayDismissed(false); }, [playContext]);
@@ -338,9 +340,21 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   );
 
   // True while the active dead-stock source is still loading (server aggregate, or the local fallback).
-  const deadStockLoading = channelInsight.isLoading || (!channelInsight.ready && productsLoading);
+  const deadStockLoading = channelInsight.isLoading
+    || (channelInsight.ready ? channelInsight.deadLoading : productsLoading);
 
-  const feedProducts = inventoryPlayContext === 'dead_stock' ? deadStockActionProducts : activeStockProducts;
+  // PER-166: the Ads-feed «active» products come from the server in-stock bucket pages (bounded,
+  // loaded on demand) when the aggregate is ready; otherwise from the local catalog fallback.
+  const adsFeedProducts = channelInsight.ready ? channelInsight.feedProducts : activeStockProducts;
+  const feedProducts = inventoryPlayContext === 'dead_stock' ? deadStockActionProducts : adsFeedProducts;
+  // Instant «active variants with stock» count from the summary — shown before the feed rows load.
+  const adsFeedCount = channelInsight.ready ? channelInsight.activeStockCount : activeStockProducts.length;
+
+  // Load the bounded in-stock feed once, only when it's actually needed (normal/Ads-feed view).
+  const { ready: insightReady, requestFeed: requestInsightFeed } = channelInsight;
+  useEffect(() => {
+    if (insightReady && inventoryPlayContext !== 'dead_stock') requestInsightFeed();
+  }, [insightReady, inventoryPlayContext, requestInsightFeed]);
   const decisionProductRows = useMemo(
     () => groupProductsForDecisionExport(feedProducts, lookupMagentoEnrichment),
     [feedProducts, lookupMagentoEnrichment]
@@ -367,10 +381,14 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     if (silent) setIsSilentUpgrading(true);
     else setAiGenerating(true);
     try {
-      const topCats = [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
+      // PER-166: categories/count come from the server aggregate when the local catalog isn't loaded.
+      const topCats = channelInsight.ready
+        ? channelInsight.categories.map(c => c.name).filter(Boolean).slice(0, 5)
+        : [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
       const savedTriage = (activeStrategy as { triageOrigin?: TriageOrigin } | null)?.triageOrigin ?? null;
       const triagePromptCtx = buildTriagePromptContext(savedTriage);
-      const provenancePromptCtx = buildProvenancePromptContext(signalCoverage, products.length);
+      const productCountForPrompt = channelInsight.ready ? channelInsight.totalCount : products.length;
+      const provenancePromptCtx = buildProvenancePromptContext(signalCoverage, productCountForPrompt);
       // Critical: pass ALL ranked segments (ideal+good) so the AI doesn't arbitrarily
       // pick a single segment. We use the active strategy's weights.
       const strategyWeights =
@@ -426,7 +444,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       if (silent) setIsSilentUpgrading(false);
       else setAiGenerating(false);
     }
-  }, [strategyId, scenarioId, currentBrand, brandProfileText, rfmSegments, products, queryClient, toast, activeStrategy, signalCoverage, dataCoverage]);
+  }, [strategyId, scenarioId, currentBrand, brandProfileText, rfmSegments, products, queryClient, toast, activeStrategy, signalCoverage, dataCoverage, channelInsight.ready, channelInsight.categories, channelInsight.totalCount]);
 
   useEffect(() => {
     if (autoGenTriggered.current) return;
@@ -1730,7 +1748,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               <div className="space-y-2 text-sm text-[#4A4A4A]">
                 <div className="flex justify-between">
                   <span>{feed === 'Ads Feed' ? 'Active variants' : 'Parent/model rows'}</span>
-                  <span className="font-mono">{formatNumber(feed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)}</span>
+                  <span className="font-mono">{formatNumber(feed === 'Ads Feed' ? adsFeedCount : decisionProductRows.length)}</span>
                 </div>
                 <div className="text-[11px] text-[#9CA3AF] leading-snug">
                   Default export excludes zero-stock / inactive historical SKUs.
@@ -1815,7 +1833,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 title={<h2 className="text-xl font-bold text-[#1A1A1A]">Προεπισκόπηση feed</h2>}
                 description={
                   <p className="text-sm text-[#4A4A4A]">
-                    {previewFeed} · {formatNumber(previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} ενεργές γραμμές · δείγμα {Math.min(8, previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} γραμμών
+                    {previewFeed} · {formatNumber(previewFeed === 'Ads Feed' ? adsFeedCount : decisionProductRows.length)} ενεργές γραμμές · δείγμα {Math.min(8, previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} γραμμών
                   </p>
                 }
                 actions={

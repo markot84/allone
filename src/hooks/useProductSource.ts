@@ -113,10 +113,14 @@ function parseNum(v: unknown): number {
 /** Unified product source: procurement inventory for Enterprise plans, else regular product import. */
 type UseProductSourceOptions = {
   maxProducts?: number;
+  /** Gate the (potentially ~222k-doc) catalog fetch. Defaults to true. PER-166 sets this false on
+   *  Channel Activation when the server PI aggregate is used, so the full catalog is never loaded. */
+  enabled?: boolean;
 };
 
 export function useProductSource(options: UseProductSourceOptions = {}) {
-  const productHook = useProducts({ maxDocs: options.maxProducts });
+  const enabled = options.enabled ?? true;
+  const productHook = useProducts({ maxDocs: options.maxProducts, enabled });
   const { isEnterprise } = usePlan();
   const { data: procData, isLoading: procurementLoading } = useProcurement();
 
@@ -219,9 +223,12 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
   // Demo products are filtered here too so it applies across all aggregates.
   const products = excludeDemoProducts(usingProcurement ? procProducts : productHook.products);
 
-  /** Until procurement also finishes (Enterprise), don't show an empty «no products» page. */
+  /** Until procurement also finishes (Enterprise), don't show an empty «no products» page.
+   *  When the fetch is gated off (PER-166), it isn't loading — a disabled query stays `pending`. */
   const isLoading =
-    usingProcurement ? false : productHook.isLoading || (isEnterprise && procurementLoading);
+    !enabled ? false
+    : usingProcurement ? false
+    : productHook.isLoading || (isEnterprise && procurementLoading);
 
   return {
     products,
