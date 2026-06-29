@@ -1,4 +1,4 @@
-import { type Firestore, FieldValue } from 'firebase-admin/firestore';
+import { type Firestore, type Query, type QueryDocumentSnapshot, FieldValue } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 
 const SOURCE = 'megaventory_rfm';
@@ -131,45 +131,39 @@ async function deleteSourceRows(db: Firestore, collectionName: string, brandId: 
   return deleted;
 }
 
-async function loadOrders(db: Firestore, brandId: string): Promise<{ source: MegaventoryRfmCounts['source']; orders: RfmOrder[] }> {
-  const invoicesSnap = await db.collection('megaventory_invoices').where('brandId', '==', brandId).get();
-  const invoiceOrders = invoicesSnap.docs
-    .map((doc) => {
-      const d = doc.data();
-      const customerName = text(d.clientName);
-      return {
-        id: doc.id,
-        customerKey: customerKey(d.clientId, customerName),
-        customerName,
-        date: text(d.date),
-        // Use the NET (ex-VAT) amount as the monetary base, consistent with ecommerceAggregator;
-        // totalAmount (VAT-inclusive) inflated the RFM M dimension / revenue_share ~24%.
-        revenue: num(d.netAmount || d.totalAmount),
-        status: d.status,
-      };
-    })
-    .filter((o) => o.customerName && o.date && o.revenue > 0 && !isCancelled(o.status));
+// Stream + project rather than .get(): on large brands megaventory_invoices is ~645k docs, and holding
+// the whole snapshot alongside the result array drove the nightly worker heap-OOM (PER-168). .select()
+// keeps only the 6 fields this RFM pass reads; the snapshot is never materialized whole.
+async function streamRfmOrders(query: Query, revenueOf: (d: Record<string, unknown>) => number): Promise<RfmOrder[]> {
+  const orders: RfmOrder[] = [];
+  for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
+    const d = doc.data();
+    const customerName = text(d.clientName);
+    const date = text(d.date);
+    const revenue = revenueOf(d);
+    if (!customerName || !date || revenue <= 0 || isCancelled(d.status)) continue;
+    orders.push({ id: doc.id, customerKey: customerKey(d.clientId, customerName), customerName, date, revenue });
+  }
+  return orders;
+}
 
+async function loadOrders(db: Firestore, brandId: string): Promise<{ source: MegaventoryRfmCounts['source']; orders: RfmOrder[] }> {
+  const invoiceOrders = await streamRfmOrders(
+    db.collection('megaventory_invoices').where('brandId', '==', brandId)
+      .select('clientId', 'clientName', 'date', 'netAmount', 'totalAmount', 'status'),
+    // Use the NET (ex-VAT) amount as the monetary base, consistent with ecommerceAggregator;
+    // totalAmount (VAT-inclusive) inflated the RFM M dimension / revenue_share ~24%.
+    (d) => num(d.netAmount || d.totalAmount),
+  );
   if (invoiceOrders.length > 0) {
     return { source: 'invoices', orders: invoiceOrders };
   }
 
-  const salesSnap = await db.collection('megaventory_sales_orders').where('brandId', '==', brandId).get();
-  const salesOrders = salesSnap.docs
-    .map((doc) => {
-      const d = doc.data();
-      const customerName = text(d.clientName);
-      return {
-        id: doc.id,
-        customerKey: customerKey(d.clientId, customerName),
-        customerName,
-        date: text(d.date),
-        revenue: num(d.totalAmount),
-        status: d.status,
-      };
-    })
-    .filter((o) => o.customerName && o.date && o.revenue > 0 && !isCancelled(o.status));
-
+  const salesOrders = await streamRfmOrders(
+    db.collection('megaventory_sales_orders').where('brandId', '==', brandId)
+      .select('clientId', 'clientName', 'date', 'totalAmount', 'status'),
+    (d) => num(d.totalAmount),
+  );
   return { source: salesOrders.length > 0 ? 'sales_orders' : 'none', orders: salesOrders };
 }
 

@@ -177,12 +177,14 @@ export async function computeProcurementSignals(brandId: string): Promise<{
 }> {
   const db = getDb();
 
-  const [inventoryRows, pricingRows, fiscalRows, evaluationRows] = await Promise.all([
-    readCollection<InventoryRow>(db, 'procurement_inventory', brandId),
-    readCollection<PricingRow>(db, 'procurement_pricing_policy', brandId),
-    readCollection<FiscalRow>(db, 'procurement_fiscal_year', brandId),
-    readCollection<EvaluationRow>(db, 'procurement_item_evaluation', brandId),
-  ]);
+  // Sequential, not Promise.all: each read's raw snapshot is the heavy transient (released after .map()
+  // to the smaller normalized row). Parallel materialized all four snapshots at once and stacked onto the
+  // nightly worker's heap peak (PER-168); the loops below consume each result independently, so serializing
+  // the reads costs nothing but keeps only one snapshot in memory at a time.
+  const inventoryRows = await readCollection<InventoryRow>(db, 'procurement_inventory', brandId);
+  const pricingRows = await readCollection<PricingRow>(db, 'procurement_pricing_policy', brandId);
+  const fiscalRows = await readCollection<FiscalRow>(db, 'procurement_fiscal_year', brandId);
+  const evaluationRows = await readCollection<EvaluationRow>(db, 'procurement_item_evaluation', brandId);
 
   const sources = {
     inventory: 0,
