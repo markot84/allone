@@ -444,34 +444,15 @@ export function EcommerceDashboard() {
     [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.platformBreakdown],
   );
 
-  const displaySalesChannelBreakdown = useMemo<SalesChannelBreakdownRow[]>(() => {
-    if (rawOrdersLoaded && periodMetricsFromRawOrders) {
-      return periodMetricsFromRawOrders.salesChannelBreakdown;
-    }
-    const channels = new Set<string>([
-      ...Object.keys(ecomm.revenueBySalesChannel),
-      ...Object.keys(ecomm.ordersBySalesChannel),
-      ...Object.keys(ecomm.includedRevenueBySalesChannel),
-      ...Object.keys(ecomm.includedOrdersBySalesChannel),
-    ]);
-    return [...channels]
-      .map((channel) => ({
-        channel: channel as EcommerceSalesChannel,
-        label: salesChannelLabel(channel),
-        revenue: ecomm.revenueBySalesChannel[channel] || 0,
-        orders: ecomm.ordersBySalesChannel[channel] || 0,
-        includedRevenue: ecomm.includedRevenueBySalesChannel[channel] || 0,
-        includedOrders: ecomm.includedOrdersBySalesChannel[channel] || 0,
-        excludedRevenue: Math.max(0, (ecomm.revenueBySalesChannel[channel] || 0) - (ecomm.includedRevenueBySalesChannel[channel] || 0)),
-        excludedOrders: Math.max(0, (ecomm.ordersBySalesChannel[channel] || 0) - (ecomm.includedOrdersBySalesChannel[channel] || 0)),
-      }))
-      .filter((row) => row.orders > 0)
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [
-    rawOrdersLoaded, periodMetricsFromRawOrders,
-    ecomm.revenueBySalesChannel, ecomm.ordersBySalesChannel,
-    ecomm.includedRevenueBySalesChannel, ecomm.includedOrdersBySalesChannel,
-  ]);
+  // ECOM Phase 1: the period-correct channel split comes ONLY from raw orders windowed to the picker.
+  // The old fallback to the all-time `ecommerce_summary.*BySalesChannel` maps had no period filter, so
+  // on large brands (where raw orders are still loading) it rendered ALL-TIME totals as if they were
+  // the selected period — misleading. Until the server emits per-day-per-channel rollups (see
+  // internal/ECOMMERCE-NET-TURNOVER-PLAN.md), show a loading state instead of an all-time number.
+  const displaySalesChannelBreakdown = useMemo<SalesChannelBreakdownRow[]>(
+    () => periodMetricsFromRawOrders?.salesChannelBreakdown ?? [],
+    [periodMetricsFromRawOrders],
+  );
 
   const kpis: KPICardData[] = useMemo(() => {
     const last30 = filteredDailyRevenue.slice(-30);
@@ -927,7 +908,7 @@ export function EcommerceDashboard() {
         </Card>
       </div>
 
-      {displaySalesChannelBreakdown.length > 0 && (
+      {(displaySalesChannelBreakdown.length > 0 || rawOrdersLoading) && (
         <Card>
           <CardHeader
             title="Καθαρός τζίρος & εξαιρέσεις"
@@ -938,6 +919,11 @@ export function EcommerceDashboard() {
               Core revenue = τζίρος που μετρά στα e-shop KPI/ROI. Τα εξαιρούμενα ποσά είναι πραγματικές
               παραγγελίες του καναλιού, αλλά δεν μπαίνουν στον καθαρό τζίρο e-shop.
             </p>
+            {displaySalesChannelBreakdown.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-[#E5E7EB] bg-white p-5 text-sm text-[#6B7280]">
+                Φόρτωση ανάλυσης καναλιών για το επιλεγμένο διάστημα…
+              </div>
+            ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {displaySalesChannelBreakdown.map((row) => {
                 const color = SALES_CHANNEL_COLORS[row.channel] || '#6B7280';
@@ -970,6 +956,7 @@ export function EcommerceDashboard() {
                 );
               })}
             </div>
+            )}
           </div>
         </Card>
       )}
