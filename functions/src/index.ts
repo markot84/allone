@@ -80,6 +80,7 @@ import {
   saveMagentoCredentials,
   fetchMagentoData,
   updateMagentoSyncScope,
+  backfillMagentoRefunds,
   setDb as setMagentoDb,
 } from './magentoConnector';
 import {
@@ -3710,6 +3711,46 @@ export const refreshAggregates = onRequest(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshAggregates]', { alertKey: ALERT.aggregateStatsFailed, err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/** POST /magentoRefundBackfill { brandId } — ONE-TIME: backfill historical Magento partial credit
+ *  memos onto existing order docs, then re-aggregate so corrected turnover shows immediately. Member
+ *  auth. Resumable: re-POST until `complete:true`. Future refunds self-heal via incremental sync. */
+export const magentoRefundBackfill = onRequest(
+  // 4GiB: the synchronous post-backfill computeEcommerceSummary re-aggregate reads the full order
+  // history (108k+ on prod e-tennis) and OOM'd at 1GiB — same budget its other callers need.
+  { region: 'europe-west1', timeoutSeconds: 540, memory: '4GiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
+  async (req, res) => {
+    if (applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
+      const { brandId, maxPages } = req.body as { brandId?: string; maxPages?: number };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
+        return;
+      }
+      // Optional `maxPages` lets the first prod run be bounded (validate on ~100 orders before the
+      // full walk). Resumable: re-POST continues from the checkpoint cursor.
+      const bounded = typeof maxPages === 'number' && maxPages > 0 ? { maxPages } : undefined;
+      const result = await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, () =>
+        backfillMagentoRefunds(brandId, bounded),
+      );
+      // Re-aggregate so the corrected (net-of-refunds) turnover is visible right away.
+      if (result.success && result.ordersPatched > 0) {
+        try { await computeEcommerceSummary(brandId); } catch (e) {
+          logger.warn('[magentoRefundBackfill] re-aggregate failed (non-fatal):', { err: e });
+        }
+      }
+      res.status(200).json(result);
+    } catch (error) {
+      logger.error('[magentoRefundBackfill]', { alertKey: ALERT.magentoSyncFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }

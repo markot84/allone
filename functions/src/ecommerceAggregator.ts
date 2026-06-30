@@ -266,12 +266,16 @@ function parseNumeric(value: unknown): number {
 
 /** Net products revenue ex-VAT. Magento: `baseSubtotal − |baseDiscountAmount|` (EUR fallback
  * `subtotal − |discountAmount|`; non-EUR without base_* → 0). Else `total − tax`. */
-function computeOrderExVatRevenue(platform: string, d: Record<string, unknown>): number {
+export function computeOrderExVatRevenue(platform: string, d: Record<string, unknown>): number {
   if (platform === 'magento') {
+    // Net out partial credit memos (refunds against still-complete orders): the ex-VAT merchandise
+    // refunded = subtotal_refunded − |discount_refunded|. Absent on un-backfilled orders → 0 → no-op.
+    const refundedBase = Math.max(0, parseNumeric(d.baseSubtotalRefunded) - Math.abs(parseNumeric(d.baseDiscountRefunded)));
+    const refundedLocal = Math.max(0, parseNumeric(d.subtotalRefunded) - Math.abs(parseNumeric(d.discountRefunded)));
     const baseSubtotal = parseNumeric(d.baseSubtotal);
     const baseDiscount = Math.abs(parseNumeric(d.baseDiscountAmount));
     if (baseSubtotal > 0) {
-      return Math.max(0, baseSubtotal - baseDiscount);
+      return Math.max(0, baseSubtotal - baseDiscount - refundedBase);
     }
     const currency = String(d.currency || '').toUpperCase();
     const baseCurrency = String(d.baseCurrencyCode || '').toUpperCase();
@@ -282,9 +286,9 @@ function computeOrderExVatRevenue(platform: string, d: Record<string, unknown>):
     const subtotal = parseNumeric(d.subtotal);
     const discount = Math.abs(parseNumeric(d.discountAmount));
     if (subtotal > 0) {
-      return Math.max(0, subtotal - discount);
+      return Math.max(0, subtotal - discount - refundedLocal);
     }
-    return Math.max(0, parseNumeric(d.grandTotal) - parseNumeric(d.taxAmount));
+    return Math.max(0, parseNumeric(d.grandTotal) - parseNumeric(d.taxAmount) - refundedBase);
   }
   const revenueField = REVENUE_FIELD[platform] || 'totalPrice';
   const taxField = TAX_FIELD[platform];

@@ -1035,6 +1035,135 @@ async function ingestMagentoProductPage(
 
 /** Fetch Magento orders/products → Firestore: first run backfills, later runs use updated_at with
  * overlap. Stores customer email for exports; `customerEmailHash` for analytics/matching. */
+/**
+ * ONE-TIME targeted backfill of Magento partial credit memos (PER-137 follow-up). Fetches only orders
+ * with `base_total_refunded > 0` and merges the `*_refunded` fields that `computeOrderExVatRevenue`
+ * nets out — so historical e-shop turnover stops over-counting refunded merchandise. Idempotent (merge),
+ * resumable via `magento.refundBackfillCursor` (entity_id walk), brand-agnostic. Future refunds self-heal
+ * via the `updated_at` incremental sync, so this only needs to run once per brand after deploy.
+ * Matches existing order docs by the `brandId`+`orderId` fields (doc-id scheme is brand-prefixed
+ * historically; the aggregator reads by field, so we patch whatever doc it reads).
+ */
+export async function backfillMagentoRefunds(
+  brandId: string,
+  opts?: { maxRuntimeMs?: number; maxPages?: number },
+): Promise<{ success: boolean; error?: string; ordersScanned: number; ordersPatched: number; complete: boolean; durationMs: number }> {
+  const start = Date.now();
+  const db = getDb();
+  const maxRuntimeMs = opts?.maxRuntimeMs ?? 480_000;
+  const maxPages = opts?.maxPages ?? 2000;
+  const baseRet = { ordersScanned: 0, ordersPatched: 0, complete: false };
+
+  const connector = (await db.doc(`connectors/${brandId}`).get()).data()?.magento as Record<string, unknown> | undefined;
+  if (!connector?.connected || !connector?.accessToken) {
+    return { success: false, error: 'Magento not connected', ...baseRet, durationMs: Date.now() - start };
+  }
+  const storeUrl = String(connector.storeUrl || '').replace(/\/+$/, '');
+  const restApiBase = String((connector.restApiBase as string) || storeUrl).replace(/\/+$/, '');
+  const storeCode = String((connector.storeCode as string) || '').trim();
+  const storeId = Number(connector.storeId);
+  const syncAllStores = Boolean(connector.syncAllStores);
+  const accessToken = decryptToken(String(connector.accessToken));
+  if (!accessToken) {
+    return { success: false, error: 'Magento token unavailable — reconnect required', ...baseRet, durationMs: Date.now() - start };
+  }
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'User-Agent': MAGENTO_UA,
+  };
+
+  let ordersScanned = 0;
+  let ordersPatched = 0;
+  let cursor = Number(connector.refundBackfillCursor ?? 0) || 0; // resume from last entity_id
+  let pages = 0;
+  let complete = false;
+
+  // Bound the walk to the synced history window — orders older than what we hold in Firestore can't be
+  // patched anyway, so this keeps the walk to the relevant set (high match rate) instead of churning
+  // through years of ancient refunded orders. Refunds inside the window self-heal going forward via the
+  // updated_at incremental sync; this one pass clears the historical backlog.
+  const histYear = Number(connector.historyLoadedUntilYear);
+  const windowStart =
+    Number.isFinite(histYear) && histYear > 2000
+      ? `${histYear}-01-01 00:00:00`
+      : `${new Date(Date.now() - 3 * 365 * 24 * 3600 * 1000).toISOString().slice(0, 10)} 00:00:00`;
+
+  while (pages < maxPages && Date.now() - start < maxRuntimeMs) {
+    const params = new URLSearchParams({
+      'searchCriteria[filter_groups][0][filters][0][field]': 'base_total_refunded',
+      'searchCriteria[filter_groups][0][filters][0][value]': '0',
+      'searchCriteria[filter_groups][0][filters][0][condition_type]': 'gt',
+      'searchCriteria[filter_groups][1][filters][0][field]': 'entity_id',
+      'searchCriteria[filter_groups][1][filters][0][value]': String(cursor),
+      'searchCriteria[filter_groups][1][filters][0][condition_type]': 'gt',
+      'searchCriteria[filter_groups][2][filters][0][field]': 'created_at',
+      'searchCriteria[filter_groups][2][filters][0][value]': windowStart,
+      'searchCriteria[filter_groups][2][filters][0][condition_type]': 'gteq',
+      'searchCriteria[sortOrders][0][field]': 'entity_id',
+      'searchCriteria[sortOrders][0][direction]': 'ASC',
+      'searchCriteria[pageSize]': '100',
+      'searchCriteria[currentPage]': '1',
+      'fields': 'items[entity_id,base_total_refunded,base_subtotal_refunded,base_discount_refunded,subtotal_refunded,discount_refunded],total_count',
+    });
+    if (!syncAllStores && Number.isFinite(storeId) && storeId > 0) {
+      params.set('searchCriteria[filter_groups][3][filters][0][field]', 'store_id');
+      params.set('searchCriteria[filter_groups][3][filters][0][value]', String(storeId));
+      params.set('searchCriteria[filter_groups][3][filters][0][condition_type]', 'eq');
+    }
+    const res = await magentoFetch(buildMagentoRestUrl(restApiBase, `orders?${params.toString()}`, storeCode), { headers });
+    if (!res.ok) {
+      return { success: false, error: `Orders fetch failed (${res.status})`, ordersScanned, ordersPatched, complete: false, durationMs: Date.now() - start };
+    }
+    const orders: Array<Record<string, unknown>> = (await res.json()).items || [];
+    if (orders.length === 0) { complete = true; break; }
+    pages += 1;
+
+    const patches: { ref: FirebaseFirestore.DocumentReference; data: Record<string, unknown> }[] = [];
+    for (const o of orders) {
+      ordersScanned += 1;
+      const eid = Number(o.entity_id);
+      if (Number.isFinite(eid) && eid > cursor) cursor = eid;
+      if (!(parseFloat(String(o.base_total_refunded ?? '0')) > 0)) continue;
+      const snap = await db.collection('magento_orders')
+        .where('brandId', '==', brandId)
+        .where('orderId', '==', String(o.entity_id))
+        .limit(1).get();
+      if (snap.empty) continue;
+      patches.push({
+        ref: snap.docs[0].ref,
+        data: {
+          baseTotalRefunded: parseFloat(String(o.base_total_refunded ?? '0')),
+          baseSubtotalRefunded: parseFloat(String(o.base_subtotal_refunded ?? '0')),
+          baseDiscountRefunded: parseFloat(String(o.base_discount_refunded ?? '0')),
+          subtotalRefunded: parseFloat(String(o.subtotal_refunded ?? '0')),
+          discountRefunded: parseFloat(String(o.discount_refunded ?? '0')),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+      });
+    }
+    for (let i = 0; i < patches.length; i += 400) {
+      const batch = db.batch();
+      for (const p of patches.slice(i, i + 400)) batch.set(p.ref, p.data, { merge: true });
+      await batch.commit();
+    }
+    ordersPatched += patches.length;
+    // Checkpoint the cursor so a re-run resumes instead of restarting the walk.
+    await db.doc(`connectors/${brandId}`).set({ magento: { refundBackfillCursor: cursor } }, { merge: true });
+    if (orders.length < 100) { complete = true; break; }
+  }
+
+  if (complete) {
+    await db.doc(`connectors/${brandId}`).set(
+      { magento: { refundBackfillComplete: true, refundBackfillCompletedAt: FieldValue.serverTimestamp() } },
+      { merge: true },
+    );
+  }
+  logger.info(`[Magento] Refund backfill for ${brandId}: scanned=${ordersScanned} patched=${ordersPatched} complete=${complete}`);
+  return { success: true, ordersScanned, ordersPatched, complete, durationMs: Date.now() - start };
+}
+
 export async function fetchMagentoData(brandId: string): Promise<{
   success: boolean;
   imported: number;
@@ -1137,7 +1266,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         'searchCriteria[sortOrders][0][direction]': orderSortDirection,
         'searchCriteria[pageSize]': '100',
         'searchCriteria[currentPage]': String(currentPage),
-        'fields': 'items[entity_id,increment_id,store_id,customer_id,customer_email,customer_firstname,customer_lastname,billing_address[email,firstname,lastname],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,payment,items[item_id,sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
+        'fields': 'items[entity_id,increment_id,store_id,customer_id,customer_email,customer_firstname,customer_lastname,billing_address[email,firstname,lastname],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,total_refunded,base_total_refunded,subtotal_refunded,base_subtotal_refunded,discount_refunded,base_discount_refunded,payment,items[item_id,sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
       });
       if (!syncAllStores && Number.isFinite(storeId) && storeId > 0) {
         searchParams.set('searchCriteria[filter_groups][1][filters][0][field]', 'store_id');
@@ -1199,6 +1328,18 @@ export async function fetchMagentoData(brandId: string): Promise<{
             baseTaxAmount: parseFloat(o.base_tax_amount || '0'),
             baseDiscountAmount: parseFloat(o.base_discount_amount || '0'),
             baseCurrencyCode: o.base_currency_code || 'EUR',
+            // Partial credit memos (refunds against still-complete orders) — netted out of e-shop
+            // turnover in computeOrderExVatRevenue. Stored only when a refund exists to keep docs lean;
+            // fully-refunded orders are already dropped by status (closed/refunded). (PER-137 follow-up)
+            ...(parseFloat(o.base_total_refunded || '0') > 0
+              ? {
+                  baseTotalRefunded: parseFloat(o.base_total_refunded || '0'),
+                  baseSubtotalRefunded: parseFloat(o.base_subtotal_refunded || '0'),
+                  baseDiscountRefunded: parseFloat(o.base_discount_refunded || '0'),
+                  subtotalRefunded: parseFloat(o.subtotal_refunded || '0'),
+                  discountRefunded: parseFloat(o.discount_refunded || '0'),
+                }
+              : {}),
             totalItemCount: parseInt(o.total_item_count || '0', 10),
             currency: o.order_currency_code || 'EUR',
             paymentMethod: paymentAdditionalInfo || paymentMethodCode || '',
