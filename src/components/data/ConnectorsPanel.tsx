@@ -1541,6 +1541,110 @@ function EpsilonNetCredentialsModal({ brandId, onSuccess, onCancel }: { brandId:
   );
 }
 
+/** PER-172: connect Meta with a durable System User token; falls back to Facebook login. */
+function MetaSystemUserModal({
+  brandId,
+  onSuccess,
+  onCancel,
+  onUseFacebookLogin,
+}: {
+  brandId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+  onUseFacebookLogin: () => void;
+}) {
+  const [token, setToken] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToast();
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '13px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const, fontFamily: 'monospace', minHeight: '84px', resize: 'vertical' as const };
+
+  const handleSave = async () => {
+    if (!token.trim()) return;
+    setLoading(true);
+    setError('');
+    try {
+      const authToken = await auth.currentUser?.getIdToken();
+      if (!authToken) throw new Error('Not authenticated');
+      const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
+        method: 'POST',
+        headers: await connectorRequestHeaders(authToken),
+        body: JSON.stringify({ brandId, provider: 'meta', token: token.trim() }),
+      });
+      const result = await res.json();
+      if (res.ok && result.success !== false && !result.error) {
+        if (result.warning) toast.error(result.warning);
+        toast.success(result.needsSelection ? 'Token αποθηκεύτηκε — διάλεξε διαφημιστικό λογαριασμό' : 'Meta συνδέθηκε με μόνιμο token');
+        onSuccess();
+      } else {
+        setError(result.error || 'Αποτυχία σύνδεσης');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
+      <div style={{ maxWidth: '500px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+          <div>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Meta — Μόνιμο token (System User)</p>
+            <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>Δεν λήγει — δεν χρειάζεται επανασύνδεση κάθε 60 ημέρες</p>
+          </div>
+          <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+            <X size={18} />
+          </button>
+        </div>
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div style={{ backgroundColor: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: '10px', padding: '12px 14px' }}>
+            <p style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: 600, color: '#0C4A6E' }}>Πώς φτιάχνεις το token (μία φορά):</p>
+            <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: '#0C4A6E', lineHeight: 1.6 }}>
+              <li>Άνοιξε <strong>Meta Business Settings → Users → System Users</strong>.</li>
+              <li>Δημιούργησε ή διάλεξε έναν System User και πάτησε <strong>«Generate new token»</strong>.</li>
+              <li>Διάλεξε την εφαρμογή μας, λήξη <strong>«Never»</strong> και permission <strong>ads_read</strong>.</li>
+              <li>Στα <strong>Assets → Ad Accounts</strong> ανάθεσε τον διαφημιστικό λογαριασμό στον System User.</li>
+              <li>Αντίγραψε το token και επικόλλησέ το εδώ.</li>
+            </ol>
+            <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: '8px', fontSize: '12px', color: '#0369A1', fontWeight: 600 }}>
+              Άνοιγμα Business Settings ↗
+            </a>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>System User token</label>
+            <textarea value={token} onChange={(e) => setToken(e.target.value)} placeholder="EAAB..." style={inputStyle} />
+          </div>
+          {error && (
+            <div style={{ display: 'flex', gap: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px' }}>
+              <AlertTriangle size={16} className="text-red-600 flex-shrink-0" />
+              <p style={{ margin: 0, fontSize: '12px', color: '#991B1B' }}>{error}</p>
+            </div>
+          )}
+          <button type="button" onClick={onUseFacebookLogin} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: '12px', textDecoration: 'underline', alignSelf: 'flex-start', padding: 0 }}>
+            ή σύνδεση με Facebook login (λήγει σε ~60 ημέρες)
+          </button>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', padding: '0 24px 20px' }}>
+          <button type="button" onClick={onCancel} disabled={loading} style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px' }}>
+            Άκυρο
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={loading || !token.trim()}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: 'none', backgroundColor: '#1877F2', color: '#fff', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            {loading && <Spinner size="sm" />}
+            Σύνδεση
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EntersoftCredentialsModal({ brandId, onSuccess, onCancel }: { brandId: string; onSuccess: () => void; onCancel: () => void }) {
   const [webApiBaseUrl, setWebApiBaseUrl] = useState('');
   const [userId, setUserId] = useState('');
@@ -2083,6 +2187,7 @@ export function ConnectorsPanel() {
   const [softoneModal, setSoftoneModal] = useState(false);
   const [epsilonNetModal, setEpsilonNetModal] = useState(false);
   const [entersoftModal, setEntersoftModal] = useState(false);
+  const [metaTokenModal, setMetaTokenModal] = useState(false);
   const [expandedConnectorDetails, setExpandedConnectorDetails] = useState<Partial<Record<ConnectorId, boolean>>>({});
   const handledMegaventoryJobRef = useRef<string | null>(null);
   const previousMegaventoryJobStatusRef = useRef<ConnectorSyncJobStatus | null>(null);
@@ -2516,7 +2621,17 @@ export function ConnectorsPanel() {
       setEntersoftModal(true);
       return;
     }
+    if (provider === 'meta') {
+      // PER-172: default Meta connect to the System User token modal (OAuth fallback inside it)
+      setMetaTokenModal(true);
+      return;
+    }
 
+    await runOAuthConnect(provider, shopDomain);
+  };
+
+  const runOAuthConnect = async (provider: ConnectorConfig['id'], shopDomain?: string) => {
+    if (!brandId) return;
     setConnecting(provider);
 
     try {
@@ -2980,6 +3095,21 @@ export function ConnectorsPanel() {
         />
       )}
 
+      {metaTokenModal && brandId && (
+        <MetaSystemUserModal
+          brandId={brandId}
+          onSuccess={() => {
+            setMetaTokenModal(false);
+            fetchStates();
+          }}
+          onCancel={() => setMetaTokenModal(false)}
+          onUseFacebookLogin={() => {
+            setMetaTokenModal(false);
+            void runOAuthConnect('meta');
+          }}
+        />
+      )}
+
       <Card>
         <div className="p-6">
           <PageHeader
@@ -3110,11 +3240,14 @@ export function ConnectorsPanel() {
                 const ecommerceHealth = ECOMMERCE_CONNECTOR_IDS.has(conn.id)
                   ? ecommerceSyncHealth(state, importMeta)
                   : null;
+                // PER-172: a failed attempt isn't a successful sync
+                const lastSuccessfulAttemptAt =
+                  state.lastSyncStatus === 'error' ? undefined : connectorAttemptAt;
                 const lastSyncAt =
                   ecommerceHealth === 'full'
                     ? newestDate(ordersSyncAt, productsSyncAt)
                     : newestDate(
-                        connectorAttemptAt,
+                        lastSuccessfulAttemptAt,
                         lastSyncDates[conn.id],
                         state.lastSyncAt,
                         state.lastOrdersSyncAt,
@@ -3129,7 +3262,20 @@ export function ConnectorsPanel() {
                   (ECOMMERCE_CONNECTOR_IDS.has(conn.id) &&
                     Boolean(lastSyncAt) &&
                     (!ordersSyncAt || !productsSyncAt));
-                const lastAttempt = syncAttempts[conn.id];
+                // PER-172: reflect Meta's persisted sync failure on load, not just after a manual Sync
+                const persistedMetaAttempt =
+                  conn.id === 'meta' && !syncAttempts[conn.id]
+                    ? (() => {
+                        const at = coerceToDate(state.lastSyncAttemptAt);
+                        if (!at) return undefined;
+                        return {
+                          at,
+                          success: state.lastSyncStatus === 'ok',
+                          error: typeof state.lastSyncError === 'string' ? state.lastSyncError : undefined,
+                        };
+                      })()
+                    : undefined;
+                const lastAttempt = syncAttempts[conn.id] ?? persistedMetaAttempt;
                 const opencartBackfillContinuing =
                   conn.id === 'opencart' &&
                   Boolean(state.productsSyncPageCursor || state.ordersSyncPageCursor);
@@ -3141,6 +3287,17 @@ export function ConnectorsPanel() {
                   megaventoryJobActive !== true &&
                   (!lastSyncAt || lastAttempt!.at.getTime() > lastSyncAt.getTime() - 2000);
                 const connectedAt = coerceToDate(state.connectedAt as unknown);
+                // PER-172: warn ~7 days before a Meta OAuth token expires + offer reconnect (System
+                // User tokens have no expiresAt → never warn)
+                const metaExpiresAt =
+                  conn.id === 'meta' && typeof state.expiresAt === 'number' ? state.expiresAt : null;
+                const metaDaysToExpiry =
+                  metaExpiresAt != null ? Math.ceil((metaExpiresAt - Date.now()) / 86_400_000) : null;
+                const metaExpiringSoon =
+                  metaDaysToExpiry != null && metaDaysToExpiry > 0 && metaDaysToExpiry <= 7;
+                const metaTokenExpired = metaExpiresAt != null && metaExpiresAt <= Date.now();
+                const metaNeedsReconnect =
+                  conn.id === 'meta' && (recentFailedAttempt || metaTokenExpired || metaExpiringSoon);
                 const identityLines = getConnectorIdentityLines(conn.id, state);
                 const usesCompactDetails = conn.id === 'magento' || conn.group === 'operations';
                 const detailsExpanded = !usesCompactDetails || expandedConnectorDetails[conn.id] === true;
@@ -3259,6 +3416,14 @@ export function ConnectorsPanel() {
                               title={syncJob?.error || undefined}
                             >
                               {syncJobBadge.label}
+                            </span>
+                          )}
+                          {metaExpiringSoon && !recentFailedAttempt && (
+                            <span
+                              className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-300"
+                              title="Το token της Meta λήγει σύντομα — κάντε επανασύνδεση τώρα για να μη διακοπεί η εισαγωγή."
+                            >
+                              Λήγει σε {metaDaysToExpiry}η — επανασύνδεση
                             </span>
                           )}
                           {usesCompactDetails && (
@@ -3407,8 +3572,24 @@ export function ConnectorsPanel() {
                         </Button>
                       ) : isConnected ? (
                         <>
+                          {metaNeedsReconnect && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleConnect(conn.id)}
+                              disabled={!canManageConnectors || isConnecting}
+                              title="Δημιουργία νέας σύνδεσης Meta (μόνιμο token ή Facebook login)"
+                            >
+                              {isConnecting ? (
+                                <Spinner size="sm" className="mr-1" />
+                              ) : (
+                                <ExternalLink size={14} className="mr-1" />
+                              )}
+                              Επανασύνδεση
+                            </Button>
+                          )}
                           <Button
-                            variant="primary"
+                            variant={metaNeedsReconnect ? 'secondary' : 'primary'}
                             size="sm"
                             onClick={() => handleSync(conn.id)}
                             disabled={isSyncing || !canManageConnectors}

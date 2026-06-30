@@ -39,6 +39,7 @@ import {
   handleMetaCallback,
   fetchMetaCampaigns,
   selectMetaAccount,
+  connectMetaSystemUserToken,
   setDb as setMetaDb,
 } from './metaConnector';
 import { sendNotificationEmail, setDb as setEmailDb } from './emailNotifier';
@@ -2149,7 +2150,7 @@ export const processMegaventorySyncJobs = onSchedule(
 
 /** POST /connectorSaveCredentials — Body: { brandId, provider, ...provider-specific credentials }. */
 export const connectorSaveCredentials = onRequest(
-  { region: 'europe-west1', secrets: ['CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
+  { region: 'europe-west1', secrets: ['CONNECTOR_TOKEN_KEY', 'META_APP_ID', 'META_APP_SECRET'], ...OPENCART_EGRESS_OPTIONS },
   async (req, res) => {
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
@@ -2176,7 +2177,38 @@ export const connectorSaveCredentials = onRequest(
         return;
       }
 
-      if (provider === 'woocommerce') {
+      if (provider === 'meta') {
+        // PER-172: store a pasted System User token, encrypted, with no expiresAt (durable).
+        const { token } = req.body as { token?: string };
+        if (!token) { res.status(400).json({ error: 'Λείπει το token' }); return; }
+        const result = await connectMetaSystemUserToken(brandId, token);
+        if (!result.success || !result.data) {
+          res.status(400).json({ error: result.error || 'Αποτυχία σύνδεσης Meta' });
+          return;
+        }
+        const { accessToken, expiresAt, availableAccounts, needsSelection } = result.data;
+        await admin.firestore().doc(`connectors/${brandId}`).set(
+          {
+            meta: {
+              connected: !needsSelection,
+              pendingAccountSelection: needsSelection,
+              accessToken: encryptToken(accessToken),
+              tokenType: 'system_user',
+              // null = never expires; drop any stale OAuth expiry
+              expiresAt: expiresAt ?? FieldValue.delete(),
+              availableAccounts,
+              adAccountIds: needsSelection ? [] : availableAccounts.map((a) => a.id),
+              adAccountNames: needsSelection ? [] : availableAccounts.map((a) => a.name),
+              connectedAt: FieldValue.serverTimestamp(),
+              oauthInitiatedByUid: needsSelection ? decoded.uid : FieldValue.delete(),
+              lastSyncError: FieldValue.delete(),
+            },
+          },
+          { merge: true }
+        );
+        res.status(200).json({ success: true, needsSelection, availableAccounts, warning: result.warning });
+        return;
+      } else if (provider === 'woocommerce') {
         if (!storeUrl || !consumerKey || !consumerSecret) {
           res.status(400).json({ error: 'Missing storeUrl, consumerKey, or consumerSecret' });
           return;
