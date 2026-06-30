@@ -550,6 +550,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const hasErpRevenueForPeriod =
     hasErpBusinessRevenue && erpRevenueInPeriod > 0 && erpDailyCoverageIsCurrentForPeriod;
 
+  /** PER-171: the headline total-turnover KPI (and its tooltip) use the business-wide ERP figure
+   *  whenever ERP data exists — matching the Finances detail headline. The coverage-freshness gate
+   *  stays on the chart/sparkline/AOV only; for the headline it would silently degrade the €268K
+   *  business-wide turnover to the €83K e-shop subset whenever the ERP daily series lags by a day. */
+  const kpiUsesErp = hasErpBusinessRevenue && erpRevenueInPeriod > 0;
+
   const hasProcurementTurnoverEstimate = procurementRevenueInPeriod > 0;
 
   /** The Revenue Performance trend uses the e-shop order-date series when the brand prefers it (avoids
@@ -561,13 +567,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
    *  Procurement always wins when 12-month costing data exists. */
   const dashboardTotalRevenue = useMemo(() => {
     if (hasProcurementTurnoverEstimate) return procurementRevenueInPeriod;
-    if (hasErpRevenueForPeriod) return erpRevenueInPeriod;
+    if (kpiUsesErp) return erpRevenueInPeriod;
     if (hasEcommerceRevenue) return storeRevenueInPeriod;
     return organicRevenueInPeriod + campaignMetrics.totalRevenue;
   }, [
     hasProcurementTurnoverEstimate,
     procurementRevenueInPeriod,
-    hasErpRevenueForPeriod,
+    kpiUsesErp,
     erpRevenueInPeriod,
     hasEcommerceRevenue,
     storeRevenueInPeriod,
@@ -586,7 +592,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         tail
       );
     }
-    if (hasErpRevenueForPeriod) {
+    if (kpiUsesErp) {
       return 'Πραγματικός τζίρος από τα παραστατικά του ERP για την περίοδο. Περιλαμβάνει φυσικά καταστήματα, B2B και online πωλήσεις, όπως καταγράφονται στο ERP.' + tail;
     }
     if (enabledModules.procurement) {
@@ -599,7 +605,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       'Συνολικά έσοδα της επιχείρησης για την περίοδο. Χρησιμοποιείται η καλύτερη διαθέσιμη πηγή με σειρά: παραστατικά ERP → τζίρος e-shop → εκτίμηση από organic & καμπάνιες.' +
       tail
     );
-  }, [isB2B, hasProcurementTurnoverEstimate, hasErpRevenueForPeriod, enabledModules.procurement]);
+  }, [isB2B, hasProcurementTurnoverEstimate, kpiUsesErp, enabledModules.procurement]);
 
   const revenuePerformanceChartLabel = chartUsesProcurement
     ? 'Τζίρος επιχείρησης (Procurement · εκτίμηση 12μ.)'
