@@ -21,6 +21,7 @@ export type ProductIntelligenceAggregate = {
   pageSize: number;
   pagesByBucket: Record<ProductIntelligenceBucket, number>;
   categories: Array<{ name: string; count: number }>;
+  brands?: Array<{ name: string; count: number }>;
   summary: InventorySummary;
   charts?: ProductIntelligenceCharts;
   error?: string;
@@ -50,6 +51,7 @@ export type ProductIntelligenceQuery = {
   bucket?: ProductIntelligenceBucket;
   search?: string;
   categories?: string[];
+  brands?: string[];
   tags?: string[];
   margin?: 'all' | 'high' | 'medium' | 'low';
   stockAge?: 'all' | 'dead' | 'near-dead' | 'high-margin-low-stock';

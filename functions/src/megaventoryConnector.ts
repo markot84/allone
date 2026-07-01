@@ -447,6 +447,20 @@ export function extractMvCategory(p: Record<string, unknown>): string {
   return leafCategoryName(p.ProductCategoryDescription);
 }
 
+/** PER-177 (storefront/Store dimension, NOT the brand): the segment right under the catalog root in
+ *  the MV category path ("Root Catalog/<store>/<category>/…" → "<store>", e.g. e-tennis / e-running /
+ *  e-padel). Kept for the upcoming Store/Domain column; brand now comes from a CF (see mvBrand). */
+export function extractMvStorefront(p: Record<string, unknown>): string {
+  const ref = (p.mvProductCategory ?? p.ProductCategory) as Record<string, unknown> | undefined;
+  const raw =
+    ref && typeof ref === 'object'
+      ? (ref.ProductCategoryName ?? ref.ProductCategoryDescription)
+      : (p.ProductCategoryName ?? p.ProductCategoryDescription);
+  const parts = String(raw ?? '').split('/').map((x) => x.trim()).filter(Boolean);
+  // brand/storefront = the segment directly under the "Root Catalog" root (incl. depth-2 brand-only paths)
+  return parts.length >= 2 && /^root catalog$/i.test(parts[0]) ? parts[1] : '';
+}
+
 async function fetchAllMvPages(
   endpoint: string,
   apiKey: string,
@@ -1094,8 +1108,8 @@ export async function mergeMegaventoryApiCatalogProducts(
   brandId: string,
   customReportSnapshotRows: Record<string, unknown>[],
 ): Promise<number> {
-  // Projection (source/sku only) — otherwise ~221k whole docs load into the worker's memory.
-  const snap = await db.collection('products').where('brandId', '==', brandId).select('source', 'sku').get();
+  // Projection (source/sku/brand only) — otherwise ~221k whole docs load into the worker's memory.
+  const snap = await db.collection('products').where('brandId', '==', brandId).select('source', 'sku', 'brand').get();
   const apiCatalogDocs = snap.docs.filter((d) => d.data().source === PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE);
   for (let i = 0; i < apiCatalogDocs.length; i += 500) {
     const batch = db.batch();
@@ -1119,16 +1133,21 @@ export async function mergeMegaventoryApiCatalogProducts(
   // Read the full catalog from megaventory_products (persisted, already normalized) instead of an
   // in-memory ProductGet set — gap-fill works without holding the whole 87k-SKU catalog in one invocation.
   const catalogSnap = await db.collection('megaventory_products').where('brandId', '==', brandId)
-    .select('sku', 'mvDeletedAt', 'stockOnHand', 'sellingPrice', 'purchasePrice', 'name', 'category')
+    .select('sku', 'mvDeletedAt', 'stockOnHand', 'sellingPrice', 'purchasePrice', 'name', 'category', 'brand')
     .get();
   const items: { id: string; data: Record<string, unknown> }[] = [];
   const seenSku = new Set<string>();
   const deletedSkus = new Set<string>();
+  // PER-176: brand/storefront source-of-truth (from the MV category path) — applied to gap-fill docs
+  // below and patched onto report-source docs (which lack the path) afterwards.
+  const skuBrand = new Map<string, string>();
   for (const doc of catalogSnap.docs) {
     const p = doc.data();
     const sku = String(p.sku ?? '').trim();
     if (!sku || seenSku.has(sku)) continue;
     seenSku.add(sku);
+    const brand = String(p.brand ?? '').trim();
+    if (brand) skuBrand.set(sku, brand); // capture for report-source docs too (before the reportSkus skip)
     // mvDeletedAt → doc stays (history/attribution) but gets discontinued_at + ZERO stock so dashboards
     // distinguish "delisted in ERP" from "sold out". Reversible: an unmarked source doc rebuilds it clean.
     const isDeleted = Boolean(p.mvDeletedAt);
@@ -1146,6 +1165,7 @@ export async function mergeMegaventoryApiCatalogProducts(
         sku,
         name,
         ...(cat ? { category: cat } : {}),
+        ...(brand ? { brand } : {}),
         price: sell,
         cost_price: purchase,
         stock_level: stock,
@@ -1164,11 +1184,18 @@ export async function mergeMegaventoryApiCatalogProducts(
     if (!sku) continue;
     const isDeleted = deletedSkus.has(sku);
     const wasMarked = Boolean(doc.data().discontinued_at);
+    const data: Record<string, unknown> = {};
     if (isDeleted && !wasMarked) {
-      normalizedPatches.push({ ref: doc.ref, data: { discontinued_at: FieldValue.serverTimestamp(), stock_level: 0, stock_capacity: 0 } });
+      data.discontinued_at = FieldValue.serverTimestamp();
+      data.stock_level = 0;
+      data.stock_capacity = 0;
     } else if (!isDeleted && wasMarked) {
-      normalizedPatches.push({ ref: doc.ref, data: { discontinued_at: FieldValue.delete() } });
+      data.discontinued_at = FieldValue.delete();
     }
+    // PER-176: report-source docs carry no MV category path → backfill brand from megaventory_products.
+    const brand = skuBrand.get(sku);
+    if (brand && doc.data().brand !== brand) data.brand = brand;
+    if (Object.keys(data).length) normalizedPatches.push({ ref: doc.ref, data });
   }
   for (let i = 0; i < normalizedPatches.length; i += 400) {
     const batch = db.batch();
@@ -1434,6 +1461,16 @@ export async function fetchMegaventoryData(
   if (!apiKey) {
     return { success: false, imported: 0, error: 'Megaventory API key unavailable — reconnect required' };
   }
+
+  // PER-176: brand = the manufacturer stored in a per-brand-configured MV custom field
+  // (`connectors/{id}.megaventory.brandCustomField`, e.g. e-tennis=11 → ProductCustomField11).
+  // Unset ⇒ no MV brand (blank). MV uses '-' for empty custom fields → treat as blank.
+  const brandCF = positiveNumber(conn.brandCustomField);
+  const mvBrand = (p: Record<string, unknown>): string => {
+    if (!brandCF) return '';
+    const v = String(p['ProductCustomField' + brandCF] ?? '').trim();
+    return v === '-' ? '' : v;
+  };
 
   const mode = options.mode || 'manual';
   // Soft deadline so no invocation runs into the worker's hard timeout.
@@ -1925,6 +1962,7 @@ export async function fetchMegaventoryData(
             name: p.ProductDescription || '',
             longDescription: p.ProductLongDescription || '',
             category: extractMvCategory(p as Record<string, unknown>),
+            brand: mvBrand(p as Record<string, unknown>),
             unitOfMeasurement: p.ProductUnitOfMeasurement || '',
             sellingPrice: num(p.ProductSellingPrice),
             purchasePrice: num(p.ProductPurchasePrice),
@@ -2127,6 +2165,7 @@ export async function fetchMegaventoryData(
                 name: p.ProductDescription || '',
                 longDescription: p.ProductLongDescription || '',
                 category: extractMvCategory(p as Record<string, unknown>),
+                brand: mvBrand(p as Record<string, unknown>),
                 unitOfMeasurement: p.ProductUnitOfMeasurement || '',
                 sellingPrice: num(p.ProductSellingPrice),
                 purchasePrice: num(p.ProductPurchasePrice),

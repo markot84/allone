@@ -95,6 +95,7 @@ export type ProductIntelligenceQueryParams = {
   bucket?: PageBucket;
   search?: string;
   categories?: string[];
+  brands?: string[];
   tags?: string[];
   margin?: 'all' | 'high' | 'medium' | 'low';
   stockAge?: 'all' | 'dead' | 'near-dead' | 'high-margin-low-stock';
@@ -345,7 +346,7 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     ...(asIsoDate(row.last_sale_at ?? row.lastSaleAt) ? { last_sale_at: asIsoDate(row.last_sale_at ?? row.lastSaleAt) } : {}),
     ...(asIsoDate(row.first_available_date ?? row.firstAvailableDate ?? row.createdAt) ? { first_available_date: asIsoDate(row.first_available_date ?? row.firstAvailableDate ?? row.createdAt) } : {}),
     ...(text(row.supplier) ? { supplier: text(row.supplier) } : {}),
-    ...(text(row.brand) ? { brand: text(row.brand) } : {}),
+    ...(text(row.brand ?? row.manufacturer) ? { brand: text(row.brand ?? row.manufacturer) } : {}),
     ...(text(row.barcode ?? row.gtin) ? { barcode: text(row.barcode ?? row.gtin) } : {}),
     ...(text(row.procurement_status ?? row.status) ? { procurement_status: text(row.procurement_status ?? row.status) } : {}),
     ...(text(row.abc_class) ? { abc_class: text(row.abc_class) } : {}),
@@ -387,7 +388,7 @@ function overlayFromMegaventoryProduct(row: Record<string, unknown>): StockOverl
     ...(asIsoDate(row.first_available_date ?? row.firstAvailableDate ?? row.createdAt) ? { first_available_date: asIsoDate(row.first_available_date ?? row.firstAvailableDate ?? row.createdAt) } : {}),
     ...(text(row.category ?? row.category_name) ? { category: text(row.category ?? row.category_name) } : {}),
     ...(text(row.supplier) ? { supplier: text(row.supplier) } : {}),
-    ...(text(row.brand) ? { brand: text(row.brand) } : {}),
+    ...(text(row.brand ?? row.manufacturer) ? { brand: text(row.brand ?? row.manufacturer) } : {}),
     ...(text(row.barcode ?? row.gtin) ? { barcode: text(row.barcode ?? row.gtin) } : {}),
     ...(text(row.procurement_status ?? row.status) ? { procurement_status: text(row.procurement_status ?? row.status) } : {}),
     ...(text(row.abc_class) ? { abc_class: text(row.abc_class) } : {}),
@@ -1093,6 +1094,17 @@ function categoryCounts(products: CompactProduct[]): Array<{ name: string; count
     .map(([name, count]) => ({ name, count }));
 }
 
+function brandCounts(products: CompactProduct[]): Array<{ name: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const product of products) {
+    if (product.brand) counts.set(product.brand, (counts.get(product.brand) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 250)
+    .map(([name, count]) => ({ name, count }));
+}
+
 function daysOfStock(product: CompactProduct): number {
   const stock = product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
   if (stock <= 0) return 0;
@@ -1124,6 +1136,10 @@ function categoryId(product: CompactProduct): string {
   return text(product.category) || '__EMPTY_CAT__';
 }
 
+function brandFilterId(product: CompactProduct): string {
+  return text(product.brand) || '__EMPTY_BRAND__';
+}
+
 function searchText(product: CompactProduct): string {
   return [
     product.sku,
@@ -1150,6 +1166,11 @@ function matchesQuery(product: CompactProduct, params: ProductIntelligenceQueryP
   if (params.categories?.length) {
     const allowed = new Set(params.categories);
     if (!allowed.has(categoryId(product))) return false;
+  }
+
+  if (params.brands?.length) {
+    const allowed = new Set(params.brands);
+    if (!allowed.has(brandFilterId(product))) return false;
   }
 
   if (params.tags?.length) {
@@ -1516,6 +1537,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
             pageSize: TABLE_PAGE_SIZE,
             pagesByBucket,
             categories: categoryCounts(procProducts),
+            brands: brandCounts(procProducts),
             charts,
             summary,
             computedAt: FieldValue.serverTimestamp(),
@@ -1618,6 +1640,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       pageSize: TABLE_PAGE_SIZE,
       pagesByBucket,
       categories: categoryCounts(products),
+      brands: brandCounts(products),
       charts,
       summary,
       computedAt: FieldValue.serverTimestamp(),

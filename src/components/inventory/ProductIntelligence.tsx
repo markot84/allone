@@ -171,6 +171,7 @@ interface ProductIntelligenceProps {
 export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProps = {}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryInclude, setCategoryInclude] = useState<string[] | null>(null);
+  const [brandInclude, setBrandInclude] = useState<string[] | null>(null);
   const [tagInclude, setTagInclude] = useState<string[] | null>(null);
   const [includeNoStock, setIncludeNoStock] = useState(false);
   const [marginFilter, setMarginFilter] = useState<string>('all');
@@ -249,6 +250,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     pageSize: PAGE_SIZE,
     search: searchQuery.trim() || undefined,
     categories: categoryInclude == null ? undefined : categoryInclude.length > 0 ? categoryInclude : ['__NO_MATCH__'],
+    brands: brandInclude == null ? undefined : brandInclude.length > 0 ? brandInclude : ['__NO_MATCH__'],
     tags: effectiveTagFilter == null ? undefined : effectiveTagFilter.length > 0 ? effectiveTagFilter : ['__NO_MATCH__'],
     margin: marginFilter === 'all' ? undefined : marginFilter as ProductIntelligenceQuery['margin'],
     stockAge: stockAgeFilter === 'all' ? undefined : stockAgeFilter,
@@ -258,7 +260,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     dateTo: productDateTo || undefined,
     dateMode: productDateMode,
     includeNoStock,
-  }), [PAGE_SIZE, searchQuery, categoryInclude, effectiveTagFilter, marginFilter, stockAgeFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode, includeNoStock]);
+  }), [PAGE_SIZE, searchQuery, categoryInclude, brandInclude, effectiveTagFilter, marginFilter, stockAgeFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode, includeNoStock]);
   const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage, serverQuery);
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -366,6 +368,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       .sort((a, b) => a.label.localeCompare(b.label, 'el'));
   }, [serverIntelligence.aggregate?.categories]);
 
+  const brandOptions = useMemo((): ExcelFilterOption[] => {
+    return (serverIntelligence.aggregate?.brands ?? [])
+      .filter((row) => row.name?.trim())
+      .map((row) => ({ id: row.name, label: row.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'el'));
+  }, [serverIntelligence.aggregate?.brands]);
+
   const tagOptions = useMemo((): ExcelFilterOption[] => {
     return STOCK_INTELLIGENCE_TAG_IDS.map((id) => ({ id, label: id }));
   }, []);
@@ -396,7 +405,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, categoryInclude, tagInclude, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
+  }, [searchQuery, categoryInclude, brandInclude, tagInclude, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
 
   const handleQuickExportCsv = () => {
     if (paginatedProducts.length === 0) {
@@ -829,6 +838,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               onChange={setCategoryInclude}
             />
             <ColumnExcelFilter
+              label="Brand"
+              options={brandOptions}
+              value={brandInclude}
+              onChange={setBrandInclude}
+            />
+            <ColumnExcelFilter
               label="Tag"
               options={tagOptions}
               value={tagInclude}
@@ -906,6 +921,9 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     Category
                     <Tooltip content="Κατηγορία προϊόντος (π.χ. από DSS: Προμηθευτής)." size={12} />
                   </span>
+                </th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
+                  Brand
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A]">
                   <button
@@ -1122,6 +1140,9 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
       </td>
       <td className="px-3 py-2 hidden lg:table-cell">
         <span className="text-xs text-[#4A4A4A] truncate block max-w-[120px]">{product.category}</span>
+      </td>
+      <td className="px-3 py-2 hidden lg:table-cell">
+        <span className="text-xs text-[#4A4A4A] truncate block max-w-[120px]">{product.brand || '—'}</span>
       </td>
       <td className="px-3 py-2">
         <Badge
