@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useBrand } from './useBrand';
+import { useBrandSyncVersion } from './useBrandSyncVersion';
 import type { MarketingPlanInsight } from '../services/marketingPlanInsights';
 
 /** A doc older than this is treated as stale → the page falls back to the local compute. The
@@ -56,9 +57,10 @@ export function processMarketingPlanInsightDoc(
 export function useMarketingPlanInsight() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
+  const syncVersion = useBrandSyncVersion(brandId).data?.version ?? null;
 
   const { data, isPending } = useQuery({
-    queryKey: ['marketing_plan_insight', brandId],
+    queryKey: ['marketing_plan_insight', brandId, syncVersion],
     // Parse + freshness here (not in render) — Date.now()/JSON.parse must not run during render.
     queryFn: async (): Promise<MarketingPlanInsightProcessed | null> => {
       if (!brandId) return null;

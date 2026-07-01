@@ -210,7 +210,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const brandSyncVersionQuery = useBrandSyncVersion(brandId);
   const syncVersion = brandSyncVersionQuery.data?.version ?? null;
   const { data: dataAnalysisAggregate = null, isPending: dataAnalysisAggregatePending } = useQuery({
-    queryKey: ['dataAnalysisRfmAggregate', brandId],
+    // useProductIntelligenceAggregate). Without it, an out-of-band rebuild stays hidden for up to 24h.
+    queryKey: ['dataAnalysisRfmAggregate', brandId, syncVersion],
     queryFn: () => (brandId ? fetchDataAnalysisRfmAggregate(brandId, syncVersion) : Promise.resolve(null)),
     enabled: aggregateQueryGate({ isDataAnalysis, useServerAggregate, brandId }),
     staleTime: 24 * 60 * 60 * 1000,
