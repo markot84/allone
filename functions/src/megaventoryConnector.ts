@@ -321,8 +321,9 @@ export async function updateMegaventoryConnectorSettings(
     customReportEnabled?: boolean | null;
     stockLocations?: string[] | null;
     stockLocationLabels?: string[] | null;
+    brandCustomField?: number | null;
   }
-): Promise<{ ok: boolean; error?: string; stockLocationsChanged?: boolean }> {
+): Promise<{ ok: boolean; error?: string; stockLocationsChanged?: boolean; brandCustomFieldChanged?: boolean }> {
   const db = getDb();
   const snap = await db.doc(`connectors/${brandId}`).get();
   if (!snap.exists) return { ok: false, error: 'Δεν υπάρχουν ρυθμίσεις Megaventory.' };
@@ -368,12 +369,27 @@ export async function updateMegaventoryConnectorSettings(
     patch['megaventory.stockLocationLabels'] = labels.length ? labels : FieldValue.delete();
   }
 
+  // Brand source = which MV custom field holds the manufacturer (PER-176). Changing it needs a full
+  // ProductGet re-walk (brand only lands on a fresh catalog fetch) — the caller resets + re-syncs.
+  let brandCustomFieldChanged = false;
+  if (updates.brandCustomField !== undefined) {
+    const prev = positiveNumber(mv.brandCustomField);
+    const next = updates.brandCustomField === null ? null : positiveNumber(updates.brandCustomField);
+    if (next !== null && (next < 1 || next > 20)) {
+      return { ok: false, error: 'Το πεδίο brand πρέπει να είναι μεταξύ 1 και 20.' };
+    }
+    if (next !== prev) {
+      patch['megaventory.brandCustomField'] = next === null ? FieldValue.delete() : next;
+      brandCustomFieldChanged = true;
+    }
+  }
+
   if (Object.keys(patch).length === 0) {
-    return { ok: true, stockLocationsChanged: false };
+    return { ok: true, stockLocationsChanged: false, brandCustomFieldChanged: false };
   }
 
   await db.doc(`connectors/${brandId}`).update(patch);
-  return { ok: true, stockLocationsChanged };
+  return { ok: true, stockLocationsChanged, brandCustomFieldChanged };
 }
 
 /** *Get endpoints with ReturnTopNRecords return top N descending by primary id; next page = same filters + And LessThan min(id) of the previous page. */
@@ -993,6 +1009,38 @@ export async function listMegaventoryLocations(
   }
   locations.sort((a, b) => a.name.localeCompare(b.name));
   return { ok: true, locations };
+}
+
+/** PER-176: sample ProductGet custom fields 1–20 so the connector card can show the admin which field
+ *  holds the brand (e.g. "CF11 — Nike, Asics, Babolat") before they pick brandCustomField. One small
+ *  ProductGet page — no sync needed. */
+export async function sampleMegaventoryCustomFields(
+  brandId: string
+): Promise<{ ok: boolean; fields: { n: number; fillPct: number; samples: string[] }[]; error?: string }> {
+  const conn = (await getDb().doc(`connectors/${brandId}`).get()).data()?.megaventory as Record<string, unknown> | undefined;
+  if (!conn?.connected || !conn?.apiKey) return { ok: false, fields: [], error: 'Το Megaventory δεν είναι συνδεδεμένο.' };
+  const apiKey = decryptToken(conn.apiKey as string);
+  if (!apiKey) return { ok: false, fields: [], error: 'Μη διαθέσιμο API key — απαιτείται επανασύνδεση.' };
+
+  const call = await mvCall('ProductGet', apiKey, { ReturnTopNRecords: 200 });
+  const err = asMvError(call, 'ProductGet');
+  if (err) return { ok: false, fields: [], error: err };
+  const rows = ((call.body as Record<string, unknown>)?.mvProducts as Record<string, unknown>[]) || [];
+
+  const fields: { n: number; fillPct: number; samples: string[] }[] = [];
+  for (let n = 1; n <= 20; n++) {
+    const key = 'ProductCustomField' + n;
+    const distinct = new Set<string>();
+    let filled = 0;
+    for (const p of rows) {
+      const v = String(p[key] ?? '').trim();
+      if (!v || v === '-') continue;
+      filled++;
+      if (distinct.size < 5) distinct.add(v);
+    }
+    fields.push({ n, fillPct: rows.length ? Math.round((100 * filled) / rows.length) : 0, samples: [...distinct] });
+  }
+  return { ok: true, fields };
 }
 
 /** Light recompute for a warehouse-filter change: re-derive per-product stock totals from the

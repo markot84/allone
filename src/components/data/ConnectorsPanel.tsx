@@ -1802,6 +1802,7 @@ function MegaventoryCustomReportSettingsInline({
   initialReportId,
   initialEnabled,
   initialStockLocations,
+  initialBrandCustomField,
   canManage,
   onSaved,
 }: {
@@ -1809,6 +1810,7 @@ function MegaventoryCustomReportSettingsInline({
   initialReportId: string;
   initialEnabled: boolean;
   initialStockLocations: string[];
+  initialBrandCustomField: number | null;
   canManage: boolean;
   onSaved: () => void;
 }) {
@@ -1818,6 +1820,9 @@ function MegaventoryCustomReportSettingsInline({
   const [locations, setLocations] = useState<{ id: string; name: string }[]>([]);
   const [locLoading, setLocLoading] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
+  const [brandCustomField, setBrandCustomField] = useState<number | null>(initialBrandCustomField);
+  const [cfSamples, setCfSamples] = useState<{ n: number; fillPct: number; samples: string[] }[]>([]);
+  const [cfLoading, setCfLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
 
@@ -1825,7 +1830,32 @@ function MegaventoryCustomReportSettingsInline({
     setReportId(initialReportId);
     setEnabled(initialEnabled);
     setStockLocations(initialStockLocations);
-  }, [initialReportId, initialEnabled, initialStockLocations]);
+    setBrandCustomField(initialBrandCustomField);
+  }, [initialReportId, initialEnabled, initialStockLocations, initialBrandCustomField]);
+
+  // Sample CF1–20 from Megaventory so the admin can see which field holds the brand (PER-176).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setCfLoading(true);
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const res = await fetch(`${FUNCTIONS_BASE}/megaventorySampleCustomFields`, {
+          method: 'POST',
+          headers: await connectorRequestHeaders(token),
+          body: JSON.stringify({ brandId }),
+        });
+        const result = await res.json();
+        if (!cancelled && res.ok && result.success) setCfSamples(result.fields ?? []);
+      } catch {
+        // sampling is a hint only — silently degrade to the numeric list
+      } finally {
+        if (!cancelled) setCfLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [brandId]);
 
   // Warehouses are fetched live from Megaventory (InventoryLocationGet) when the panel opens — no sync
   // needed first, and the names (e.g. ΚΑΠ) aren't present in the synced stock rows.
@@ -1876,13 +1906,16 @@ function MegaventoryCustomReportSettingsInline({
           stockLocations,
           // Names of the selected warehouses → stored for the PI badge (so it can label the filter).
           stockLocationLabels: stockLocations.map((id) => locations.find((l) => l.id === id)?.name || id),
+          brandCustomField,
         }),
       });
 
       const result = await res.json();
       if (res.ok && !result.error) {
         toast.success(
-          result.recomputeQueued
+          result.resyncQueued
+            ? 'Οι ρυθμίσεις αποθηκεύτηκαν. Το brand θα ενημερωθεί μετά τον πλήρη επανασυγχρονισμό που ξεκίνησε στο background.'
+            : result.recomputeQueued
             ? 'Οι ρυθμίσεις αποθηκεύτηκαν. Ο επανυπολογισμός όλου του stock ξεκίνησε στο background.'
             : 'Οι ρυθμίσεις custom report αποθηκεύτηκαν.'
         );
@@ -1958,6 +1991,31 @@ function MegaventoryCustomReportSettingsInline({
             })}
           </div>
         )}
+      </div>
+      <div className="mb-3 rounded-md border border-[#E5E7EB] bg-white p-2.5">
+        <label htmlFor={`mv-brand-cf-${brandId}`} className="mb-1 block text-xs font-medium text-[#374151]">
+          Πεδίο brand (Product Intelligence)
+        </label>
+        <p className="mb-2 text-xs text-[#6B7280]">
+          Ποιο custom field του Megaventory κρατά τον κατασκευαστή/brand (π.χ. Nike, Asics). Η αλλαγή απαιτεί πλήρη επανασυγχρονισμό για να ενημερωθεί.
+        </p>
+        <select
+          id={`mv-brand-cf-${brandId}`}
+          value={brandCustomField ?? ''}
+          onChange={(e) => setBrandCustomField(e.target.value ? Number(e.target.value) : null)}
+          disabled={!canManage || saving}
+          className="max-w-[360px] rounded-md border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-sm text-[#111827] shadow-sm disabled:opacity-50"
+        >
+          <option value="">— Κανένα (χωρίς brand)</option>
+          {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => {
+            const s = cfSamples.find((f) => f.n === n);
+            const hint = s && s.samples.length ? ` — ${s.samples.slice(0, 3).join(', ')} (${s.fillPct}%)` : '';
+            return (
+              <option key={n} value={n}>{`CF${n}${hint}`}</option>
+            );
+          })}
+        </select>
+        {cfLoading && <p className="mt-1 text-xs text-[#6B7280]">Φόρτωση δειγμάτων πεδίων…</p>}
       </div>
       <button
         type="button"
@@ -3521,6 +3579,7 @@ export function ConnectorsPanel() {
                           }
                           initialEnabled={(state as any).customReportEnabled !== false}
                           initialStockLocations={((state as any).stockLocations ?? []) as string[]}
+                          initialBrandCustomField={((state as any).brandCustomField as number | null) ?? null}
                           canManage={canManageConnectors}
                           onSaved={() => {
                             void fetchStates();

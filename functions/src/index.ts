@@ -89,6 +89,7 @@ import {
   fetchMegaventoryData,
   updateMegaventoryConnectorSettings,
   listMegaventoryLocations,
+  sampleMegaventoryCustomFields,
   recomputeMegaventoryProductTotals,
   mergeMegaventoryApiCatalogProducts,
   setDb as setMegaventoryDb,
@@ -2296,13 +2297,14 @@ export const connectorSaveCredentials = onRequest(
         });
         res.status(200).json(result);
       } else if (provider === 'megaventory') {
-        const { apiKey: mvKey, megaventorySettingsOnly, customReportId, customReportEnabled, stockLocations, stockLocationLabels } = req.body as {
+        const { apiKey: mvKey, megaventorySettingsOnly, customReportId, customReportEnabled, stockLocations, stockLocationLabels, brandCustomField } = req.body as {
           apiKey?: string;
           megaventorySettingsOnly?: boolean;
           customReportId?: string;
           customReportEnabled?: boolean;
           stockLocations?: string[];
           stockLocationLabels?: string[];
+          brandCustomField?: number | null;
         };
         if (megaventorySettingsOnly) {
           const updated = await updateMegaventoryConnectorSettings(brandId, {
@@ -2310,16 +2312,35 @@ export const connectorSaveCredentials = onRequest(
             customReportEnabled: customReportEnabled !== undefined ? customReportEnabled : undefined,
             stockLocations: stockLocations !== undefined ? stockLocations : undefined,
             stockLocationLabels: stockLocationLabels !== undefined ? stockLocationLabels : undefined,
+            brandCustomField: brandCustomField !== undefined ? brandCustomField : undefined,
           });
           if (!updated.ok) {
             res.status(400).json({ success: false, error: updated.error || 'Αποτυχία ενημέρωσης' });
             return;
           }
           let recomputeQueued = false;
-          if (updated.stockLocationsChanged) {
+          let resyncQueued = false;
+          // Brand field changed → brand only lands on a fresh ProductGet walk, so reset the catalog
+          // checkpoint and enqueue a full re-sync (which then refreshes PI). PER-176.
+          if (updated.brandCustomFieldChanged) {
+            await resetMegaventoryResumableState(admin.firestore(), brandId);
+            const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+            await admin.firestore().collection('connector_sync_jobs').doc(jobId).set({
+              brandId,
+              provider,
+              status: 'pending',
+              requestedBy: decoded.uid,
+              requestedAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+              mode: 'manual_full_refresh',
+            }, { merge: true });
+            resyncQueued = true;
+          }
+          if (updated.stockLocationsChanged && !resyncQueued) {
             // The warehouse filter only changes the per-product roll-up — the per-location data is
             // already in megaventory_stock. Enqueue a LIGHT recompute (no ERP re-ingest): re-derive
             // totals from megaventory_stock → gap-fill → summary → PI. Minutes, not a full re-sync.
+            // (Skipped when a full re-sync is already queued for a brand-field change — it supersedes.)
             const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
             await admin.firestore().collection('connector_sync_jobs').doc(jobId).set({
               brandId,
@@ -2332,7 +2353,7 @@ export const connectorSaveCredentials = onRequest(
             }, { merge: true });
             recomputeQueued = true;
           }
-          res.status(200).json({ success: true, recomputeQueued });
+          res.status(200).json({ success: true, recomputeQueued, resyncQueued });
           return;
         }
         if (!mvKey) {
@@ -3958,6 +3979,41 @@ export const megaventoryListLocations = onRequest(
     } catch (error) {
       // A warehouse-list fetch failing only degrades the settings panel — warn (non-alerting), not error.
       logger.warn('[megaventoryListLocations] failed', { err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/** POST /megaventorySampleCustomFields (Bearer, {brandId}) → CF1–20 fill% + sample values so the
+ *  connector card can guide brandCustomField selection. PER-176. */
+export const megaventorySampleCustomFields = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 60, memory: '256MiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
+  async (req, res) => {
+    if (applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    let uid: string;
+    try {
+      uid = (await admin.auth().verifyIdToken(authHeader.slice(7).trim())).uid;
+    } catch {
+      res.status(401).json({ error: 'Invalid auth' });
+      return;
+    }
+    try {
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+      if (!(await verifyBrandMembership(uid, brandId))) {
+        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        return;
+      }
+      const result = await sampleMegaventoryCustomFields(brandId);
+      if (!result.ok) { res.status(400).json({ error: result.error || 'Αποτυχία φόρτωσης πεδίων' }); return; }
+      res.status(200).json({ success: true, fields: result.fields });
+    } catch (error) {
+      logger.warn('[megaventorySampleCustomFields] failed', { err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
