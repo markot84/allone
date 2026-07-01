@@ -1165,6 +1165,50 @@ async function loadCatalog(brandId: string): Promise<Map<string, CatalogDims>> {
   };
   await load('magento_products');
   await load('products');
+
+  // PER-174: brand's authoritative source is megaventory_products (the same mirror PI reads), not the
+  // storefront/gap-fill catalog above — magento `manufacturer` can be blocked/option-id and the
+  // products gap-fill only carries brand after a full MV cycle. Overlay brand here so Data Analysis
+  // brand-affinity matches PI. Touches brand ONLY (category/subcategory left to the storefront catalog).
+  {
+    let cursor: QueryDocumentSnapshot | null = null;
+    for (;;) {
+      let query = firestore
+        .collection('megaventory_products')
+        .where('brandId', '==', brandId)
+        .orderBy(FieldPath.documentId())
+        .limit(5000)
+        .select('sku', 'brand', 'category', 'name');
+      if (cursor) query = query.startAfter(cursor);
+      const snap = await query.get();
+      snap.docs.forEach((doc) => {
+        const row = doc.data();
+        const sku = normalizeSku(row.sku);
+        const brand = asString(row.brand);
+        if (!sku || !brand) return;
+        const existing = catalog.get(sku);
+        if (existing) {
+          if (!existing.brand) existing.brand = brand;
+        } else {
+          const category = asString(row.category);
+          catalog.set(sku, {
+            sku,
+            name: asString(row.name),
+            brand,
+            category,
+            subcategory: '',
+            categoryPath: category ? [category] : [],
+            stockOnHand: 0,
+            qtySold: 0,
+          });
+        }
+      });
+      if (snap.size < 5000) break;
+      cursor = snap.docs[snap.docs.length - 1] ?? null;
+      if (!cursor) break;
+    }
+  }
+
   return catalog;
 }
 
