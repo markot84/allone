@@ -4,6 +4,8 @@
  * (WeightConfigurator, TriageCard, the impact preview/modal, the seasonal panel) each loaded the full
  * catalog independently — collectively the page freeze. This hook bounds them all the same way.
  * Returns the same shape as useProductSource so it swaps in unchanged. */
+import { useMemo } from 'react';
+import { getEffectiveStockLevel } from '../utils/productUtils';
 import { useInStockProducts } from './useInStockProducts';
 import { useProductSource } from './useProductSource';
 
@@ -15,12 +17,16 @@ export function useBoundedProductSource(options: { maxProducts?: number } = {}) 
     enabled: !inStock.isLoading && !inStock.ready,
   });
 
+  // PER-179 — both branches serve only effective (available-first) stock > 0, same convention as the PI query CF.
+  const readyInStock = useMemo(
+    () => inStock.products.filter((p) => getEffectiveStockLevel(p) > 0),
+    [inStock.products]
+  );
+
   if (inStock.ready) {
-    return { ...fallback, products: inStock.products, count: inStock.products.length, isLoading: false };
+    return { ...fallback, products: readyInStock, count: readyInStock.length, isLoading: false };
   }
-  // The fallback must honor the same in-stock contract as the bucket pages: brands
-  // without a PI aggregate were the one path still showing zero-stock products on Commercial Strategy.
-  const fallbackInStock = fallback.products.filter((p) => (p.stock_level ?? 0) > 0);
+  const fallbackInStock = fallback.products.filter((p) => getEffectiveStockLevel(p) > 0);
   return {
     ...fallback,
     products: fallbackInStock,

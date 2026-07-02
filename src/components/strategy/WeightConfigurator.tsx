@@ -289,7 +289,8 @@ export function WeightConfigurator({
   const hasImported = sourceHasImported || !!serverProductIntelligence.aggregate;
   const productDataSourceLabel = serverProductIntelligence.aggregate?.sourceLabel ?? sourceProductDataSourceLabel;
   const productSourceKind = serverProductIntelligence.aggregate ? 'erp' : sourceProductSourceKind;
-  const productSourceCount = serverProductIntelligence.aggregate?.totalCount ?? products.length;
+  // PER-179 — count the bounded in-stock set actually scored, not aggregate totalCount (includes no_stock).
+  const productSourceCount = products.length;
 
   const scenarioErpHints = useMemo(() => {
     if (!usingProcurement || products.length === 0) return undefined;
