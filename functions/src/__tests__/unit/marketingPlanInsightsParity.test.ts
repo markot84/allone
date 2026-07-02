@@ -45,11 +45,13 @@ const parityOf = (insight: ReturnType<typeof buildMarketingPlanInsight>) => ({
 });
 
 describe.skipIf(!have)('PER-157 server compute parity (vs client baseline)', () => {
-  const meta = JSON.parse(readFileSync(META, 'utf8'));
-  const baseline = JSON.parse(readFileSync(BASELINE, 'utf8'));
-  const products = readFileSync(PRODUCTS, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
-  const signals = JSON.parse(JSON.parse(readFileSync(SIGNALS, 'utf8')).skuSignalsJson || '{}');
-  const lastYearOrders = JSON.parse(readFileSync(ORDERS, 'utf8'));
+  // Guard all reads so the describe body doesn't throw when fixtures are absent
+  // (describe.skipIf skips the its but still evaluates the body).
+  const meta = have ? JSON.parse(readFileSync(META, 'utf8')) : null;
+  const baseline = have ? JSON.parse(readFileSync(BASELINE, 'utf8')) : null;
+  const products = have ? readFileSync(PRODUCTS, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
+  const signals = have ? JSON.parse(JSON.parse(readFileSync(SIGNALS, 'utf8')).skuSignalsJson || '{}') : {};
+  const lastYearOrders = have ? JSON.parse(readFileSync(ORDERS, 'utf8')) : [];
 
   // Loads the ~222k-product fixture + runs the compute (~8s) — needs a generous timeout vs the 5s default.
   it('faithful (next_month) scenario matches the client baseline byte-for-byte', () => {

@@ -25,8 +25,11 @@ import type { Campaign } from '../types';
 import type { BudgetSuggestionKind } from '../types/budgetSuggestions';
 import { computeBudgetOpportunities } from './budgetOpportunityEngine';
 
-/** Fixed reference so the recent/baseline windows are deterministic. */
-const REF = new Date('2026-02-01T00:00:00.000Z');
+/** Fixed reference so the recent/baseline windows are deterministic.
+ * Use Date(y, m, d) — local midnight — so the engine's setHours(12) lands on the
+ * correct calendar date regardless of the machine timezone (UTC strings parse as UTC
+ * midnight, which drifts to the prior day in UTC- timezones). */
+const REF = new Date(2026, 1, 1); // Feb 1, 2026 local midnight
 
 /** Dates that fall inside the baseline window (2026-01-18 .. 2026-01-24). */
 const BASELINE_DATES = ['2026-01-18', '2026-01-19', '2026-01-20', '2026-01-21'] as const;
