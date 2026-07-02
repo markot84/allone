@@ -25,6 +25,7 @@ import type { Supplier } from '../../types';
 import * as XLSX from 'xlsx';
 import { logger } from '../../utils/logger';
 import { supplierDocId } from '../../utils/supplierDocId';
+import { sanitizeRow } from '../../utils/spreadsheetSafe';
 
 export function SuppliersPage() {
   const { currentBrand } = useBrand();
@@ -188,6 +189,19 @@ export function SuppliersPage() {
     }
   }, [brandId, invalidate, toast]);
 
+  // PER-184 — headers match the importer's aliases exactly, so export → edit → upload round-trips.
+  // Stored values only: blank TOD/Lead_Time cells stay blank so re-import doesn't materialize defaults.
+  const handleExport = () => {
+    const rows = [
+      ['Supplier', 'TOD', 'Lead_Time', 'Contact'],
+      ...suppliers.map(s => sanitizeRow([s.name, s.tod ?? '', s.lead_time ?? '', s.contact ?? ''])),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Suppliers');
+    XLSX.writeFile(wb, `suppliers-${currentBrand?.name ?? 'brand'}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const handleStartEdit = (s: Supplier) => {
     setEditingId(s.id);
     setEditTod(s.tod ?? DEFAULT_TOD);
@@ -272,6 +286,14 @@ export function SuppliersPage() {
             Προσθήκη
           </Button>
           <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleExport}
+          >
+            <FileSpreadsheet size={14} className="mr-1" />
+            Export Excel
+          </Button>
+          <Button
             variant="primary"
             size="sm"
             onClick={() => fileInputRef.current?.click()}
@@ -304,6 +326,9 @@ export function SuppliersPage() {
             </p>
             <p className="text-[var(--nts-medium-gray)] mt-1">
               Τα προϊόντα συνδέονται με προμηθευτή μέσω της στήλης <code className="text-xs bg-white px-1 py-0.5 rounded">Supplier</code> στο product import.
+            </p>
+            <p className="text-[var(--nts-medium-gray)] mt-1">
+              Για μαζική ενημέρωση: Export Excel → επεξεργασία → Import του ίδιου αρχείου. Κενά κελιά δεν αλλάζουν τις αποθηκευμένες τιμές.
             </p>
           </div>
         </div>
