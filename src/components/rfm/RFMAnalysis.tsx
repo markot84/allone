@@ -662,6 +662,11 @@ export function RFMAnalysis() {
                   nameKey="name"
                   animationBegin={0}
                   animationDuration={700}
+                  onClick={(_, index) => {
+                    // PER-175 — slice click behaves like the legend: same segment selection, same tables below.
+                    const id = rfmSegments[index]?.id;
+                    if (id) setSelectedSegmentId(id);
+                  }}
                 >
                   {rfmSegments.map((segment) => (
                     <Cell
@@ -670,7 +675,7 @@ export function RFMAnalysis() {
                       stroke={selectedSegment?.id === segment.id ? SELECTED_SEGMENT_STROKE : '#FFFFFF'}
                       strokeWidth={selectedSegment?.id === segment.id ? 1.5 : 1}
                       strokeOpacity={selectedSegment?.id === segment.id ? 0.9 : 0.7}
-                      className="transition-opacity outline-none focus:outline-none"
+                      className="cursor-pointer transition-opacity outline-none focus:outline-none"
                       style={{ outline: 'none' }}
                       tabIndex={-1}
                       focusable={false}
@@ -732,6 +737,11 @@ export function RFMAnalysis() {
                   nameKey="name"
                   animationBegin={0}
                   animationDuration={700}
+                  onClick={(_, index) => {
+                    // PER-175 — slice click behaves like the legend: same segment selection, same tables below.
+                    const id = rfmSegments[index]?.id;
+                    if (id) setSelectedSegmentId(id);
+                  }}
                 >
                   {rfmSegments.map((segment) => (
                     <Cell
@@ -740,7 +750,7 @@ export function RFMAnalysis() {
                       stroke={selectedSegment?.id === segment.id ? SELECTED_SEGMENT_STROKE : '#FFFFFF'}
                       strokeWidth={selectedSegment?.id === segment.id ? 1.5 : 1}
                       strokeOpacity={selectedSegment?.id === segment.id ? 0.9 : 0.7}
-                      className="transition-opacity outline-none focus:outline-none"
+                      className="cursor-pointer transition-opacity outline-none focus:outline-none"
                       style={{ outline: 'none' }}
                       tabIndex={-1}
                       focusable={false}
