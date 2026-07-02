@@ -7,6 +7,7 @@ import { PROCUREMENT_SHEET_NAMES } from '../types/procurement';
 import type { ProcurementSheetType } from '../types/procurement';
 import { FEED_SOURCE_CONFIG, type FeedSourceType } from '../data/feedSourceConfig';
 import { logger } from '../utils/logger';
+import { supplierDocId } from '../utils/supplierDocId';
 import type { Product, RFMSegment, Campaign } from '../types';
 
 const BATCH_SIZE = 500; // Firestore limit per writeBatch
@@ -2020,7 +2021,7 @@ export async function importFile(
 
         // Auto-extract suppliers with TOD from imported products
         try {
-          const supplierMap = new Map<string, number>();
+          const supplierMap = new Map<string, number | undefined>();
           const rawRows = objects;
           const pickCol = (r: Record<string, string>, ...alts: string[]) => {
             for (const a of alts) {
@@ -2034,13 +2035,14 @@ export async function importFile(
             if (!sName) continue;
             const todVal = parseInt(pickCol(r, 'tod', 'target_days', 'target_days_of_stock') || '0', 10);
             if (!supplierMap.has(sName) || (todVal > 0 && !supplierMap.get(sName))) {
-              supplierMap.set(sName, todVal > 0 ? todVal : 60);
+              supplierMap.set(sName, todVal > 0 ? todVal : undefined);
             }
           }
           if (supplierMap.size > 0) {
+            // Only name (+ sheet-provided tod) — never stamp defaults over existing docs (PER-183)
             const supItems = Array.from(supplierMap.entries()).map(([name, tod]) => ({
-              id: name.replace(/[/\\#$.[\]]/g, '_').replace(/\s+/g, '_').slice(0, 120),
-              data: { name, tod, lead_time: 0, contact: '' } as Record<string, unknown>,
+              id: supplierDocId(brandId, name),
+              data: { name, ...(tod ? { tod } : {}) } as Record<string, unknown>,
             }));
             await FirestoreService.batchSet('suppliers', supItems, brandId);
             result.warnings.push(`Αυτόματη εισαγωγή ${supItems.length} προμηθευτών με TOD`);

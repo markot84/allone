@@ -1,4 +1,5 @@
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
+import { supplierDocId } from './erpConnectorFirestore';
 import { logger } from './utils/logger';
 
 const WRITE_BATCH_SIZE = 500;
@@ -147,9 +148,9 @@ export async function normalizeMegaventoryCustomReportRows(
   brandId: string,
   reportRows: Record<string, unknown>[],
 ): Promise<MegaventoryNormalizationCounts> {
+  // suppliers deliberately NOT delete-recreated: user-edited tod/lead_time must survive syncs (PER-183)
   const collections = [
     'products',
-    'suppliers',
     'procurement_inventory',
     'procurement_pricing_policy',
     'procurement_item_evaluation',
@@ -283,13 +284,8 @@ export async function normalizeMegaventoryCustomReportRows(
       const supplierKey = supplier.toLocaleUpperCase('el-GR');
       if (!suppliers.has(supplierKey)) {
         suppliers.set(supplierKey, {
-          id: `mv_report_supplier_${brandId}_${supplier}`,
-          data: {
-            name: supplier,
-            contact: '',
-            tod: 60,
-            lead_time: 0,
-          },
+          id: supplierDocId(brandId, supplier),
+          data: { name: supplier },
         });
       }
     }

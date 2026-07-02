@@ -6,7 +6,7 @@ import type { Supplier } from '../types';
 import { TRIGGERS_CATALOG } from '../data/triggersCatalog';
 import { AutomationSettingsService, AutomationAlertsService } from './automationSettings';
 import { DecisionsService, logAndNotify } from './coordination';
-import { classifyStockHealth, getDaysOfStock, getProductTod } from '../utils/productUtils';
+import { classifyStockHealth, DEFAULT_TOD, getDaysOfStock, getProductTod } from '../utils/productUtils';
 import { getUpcomingSeason, SEASONAL_PERIODS } from '../data/seasonalPeriods';
 import { deriveBehavioralProfile, derivePredictiveMetrics } from './behavioralEngine';
 
@@ -56,7 +56,7 @@ function evaluateTrigger(
   switch (triggerId) {
     case 'dead_stock_alert': {
       if (ctx.products.length === 0) return null;
-      const supplierTodMap = new Map(ctx.suppliers.map(s => [s.name, s.tod]));
+      const supplierTodMap = new Map(ctx.suppliers.map(s => [s.name, s.tod ?? DEFAULT_TOD]));
       const deadCount = ctx.products.filter(p => {
         const tod = getProductTod(p, supplierTodMap);
         return classifyStockHealth(p, tod) === 'dead';
@@ -76,7 +76,7 @@ function evaluateTrigger(
 
     case 'excess_stock_alert': {
       if (ctx.products.length === 0) return null;
-      const supplierTodMap = new Map(ctx.suppliers.map(s => [s.name, s.tod]));
+      const supplierTodMap = new Map(ctx.suppliers.map(s => [s.name, s.tod ?? DEFAULT_TOD]));
       let excessValue = 0;
       let excessCount = 0;
       for (const p of ctx.products) {
@@ -99,7 +99,7 @@ function evaluateTrigger(
     }
 
     case 'low_stock_critical': {
-      const supplierTodMap = new Map(ctx.suppliers.map(s => [s.name, s.tod]));
+      const supplierTodMap = new Map(ctx.suppliers.map(s => [s.name, s.tod ?? DEFAULT_TOD]));
       const highMarginLow = ctx.products.filter(p => {
         if (p.margin_tier !== 'high' && (p.margin_percentage ?? 0) <= 25) return false;
         const tod = getProductTod(p, supplierTodMap);

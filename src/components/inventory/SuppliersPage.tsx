@@ -24,13 +24,7 @@ import { DEFAULT_TOD } from '../../utils/productUtils';
 import type { Supplier } from '../../types';
 import * as XLSX from 'xlsx';
 import { logger } from '../../utils/logger';
-
-function sanitizeDocId(raw: string): string {
-  return raw
-    .replace(/[/\\#$.[\]]/g, '_')
-    .replace(/\s+/g, '_')
-    .slice(0, 120);
-}
+import { supplierDocId } from '../../utils/supplierDocId';
 
 export function SuppliersPage() {
   const { currentBrand } = useBrand();
@@ -94,7 +88,7 @@ export function SuppliersPage() {
       if (q && !(s.name.toLowerCase().includes(q) || (s.contact || '').toLowerCase().includes(q))) return false;
       if (fn && !s.name.toLowerCase().includes(fn)) return false;
       if (fc && !(s.contact || '').toLowerCase().includes(fc)) return false;
-      if (!matchNumeric(s.tod || 0, filterTod)) return false;
+      if (!matchNumeric(s.tod ?? DEFAULT_TOD, filterTod)) return false;
       if (!matchNumeric(s.lead_time || 0, filterLead)) return false;
       return true;
     });
@@ -106,7 +100,7 @@ export function SuppliersPage() {
       let bv: string | number = '';
       switch (sortBy) {
         case 'name': av = a.name.toLowerCase(); bv = b.name.toLowerCase(); break;
-        case 'tod': av = a.tod || 0; bv = b.tod || 0; break;
+        case 'tod': av = a.tod ?? DEFAULT_TOD; bv = b.tod ?? DEFAULT_TOD; break;
         case 'lead': av = a.lead_time || 0; bv = b.lead_time || 0; break;
         case 'contact': av = (a.contact || '').toLowerCase(); bv = (b.contact || '').toLowerCase(); break;
       }
@@ -164,14 +158,17 @@ export function SuppliersPage() {
       for (const row of rows) {
         const name = pickCol(row, 'supplier', 'name', 'supplier_name', 'vendor', 'vendor_name', 'προμηθευτής', 'όνομα');
         if (!name) continue;
-        const todVal = parseInt(pickCol(row, 'tod', 'target_days', 'target_days_of_stock', 'days_of_stock', 'στόχος_ημερών') || String(DEFAULT_TOD), 10) || DEFAULT_TOD;
-        const leadTime = parseInt(pickCol(row, 'lead_time', 'lead_time_days', 'delivery_days', 'χρόνος_παράδοσης') || '0', 10) || 0;
+        // Only fields present in the sheet are written — absent/empty cells leave stored values untouched (PER-183).
+        const todRaw = pickCol(row, 'tod', 'target_days', 'target_days_of_stock', 'days_of_stock', 'στόχος_ημερών');
+        const leadRaw = pickCol(row, 'lead_time', 'lead_time_days', 'delivery_days', 'χρόνος_παράδοσης');
         const contact = pickCol(row, 'contact', 'email', 'phone', 'επικοινωνία');
 
-        items.push({
-          id: sanitizeDocId(name),
-          data: { name, tod: todVal, lead_time: leadTime, contact },
-        });
+        const data: Record<string, unknown> = { name };
+        if (todRaw && Number.isFinite(parseInt(todRaw, 10))) data.tod = parseInt(todRaw, 10);
+        if (leadRaw && Number.isFinite(parseInt(leadRaw, 10))) data.lead_time = parseInt(leadRaw, 10);
+        if (contact) data.contact = contact;
+
+        items.push({ id: supplierDocId(brandId, name), data });
       }
 
       if (items.length === 0) {
@@ -193,7 +190,7 @@ export function SuppliersPage() {
 
   const handleStartEdit = (s: Supplier) => {
     setEditingId(s.id);
-    setEditTod(s.tod);
+    setEditTod(s.tod ?? DEFAULT_TOD);
     setEditLeadTime(s.lead_time || 0);
   };
 
@@ -227,7 +224,7 @@ export function SuppliersPage() {
       return;
     }
     try {
-      const id = sanitizeDocId(newName.trim());
+      const id = supplierDocId(brandId, newName.trim());
       await SuppliersService.create(id, {
         name: newName.trim(),
         tod: newTod,
@@ -379,7 +376,7 @@ export function SuppliersPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {[
           { icon: <Truck size={16} />, color: 'text-[var(--nts-accent)]', bg: 'bg-[var(--nts-accent)]/10', value: suppliers.length, label: 'Προμηθευτές' },
-          { icon: <Clock size={16} />, color: 'text-blue-500', bg: 'bg-blue-50', value: suppliers.length > 0 ? Math.round(suppliers.reduce((s, x) => s + x.tod, 0) / suppliers.length) : DEFAULT_TOD, label: 'Μέσο TOD' },
+          { icon: <Clock size={16} />, color: 'text-blue-500', bg: 'bg-blue-50', value: suppliers.length > 0 ? Math.round(suppliers.reduce((s, x) => s + (x.tod ?? DEFAULT_TOD), 0) / suppliers.length) : DEFAULT_TOD, label: 'Μέσο TOD' },
           { icon: <Clock size={16} />, color: 'text-amber-500', bg: 'bg-amber-50', value: suppliers.length > 0 ? Math.round(suppliers.filter(s => (s.lead_time || 0) > 0).reduce((s, x) => s + (x.lead_time || 0), 0) / Math.max(suppliers.filter(s => (s.lead_time || 0) > 0).length, 1)) : 0, label: 'Μέσο Lead Time' },
         ].map((stat, i) => (
           <Card key={i} className="px-3 py-3 sm:px-4">
@@ -514,7 +511,7 @@ export function SuppliersPage() {
                           />
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]">
-                            {s.tod}d
+                            {s.tod ?? DEFAULT_TOD}d
                           </span>
                         )}
                       </td>

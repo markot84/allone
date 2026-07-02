@@ -2457,7 +2457,8 @@ export async function fetchMegaventoryData(
       docsOk &&
       normalizedCounts !== null &&
       normalizedCounts.products > 0 &&
-      ((docsWindow.mode === 'historical' && !conn.manualImportCleanupAt) || !conn.manualSegmentCleanupAt);
+      docsWindow.mode === 'historical' &&
+      (!conn.manualImportCleanupAt || !conn.manualSegmentCleanupAt);
     if (shouldCleanupManualImports) {
       try {
         manualCleanupCounts = await cleanupManualImportsForMegaventoryMaster(db, brandId);

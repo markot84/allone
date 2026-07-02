@@ -287,7 +287,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   const supplierTodMap = useMemo(() => {
     const m = new Map<string, number>();
-    suppliers.forEach(s => m.set(s.name, s.tod));
+    suppliers.forEach(s => { if (s.tod != null) m.set(s.name, s.tod); });
     return m;
   }, [suppliers]);
 

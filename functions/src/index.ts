@@ -21,6 +21,7 @@ const OPENCART_EGRESS_OPTIONS: { vpcConnector?: string; vpcConnectorEgressSettin
     ? { vpcConnector: 'pp-opencart-connector', vpcConnectorEgressSettings: 'ALL_TRAFFIC' }
     : {};
 import { nestDottedKeys } from './firestorePatch';
+import { supplierDocId } from './erpConnectorFirestore';
 import { sanitizeOAuthReturnOrigin } from './oauthRedirect';
 import { validateImportUrl, safeFetch } from './urlValidator';
 import { verifyState } from './oauthState';
@@ -468,8 +469,8 @@ async function importProducts(
 
   if (suppliers.size > 0) {
     const supplierItems = Array.from(suppliers.values()).map((name) => ({
-      id: name.replace(/[/\\]/g, '_').trim(),
-      data: { name, tod: 60, lead_time: 0 } as Record<string, unknown>,
+      id: supplierDocId(brandId, name),
+      data: { name } as Record<string, unknown>,
     }));
     await batchWrite('suppliers', supplierItems, brandId);
     logger.info(`Auto-created ${supplierItems.length} suppliers`);

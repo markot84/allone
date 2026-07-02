@@ -366,8 +366,8 @@ export interface SegmentCategoryData {
 export interface Supplier {
   id: string;
   name: string;
-  /** Target Days of Stock — ideal stock duration in days */
-  tod: number;
+  /** Target Days of Stock — ideal stock duration in days; absent = platform default */
+  tod?: number;
   /** Optional lead time in days */
   lead_time?: number;
   /** Optional contact info */
