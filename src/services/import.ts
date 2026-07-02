@@ -2038,7 +2038,7 @@ export async function importFile(
               supplierMap.set(sName, todVal > 0 ? todVal : undefined);
             }
           }
-          if (supplierMap.size > 0) {
+          if (supplierMap.size > 0 && brandId) {
             // Only name (+ sheet-provided tod) — never stamp defaults over existing docs (PER-183)
             const supItems = Array.from(supplierMap.entries()).map(([name, tod]) => ({
               id: supplierDocId(brandId, name),

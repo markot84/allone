@@ -65,7 +65,7 @@ export class FirestoreService {
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as T;
+        return { ...docSnap.data(), id: docSnap.id } as T;
       }
       return null;
     } catch (error) {
@@ -85,7 +85,7 @@ export class FirestoreService {
     const load = async (): Promise<T | null> => {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as T;
+        return { ...docSnap.data(), id: docSnap.id } as T;
       }
       return null;
     };
@@ -148,8 +148,8 @@ export class FirestoreService {
           : await getDocs(q);
 
       return querySnapshot.docs.map((d) => ({
-        id: d.id,
         ...d.data(),
+        id: d.id,
       })) as T[];
     } catch (error) {
       logger.error('Error getting documents from', { collectionName, err: error });
@@ -187,7 +187,7 @@ export class FirestoreService {
       const q = query(collection(db, collectionName), ...pageConstraints);
       const snap = await getDocs(q);
 
-      const items = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as T[];
+      const items = snap.docs.map((d) => ({ ...d.data(), id: d.id })) as T[];
       const lastDoc = snap.docs[snap.docs.length - 1] ?? null;
 
       return { items, lastDoc, totalCount };
