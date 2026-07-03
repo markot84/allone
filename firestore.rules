@@ -109,14 +109,26 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 120;
+        && request.resource.data.name.size() <= 120
+        // SEC entitlement (PP-01/06/03): a self-service brand starts on the default plan with no
+        // module overrides — only a super-admin (billing) may mint an Enterprise brand.
+        && (isSuperAdmin()
+            || (request.resource.data.get('plan', 'growth') == 'growth'
+                && !('enabledModules' in request.resource.data)));
       // SEC-M2: `createdBy` is trusted as a membership/ownership signal (isBrandMember,
       // isBrandOwnerOrAdmin, Storage rules) but was mutable on update — letting an
       // owner/admin re-point it to their own uid and keep a persistent backdoor even
       // after being removed from members. Pin it immutable; a normal update (which never
       // changes createdBy) still passes since request.resource.data carries it unchanged.
+      // SEC entitlement (PP-01/06/03): `plan` and `enabledModules` gate the paid Enterprise
+      // edition and the server-side procurement-catalog switch. An owner/admin could self-upgrade
+      // for free via the same SDK path used to edit name/logo, so pin them: only a super-admin
+      // (billing) may change them. `type` (B2B/B2C) stays owner-editable — it is a product setting,
+      // not a paywall (BrandsPage edits it and no paid feature gates on it).
       allow update: if isBrandOwnerOrAdmin(brandId)
-        && request.resource.data.createdBy == resource.data.createdBy;
+        && request.resource.data.createdBy == resource.data.createdBy
+        && (isSuperAdmin()
+            || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['plan', 'enabledModules']));
       allow delete: if isBrandOwnerOrAdmin(brandId);
 
       // Brand members — προσοχή: collection group query `where userId == request.auth.uid` ΔΕΝ πρέπει

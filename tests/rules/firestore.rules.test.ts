@@ -388,6 +388,55 @@ describe('G. brandId immutability on update', () => {
   });
 });
 
+// G1b. Entitlement immutability on brands — `plan`/`enabledModules` are super-admin-only
+// (paid Enterprise + server procurement-catalog switch); `type` stays owner-editable.
+describe('G1b. brands entitlement immutability (plan / enabledModules)', () => {
+  it('denies an owner self-upgrading plan to enterprise', async () => {
+    const db = authed(OWNER_A);
+    await assertFails(updateDoc(doc(db, `brands/${BRAND_A}`), { plan: 'enterprise' }));
+  });
+
+  it('denies an owner presetting enabledModules overrides', async () => {
+    const db = authed(OWNER_A);
+    await assertFails(
+      updateDoc(doc(db, `brands/${BRAND_A}`), { enabledModules: { procurement: true } }),
+    );
+  });
+
+  it('allows an owner editing name/type/logo (no entitlement change)', async () => {
+    const db = authed(OWNER_A);
+    await assertSucceeds(
+      updateDoc(doc(db, `brands/${BRAND_A}`), { name: 'Renamed A', type: 'B2B', logoUrl: 'x' }),
+    );
+  });
+
+  it('allows a super-admin to change plan to enterprise', async () => {
+    const db = authed(SUPER_ADMIN);
+    await assertSucceeds(updateDoc(doc(db, `brands/${BRAND_A}`), { plan: 'enterprise' }));
+  });
+
+  it('denies a self-service create pre-set to enterprise', async () => {
+    const db = authed(OUTSIDER);
+    await assertFails(
+      setDoc(doc(db, 'brands/brandNew'), { name: 'New', createdBy: OUTSIDER, plan: 'enterprise' }),
+    );
+  });
+
+  it('allows a self-service create on the default plan', async () => {
+    const db = authed(OUTSIDER);
+    await assertSucceeds(
+      setDoc(doc(db, 'brands/brandNew'), { name: 'New', createdBy: OUTSIDER, plan: 'growth' }),
+    );
+  });
+
+  it('allows a super-admin to mint an enterprise brand', async () => {
+    const db = authed(SUPER_ADMIN);
+    await assertSucceeds(
+      setDoc(doc(db, 'brands/brandEnt'), { name: 'Ent', createdBy: SUPER_ADMIN, plan: 'enterprise' }),
+    );
+  });
+});
+
 // G2. brandId immutability on the merge-added commercial_*/offers/marketing_plans
 // collections — `update, delete` must enforce brandIdUnchanged().
 
