@@ -36,16 +36,21 @@ npm run build
 
 ## Deploy
 
-### Firebase Hosting
+Firebase Hosting + Cloud Functions + Firestore. **Two independent switches govern a deploy** — they must agree:
 
-The application is deployed to Firebase Hosting with Firestore database.
+- **What the bundle talks to** (baked at build time): the `.env` `VITE_FIREBASE_*` config, selected by the Vite build mode — `npm run build` = **staging** config, `npm run build:production` = **production** config.
+- **Where the artifacts are uploaded** (deploy time): the Firebase CLI `--project` flag, resolved via `.firebaserc` (`staging` → `performanceplus-staging`, `production` → `performance-plus-4a5b2`).
 
-**Setup:**
-1. Install Firebase CLI: `npm install -g firebase-tools`
-2. Login: `firebase login`
-3. Configure `.env` file with your Firebase credentials (see `.env.example`) — `VITE_FIREBASE_PROJECT_ID` is the single switch between prod and staging.
-4. Deploy: `npm run firebase:deploy` (reads the project id from `.env` via `scripts/firebase-deploy.mjs`; no `.firebaserc` needed)
+Mixing them (e.g. a staging-mode build deployed to production) ships the wrong Firebase config to the live site. The npm scripts pair them correctly:
 
-**See `FIREBASE_SETUP.md` for detailed instructions.**
+**Setup:** `npm install -g firebase-tools` then `firebase login`.
 
-**Live URL:** `https://<VITE_FIREBASE_PROJECT_ID>.web.app` (resolves from `.env`)
+| Command | Build mode | Target (`--project`) | Scope |
+|---|---|---|---|
+| `npm run firebase:deploy` | staging | staging | hosting only |
+| `npm run firebase:deploy:functions` | — | staging | functions only |
+| `npm run firebase:deploy:full` (= `:full:staging`) | staging | staging | everything |
+| `npm run firebase:deploy:full:production` | production | production | everything |
+| `npm run deploy:full` | staging | staging | everything, then `git add -u` + commit + push |
+
+**Live URLs:** staging `https://performanceplus-staging.web.app` · production `https://performance-plus-4a5b2.web.app`.
