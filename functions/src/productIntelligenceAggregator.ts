@@ -119,6 +119,8 @@ type ProductIntelligenceQueryResult = {
   totalPages: number;
   bucket: PageBucket;
   products: CompactProduct[];
+  /** Summary over the full filtered set (not just the page) so cards can follow active filters (PER-178). */
+  summary?: InventorySummaryPayload;
 };
 
 const READ_PAGE_SIZE = 1000;
@@ -1429,6 +1431,7 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
     totalPages,
     bucket,
     products: sorted.slice(start, start + pageSize),
+    summary: summaryForProducts(filtered),
   };
 }
 

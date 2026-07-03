@@ -75,6 +75,8 @@ export type ProductIntelligenceQueryResult = {
   totalPages: number;
   bucket: ProductIntelligenceBucket;
   products: Product[];
+  /** Summary over the full filtered set — lets the cards follow active filters (PER-178). */
+  summary?: InventorySummary;
 };
 
 function isAggregateReady(value: unknown): value is ProductIntelligenceAggregate {

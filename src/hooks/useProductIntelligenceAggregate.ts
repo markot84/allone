@@ -80,6 +80,7 @@ export function useProductIntelligenceAggregate(
           totalPages: aggregate.pagesByBucket?.[bucket] ?? 1,
           bucket,
           products: pageDoc.products,
+          summary: aggregate.summary, // static (unfiltered) path → whole-catalog summary
         };
         return result;
       }

@@ -357,7 +357,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [serverIntelligence.safePage, currentPage]);
 
   const inventoryAlerts: InventoryAlert[] = [];
-  const displaySummary = serverIntelligence.aggregate?.summary ?? EMPTY_INVENTORY_SUMMARY;
+  // PER-178: with no stock-card bucket selected, the cards follow the active filters (category/brand/
+  // search/margin/date) via the CF's filtered summary; a selected bucket keeps whole-inventory numbers
+  // so the cards stay usable as bucket navigation.
+  const displaySummary =
+    (serverBucket === 'all' ? serverIntelligence.page?.summary : undefined)
+    ?? serverIntelligence.aggregate?.summary
+    ?? EMPTY_INVENTORY_SUMMARY;
 
   const categoryOptions = useMemo((): ExcelFilterOption[] => {
     return (serverIntelligence.aggregate?.categories ?? [])
@@ -395,7 +401,11 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     if (!s) return serverFilteredTotal || totalCatalogCount;
     return s.healthy_stock.count + s.low_stock.count + s.excess_stock.count + s.dead_stock.count;
   }, [serverIntelligence.aggregate?.summary, serverFilteredTotal, totalCatalogCount]);
-  const displayTotalSkus = includeNoStock ? totalCatalogCount : activeInventoryTotal;
+  // PER-178: the Active/Total SKUs card follows filters too — the filtered row count when no stock-card
+  // bucket is selected, whole-catalog otherwise (matching the health cards' navigation behavior).
+  const displayTotalSkus = serverBucket === 'all'
+    ? serverFilteredTotal || (includeNoStock ? totalCatalogCount : activeInventoryTotal)
+    : includeNoStock ? totalCatalogCount : activeInventoryTotal;
   const showMagentoImageAccessNotice =
     hasServerAggregate &&
     productDataSourceLabel === 'ERP' &&
