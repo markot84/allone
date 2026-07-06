@@ -37,6 +37,7 @@ import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { useBrand } from '../../hooks/useBrand';
 import { prefersEshopRevenuePerformance } from '../../utils/revenueSource';
+import { buildSupplierTodMap } from '../../utils/productUtils';
 import { useProductAggregates, useSegmentAggregates } from '../../hooks/useAggregates';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { useProcurementSignals } from '../../hooks/useProcurementSignals';
