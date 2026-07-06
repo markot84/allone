@@ -256,11 +256,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const showSegmentsStaleSourceNote =
     !segmentsLoading && rfmSegments.length > 0 && segmentsDataSource !== 'ecommerce';
 
-  const supplierTodMap = useMemo(() => {
-    const m = new Map<string, number>();
-    suppliers.forEach(s => { if (s.tod != null) m.set(s.name, s.tod); });
-    return m;
-  }, [suppliers]);
+  const supplierTodMap = useMemo(
+    () => buildSupplierTodMap(suppliers, currentBrand?.inventoryThresholds?.defaultTod),
+    [suppliers, currentBrand?.inventoryThresholds?.defaultTod]
+  );
   const productsCount = productIntelligence.aggregate?.totalCount ?? productStats?.totalSkus ?? 0;
   const hasAnyData =
     hasOrganic ||

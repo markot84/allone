@@ -105,6 +105,10 @@ export interface Brand {
     excessDaysOfCover?: number;
     /** Grace days after receipt before unsold stock counts as "dead". Default 60. */
     newStockGraceDays?: number;
+    /** Brand-wide fallback supplier lead time (days), used when a supplier has no lead_time. Default 0. */
+    defaultLeadTimeDays?: number;
+    /** Brand-wide fallback Target Days of Stock, used when a supplier has no tod. Default 60. */
+    defaultTod?: number;
   };
 }
 

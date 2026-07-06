@@ -124,13 +124,31 @@ export function getDaysOfStock(product: Product): number {
 export type StockHealth = 'healthy' | 'excess' | 'low' | 'dead';
 
 /** Classify stock health via TOD: dead (∞ days), low (≤TOD/2), excess (>TOD×2), else healthy. */
-/** Resolve TOD for a product: supplier-specific if available, else default */
-export function getProductTod(product: Product, supplierTodMap?: Map<string, number>): number {
+/** Build a supplier→TOD map: each supplier's own tod, else the brand default (config page), else
+ * the platform floor. Products whose supplier isn't listed fall back via getProductTod. */
+export function buildSupplierTodMap(
+  suppliers: { name: string; tod?: number | null }[],
+  brandDefaultTod: number = DEFAULT_TOD
+): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const s of suppliers) {
+    if (!s.name) continue;
+    m.set(s.name, s.tod != null && s.tod > 0 ? s.tod : brandDefaultTod);
+  }
+  return m;
+}
+
+/** Resolve TOD for a product: supplier-specific → brand default (config page) → platform floor. */
+export function getProductTod(
+  product: Product,
+  supplierTodMap?: Map<string, number>,
+  brandDefaultTod: number = DEFAULT_TOD
+): number {
   if (supplierTodMap && product.supplier) {
     const supplierTod = supplierTodMap.get(product.supplier);
     if (supplierTod != null && supplierTod > 0) return supplierTod;
   }
-  return DEFAULT_TOD;
+  return brandDefaultTod;
 }
 
 export function classifyStockHealth(product: Product, tod: number = DEFAULT_TOD): StockHealth {
@@ -150,7 +168,8 @@ export function classifyStockHealth(product: Product, tod: number = DEFAULT_TOD)
 export function resolveStockHealth(
   product: Product,
   supplierTodMap?: Map<string, number>,
-  useProcurementRowModel?: boolean
+  useProcurementRowModel?: boolean,
+  brandDefaultTod: number = DEFAULT_TOD
 ): StockHealth {
   if (useProcurementRowModel) {
     const tag = product.priority_tag;
@@ -158,7 +177,7 @@ export function resolveStockHealth(
       return tag;
     }
   }
-  return classifyStockHealth(product, getProductTod(product, supplierTodMap));
+  return classifyStockHealth(product, getProductTod(product, supplierTodMap, brandDefaultTod));
 }
 
 /** Delivery-note-first products have stock but no cost price yet; true when stock > 0 and

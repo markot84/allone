@@ -249,10 +249,37 @@ const DEFAULT_STOCK_THRESHOLDS: StockThresholds = {
   excessDaysOfCover: 120,
   newStockGraceDays: 60,
 };
+/** Platform floor for supplier lead time (days) when neither supplier nor brand default sets one. */
+const DEFAULT_LEAD_DAYS = 0;
 
 /** Per-brand thresholds for the current aggregation run; set at the top of refreshProductIntelligenceAggregate
  * (brands are processed sequentially, so a module-level value is safe) and read by stockBucket's default. */
 let activeStockThresholds: StockThresholds = DEFAULT_STOCK_THRESHOLDS;
+
+/** Per-brand supplier lead times (days) for the current run: supplier name (normalized) → lead_time,
+ * plus a brand-wide fallback. Feeds the PER-276 reorder-point low threshold. */
+let activeSupplierLeadByName = new Map<string, number>();
+let activeDefaultLeadDays = 0;
+const normSupplierName = (s?: string | null): string => (s ?? '').trim().toLowerCase();
+/** Effective lead time for a product's supplier: per-supplier lead_time, else brand default, else 0. */
+function leadDaysForSupplier(supplier?: string | null): number {
+  const perSupplier = activeSupplierLeadByName.get(normSupplierName(supplier));
+  return perSupplier != null && perSupplier > 0 ? perSupplier : activeDefaultLeadDays;
+}
+
+/** Load per-supplier lead times for a brand (suppliers collection is small — a few dozen docs). */
+async function loadSupplierLeadTimes(brandId: string): Promise<Map<string, number>> {
+  const firestore = assertDb();
+  const map = new Map<string, number>();
+  const snap = await firestore.collection('suppliers').where('brandId', '==', brandId).get().catch(() => null);
+  if (!snap) return map;
+  for (const doc of snap.docs) {
+    const name = normSupplierName(text(doc.data().name));
+    const lead = num(doc.data().lead_time);
+    if (name && lead > 0) map.set(name, lead);
+  }
+  return map;
+}
 
 /** Resolve a brand's inventoryThresholds onto a full StockThresholds, each field defaulting when unset/invalid. */
 function resolveStockThresholds(raw: unknown): StockThresholds {
@@ -271,12 +298,14 @@ function stockBucket(
   qtySoldPeriod: number | null,
   qtySoldLifetime: number | null = null,
   shelfAgeDays: number | null = null,
+  leadDays = 0,
   t: StockThresholds = activeStockThresholds
 ): StockBucket {
   if (stockLevel <= 0) return 'no_stock';
   if (qtySoldPeriod != null && qtySoldPeriod > 0) {
     const daysOfStock = stockLevel / (qtySoldPeriod / t.velocityWindowDays);
-    if (daysOfStock <= t.lowDaysOfCover) return 'low';
+    // PER-276: low = stock can't cover demand through the supplier replenishment lead time (reorder point).
+    if (daysOfStock <= t.lowDaysOfCover + leadDays) return 'low';
     if (daysOfStock > t.excessDaysOfCover) return 'excess';
     return 'healthy';
   }
@@ -325,7 +354,7 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     row.qty_sold_period != null || row.qtySoldPeriod != null || row.qty_sold_last_30d != null || row.qtySold != null;
   const qtySoldLifetime = firstPositive(row.qty_sold_lifetime, row.qtySoldLifetime);
   const margin = num(row.margin_percentage) || (price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0);
-  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null, qtySoldLifetime);
+  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null, qtySoldLifetime, null, leadDaysForSupplier(text(row.supplier)));
   const product: CompactProduct = {
     id: docId,
     ...(text(row.productId ?? row.ProductID ?? row.ProductId) ? { productId: text(row.productId ?? row.ProductID ?? row.ProductId) } : {}),
@@ -373,7 +402,7 @@ function overlayFromMegaventoryProduct(row: Record<string, unknown>): StockOverl
   const price = firstPositive(row.price, row.sell_price, row.list_price, row.sellingPrice);
   const cost = firstPositive(row.cost_price, row.costPrice, row.purchasePrice);
   const margin = num(row.margin_percentage) || (price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0);
-  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null);
+  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null, null, null, leadDaysForSupplier(text(row.supplier)));
   return {
     stock_level: Math.round(stock * 100) / 100,
     stock_capacity: Math.max(Math.round(stock * 2 * 100) / 100, Math.round(stock * 100) / 100, 1),
@@ -413,7 +442,7 @@ function applyStockOverlay(product: CompactProduct, overlay: StockOverlay, keepS
     next.stock_level = overlay.stock_level;
     next.stock_capacity = overlay.stock_capacity;
   }
-  next.priority_tag = stockBucket(effectiveStock, finalQtySold);
+  next.priority_tag = stockBucket(effectiveStock, finalQtySold, null, null, leadDaysForSupplier(overlay.supplier ?? next.supplier));
   next.source = 'erp';
   if (overlay.price != null) next.price = overlay.price;
   if (overlay.cost_price != null) next.cost_price = overlay.cost_price;
@@ -805,7 +834,7 @@ function applyMegaventoryStockOverlay(products: Map<string, CompactProduct>, sto
     product.stock_on_hand = Math.round(stock.physical * 100) / 100;
     product.available_stock = Math.round(stock.available * 100) / 100;
     product.stock_capacity = Math.max(Math.round(stockLevel * 2 * 100) / 100, Math.round(stockLevel * 100) / 100, 1);
-    product.priority_tag = stockBucket(stockLevel, qtySold);
+    product.priority_tag = stockBucket(stockLevel, qtySold, null, null, leadDaysForSupplier(product.supplier));
     applied += 1;
   }
   return applied;
@@ -881,7 +910,7 @@ function applySkuStatsOverlay(products: Map<string, CompactProduct>, statsBySku:
     if (qtySoldPeriod > 0) product.qty_sold_period = Math.round(qtySoldPeriod * 100) / 100;
     if (num(stats.sold) > 0) product.qty_sold_lifetime = Math.round(num(stats.sold) * 100) / 100;
     if (stats.lastSaleAt) product.last_sale_at = stats.lastSaleAt;
-    product.priority_tag = stockBucket(product.stock_level, qtySoldPeriod, num(stats.sold));
+    product.priority_tag = stockBucket(product.stock_level, qtySoldPeriod, num(stats.sold), null, leadDaysForSupplier(product.supplier));
     applied += 1;
   }
   return applied;
@@ -927,7 +956,8 @@ function applyReceiptDateOverlay(
         product.stock_level,
         product.qty_sold_period ?? null,
         product.qty_sold_lifetime ?? null,
-        shelfAge >= 0 ? shelfAge : null
+        shelfAge >= 0 ? shelfAge : null,
+        leadDaysForSupplier(product.supplier)
       );
     }
     applied += 1;
@@ -1512,7 +1542,13 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
   // gating + connector ERP detection) is preserved unchanged.
   const stockOverride = await readStockSourceOverride(brandId);
   // Per-brand stock-health thresholds for this run (defaults preserve current behaviour when unset).
-  activeStockThresholds = resolveStockThresholds((await firestore.doc(`brands/${brandId}`).get()).data()?.inventoryThresholds);
+  const brandInventoryThresholds = (await firestore.doc(`brands/${brandId}`).get()).data()?.inventoryThresholds as
+    | Record<string, unknown>
+    | undefined;
+  activeStockThresholds = resolveStockThresholds(brandInventoryThresholds);
+  const rawLead = num(brandInventoryThresholds?.defaultLeadTimeDays);
+  activeDefaultLeadDays = rawLead > 0 ? rawLead : DEFAULT_LEAD_DAYS;
+  activeSupplierLeadByName = await loadSupplierLeadTimes(brandId);
 
   // Procurement-first: for Enterprise+Procurement brands stock is authoritative from the uploaded
   // procurement file and OVERRIDES any connector catalog.

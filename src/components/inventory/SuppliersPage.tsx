@@ -15,7 +15,7 @@ import {
   ArrowDown,
   ArrowUpDown,
 } from 'lucide-react';
-import { Card, Button, Spinner, useToast } from '../common';
+import { Card, Button, Spinner, useToast, Tooltip } from '../common';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { useBrand } from '../../hooks/useBrand';
 import { SuppliersService } from '../../services/firestore';
@@ -30,6 +30,7 @@ import { sanitizeRow } from '../../utils/spreadsheetSafe';
 export function SuppliersPage() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
+  const brandDefaultTod = currentBrand?.inventoryThresholds?.defaultTod ?? DEFAULT_TOD;
   const { suppliers, isLoading, invalidate } = useSuppliers();
   // queryClient available for manual cache ops if needed
   const toast = useToast();
@@ -89,7 +90,7 @@ export function SuppliersPage() {
       if (q && !(s.name.toLowerCase().includes(q) || (s.contact || '').toLowerCase().includes(q))) return false;
       if (fn && !s.name.toLowerCase().includes(fn)) return false;
       if (fc && !(s.contact || '').toLowerCase().includes(fc)) return false;
-      if (!matchNumeric(s.tod ?? DEFAULT_TOD, filterTod)) return false;
+      if (!matchNumeric(s.tod ?? brandDefaultTod, filterTod)) return false;
       if (!matchNumeric(s.lead_time || 0, filterLead)) return false;
       return true;
     });
@@ -101,7 +102,7 @@ export function SuppliersPage() {
       let bv: string | number = '';
       switch (sortBy) {
         case 'name': av = a.name.toLowerCase(); bv = b.name.toLowerCase(); break;
-        case 'tod': av = a.tod ?? DEFAULT_TOD; bv = b.tod ?? DEFAULT_TOD; break;
+        case 'tod': av = a.tod ?? brandDefaultTod; bv = b.tod ?? brandDefaultTod; break;
         case 'lead': av = a.lead_time || 0; bv = b.lead_time || 0; break;
         case 'contact': av = (a.contact || '').toLowerCase(); bv = (b.contact || '').toLowerCase(); break;
       }
@@ -204,7 +205,7 @@ export function SuppliersPage() {
 
   const handleStartEdit = (s: Supplier) => {
     setEditingId(s.id);
-    setEditTod(s.tod ?? DEFAULT_TOD);
+    setEditTod(s.tod ?? brandDefaultTod);
     setEditLeadTime(s.lead_time || 0);
   };
 
@@ -320,7 +321,7 @@ export function SuppliersPage() {
             <p className="font-medium mb-1">Μορφή αρχείου εισαγωγής</p>
             <p className="text-[var(--nts-medium-gray)]">
               Στήλες: <code className="text-xs bg-white px-1 py-0.5 rounded">Supplier</code> (υποχρεωτικό), 
-              <code className="text-xs bg-white px-1 py-0.5 rounded ml-1">TOD</code> (ημέρες, default {DEFAULT_TOD}), 
+              <code className="text-xs bg-white px-1 py-0.5 rounded ml-1">TOD</code> (ημέρες, default {brandDefaultTod}),
               <code className="text-xs bg-white px-1 py-0.5 rounded ml-1">Lead_Time</code> (ημέρες), 
               <code className="text-xs bg-white px-1 py-0.5 rounded ml-1">Contact</code>
             </p>
@@ -356,7 +357,10 @@ export function SuppliersPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-[var(--nts-medium-gray)] mb-1 block">TOD (ημέρες)</label>
+                  <label className="text-xs text-[var(--nts-medium-gray)] mb-1 flex items-center gap-1">
+                    Target Days of Stock — TOD (ημέρες)
+                    <Tooltip content="Στοχευμένες ημέρες κάλυψης αποθέματος για τον προμηθευτή (πόσων ημερών απόθεμα θέλετε να κρατάτε)." size={11} />
+                  </label>
                   <input
                     type="number"
                     value={newTod}
@@ -401,7 +405,7 @@ export function SuppliersPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {[
           { icon: <Truck size={16} />, color: 'text-[var(--nts-accent)]', bg: 'bg-[var(--nts-accent)]/10', value: suppliers.length, label: 'Προμηθευτές' },
-          { icon: <Clock size={16} />, color: 'text-blue-500', bg: 'bg-blue-50', value: suppliers.length > 0 ? Math.round(suppliers.reduce((s, x) => s + (x.tod ?? DEFAULT_TOD), 0) / suppliers.length) : DEFAULT_TOD, label: 'Μέσο TOD' },
+          { icon: <Clock size={16} />, color: 'text-blue-500', bg: 'bg-blue-50', value: suppliers.length > 0 ? Math.round(suppliers.reduce((s, x) => s + (x.tod ?? brandDefaultTod), 0) / suppliers.length) : DEFAULT_TOD, label: 'Μέσο TOD' },
           { icon: <Clock size={16} />, color: 'text-amber-500', bg: 'bg-amber-50', value: suppliers.length > 0 ? Math.round(suppliers.filter(s => (s.lead_time || 0) > 0).reduce((s, x) => s + (x.lead_time || 0), 0) / Math.max(suppliers.filter(s => (s.lead_time || 0) > 0).length, 1)) : 0, label: 'Μέσο Lead Time' },
         ].map((stat, i) => (
           <Card key={i} className="px-3 py-3 sm:px-4">
@@ -499,7 +503,11 @@ export function SuppliersPage() {
                     Προμηθευτής <SortIcon col="name" />
                   </th>
                   <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap w-24 cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('tod')}>
-                    TOD <SortIcon col="tod" />
+                    <span className="inline-flex items-center gap-1">
+                      TOD
+                      <Tooltip content="Target Days of Stock: στοχευμένες ημέρες κάλυψης αποθέματος για τον προμηθευτή (πόσων ημερών απόθεμα θέλετε να κρατάτε)." size={11} />
+                      <SortIcon col="tod" />
+                    </span>
                   </th>
                   <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap w-28 hidden sm:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('lead')}>
                     Lead Time <SortIcon col="lead" />
@@ -536,7 +544,7 @@ export function SuppliersPage() {
                           />
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]">
-                            {s.tod ?? DEFAULT_TOD}d
+                            {s.tod ?? brandDefaultTod}d
                           </span>
                         )}
                       </td>
@@ -589,8 +597,8 @@ export function SuppliersPage() {
       {/* Default TOD info */}
       <Card className="p-4 bg-gray-50/50">
         <p className="text-xs text-[var(--nts-medium-gray)]">
-          <strong>Default TOD:</strong> Προϊόντα χωρίς αντιστοιχισμένο προμηθευτή χρησιμοποιούν TOD = {DEFAULT_TOD} ημέρες.
-          Η κατηγοριοποίηση stock health (Healthy / Excess / Low / Dead) βασίζεται στο TOD κάθε προμηθευτή.
+          <strong>Default TOD:</strong> Προμηθευτές χωρίς δικό τους TOD χρησιμοποιούν την προεπιλογή ({brandDefaultTod} ημέρες),
+          που ορίζεται στα «Όρια υγείας αποθέματος». Η κατηγοριοποίηση stock health (Healthy / Excess / Low / Dead) βασίζεται στο TOD κάθε προμηθευτή.
         </p>
       </Card>
     </div>

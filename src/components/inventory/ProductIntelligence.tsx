@@ -44,6 +44,7 @@ import { useProductIntelligenceAggregate } from '../../hooks/useProductIntellige
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import { FirestoreService } from '../../services/firestore';
 import {
+  buildSupplierTodMap,
   getDaysOfStock,
   getEffectiveStockLevel,
   hasPricePending,
@@ -287,11 +288,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [benchmarks]);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const supplierTodMap = useMemo(() => {
-    const m = new Map<string, number>();
-    suppliers.forEach(s => { if (s.tod != null) m.set(s.name, s.tod); });
-    return m;
-  }, [suppliers]);
+  const supplierTodMap = useMemo(
+    () => buildSupplierTodMap(suppliers, currentBrand?.inventoryThresholds?.defaultTod),
+    [suppliers, currentBrand?.inventoryThresholds?.defaultTod]
+  );
 
   const hasServerAggregate = !!serverIntelligence.aggregate;
   const hasImported = hasServerAggregate;

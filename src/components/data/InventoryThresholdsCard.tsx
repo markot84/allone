@@ -14,6 +14,8 @@ const FIELDS: { key: FieldKey; label: string; def: number; hint: string }[] = [
   { key: 'lowDaysOfCover', label: 'Όριο «Χαμηλού» (ημέρες κάλυψης)', def: 30, hint: 'Κάτω από τόσες ημέρες κάλυψης → «Χαμηλό απόθεμα».' },
   { key: 'excessDaysOfCover', label: 'Όριο «Υπερβολικού» (ημέρες κάλυψης)', def: 120, hint: 'Πάνω από τόσες ημέρες κάλυψης → «Υπερβολικό απόθεμα».' },
   { key: 'newStockGraceDays', label: 'Περίοδος χάριτος νέου αποθέματος (ημέρες)', def: 60, hint: 'Απόθεμα χωρίς πωλήσεις δεν χαρακτηρίζεται «Νεκρό» πριν περάσουν τόσες ημέρες από την παραλαβή.' },
+  { key: 'defaultLeadTimeDays', label: 'Προεπιλογή lead time προμηθευτή (ημέρες)', def: 0, hint: 'Εφεδρικός χρόνος παράδοσης όταν ο προμηθευτής δεν έχει δικό του lead time. Χρησιμοποιείται στον χαρακτηρισμό «Χαμηλού αποθέματος».' },
+  { key: 'defaultTod', label: 'Προεπιλογή TOD ανά προμηθευτή (ημέρες)', def: 60, hint: 'Εφεδρικό Target Days of Stock όταν ο προμηθευτής δεν έχει δικό του TOD. Το κάθε προμηθευτής μπορεί να το υπερισχύσει στη σελίδα Προμηθευτών.' },
 ];
 
 /** Per-brand stock-health thresholds (Product Intelligence). Empty inputs keep the platform default.
