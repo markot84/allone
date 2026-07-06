@@ -402,14 +402,18 @@ function overlayFromMegaventoryProduct(row: Record<string, unknown>): StockOverl
   };
 }
 
-function applyStockOverlay(product: CompactProduct, overlay: StockOverlay): CompactProduct {
+function applyStockOverlay(product: CompactProduct, overlay: StockOverlay, keepStock = false): CompactProduct {
   // Mutate in place rather than spreading a fresh object — called once per ERP catalog row (~90k on
   // large brands); the product is owned solely by the catalog map at this stage.
   const finalQtySold = overlay.qty_sold_period ?? product.qty_sold_period ?? 0;
   const next = product;
-  next.stock_level = overlay.stock_level;
-  next.stock_capacity = overlay.stock_capacity;
-  next.priority_tag = stockBucket(overlay.stock_level, finalQtySold);
+  // PER-177: keepStock preserves the warehouse-filtered mirror total over the report's all-warehouse stock.
+  const effectiveStock = keepStock ? next.stock_level : overlay.stock_level;
+  if (!keepStock) {
+    next.stock_level = overlay.stock_level;
+    next.stock_capacity = overlay.stock_capacity;
+  }
+  next.priority_tag = stockBucket(effectiveStock, finalQtySold);
   next.source = 'erp';
   if (overlay.price != null) next.price = overlay.price;
   if (overlay.cost_price != null) next.cost_price = overlay.cost_price;
@@ -418,8 +422,8 @@ function applyStockOverlay(product: CompactProduct, overlay: StockOverlay): Comp
   if (overlay.margin_tier) next.margin_tier = overlay.margin_tier;
   if (overlay.qty_sold_period != null) next.qty_sold_period = overlay.qty_sold_period;
   if (overlay.qty_sold_lifetime != null) next.qty_sold_lifetime = overlay.qty_sold_lifetime;
-  if (overlay.stock_on_hand != null) next.stock_on_hand = overlay.stock_on_hand;
-  if (overlay.available_stock != null) next.available_stock = overlay.available_stock;
+  if (!keepStock && overlay.stock_on_hand != null) next.stock_on_hand = overlay.stock_on_hand;
+  if (!keepStock && overlay.available_stock != null) next.available_stock = overlay.available_stock;
   if (overlay.last_sale_at) next.last_sale_at = overlay.last_sale_at;
   if (overlay.first_available_date) next.first_available_date = overlay.first_available_date;
   if (overlay.category && (!next.category || next.category === 'Uncategorized')) next.category = overlay.category;
@@ -933,7 +937,8 @@ function applyReceiptDateOverlay(
 
 async function loadMegaventoryProductOverlay(
   brandId: string,
-  bySku: Map<string, CompactProduct>
+  bySku: Map<string, CompactProduct>,
+  warehouseFilteredStock: Map<string, { available: number; physical: number }>
 ): Promise<{ rowsRead: number; overlaysApplied: number; erpOnlyProducts: number }> {
   const firestore = assertDb();
   let cursor: QueryDocumentSnapshot | null = null;
@@ -957,7 +962,8 @@ async function loadMegaventoryProductOverlay(
       if (!overlay) continue;
       const existing = bySku.get(sku);
       if (existing) {
-        bySku.set(sku, applyStockOverlay(existing, overlay));
+        const keepStock = !!existing.productId && warehouseFilteredStock.has(existing.productId);
+        bySku.set(sku, applyStockOverlay(existing, overlay, keepStock));
         overlaysApplied += 1;
         continue;
       }
@@ -1024,7 +1030,7 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
   // ERP velocity backs it, so in-store-only sellers aren't mislabelled dead.
   if (hasErp) applyReceiptDateOverlay(bySku, await loadReceiptDates(brandId), hasErpVelocity);
   const overlay = hasErp
-    ? await loadMegaventoryProductOverlay(brandId, bySku)
+    ? await loadMegaventoryProductOverlay(brandId, bySku, stockResult.byProductId)
     : { rowsRead: 0, overlaysApplied: 0, erpOnlyProducts: 0 };
   return {
     products: [...bySku.values()].filter((product) => !isDemoProduct(product) && !isNonMerchandiseProduct(product)),
@@ -1719,5 +1725,6 @@ export const __test = {
   stalePageIds,
   mergeVelocityPreferErp,
   applySkuStatsOverlay,
+  applyStockOverlay,
   classifyAggregateRecovery,
 };

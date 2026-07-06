@@ -213,6 +213,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
+  const lowDaysOfCover = currentBrand?.inventoryThresholds?.lowDaysOfCover ?? 30;
+  const excessDaysOfCover = currentBrand?.inventoryThresholds?.excessDaysOfCover ?? 120;
   const { isEnterprise } = usePlan();
   const procurementModuleEnabled = currentBrand?.enabledModules?.procurement !== false;
   const { signalsBySku: piProcurementSignals } = useProcurementSignals();
@@ -702,7 +704,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={`${displaySummary.excess_stock.count} SKUs`}
           icon={<AlertTriangle size={20} />}
           color="#F59E0B"
-          tooltip="Προϊόντα με πλεόνασμα αποθέματος."
+          tooltip={`Προϊόντα με απόθεμα που καλύπτει πάνω από ${excessDaysOfCover} ημέρες πωλήσεων, με βάση τον τρέχοντα ρυθμό. Το όριο ρυθμίζεται στα «Όρια υγείας αποθέματος».`}
           active={stockCardFilter === 'excess'}
           onClick={() => selectStockCardFilter(stockCardFilter === 'excess' ? 'all' : 'excess')}
         />
@@ -724,7 +726,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={`${displaySummary.low_stock.count} SKUs`}
           icon={<TrendingDown size={20} />}
           color="#8B5CF6"
-          tooltip="Προϊόντα με χαμηλό απόθεμα — κίνδυνος εξάντλησης."
+          tooltip={`Προϊόντα με απόθεμα που καλύπτει έως ${lowDaysOfCover} ημέρες πωλήσεων. Κίνδυνος εξάντλησης. Το όριο ρυθμίζεται στα «Όρια υγείας αποθέματος».`}
           active={stockCardFilter === 'low'}
           onClick={() => selectStockCardFilter(stockCardFilter === 'low' ? 'all' : 'low')}
         />
