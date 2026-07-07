@@ -849,7 +849,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     return [
       { label: 'Συνολικά SKUs', value: uniqueSkus > 0 ? uniqueSkus.toLocaleString('el-GR') : '—', Icon: Tag },
       { label: 'Αξία Αποθέματος', value: totalValue > 0 ? `€${fmt0(totalValue)}` : '—', Icon: Package },
-      { label: 'Πραγματικός Τζίρος 12μήνου', value: last12Revenue > 0 ? `€${fmt0(last12Revenue)}` : '—', Icon: DollarSign },
+      { label: 'Revenue 12μήνου', value: last12Revenue > 0 ? `€${fmt0(last12Revenue)}` : '—', Icon: DollarSign },
       { label: 'Μέση Βαθμολογία Ειδών', value: scores.length > 0 ? avgScore.toFixed(1) : '—', Icon: Star },
     ];
   }, [data, monthlyRevenue, totalRevenue, hasEcommerce]);

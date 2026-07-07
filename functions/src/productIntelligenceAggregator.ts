@@ -250,7 +250,7 @@ const DEFAULT_STOCK_THRESHOLDS: StockThresholds = {
   newStockGraceDays: 60,
 };
 /** Platform floor for supplier lead time (days) when neither supplier nor brand default sets one. */
-const DEFAULT_LEAD_DAYS = 0;
+const DEFAULT_LEAD_DAYS = 30;
 
 /** Per-brand thresholds for the current aggregation run; set at the top of refreshProductIntelligenceAggregate
  * (brands are processed sequentially, so a module-level value is safe) and read by stockBucket's default. */

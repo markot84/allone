@@ -257,7 +257,7 @@ export function StrategyImpactSummary({
         {impacts.usedSample && (
           <p className="text-[10px] text-[#9CA3AF] mt-2 leading-snug">
             Έλεγχος επίδρασης σε {impacts.sampleSize.toLocaleString('el-GR')} από{' '}
-            {impacts.catalogTotal.toLocaleString('el-GR')} SKU (δείγμα για ταχύτητα· τα ↑/↓/ίδια αφορούν μόνο αυτό το
+            {impacts.catalogTotal.toLocaleString('el-GR')} SKU (δείγμα για ταχύτητα πωλήσεων· τα ↑/↓/ίδια αφορούν μόνο αυτό το
             υποσύνολο).
           </p>
         )}

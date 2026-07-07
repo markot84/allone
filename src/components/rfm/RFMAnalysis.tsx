@@ -722,7 +722,7 @@ export function RFMAnalysis() {
         </Card>
 
         <Card padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
-          <CardHeader title="Μερίδιο τζίρου ανά segment" />
+          <CardHeader title="Μερίδιο Revenue ανά segment" />
           <div className="min-h-[260px] w-full min-w-0 flex-1" style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height={280} minHeight={260}>
               <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>

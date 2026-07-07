@@ -1026,8 +1026,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                   <SortableHeader col="spent" label="Spent" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
                   <SortableHeader
                     col="conversion_value"
-                    label={showPurchaseSalesHeadlines && !convFilterActive ? 'Τζίρ.' : 'Value'}
-                    title={showPurchaseSalesHeadlines && !convFilterActive ? 'Τζίρος πωλήσεων' : 'Conversion value'}
+                    label={showPurchaseSalesHeadlines && !convFilterActive ? 'Revenue' : 'Value'}
+                    title={showPurchaseSalesHeadlines && !convFilterActive ? 'Revenue πωλήσεων' : 'Conversion value'}
                     current={sortColumn}
                     dir={sortDirection}
                     onSort={handleSort}

@@ -31,6 +31,7 @@ export function SuppliersPage() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const brandDefaultTod = currentBrand?.inventoryThresholds?.defaultTod ?? DEFAULT_TOD;
+  const brandDefaultLead = currentBrand?.inventoryThresholds?.defaultLeadTimeDays ?? 30;
   const { suppliers, isLoading, invalidate } = useSuppliers();
   // queryClient available for manual cache ops if needed
   const toast = useToast();
@@ -274,7 +275,7 @@ export function SuppliersPage() {
         <div>
           <h2 className="text-xl font-bold text-[var(--nts-charcoal)]">Προμηθευτές</h2>
           <p className="text-sm text-[var(--nts-medium-gray)] mt-1">
-            Διαχείριση προμηθευτών & Target Days of Stock (TOD) ανά προμηθευτή
+            Προμηθευτές με TOD & Lead Time ανά προμηθευτή — τροφοδοτούν την κατηγοριοποίηση αποθέματος
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -322,7 +323,7 @@ export function SuppliersPage() {
             <p className="text-[var(--nts-medium-gray)]">
               Στήλες: <code className="text-xs bg-white px-1 py-0.5 rounded">Supplier</code> (υποχρεωτικό), 
               <code className="text-xs bg-white px-1 py-0.5 rounded ml-1">TOD</code> (ημέρες, default {brandDefaultTod}),
-              <code className="text-xs bg-white px-1 py-0.5 rounded ml-1">Lead_Time</code> (ημέρες), 
+              <code className="text-xs bg-white px-1 py-0.5 rounded ml-1">Lead_Time</code> (ημέρες, default {brandDefaultLead}),
               <code className="text-xs bg-white px-1 py-0.5 rounded ml-1">Contact</code>
             </p>
             <p className="text-[var(--nts-medium-gray)] mt-1">
@@ -370,7 +371,10 @@ export function SuppliersPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-[var(--nts-medium-gray)] mb-1 block">Lead Time (ημέρες)</label>
+                  <label className="text-xs text-[var(--nts-medium-gray)] mb-1 flex items-center gap-1">
+                    Lead Time (ημέρες)
+                    <Tooltip content="Χρόνος παράδοσης προμηθευτή (ημέρες από παραγγελία έως παραλαβή). Χρησιμοποιείται στο σημείο αναπαραγγελίας: προϊόν γίνεται Low όταν το απόθεμα δεν καλύπτει τη ζήτηση μέχρι να φτάσει η επόμενη παραλαβή." size={11} />
+                  </label>
                   <input
                     type="number"
                     value={newLeadTime}
@@ -510,7 +514,11 @@ export function SuppliersPage() {
                     </span>
                   </th>
                   <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap w-28 hidden sm:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('lead')}>
-                    Lead Time <SortIcon col="lead" />
+                    <span className="inline-flex items-center gap-1">
+                      Lead Time
+                      <Tooltip content="Χρόνος παράδοσης προμηθευτή (ημέρες από παραγγελία έως παραλαβή). Τροφοδοτεί το σημείο αναπαραγγελίας για την ένδειξη Low." size={11} />
+                    </span>
+                    <SortIcon col="lead" />
                   </th>
                   <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap hidden md:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('contact')}>
                     Επικοινωνία <SortIcon col="contact" />
@@ -544,7 +552,7 @@ export function SuppliersPage() {
                           />
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]">
-                            {s.tod ?? brandDefaultTod}d
+                            {s.tod ?? brandDefaultTod} ημέρες
                           </span>
                         )}
                       </td>
@@ -559,7 +567,7 @@ export function SuppliersPage() {
                           />
                         ) : (
                           <span className="text-xs text-[var(--nts-medium-gray)]">
-                            {s.lead_time ? `${s.lead_time}d` : '—'}
+                            {s.lead_time ? `${s.lead_time} ημέρες` : '—'}
                           </span>
                         )}
                       </td>
@@ -594,11 +602,17 @@ export function SuppliersPage() {
         )}
       </Card>
 
-      {/* Default TOD info */}
-      <Card className="p-4 bg-gray-50/50">
+      {/* Defaults & how they're used */}
+      <Card className="p-4 bg-gray-50/50 space-y-2">
         <p className="text-xs text-[var(--nts-medium-gray)]">
-          <strong>Default TOD:</strong> Προμηθευτές χωρίς δικό τους TOD χρησιμοποιούν την προεπιλογή ({brandDefaultTod} ημέρες),
-          που ορίζεται στα «Όρια υγείας αποθέματος». Η κατηγοριοποίηση stock health (Healthy / Excess / Low / Dead) βασίζεται στο TOD κάθε προμηθευτή.
+          <strong>Προεπιλογές:</strong> Οι προεπιλογές <strong>TOD ({brandDefaultTod} ημέρες)</strong> και
+          <strong> Lead Time ({brandDefaultLead} ημέρες)</strong> ορίζονται στα «Όρια υγείας αποθέματος».
+          Κάθε προμηθευτής μπορεί να τις υπερισχύσει συμπληρώνοντας δική του τιμή εδώ· κενό κελί σημαίνει «χρήση προεπιλογής».
+        </p>
+        <p className="text-xs text-[var(--nts-medium-gray)]">
+          <strong>Πού χρησιμοποιούνται:</strong> Το <strong>TOD</strong> καθορίζει την κατηγορία αποθέματος
+          (Low ≤ TOD/2, Excess &gt; TOD×2). Το <strong>Lead Time</strong> ανεβάζει το σημείο αναπαραγγελίας:
+          προϊόν γίνεται Low όταν το απόθεμα δεν καλύπτει τη ζήτηση μέχρι την επόμενη παραλαβή.
         </p>
       </Card>
     </div>

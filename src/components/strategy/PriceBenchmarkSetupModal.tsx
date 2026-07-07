@@ -253,7 +253,7 @@ export function PriceBenchmarkSetupModal({
 
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex-1 min-w-[140px]">
-                <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">Μάρκα / προμηθευτής</label>
+                <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">Brand / προμηθευτής</label>
                 <input
                   list="pb-brands"
                   value={brandFilter}
@@ -309,7 +309,7 @@ export function PriceBenchmarkSetupModal({
 
             {totalMatched > 0 && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {renderGroupTable('Ανά μάρκα / προμηθευτή', brandS.shown, brandS.rest, brandGroups.length)}
+                {renderGroupTable('Ανά Brand / προμηθευτή', brandS.shown, brandS.rest, brandGroups.length)}
                 {renderGroupTable('Ανά κατηγορία', catS.shown, catS.rest, categoryGroups.length)}
               </div>
             )}

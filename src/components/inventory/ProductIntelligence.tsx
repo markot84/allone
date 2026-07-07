@@ -67,6 +67,10 @@ const PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT = 5000;
 const EMPTY_CATEGORY_ID = '__EMPTY_CAT__';
 /** Fixed priority_tag values (inventory intelligence) — always shown in the filter even if the client catalog lacks the field. */
 const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead', 'no_stock', 'price_pending'] as const;
+const STOCK_TAG_LABELS: Record<string, string> = {
+  healthy: 'Healthy Stock', low: 'Low Stock', excess: 'Excess Stock',
+  dead: 'Dead Stock', no_stock: 'No Stock', price_pending: 'Price Pending',
+};
 const productStockLevel = (product: Product): number =>
   Number(product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0) || 0;
 const productDisplayTag = (product: Product): string =>
@@ -384,7 +388,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [serverIntelligence.aggregate?.brands]);
 
   const tagOptions = useMemo((): ExcelFilterOption[] => {
-    return STOCK_INTELLIGENCE_TAG_IDS.map((id) => ({ id, label: id }));
+    return STOCK_INTELLIGENCE_TAG_IDS.map((id) => ({ id, label: STOCK_TAG_LABELS[id] ?? id }));
   }, []);
 
   const filteredProducts = useMemo(() => {
@@ -877,10 +881,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 value={marginFilter}
                 onChange={setMarginFilter}
                 options={[
-                  { value: 'all', label: 'Όλα τα margins' },
-                  { value: 'high', label: 'Υψηλό margin' },
-                  { value: 'medium', label: 'Μέτριο margin' },
-                  { value: 'low', label: 'Χαμηλό margin' },
+                  { value: 'all', label: 'All margins' },
+                  { value: 'high', label: 'High margin' },
+                  { value: 'medium', label: 'Medium margin' },
+                  { value: 'low', label: 'Low margin' },
                 ]}
               />
             </div>

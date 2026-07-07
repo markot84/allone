@@ -11,10 +11,10 @@ type FieldKey = keyof Thresholds;
 
 const FIELDS: { key: FieldKey; label: string; def: number; hint: string }[] = [
   { key: 'velocityWindowDays', label: 'Παράθυρο πωλήσεων (ημέρες)', def: 30, hint: 'Σε πόσες ημέρες αναφέρεται η ταχύτητα πωλήσεων.' },
-  { key: 'lowDaysOfCover', label: 'Όριο «Χαμηλού» (ημέρες κάλυψης)', def: 30, hint: 'Κάτω από τόσες ημέρες κάλυψης → «Χαμηλό απόθεμα».' },
-  { key: 'excessDaysOfCover', label: 'Όριο «Υπερβολικού» (ημέρες κάλυψης)', def: 120, hint: 'Πάνω από τόσες ημέρες κάλυψης → «Υπερβολικό απόθεμα».' },
-  { key: 'newStockGraceDays', label: 'Περίοδος χάριτος νέου αποθέματος (ημέρες)', def: 60, hint: 'Απόθεμα χωρίς πωλήσεις δεν χαρακτηρίζεται «Νεκρό» πριν περάσουν τόσες ημέρες από την παραλαβή.' },
-  { key: 'defaultLeadTimeDays', label: 'Προεπιλογή lead time προμηθευτή (ημέρες)', def: 0, hint: 'Εφεδρικός χρόνος παράδοσης όταν ο προμηθευτής δεν έχει δικό του lead time. Χρησιμοποιείται στον χαρακτηρισμό «Χαμηλού αποθέματος».' },
+  { key: 'lowDaysOfCover', label: 'Όριο «Low Stock» (ημέρες κάλυψης)', def: 30, hint: 'Κάτω από τόσες ημέρες κάλυψης → «Low Stock».' },
+  { key: 'excessDaysOfCover', label: 'Όριο «Excess Stock» (ημέρες κάλυψης)', def: 120, hint: 'Πάνω από τόσες ημέρες κάλυψης → «Excess Stock».' },
+  { key: 'newStockGraceDays', label: 'Περίοδος χάριτος νέου αποθέματος (ημέρες)', def: 60, hint: 'Απόθεμα χωρίς πωλήσεις δεν χαρακτηρίζεται «Dead Stock» πριν περάσουν τόσες ημέρες από την παραλαβή.' },
+  { key: 'defaultLeadTimeDays', label: 'Προεπιλογή lead time προμηθευτή (ημέρες)', def: 30, hint: 'Εφεδρικός χρόνος παράδοσης όταν ο προμηθευτής δεν έχει δικό του lead time. Χρησιμοποιείται στον χαρακτηρισμό «Low Stock».' },
   { key: 'defaultTod', label: 'Προεπιλογή TOD ανά προμηθευτή (ημέρες)', def: 60, hint: 'Εφεδρικό Target Days of Stock όταν ο προμηθευτής δεν έχει δικό του TOD. Το κάθε προμηθευτής μπορεί να το υπερισχύσει στη σελίδα Προμηθευτών.' },
 ];
 

@@ -469,7 +469,7 @@ export function EcommerceDashboard() {
     });
     return [
       {
-        label: 'Καθαρός τζίρος e-shop',
+        label: 'Net Revenue e-shop',
         value: formatCurrencyCompact(filteredTotalRevenue),
         tooltip: 'Καθαρά έσοδα e-commerce (χωρίς ΦΠΑ) για το επιλεγμένο διάστημα. Εξαιρούνται cancelled/refunded statuses, demo line items και κανάλια που έχουν οριστεί ως μη-core (π.χ. ενδοομιλικά).',
         sparklineData: padSparklineForChart(last30.map((d) => d.revenue)),
@@ -809,7 +809,7 @@ export function EcommerceDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Revenue Trend */}
         <Card className="xl:col-span-2">
-          <CardHeader title="Έσοδα ανά ημέρα" subtitle={`${effectiveFrom} — ${effectiveTo}`} />
+          <CardHeader title="Revenue ανά ημέρα" subtitle={`${effectiveFrom} — ${effectiveTo}`} />
           <div className="px-5 pb-5">
             {filteredDailyRevenue.length > 0 ? (
               <ResponsiveContainer width="100%" height={280}>
@@ -837,7 +837,7 @@ export function EcommerceDashboard() {
                   <RechartsTooltip
                     contentStyle={TOOLTIP_STYLE}
                     labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
-                    formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Έσοδα']}
+                    formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Revenue']}
                   />
                   <Area type="monotone" dataKey="revenue" stroke="var(--nts-accent)" fill="url(#ecommRevGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
                 </AreaChart>
@@ -870,7 +870,7 @@ export function EcommerceDashboard() {
                     <RechartsTooltip
                       contentStyle={TOOLTIP_STYLE}
                       labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
-                      formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Έσοδα']}
+                      formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Revenue']}
                       labelFormatter={(l: string) => PLATFORM_LABELS[l] || l}
                     />
                     <Bar dataKey="revenue" radius={[0, 6, 6, 0]}>
@@ -916,7 +916,7 @@ export function EcommerceDashboard() {
       {(displaySalesChannelBreakdown.length > 0 || rawOrdersLoading) && (
         <Card>
           <CardHeader
-            title="Καθαρός τζίρος & εξαιρέσεις"
+            title="Net Revenue & εξαιρέσεις"
             subtitle={`${effectiveFrom} — ${effectiveTo}`}
           />
           <div className="px-5 pb-5">
@@ -1075,7 +1075,7 @@ export function EcommerceDashboard() {
         <Card>
           <CardHeader
             title="Top Products"
-            subtitle={`Κατά έσοδα (${effectiveFrom} — ${effectiveTo})`}
+            subtitle={`Κατά Revenue (${effectiveFrom} — ${effectiveTo})`}
             icon={<Package size={16} />}
           />
           <div className="px-5 pb-5">
@@ -1130,7 +1130,7 @@ export function EcommerceDashboard() {
                         onClick={() => toggleProdSort('revenue')}
                       >
                         <span className="inline-flex items-center gap-0.5 hover:text-[#111827] transition-colors">
-                          Έσοδα <SortIcon active={prodSort.field === 'revenue'} dir={prodSort.dir} />
+                          Revenue <SortIcon active={prodSort.field === 'revenue'} dir={prodSort.dir} />
                         </span>
                       </th>
                       <th
@@ -1289,7 +1289,7 @@ export function EcommerceDashboard() {
                         </span>
                       </th>
                       <th className="pb-2.5 font-medium text-[#6B7280]">Κανάλι</th>
-                      <th className="pb-2.5 font-medium text-[#6B7280]">Status</th>
+                      <th className="pb-2.5 font-medium text-[#6B7280]">Κατάσταση</th>
                       <th
                         className="pb-2.5 font-medium text-[#6B7280] text-right cursor-pointer select-none whitespace-nowrap"
                         onClick={() => toggleOrderSort('total')}

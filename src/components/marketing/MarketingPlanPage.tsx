@@ -760,7 +760,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           >
             {draft.evidence && (
               <div className="grid gap-3 sm:grid-cols-5">
-                <Metric label="Τζίρος πέρυσι" value={formatCurrency(draft.evidence.revenue, 0)} />
+                <Metric label="Revenue πέρυσι" value={formatCurrency(draft.evidence.revenue, 0)} />
                 <Metric label="Παραγγελίες" value={formatNumber(draft.evidence.orders)} />
                 <Metric label="Τεμάχια" value={formatNumber(draft.evidence.units)} />
                 <Metric label="AOV" value={formatCurrency(draft.evidence.aov, 0)} />

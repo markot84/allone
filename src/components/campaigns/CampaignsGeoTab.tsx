@@ -412,7 +412,7 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                 className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[#111827]"
                 onClick={() => toggleSort('conversion_value')}
               >
-                <span className="inline-flex items-center gap-1 justify-end w-full">Έσοδα <SortIcon col="conversion_value" /></span>
+                <span className="inline-flex items-center gap-1 justify-end w-full">Revenue <SortIcon col="conversion_value" /></span>
               </th>
               <th
                 className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[#111827]"

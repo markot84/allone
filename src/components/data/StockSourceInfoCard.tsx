@@ -87,7 +87,7 @@ export function StockSourceInfoCard() {
 
       <p className="text-[12px] text-[var(--nts-medium-gray)] leading-relaxed mt-3">
         Αντλείται αυτόματα από το ERP όταν υπάρχει· διαφορετικά από την πλατφόρμα e-shop. Οι πωλήσεις
-        (ταχύτητα/dead stock) υπολογίζονται από όλα τα κανάλια — φυσικά καταστήματα και e-shop.
+        (ταχύτητα πωλήσεων/Dead Stock) υπολογίζονται από όλα τα κανάλια — φυσικά καταστήματα και e-shop.
       </p>
     </Card>
   );

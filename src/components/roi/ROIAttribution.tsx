@@ -644,7 +644,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                     ? `+${formatCurrencyCompact(performanceSummary.revenueGap)}`
                     : formatCurrencyCompact(performanceSummary.revenueGap)
               }
-              subtitle="Τζίρος e-shop (χωρίς ΦΠΑ) − έσοδα καμπανιών"
+              subtitle="Revenue e-shop (χωρίς ΦΠΑ) − Revenue καμπανιών"
               color={
                 performanceSummary.revenueGap == null
                   ? '#111827'

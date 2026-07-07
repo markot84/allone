@@ -149,7 +149,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
     { value: 'products', label: 'Προϊόντα', icon: <Package size={16} /> },
     { value: 'segments', label: 'Segments (RFM)', icon: <Users size={16} /> },
     { value: 'campaigns', label: 'Καμπάνιες', icon: <BarChart3 size={16} /> },
-    { value: 'organic', label: 'Οργανικά Έσοδα', icon: <Euro size={16} /> },
+    { value: 'organic', label: 'Organic Revenue', icon: <Euro size={16} /> },
     { value: 'procurement', label: 'Procurement (7 καρτέλες)', icon: <ClipboardList size={16} /> },
   ];
 

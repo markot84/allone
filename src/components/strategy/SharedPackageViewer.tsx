@@ -85,7 +85,7 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
 
       {/* Segments */}
       <div className="mb-6">
-        <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2 pb-1 border-b border-[#F5F5F5]">Τμήματα πελατών</p>
+        <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2 pb-1 border-b border-[#F5F5F5]">Segments</p>
         <div className="flex flex-wrap gap-1.5">
           {data.idealSegments.map(s => (
             <span key={s} className="px-2.5 py-1 rounded-full text-xs bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">{s}</span>
