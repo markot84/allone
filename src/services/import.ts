@@ -245,8 +245,31 @@ export interface ImportProgress {
   phase?: string;
 }
 
+/** Sniff the field delimiter from the first non-empty line — Greek/EU Excel exports use ';' (and the
+ * data has EU-decimal commas), so a hard-coded ',' shredded columns. Picks the candidate with the most
+ * occurrences outside quotes; ties/none → ','. */
+export function detectDelimiter(csvText: string): ',' | ';' | '\t' | '|' {
+  const firstLine = csvText.split(/\r?\n/).find((l) => l.trim().length > 0) ?? '';
+  const candidates: Array<',' | ';' | '\t' | '|'> = [',', ';', '\t', '|'];
+  let best: ',' | ';' | '\t' | '|' = ',';
+  let bestCount = 0;
+  for (const delim of candidates) {
+    let count = 0;
+    let inQuotes = false;
+    for (const char of firstLine) {
+      if (char === '"') inQuotes = !inQuotes;
+      else if (char === delim && !inQuotes) count++;
+    }
+    if (count > bestCount) {
+      bestCount = count;
+      best = delim;
+    }
+  }
+  return best;
+}
+
 // CSV Parser (simple implementation, can be replaced with papaparse later)
-export function parseCSV(csvText: string): string[][] {
+export function parseCSV(csvText: string, delimiter: string = detectDelimiter(csvText)): string[][] {
   const lines: string[][] = [];
   let currentLine: string[] = [];
   let currentField = '';
@@ -263,7 +286,7 @@ export function parseCSV(csvText: string): string[][] {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       currentLine.push(currentField.trim());
       currentField = '';
     } else if ((char === '\n' || char === '\r') && !inQuotes) {

@@ -28,7 +28,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { XMLParser } from 'fast-xml-parser';
-import { previewFileForProducts, isCustomerLevelData } from './import';
+import { previewFileForProducts, isCustomerLevelData, parseCSV, detectDelimiter } from './import';
 import { makeProduct } from '../test/helpers';
 
 // ── Minimal DOMParser polyfill (DOM surface used by the two XML parsers) ──────
@@ -459,5 +459,33 @@ describe('import.ts — product feed parsing & routing (previewFileForProducts)'
       ];
       expect(isCustomerLevelData(rows)).toBe(true);
     });
+  });
+});
+
+describe('parseCSV — delimiter auto-detection (Real Peach corruption, PER-277)', () => {
+  it('detects semicolon delimiter (Greek/EU Excel export)', () => {
+    expect(detectDelimiter('sku;name;stock\n105417;Alfa Care;12')).toBe(';');
+  });
+
+  it('defaults to comma for a plain comma CSV', () => {
+    expect(detectDelimiter('sku,name,stock\nA1,Widget,5')).toBe(',');
+  });
+
+  it('semicolon file with EU-decimal commas in fields parses into aligned columns', () => {
+    // The exact failure mode: comma-split shredded these rows (sku became ",105417").
+    const csv = 'sku;name;price;stock\n105417;Alfa Care AC 400;198,50;12';
+    const rows = parseCSV(csv);
+    expect(rows[0]).toEqual(['sku', 'name', 'price', 'stock']);
+    expect(rows[1]).toEqual(['105417', 'Alfa Care AC 400', '198,50', '12']);
+  });
+
+  it('comma still works and respects quoted commas', () => {
+    const rows = parseCSV('sku,name,stock\nA1,"Widget, blue",5');
+    expect(rows[1]).toEqual(['A1', 'Widget, blue', '5']);
+  });
+
+  it('tab-delimited file is detected', () => {
+    const rows = parseCSV('sku\tname\tstock\nA1\tWidget\t5');
+    expect(rows[1]).toEqual(['A1', 'Widget', '5']);
   });
 });
