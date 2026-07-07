@@ -371,25 +371,39 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     ?? serverIntelligence.aggregate?.summary
     ?? EMPTY_INVENTORY_SUMMARY;
 
+  // PER-188: prefer server facets (actionable options); fall back to whole-catalog aggregate lists.
+  const facets = serverIntelligence.page?.facets;
+
   const categoryOptions = useMemo((): ExcelFilterOption[] => {
-    return (serverIntelligence.aggregate?.categories ?? [])
+    const rows = facets?.categories
+      ? facets.categories.map((row) => ({ name: row.id === EMPTY_CATEGORY_ID ? '' : row.id }))
+      : (serverIntelligence.aggregate?.categories ?? []);
+    return rows
       .map((row) => ({
         id: row.name?.trim() ? row.name : EMPTY_CATEGORY_ID,
         label: row.name?.trim() ? row.name : '(Κενή κατηγορία)',
       }))
       .sort((a, b) => a.label.localeCompare(b.label, 'el'));
-  }, [serverIntelligence.aggregate?.categories]);
+  }, [facets?.categories, serverIntelligence.aggregate?.categories]);
 
   const brandOptions = useMemo((): ExcelFilterOption[] => {
-    return (serverIntelligence.aggregate?.brands ?? [])
+    const rows = facets?.brands
+      ? facets.brands.map((row) => ({ name: row.id }))
+      : (serverIntelligence.aggregate?.brands ?? []);
+    return rows
       .filter((row) => row.name?.trim())
       .map((row) => ({ id: row.name, label: row.name }))
       .sort((a, b) => a.label.localeCompare(b.label, 'el'));
-  }, [serverIntelligence.aggregate?.brands]);
+  }, [facets?.brands, serverIntelligence.aggregate?.brands]);
 
   const tagOptions = useMemo((): ExcelFilterOption[] => {
-    return STOCK_INTELLIGENCE_TAG_IDS.map((id) => ({ id, label: STOCK_TAG_LABELS[id] ?? id }));
-  }, []);
+    // Keep canonical order; always keep price_pending (client-derived, not a server tag).
+    const present = facets?.tags ? new Set(facets.tags.map((row) => row.id)) : null;
+    const ids = present
+      ? STOCK_INTELLIGENCE_TAG_IDS.filter((id) => id === 'price_pending' || present.has(id))
+      : STOCK_INTELLIGENCE_TAG_IDS;
+    return ids.map((id) => ({ id, label: STOCK_TAG_LABELS[id] ?? id }));
+  }, [facets?.tags]);
 
   const filteredProducts = useMemo(() => {
     const rows = serverIntelligence.page?.products ?? [];

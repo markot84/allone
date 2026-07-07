@@ -121,6 +121,14 @@ type ProductIntelligenceQueryResult = {
   products: CompactProduct[];
   /** Summary over the full filtered set (not just the page) so cards can follow active filters (PER-178). */
   summary?: InventorySummaryPayload;
+  /** PER-188: actionable dropdown options (own dimension omitted → Excel semantics). */
+  facets?: QueryFacets;
+};
+
+type QueryFacets = {
+  categories: Array<{ id: string; count: number }>;
+  brands: Array<{ id: string; count: number }>;
+  tags: Array<{ id: string; count: number }>;
 };
 
 const READ_PAGE_SIZE = 1000;
@@ -1143,6 +1151,40 @@ function brandCounts(products: CompactProduct[]): Array<{ name: string; count: n
     .map(([name, count]) => ({ name, count }));
 }
 
+/** Mirrors the effectiveTag rule in matchesQuery. */
+function effectiveTagId(product: CompactProduct): string {
+  const stock = product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
+  return stock <= 0 ? 'no_stock' : text(product.priority_tag).toLowerCase();
+}
+
+function facetCounts(
+  rows: CompactProduct[],
+  params: ProductIntelligenceQueryParams,
+  omit: 'categories' | 'brands' | 'tags',
+  idFn: (product: CompactProduct) => string,
+): Array<{ id: string; count: number }> {
+  const scoped = { ...params, [omit]: undefined };
+  const counts = new Map<string, number>();
+  for (const product of rows) {
+    if (!matchesQuery(product, scoped)) continue;
+    const id = idFn(product);
+    if (!id) continue;
+    counts.set(id, (counts.get(id) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 250)
+    .map(([id, count]) => ({ id, count }));
+}
+
+function buildQueryFacets(rows: CompactProduct[], params: ProductIntelligenceQueryParams): QueryFacets {
+  return {
+    categories: facetCounts(rows, params, 'categories', categoryId),
+    brands: facetCounts(rows, params, 'brands', (p) => text(p.brand)), // empty brand dropped
+    tags: facetCounts(rows, params, 'tags', effectiveTagId),
+  };
+}
+
 function daysOfStock(product: CompactProduct): number {
   const stock = product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
   if (stock <= 0) return 0;
@@ -1468,6 +1510,7 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
     bucket,
     products: sorted.slice(start, start + pageSize),
     summary: summaryForProducts(filtered),
+    facets: buildQueryFacets(rows, params),
   };
 }
 
@@ -1763,4 +1806,5 @@ export const __test = {
   applySkuStatsOverlay,
   applyStockOverlay,
   classifyAggregateRecovery,
+  buildQueryFacets,
 };

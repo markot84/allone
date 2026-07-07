@@ -77,6 +77,12 @@ export type ProductIntelligenceQueryResult = {
   products: Product[];
   /** Summary over the full filtered set — lets the cards follow active filters (PER-178). */
   summary?: InventorySummary;
+  /** PER-188: actionable dropdown options (absent on the static first-page path). */
+  facets?: {
+    categories: Array<{ id: string; count: number }>;
+    brands: Array<{ id: string; count: number }>;
+    tags: Array<{ id: string; count: number }>;
+  };
 };
 
 function isAggregateReady(value: unknown): value is ProductIntelligenceAggregate {
