@@ -290,7 +290,8 @@ async function fetchAndSaveMagentoPopularSearchTerms(
         const url = buildMagentoRestUrl(restApiBase, path, code);
         const res = await magentoFetch(url, { headers });
         if (!res.ok) {
-          logger.warn(`[Magento] searchTerms [store=${code || 'default'}] ${path}: HTTP ${res.status}`);
+          // Expected on Magento Open Source (no searchTerms endpoint) / no custom module → debug, not warn.
+          logger.debug(`[Magento] searchTerms [store=${code || 'default'}] ${path}: HTTP ${res.status}`);
           continue;
         }
         const body = (await res.json()) as { items?: unknown[] };
@@ -329,10 +330,14 @@ async function fetchAndSaveMagentoPopularSearchTerms(
         logger.info(`[Magento] Popular search terms (REST): ${terms.length} for brand ${brandId}`);
         return terms.length;
       } catch (e) {
-        logger.warn(`[Magento] searchTerms failed [store=${code || 'default'}] (${path}):`, { err: e });
+        logger.debug(`[Magento] searchTerms failed [store=${code || 'default'}] (${path}):`, { err: e });
       }
     }
   }
+  // All REST attempts exhausted (normal on Open Source): one actionable summary instead of ~12 warns.
+  logger.info(
+    `[Magento] Popular search terms unavailable via REST for ${brandId} (Open Source has no searchTerms endpoint; Performance+ module not installed). Upload via Admin → Marketing → Search Terms CSV, or install the Performance+ module.`
+  );
   return 0;
 }
 
