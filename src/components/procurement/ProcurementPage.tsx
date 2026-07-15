@@ -16,11 +16,12 @@ import { useBrand } from '../../hooks/useBrand';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { ProcurementService } from '../../services/firestore';
 import { seedProcurementDemoData } from '../../services/procurementDemoData';
+import { parseNum } from '../../utils/procurementNum';
+import { findCol, isNumericColName, statValueCols, recoverEatenStatRow } from '../../utils/procurementCols';
 import {
   PROCUREMENT_SHEET_LABELS,
   type ProcurementSheetType,
 } from '../../types/procurement';
-import { logger } from '../../utils/logger';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -139,40 +140,6 @@ const CANONICAL_COLUMN_ORDER: Record<ProcurementSheetType, string[]> = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function parseNum(v: unknown): number {
-  if (v == null || v === '') return 0;
-  if (typeof v === 'number') return isNaN(v) ? 0 : v;
-  const s = String(v).trim().replace(/\s/g, '');
-  if (!s) return 0;
-  if (s.includes(',')) {
-    // Greek/European format: dots = thousands, comma = decimal  (e.g. "1.234,56")
-    const n = parseFloat(s.replace(/\./g, '').replace(',', '.'));
-    return isNaN(n) ? 0 : n;
-  }
-  const dots = (s.match(/\./g) ?? []).length;
-  if (dots > 1) {
-    // Multiple dots → all thousands separators (e.g. "1.234.567")
-    const n = parseFloat(s.replace(/\./g, ''));
-    return isNaN(n) ? 0 : n;
-  }
-  if (dots === 1) {
-    const afterDot = s.split('.')[1] ?? '';
-    if (afterDot.length === 3) {
-      // Exactly 3 digits after dot → Greek thousands (e.g. "4.332" = 4332, "1.000" = 1000)
-      const n = parseFloat(s.replace(/\./g, ''));
-      return isNaN(n) ? 0 : n;
-    }
-  }
-  // Standard decimal (e.g. "4.33", "65427.42")
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-}
-
-/** Returns true if the column name is a numeric value (e.g. "4065528.538423248") */
-function isNumericColName(k: string): boolean {
-  return k.trim() !== '' && !isNaN(Number(k.trim()));
-}
-
 /** Excludes summary/total rows with an empty ΚΩΔΙΚΟΣ (e.g. the template's grand-total row at
  *  index 0), which would otherwise skew sums/averages. */
 function getProductRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
@@ -197,68 +164,6 @@ function getFiscalYearTotals(rows: Record<string, unknown>[]): { turnover: numbe
   const turnover = src.reduce((s, r) => s + parseNum(r[turnoverCol]), 0);
   const profit   = src.reduce((s, r) => s + parseNum(r[profitCol]), 0);
   return { turnover, profit, marginPct: turnover > 0 ? profit / turnover : 0 };
-}
-
-/** Keyword → alternative search terms (checked in order). */
-const COL_ALIASES: Record<string, string[]> = {
-  'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ': ['ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ', 'ΔΙΑΘΕΣΙΜΟ', 'ΥΠΟΛΟΙΠΟ', 'ΑΠΟΘΕΜΑ', 'STOCK', 'AVAILABLE'],
-  'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ':  ['ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ', 'ΠΡΩΤΟΓΕΝΕΣ', 'ΚΟΣΤΟΣ ΑΓΟΡΑΣ', 'ΚΟΣΤΟΣ', 'ΤΙΜΗ ΑΓΟΡΑΣ', 'ΑΓΟΡΑ', 'COST'],
-  'ΑΝΑΤΡΟΦΟΔΟΣΙΑ':       ['ΑΝΑΤΡΟΦΟΔΟΣΙΑ', 'ΑΝΑΤΡΟΦΟΔΟΤΗΣΗ', 'REORDER', 'REFILL'],
-  'ΒΑΘΜΟΛΟΓΙΑ':          ['ΒΑΘΜΟΛΟΓΙΑ', 'ΒΑΘΜΟΣ', 'SCORE', 'RATING'],
-  'ΑΞΙΟΛΟΓΗΣΗ':          ['ΑΞΙΟΛΟΓΗΣΗ', 'EVALUATION', 'RATING'],
-  'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ':   ['ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ', 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΕΩΣ', 'ΜΕΣΗ ΤΙΜΗ', 'ΤΙΜΗ ΠΩΛΗΣΗΣ', 'ΠΩΛΗΣΗΣ', 'PRICE'],
-  'ΤΙΜΗ ΠΩΛΗΣΗΣ':        ['ΤΙΜΗ ΠΩΛΗΣΗΣ', 'ΠΩΛΗΣΗΣ', 'ΤΙΜΗ', 'PRICE', 'ΠΩΛΗΣΗ'],
-  'ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ':     ['ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ', 'ΣΥΝΟΛΙΚΟ', 'TOTAL COST'],
-  'ΔΕΥΤΕΡΟΓΕΝΕΣ':        ['ΔΕΥΤΕΡΟΓΕΝΕΣ', 'ΔΕΥΤΕΡ'],
-  'ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ':['ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ', 'ΤΖΙΡΟΣ'],
-  'ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ': ['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ', 'ΚΕΡΔΟΣ'],
-  // Costing sheet · column H — not the fiscal year (what-if)
-  // Stored in Firestore as 'ΤΖΙΡΟΣ' (the exact header from the Excel template)
-  'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ': [
-    'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ',
-    'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12 ΜΗΝΟΥ',
-    'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12 ΜΗΝΩΝ',
-    'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ (12ΜΗΝΟ)',
-    'ΠΡΑΓΜΑΤΙΚΟΣ_ΤΖΙΡΟΣ_12ΜΗΝΟΥ',
-    'ΠΡΑΓΜ. ΤΖΙΡΟΣ 12ΜΗΝΟΥ',
-    'ΤΖΙΡΟΣ 12ΜΗΝΟΥ',
-    'ΤΖΙΡΟΣ 12 ΜΗΝΩΝ',
-    '12ΜΗΝΟ ΤΖΙΡΟΣ',
-    '12Μ ΤΖΙΡΟΣ',
-    'ΤΖΙΡΟΣ',
-  ],
-  'ΤΖΙΡΟΣ':              ['ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ', 'ΤΖΙΡΟΣ', 'TURNOVER', 'ΕΣΟΔΑ', 'REVENUE'],
-  'ΚΕΡΔΟΣ':              ['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ', 'ΚΕΡΔΟΣ', 'PROFIT', 'ΚΕΡΔΗ'],
-  'ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ': ['ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ', 'ΑΞΙΑ ΑΝΑΤΡΟΦ'],
-  'ΠΕΡΙΓΡΑΦΗ':           ['ΠΕΡΙΓΡΑΦΗ', 'ΟΝΟΜΑ', 'DESCRIPTION', 'NAME'],
-  // «ΚΩΔΙΚΟΣ MASTER»/«MASTER» listed after «ΚΩΔΙΚΟΣ» so on detail sheets (which have both) the
-  // exact «ΚΩΔΙΚΟΣ» variant wins via pass-1.
-  'ΚΩΔΙΚΟΣ':             ['ΚΩΔΙΚΟΣ', 'ΚΩΔΙΚΟΣ MASTER', 'MASTER', 'SKU', 'CODE', 'BARCODE'],
-};
-
-/** Finds a non-numeric column key matching the keyword (with aliases), normalising whitespace/
- *  newlines/underscores: pass 1 exact normalised match, pass 2 substring fallback. */
-function findCol(rows: Record<string, unknown>[], keyword: string): string {
-  if (rows.length === 0) return keyword;
-  const keys = Object.keys(rows[0]).filter(k => !isNumericColName(k));
-  const normStr = (s: string) => s.toUpperCase().replace(/[\s\n\r_]+/g, ' ').trim();
-  const aliases = COL_ALIASES[keyword.toUpperCase()] ?? [keyword];
-  // Pass 1: exact normalised match
-  for (const alias of aliases) {
-    const aUp = normStr(alias);
-    const found = keys.find(k => normStr(k) === aUp);
-    if (found) return found;
-  }
-  // Pass 2: substring/includes fallback
-  for (const alias of aliases) {
-    const aUp = normStr(alias);
-    const found = keys.find(k => normStr(k).includes(aUp));
-    if (found) return found;
-  }
-  if (import.meta.env.DEV) {
-    logger.warn('[Procurement] Column not found:', { keyword, available: keys });
-  }
-  return keyword;
 }
 
 /** Sum of «Πραγματικός τζίρος 12μήνου» (Costing column H); falls back to positional lookup
@@ -503,8 +408,7 @@ function getChartData(key: ProcurementSheetType, rows: Record<string, unknown>[]
     case 'statistics': {
       if (rows.length === 0) return [];
       const metricKey = findStatMetricColumn(rows, EXCLUDED_KEYS);
-      const allKeys = Object.keys(rows[0]).filter(k => !EXCLUDED_KEYS.has(k) && !isNumericColName(k));
-      const periodKeys = allKeys.filter(k => k !== metricKey);
+      const periodKeys = statValueCols(rows, metricKey, EXCLUDED_KEYS);
       return periodKeys.map(period => {
         const point: Record<string, unknown> = { period };
         rows.forEach(r => {
@@ -875,10 +779,11 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
   const activeData = useMemo(() => {
     if (activeTab !== 'statistics' || rawActiveData.length === 0) return rawActiveData;
     const metricCol = findStatMetricColumn(rawActiveData, EXCLUDED_KEYS);
-    const periodCols = Object.keys(rawActiveData[0]).filter(
-      k => !EXCLUDED_KEYS.has(k) && !isNumericColName(k) && k !== metricCol,
-    );
-    return rawActiveData.filter(row =>
+    const periodCols = statValueCols(rawActiveData, metricCol, EXCLUDED_KEYS);
+    // Put back the row the importer consumed as the header, so its KPI isn't silently missing.
+    const eaten = recoverEatenStatRow(metricCol, periodCols);
+    const withEaten = eaten ? [eaten, ...rawActiveData] : rawActiveData;
+    return withEaten.filter(row =>
       periodCols.some(k => {
         const v = row[k];
         if (v == null) return false;
@@ -892,6 +797,15 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
    *  in canonical template order, with the metric col pinned for stats. */
   const headers = useMemo(() => {
     if (activeData.length === 0) return [];
+
+    if (activeTab === 'statistics') {
+      // Keeps numeric-named value columns, which every other sheet correctly drops (see statValueCols).
+      const metricCol = findStatMetricColumn(activeData, EXCLUDED_KEYS);
+      const valueCols = statValueCols(activeData, metricCol, EXCLUDED_KEYS)
+        .filter(k => !isColumnEmpty(activeData, k));
+      return [metricCol, ...valueCols];
+    }
+
     const keySet = new Set<string>();
     activeData.forEach(r => {
       Object.keys(r).forEach(k => {
@@ -899,11 +813,6 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
       });
     });
     const allKeys = [...keySet].filter(k => !isColumnEmpty(activeData, k));
-
-    if (activeTab === 'statistics') {
-      const metricCol = findStatMetricColumn(activeData, EXCLUDED_KEYS);
-      return [metricCol, ...allKeys.filter(k => k !== metricCol)];
-    }
 
     return allKeys.slice().sort((a, b) => {
       const ia = canonicalOrderIndex(activeTab, a);

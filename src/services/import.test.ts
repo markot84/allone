@@ -28,7 +28,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { XMLParser } from 'fast-xml-parser';
-import { previewFileForProducts, isCustomerLevelData, parseCSV, detectDelimiter } from './import';
+import { previewFileForProducts, isCustomerLevelData, parseCSV, detectDelimiter, isHeaderlessStatSheet } from './import';
 import { makeProduct } from '../test/helpers';
 
 // ── Minimal DOMParser polyfill (DOM surface used by the two XML parsers) ──────
@@ -487,5 +487,35 @@ describe('parseCSV — delimiter auto-detection (Real Peach corruption, PER-277)
   it('tab-delimited file is detected', () => {
     const rows = parseCSV('sku\tname\tstock\nA1\tWidget\t5');
     expect(rows[1]).toEqual(['A1', 'Widget', '5']);
+  });
+});
+
+/** PER-186: the statistics sheet is a headerless «δείκτης | τιμή» list. detectHeaderRow scored every
+ *  row identically (one text cell each), so row 0 won on order alone and was eaten as the header —
+ *  naming the value column "929" and losing that metric entirely. */
+describe('isHeaderlessStatSheet', () => {
+  it('detects the real safeblock statistics sheet (text | number from row 0)', () => {
+    expect(isHeaderlessStatSheet([
+      ['ΠΛΗΘΟΣ ΕΝΕΡΓΟΥ ΚΩΔΙΚΟΛΟΓΙΟΥ', '929'],
+      ['ΣΥΝΟΛΙΚΗ ΑΞΙΑ ΑΠΟΘΕΜΑΤΟΣ', '307159.53'],
+    ])).toBe(true);
+  });
+
+  it('leaves a real header row alone (text | text)', () => {
+    expect(isHeaderlessStatSheet([
+      ['ΔΕΙΚΤΗΣ', 'ΤΙΜΗ'],
+      ['ΣΥΝΟΛΙΚΗ ΑΞΙΑ ΑΠΟΘΕΜΑΤΟΣ', '307159.53'],
+    ])).toBe(false);
+  });
+
+  it('accepts Greek decimal values', () => {
+    expect(isHeaderlessStatSheet([['ΜΕΣΗ ΒΑΘΜΟΛΟΓΙΑ', '2,21']])).toBe(true);
+  });
+
+  it('is conservative about anything that is not a 2-cell pair', () => {
+    expect(isHeaderlessStatSheet([['A', 'B', 'C']])).toBe(false);
+    expect(isHeaderlessStatSheet([['A']])).toBe(false);
+    expect(isHeaderlessStatSheet([[]])).toBe(false);
+    expect(isHeaderlessStatSheet([])).toBe(false);
   });
 });

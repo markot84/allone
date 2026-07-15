@@ -1694,6 +1694,21 @@ const KNOWN_PROCUREMENT_HEADERS = new Set([
 
 /** Detects the column-header row, scanning the first 5 rows to handle XLSX variants
  * (standard row 0, or row 0 being numeric IDs / title / blank). */
+/** Synthetic headers for the headerless statistics sheet. */
+export const STAT_METRIC_HEADER = 'ΔΕΙΚΤΗΣ';
+export const STAT_VALUE_HEADER = 'ΤΙΜΗ';
+
+/** True when the statistics sheet carries no header row — i.e. it is a «metric | value» list whose
+ *  very first row is already data. A real header would be text in BOTH cells; data rows pair a text
+ *  metric with a numeric value. Conservative: anything else keeps the normal header detection. */
+export function isHeaderlessStatSheet(cleaned: string[][]): boolean {
+  const first = (cleaned[0] ?? []).filter(c => c !== '');
+  if (first.length !== 2) return false;
+  const [label, value] = first;
+  const isNum = (c: string) => c !== '' && !isNaN(Number(c.replace(',', '.')));
+  return !isNum(label) && isNum(value);
+}
+
 function detectHeaderRow(cleaned: string[][]): number {
   const MAX_SCAN = Math.min(5, cleaned.length - 1);
 
@@ -1810,8 +1825,14 @@ async function importProcurementFile(
         continue;
       }
 
-      const headerRowIdx = detectHeaderRow(cleaned);
-      const headers = cleaned[headerRowIdx].map(h => String(h || '').trim());
+      // The statistics sheet is a headerless «δείκτης | τιμή» list: every row scores the same in
+      // detectHeaderRow (one text cell each), so row 0 won on order alone and was eaten as the
+      // header — naming the value column after its value ("929") and losing that metric (PER-186).
+      const headerless = sheetType === 'statistics' && isHeaderlessStatSheet(cleaned);
+      const headerRowIdx = headerless ? -1 : detectHeaderRow(cleaned);
+      const headers = headerless
+        ? [STAT_METRIC_HEADER, STAT_VALUE_HEADER]
+        : cleaned[headerRowIdx].map(h => String(h || '').trim());
       const dataRows = cleaned.slice(headerRowIdx + 1).filter(r => r.some(c => c !== ''));
 
       // Normalize headers: spaces/dots → underscore for stable downstream keys
