@@ -8,6 +8,7 @@ import {
   isRetryableSoftOneStatus,
   planSoftOneRetry,
   parseSoftOneSalesLines,
+  softOneDocKey,
 } from '../../softoneConnector';
 
 const ab = (bytes: number[]): ArrayBuffer => Uint8Array.from(bytes).buffer;
@@ -208,5 +209,29 @@ describe('parseSoftOneSalesLines', () => {
     const r = parseSoftOneSalesLines({ data: { MTRLINES: [{ MTRL_MTRL_CODE: 'M1', QTY: '4' }, { QTY: '9' }] } });
     expect(r.length).toBe(1);
     expect(r[0]).toMatchObject({ sku: 'M1', quantity: 4 });
+  });
+});
+
+/** PER-186: doc ids were positional (`idx`), so each nightly sync overwrote whatever sat in slots
+ * 0..N-1 and silently destroyed previously-synced documents. The id must depend only on the
+ * document's own identity, never on its position in the browser result. */
+describe('softOneDocKey', () => {
+  it('extracts the internal id from ZOOMINFO (SERIES;ID)', () => {
+    expect(softOneDocKey({ ZOOMINFO: '7001;30856' })).toBe('30856');
+  });
+
+  it('is stable when the same document moves position between syncs', () => {
+    const doc = { ZOOMINFO: '7001;30856', 'SALDOC.TRNDATE': '2026-07-14' };
+    // same document, different row index on a later sync -> must resolve to the same key
+    expect(softOneDocKey(doc)).toBe(softOneDocKey({ ...doc }));
+  });
+
+  it('gives different keys to different documents', () => {
+    expect(softOneDocKey({ ZOOMINFO: '7001;30856' })).not.toBe(softOneDocKey({ ZOOMINFO: '7001;30857' }));
+  });
+
+  it('returns empty for rows with no ZOOMINFO (caller skips them rather than falling back to idx)', () => {
+    expect(softOneDocKey({})).toBe('');
+    expect(softOneDocKey({ ZOOMINFO: '' })).toBe('');
   });
 });
