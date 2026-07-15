@@ -780,7 +780,6 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     if (activeTab !== 'statistics' || rawActiveData.length === 0) return rawActiveData;
     const metricCol = findStatMetricColumn(rawActiveData, EXCLUDED_KEYS);
     const periodCols = statValueCols(rawActiveData, metricCol, EXCLUDED_KEYS);
-    // Put back the row the importer consumed as the header, so its KPI isn't silently missing.
     const eaten = recoverEatenStatRow(metricCol, periodCols);
     const withEaten = eaten ? [eaten, ...rawActiveData] : rawActiveData;
     return withEaten.filter(row =>
@@ -799,7 +798,6 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     if (activeData.length === 0) return [];
 
     if (activeTab === 'statistics') {
-      // Keeps numeric-named value columns, which every other sheet correctly drops (see statValueCols).
       const metricCol = findStatMetricColumn(activeData, EXCLUDED_KEYS);
       const valueCols = statValueCols(activeData, metricCol, EXCLUDED_KEYS)
         .filter(k => !isColumnEmpty(activeData, k));

@@ -1698,9 +1698,9 @@ const KNOWN_PROCUREMENT_HEADERS = new Set([
 export const STAT_METRIC_HEADER = 'ΔΕΙΚΤΗΣ';
 export const STAT_VALUE_HEADER = 'ΤΙΜΗ';
 
-/** True when the statistics sheet carries no header row — i.e. it is a «metric | value» list whose
- *  very first row is already data. A real header would be text in BOTH cells; data rows pair a text
- *  metric with a numeric value. Conservative: anything else keeps the normal header detection. */
+/** True when the statistics sheet carries no header row, i.e. its first row is already data.
+ *  A real header is text in BOTH cells; a data row pairs a text metric with a numeric value.
+ *  Deliberately narrow — anything else falls back to normal header detection. */
 export function isHeaderlessStatSheet(cleaned: string[][]): boolean {
   const first = (cleaned[0] ?? []).filter(c => c !== '');
   if (first.length !== 2) return false;
@@ -1825,9 +1825,8 @@ async function importProcurementFile(
         continue;
       }
 
-      // The statistics sheet is a headerless «δείκτης | τιμή» list: every row scores the same in
-      // detectHeaderRow (one text cell each), so row 0 won on order alone and was eaten as the
-      // header — naming the value column after its value ("929") and losing that metric (PER-186).
+      // The statistics sheet is a headerless «δείκτης | τιμή» list, which detectHeaderRow cannot
+      // score (every row looks alike) — it would consume row 0 and lose that metric.
       const headerless = sheetType === 'statistics' && isHeaderlessStatSheet(cleaned);
       const headerRowIdx = headerless ? -1 : detectHeaderRow(cleaned);
       const headers = headerless

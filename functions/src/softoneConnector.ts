@@ -488,9 +488,11 @@ export interface SoftOneSalesLine {
 
 /** Parse the ITELINES grid out of a getData OBJECT=SALDOC response (the SALDOC browser carries only
  * headers). Item code = MTRL_ITEM_CODE (joins softone_items.sku); quantity = QTY1; value = NETLINEVAL. */
-/** Internal document id from ZOOMINFO ('SERIES;ID'), '' when absent. The SALDOC/PURDOC browsers return
- * FINDOC/SERIES empty, so ZOOMINFO is the only stable per-document key: id it by row index instead and
- * every nightly sync overwrites the previous rows sitting in those slots (PER-186). */
+/** Internal document id from ZOOMINFO ('SERIES;ID'), '' when absent.
+ *
+ *  The SALDOC/PURDOC browsers return FINDOC/SERIES empty, so ZOOMINFO is the only stable per-document
+ *  key. Never fall back to the row index: ids must not depend on position, or each sync overwrites
+ *  whatever previously occupied those slots. */
 export function softOneDocKey(row: Record<string, unknown>): string {
   return String(row.ZOOMINFO ?? '').split(';').pop() ?? '';
 }

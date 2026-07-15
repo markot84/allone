@@ -9,20 +9,19 @@ export function isNumericColName(k: string): boolean {
 
 /** Keyword → alternative search terms, checked IN ORDER.
  *
- *  Order matters: findCol tries every alias for an exact match before falling back to substring
- *  matching, so the most specific real header must come first. Where a sheet has several columns
- *  containing the same word, relying on the substring pass picks whichever key happens to come
- *  first — Firestore field order is undefined, so that is a coin flip (PER-186). */
+ *  Order matters. findCol tries every alias for an exact match before falling back to substring
+ *  matching, so the most specific real header must come first: where several columns contain the
+ *  same word, the substring pass resolves to whichever key comes first, and Firestore field order
+ *  is undefined. */
 export const COL_ALIASES: Record<string, string[]> = {
   'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ': ['ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ', 'ΔΙΑΘΕΣΙΜΟ', 'ΥΠΟΛΟΙΠΟ', 'ΑΠΟΘΕΜΑ', 'STOCK', 'AVAILABLE'],
   'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ':  ['ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ', 'ΠΡΩΤΟΓΕΝΕΣ', 'ΚΟΣΤΟΣ ΑΓΟΡΑΣ', 'ΚΟΣΤΟΣ', 'ΤΙΜΗ ΑΓΟΡΑΣ', 'ΑΓΟΡΑ', 'COST'],
-  // «ΠΟΣΟΤΗΤΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ» first: the inventory sheet also has «ΠΟΣΟΤΗΤΑ ΑΜΕΣΗΣ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ»
-  // and «ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ», and the substring pass was picking the ΑΜΕΣΗΣ one — the refill card
-  // showed 5 SKU / €1.937 instead of 75 SKU / €16.806.
+  // The inventory sheet also has «ΠΟΣΟΤΗΤΑ ΑΜΕΣΗΣ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ» and «ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ»,
+  // so the quantity column must be matched exactly.
   'ΑΝΑΤΡΟΦΟΔΟΣΙΑ':       ['ΠΟΣΟΤΗΤΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ', 'ΑΝΑΤΡΟΦΟΔΟΣΙΑ', 'ΑΝΑΤΡΟΦΟΔΟΤΗΣΗ', 'REORDER', 'REFILL'],
   'ΒΑΘΜΟΛΟΓΙΑ':          ['ΒΑΘΜΟΛΟΓΙΑ', 'ΒΑΘΜΟΣ', 'SCORE', 'RATING'],
-  // «ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ» first for the item sheet (which also has «ΑΞΙΟΛΟΓΗΣΗ ΑΝΑ ΔΕΙΚΤΗ»); the
-  // customer sheet has a plain «ΑΞΙΟΛΟΓΗΣΗ» and still resolves on the second alias.
+  // The item sheet has «ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ» + «ΑΞΙΟΛΟΓΗΣΗ ΑΝΑ ΔΕΙΚΤΗ»; the customer sheet has a
+  // plain «ΑΞΙΟΛΟΓΗΣΗ» and resolves on the second alias.
   'ΑΞΙΟΛΟΓΗΣΗ':          ['ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ', 'ΑΞΙΟΛΟΓΗΣΗ', 'EVALUATION', 'RATING'],
   'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ':   ['ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ', 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΕΩΣ', 'ΜΕΣΗ ΤΙΜΗ', 'ΤΙΜΗ ΠΩΛΗΣΗΣ', 'ΠΩΛΗΣΗΣ', 'PRICE'],
   'ΤΙΜΗ ΠΩΛΗΣΗΣ':        ['ΤΙΜΗ ΠΩΛΗΣΗΣ', 'ΠΩΛΗΣΗΣ', 'ΤΙΜΗ', 'PRICE', 'ΠΩΛΗΣΗ'],
@@ -56,11 +55,9 @@ export const COL_ALIASES: Record<string, string[]> = {
 
 /** Value columns of the statistics sheet (everything that isn't metadata or the metric label).
  *
- *  The statistics sheet is a headerless «metric | value» list, so the importer consumed its first
- *  data row as the header and the value column ends up NAMED after that row's value — e.g. "929".
- *  Filtering numeric-looking column names (right for every other sheet) therefore hid the only
- *  value column, which left every stat row with nothing and rendered the tab empty (PER-186).
- *  Numeric names must be kept here. */
+ *  Unlike every other sheet, numeric-looking column names must be KEPT: sheets imported before the
+ *  headerless-stat fix had their first data row eaten as the header, so the value column is named
+ *  after that row's value (e.g. "929"). Filtering it leaves every stat row with no value. */
 export function statValueCols(
   rows: Record<string, unknown>[],
   metricCol: string,
@@ -72,10 +69,11 @@ export function statValueCols(
   return [...keys].filter(k => !excludedKeys.has(k) && k !== metricCol);
 }
 
-/** The stat row the importer ate, reconstructed from the header pair: its metric name is the metric
- *  column's own name and its value is the value column's own name («ΠΛΗΘΟΣ ΕΝΕΡΓΟΥ ΚΩΔΙΚΟΛΟΓΙΟΥ» =
- *  929). Returns null unless the value column is numeric-named — i.e. only for sheets imported
- *  before the header fix; correctly imported sheets have nothing to recover. */
+/** Rebuilds the stat row lost to the headerless-import bug, whose metric name and value survive as
+ *  the two column names («ΠΛΗΘΟΣ ΕΝΕΡΓΟΥ ΚΩΔΙΚΟΛΟΓΙΟΥ» = 929).
+ *
+ *  Returns null unless the value column is numeric-named — correctly imported sheets have nothing
+ *  to recover, so this goes inert once the data is re-imported. */
 export function recoverEatenStatRow(
   metricCol: string,
   valueCols: string[],
