@@ -358,7 +358,6 @@ export function WeightConfigurator({
     return out;
   }, [procurementData]);
 
-  const hasProcurementCategories = procurementBySku.size > 0;
 
   // Sales-filter source priority: connector orders (skuStats.sold*) → stock movement
   // (skuMovement.dec*, net of returns) → import lifetime/period. Movement lacks `last_sale_at` but covers 7/30/90d; zero decrease ⇒ stock-frozen, 0 sales.
@@ -1893,7 +1892,6 @@ export function WeightConfigurator({
         hasFreshWindowedStats={skuStatsHasWindows}
         stockMovementBaselineDate={stockMovementBaselineDate}
         hasMovementWindows={hasMovementData}
-        hasProcurementCategories={hasProcurementCategories}
         onRefreshStats={async () => {
           const r = await refreshAggregates();
           if (r.ok) {

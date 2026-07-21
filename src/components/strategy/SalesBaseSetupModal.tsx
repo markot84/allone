@@ -72,8 +72,6 @@ interface SalesBaseSetupModalProps {
   stockMovementBaselineDate?: string | null;
   /** Windows available from stock movement tracking. */
   hasMovementWindows?: { d7: boolean; d30: boolean; d90: boolean; any: boolean };
-  /** If a procurement_inventory upload exists for the brand → enables the category-source toggle. */
-  hasProcurementCategories?: boolean;
   onRefreshStats?: () => Promise<void>;
 }
 
@@ -87,7 +85,6 @@ export function SalesBaseSetupModal({
   hasFreshWindowedStats,
   stockMovementBaselineDate,
   hasMovementWindows,
-  hasProcurementCategories,
   onRefreshStats,
 }: SalesBaseSetupModalProps) {
   const [refreshing, setRefreshing] = useState(false);
@@ -97,7 +94,9 @@ export function SalesBaseSetupModal({
   const [categoryFilter, setCategoryFilter] = useState('');
   const [search, setSearch] = useState('');
   const [excludedCategories, setExcludedCategories] = useState<string[]>([]);
-  const [categorySource, setCategorySource] = useState<SalesBaseCategorySource>('product');
+  // PER-181: the category source is always the product catalog; the field is still emitted so
+  // strategies saved with the old 'procurement' toggle keep round-tripping.
+  const categorySource: SalesBaseCategorySource = 'product';
 
   useEffect(() => {
     if (!isOpen) return;
@@ -107,14 +106,7 @@ export function SalesBaseSetupModal({
     setCategoryFilter(s.categoryFilter);
     setSearch(s.search);
     setExcludedCategories(s.excludedCategories ?? []);
-    setCategorySource(s.categorySource ?? 'product');
   }, [isOpen, initialScope]);
-
-  // When the category source changes, clear excluded/filter — labels differ.
-  useEffect(() => {
-    setExcludedCategories([]);
-    setCategoryFilter('');
-  }, [categorySource]);
 
   const toggleExcludedCategory = (cat: string) => {
     setExcludedCategories((prev) =>
@@ -378,40 +370,6 @@ export function SalesBaseSetupModal({
                 </div>
               );
             })()}
-
-            {hasProcurementCategories && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA]">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                  Πηγή κατηγοριών
-                </span>
-                <div className="ml-auto inline-flex rounded-lg border border-[#E5E5E5] bg-white p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setCategorySource('product')}
-                    className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                      categorySource === 'product'
-                        ? 'bg-[var(--nts-accent)] text-white'
-                        : 'text-[#4B5563] hover:bg-[#F5F5F5]'
-                    }`}
-                    title="Από στήλη Category του products import (ευρεία εμπορική κατηγορία)"
-                  >
-                    Προϊόντα
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCategorySource('procurement')}
-                    className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                      categorySource === 'procurement'
-                        ? 'bg-[var(--nts-accent)] text-white'
-                        : 'text-[#4B5563] hover:bg-[#F5F5F5]'
-                    }`}
-                    title="Από procurement_inventory: STATUS / ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ (π.χ. «Επί παραγγελία», «Προς κατάργηση»)"
-                  >
-                    Procurement
-                  </button>
-                </div>
-              </div>
-            )}
 
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex-1 min-w-[140px]">
