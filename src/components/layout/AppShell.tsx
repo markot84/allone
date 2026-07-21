@@ -95,12 +95,15 @@ function SidebarNav({
               </li>
             )}
             <NavList.Item
-              as="button"
-              type="button"
-              onClick={(e) => { 
-                e.preventDefault(); 
+              as="a"
+              href={`#${item.id}`}
+              onClick={(e) => {
+                // Let the browser handle ctrl/cmd/shift-click and middle-click so
+                // "open in new tab" works; only plain clicks stay in-SPA.
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                e.preventDefault();
                 e.stopPropagation();
-                onSelect(item.id); 
+                onSelect(item.id);
               }}
               aria-current={(activeSection === item.id || (item.id === 'data' && activeSection.startsWith('data-'))) ? 'page' : undefined}
               style={{ width: '100%', textAlign: 'left' }}

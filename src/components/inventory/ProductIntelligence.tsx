@@ -953,16 +953,21 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                   </span>
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
-                  Brand
+                  <span className="inline-flex items-center gap-1">
+                    Brand
+                    <Tooltip content="Κατασκευαστής του προϊόντος (manufacturer), όπως έρχεται από το ERP ή το e-shop — όχι το brand/κατάστημα της πλατφόρμας." size={12} />
+                  </span>
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A]">
-                  <button
-                    onClick={() => handleSort('margin_percentage')}
-                    className="flex items-center gap-1 hover:text-[#1A1A1A]"
-                  >
-                    Margin
-                    <SortIcon field="margin_percentage" current={sortField} direction={sortDirection} />
-                  </button>
+                  <Tooltip content="Μικτό περιθώριο κέρδους: (τιμή πώλησης − κόστος) / τιμή πώλησης. Απαιτεί κόστος από το ERP — χωρίς αυτό εμφανίζεται κενό." size={12}>
+                    <button
+                      onClick={() => handleSort('margin_percentage')}
+                      className="flex items-center gap-1 hover:text-[#1A1A1A]"
+                    >
+                      Margin
+                      <SortIcon field="margin_percentage" current={sortField} direction={sortDirection} />
+                    </button>
+                  </Tooltip>
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden sm:table-cell">
                   <button
@@ -976,7 +981,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                   </button>
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden md:table-cell">
-                  <Tooltip content="Εκτιμώμενες ημέρες αποθέματος βάσει ρυθμού πωλήσεων (Days of Stock)." size={12}>
+                  <Tooltip content="Days of Stock: για πόσες ημέρες φτάνει το τρέχον απόθεμα με τον ρυθμό πωλήσεων του τελευταίου μήνα. «∞» = απόθεμα χωρίς πωλήσεις." size={12}>
                     <button
                       onClick={() => handleSort('stock_age_days')}
                       className="flex items-center gap-1 hover:text-[#1A1A1A]"
@@ -987,7 +992,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                   </Tooltip>
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
-                  Tag
+                  <span className="inline-flex items-center gap-1">
+                    Tag
+                    <Tooltip content="Κατάσταση αποθέματος: Low (κάτω από το σημείο αναπαραγγελίας), Excess (πολύ μεγάλη κάλυψη), Dead (χωρίς πωλήσεις), No stock (μηδενικό)." size={12} />
+                  </span>
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden sm:table-cell">
                   <button
