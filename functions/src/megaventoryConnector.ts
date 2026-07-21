@@ -144,6 +144,14 @@ const CUSTOM_REPORT_LIMIT = 1000;
 const CUSTOM_REPORT_COLLECTION = 'megaventory_custom_report_rows';
 const CUSTOM_REPORT_MAX_PAGES = 500;
 
+/** Custom-report window span in days — the denominator turning Qty_Sold_Period into a daily velocity. */
+export function customReportPeriodDays(date1: string, date2: string): number | undefined {
+  const from = Date.parse(`${date1}T00:00:00Z`);
+  const to = Date.parse(`${date2}T00:00:00Z`);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return undefined;
+  return Math.round((to - from) / 86400000);
+}
+
 /** Extract the row array from a CustomReportGetData response (official shape: `Rows[]` with `{ Index, Data[] }`). */
 export function extractCustomReportRows(body: unknown): Record<string, unknown>[] {
   if (!body || typeof body !== 'object') return [];
@@ -2330,7 +2338,9 @@ export async function fetchMegaventoryData(
         if (crItems.length) {
           await writeBatch(db, CUSTOM_REPORT_COLLECTION, brandId, crItems);
         }
-        normalizedCounts = await normalizeMegaventoryCustomReportRows(db, brandId, crRows);
+        normalizedCounts = await normalizeMegaventoryCustomReportRows(db, brandId, crRows, {
+          periodDays: customReportPeriodDays(customReportDate1, customReportDate2),
+        });
         counts.customReportRows = crItems.length;
         totalImported += crItems.length;
         logger.info(
