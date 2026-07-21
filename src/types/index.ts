@@ -109,6 +109,8 @@ export interface Brand {
     defaultLeadTimeDays?: number;
     /** Brand-wide fallback Target Days of Stock, used when a supplier has no tod. Default 60. */
     defaultTod?: number;
+    /** Reorder point as a multiple of the supplier lead time (1.5 = warn 50% before it runs out). Default 1.5. */
+    reorderWarningMultiplier?: number;
   };
 }
 

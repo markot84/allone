@@ -19,7 +19,12 @@ import { Card, Button, Spinner, useToast, Tooltip } from '../common';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { useBrand } from '../../hooks/useBrand';
 import { SuppliersService } from '../../services/firestore';
-import { DEFAULT_TOD } from '../../utils/productUtils';
+import {
+  DEFAULT_TOD,
+  DEFAULT_LEAD_TIME_DAYS,
+  DEFAULT_REORDER_MULTIPLIER,
+  getReorderPointDays,
+} from '../../utils/productUtils';
 // format utility — currently unused but available for future formatting needs
 import type { Supplier } from '../../types';
 import * as XLSX from 'xlsx';
@@ -31,7 +36,9 @@ export function SuppliersPage() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const brandDefaultTod = currentBrand?.inventoryThresholds?.defaultTod ?? DEFAULT_TOD;
-  const brandDefaultLead = currentBrand?.inventoryThresholds?.defaultLeadTimeDays ?? 30;
+  const brandDefaultLead = currentBrand?.inventoryThresholds?.defaultLeadTimeDays ?? DEFAULT_LEAD_TIME_DAYS;
+  const reorderMultiplier =
+    currentBrand?.inventoryThresholds?.reorderWarningMultiplier ?? DEFAULT_REORDER_MULTIPLIER;
   const { suppliers, isLoading, invalidate } = useSuppliers();
   // queryClient available for manual cache ops if needed
   const toast = useToast();
@@ -520,6 +527,12 @@ export function SuppliersPage() {
                     </span>
                     <SortIcon col="lead" />
                   </th>
+                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap w-32 hidden md:table-cell">
+                    <span className="inline-flex items-center gap-1">
+                      Reorder Point
+                      <Tooltip content={`Σημείο επαναπαραγγελίας: όταν το απόθεμα καλύπτει λιγότερες από τόσες ημέρες, ήρθε η ώρα να παραγγείλετε ξανά. Υπολογίζεται ως Lead Time × ${reorderMultiplier}, ώστε η παραλαβή να προλάβει το μηδενικό απόθεμα.`} size={11} />
+                    </span>
+                  </th>
                   <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap hidden md:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('contact')}>
                     Επικοινωνία <SortIcon col="contact" />
                   </th>
@@ -570,6 +583,11 @@ export function SuppliersPage() {
                             {s.lead_time ? `${s.lead_time} ημέρες` : '—'}
                           </span>
                         )}
+                      </td>
+                      <td className="px-3 py-2 text-center hidden md:table-cell">
+                        <span className="text-xs text-[var(--nts-medium-gray)]">
+                          {getReorderPointDays(s.lead_time, brandDefaultLead, reorderMultiplier)} ημέρες
+                        </span>
                       </td>
                       <td className="px-3 py-2 text-xs text-[var(--nts-medium-gray)] truncate hidden md:table-cell">{s.contact || '—'}</td>
                       <td className="px-3 py-2 text-right">

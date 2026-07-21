@@ -138,6 +138,22 @@ export function buildSupplierTodMap(
   return m;
 }
 
+/** Default supplier lead time (days) when neither the supplier nor the brand sets one. */
+export const DEFAULT_LEAD_TIME_DAYS = 30;
+/** Default reorder point as a multiple of lead time — warn 50% before the stock runs out. */
+export const DEFAULT_REORDER_MULTIPLIER = 1.5;
+
+/** Reorder point in days of cover: reorder once stock covers less than lead time × multiplier,
+ *  so the replenishment lands before the shelf empties. */
+export function getReorderPointDays(
+  leadTime: number | null | undefined,
+  brandDefaultLeadTime: number = DEFAULT_LEAD_TIME_DAYS,
+  multiplier: number = DEFAULT_REORDER_MULTIPLIER,
+): number {
+  const lead = leadTime != null && leadTime > 0 ? leadTime : brandDefaultLeadTime;
+  return Math.round(lead * multiplier);
+}
+
 /** Resolve TOD for a product: supplier-specific → brand default (config page) → platform floor. */
 export function getProductTod(
   product: Product,

@@ -9,13 +9,14 @@ import type { Brand } from '../../types';
 type Thresholds = NonNullable<Brand['inventoryThresholds']>;
 type FieldKey = keyof Thresholds;
 
-const FIELDS: { key: FieldKey; label: string; def: number; hint: string }[] = [
+const FIELDS: { key: FieldKey; label: string; def: number; hint: string; step?: number }[] = [
   { key: 'velocityWindowDays', label: 'Παράθυρο πωλήσεων (ημέρες)', def: 30, hint: 'Σε πόσες ημέρες αναφέρεται η ταχύτητα πωλήσεων.' },
   { key: 'lowDaysOfCover', label: 'Όριο «Low Stock» (ημέρες κάλυψης)', def: 30, hint: 'Κάτω από τόσες ημέρες κάλυψης → «Low Stock».' },
   { key: 'excessDaysOfCover', label: 'Όριο «Excess Stock» (ημέρες κάλυψης)', def: 120, hint: 'Πάνω από τόσες ημέρες κάλυψης → «Excess Stock».' },
   { key: 'newStockGraceDays', label: 'Περίοδος χάριτος νέου αποθέματος (ημέρες)', def: 60, hint: 'Απόθεμα χωρίς πωλήσεις δεν χαρακτηρίζεται «Dead Stock» πριν περάσουν τόσες ημέρες από την παραλαβή.' },
   { key: 'defaultLeadTimeDays', label: 'Προεπιλογή lead time προμηθευτή (ημέρες)', def: 30, hint: 'Εφεδρικός χρόνος παράδοσης όταν ο προμηθευτής δεν έχει δικό του lead time. Χρησιμοποιείται στον χαρακτηρισμό «Low Stock».' },
   { key: 'defaultTod', label: 'Προεπιλογή TOD ανά προμηθευτή (ημέρες)', def: 60, hint: 'Εφεδρικό Target Days of Stock όταν ο προμηθευτής δεν έχει δικό του TOD. Το κάθε προμηθευτής μπορεί να το υπερισχύσει στη σελίδα Προμηθευτών.' },
+  { key: 'reorderWarningMultiplier', label: 'Σημείο επαναπαραγγελίας (× lead time)', def: 1.5, step: 0.1, hint: 'Πόσες φορές το lead time πρέπει να καλύπτει το απόθεμα πριν ειδοποιηθείτε για επαναπαραγγελία. 1.5 = ειδοποίηση 50% νωρίτερα από την εξάντληση.' },
 ];
 
 /** Per-brand stock-health thresholds (Product Intelligence). Empty inputs keep the platform default.
@@ -82,8 +83,11 @@ export function InventoryThresholdsCard() {
             </span>
             <input
               type="number"
-              min={1}
-              inputMode="numeric"
+              // Days are whole numbers; the reorder multiplier is fractional (1.5), so a
+              // step of 1 would make the browser reject it as invalid.
+              min={f.step ?? 1}
+              step={f.step ?? 1}
+              inputMode={f.step ? 'decimal' : 'numeric'}
               value={vals[f.key]}
               placeholder={`Προεπιλογή ${f.def}`}
               onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
