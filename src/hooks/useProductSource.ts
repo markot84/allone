@@ -133,6 +133,20 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
     const pricingRows = ((procData?.pricing_policy ?? []) as unknown[]) as Record<string, unknown>[];
     const pricingBySku = buildPricingBySku(pricingRows);
 
+    // Grades usually live in the item_evaluation sheet, not the inventory sheet (e.g. safeblock:
+    // 842/929 SKUs graded there while the inventory grade column is empty). Join by code.
+    const evalRows = ((procData?.item_evaluation ?? []) as unknown[]) as Record<string, unknown>[];
+    const gradeBySku = new Map<string, string>();
+    if (evalRows.length) {
+      const evalCodeCol = findColByKeywords(evalRows, ['ΚΩΔΙΚΟΣ', 'MASTER']);
+      const evalGradeCol = findColByKeywords(evalRows, ['ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ', 'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ', 'ΑΞΙΟΛΟΓΗΣΗ']);
+      for (const row of evalRows) {
+        const code = String(row[evalCodeCol] ?? '').trim();
+        const grade = String(row[evalGradeCol] ?? '').trim();
+        if (code && grade && !gradeBySku.has(code)) gradeBySku.set(code, grade);
+      }
+    }
+
     // Some templates use «MASTER» instead of «ΚΩΔΙΚΟΣ» in the inventory sheet.
     const codeCol = findColByKeywords(invRows, ['ΚΩΔΙΚΟΣ', 'MASTER']);
     const descCol = findColByKeywords(invRows, ['ΠΕΡΙΓΡΑΦΗ']);
@@ -161,12 +175,18 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
       if (pr) {
         const fromPricingPrice = pr.avg || pr.list || pr.corp || 0;
         if (invPriceRaw <= 0 && fromPricingPrice > 0) price = fromPricingPrice;
+        // Primary (purchase) cost first: ΣΥΝΟΛΙΚΟ = primary + allocated MBC/ABC overheads, which
+        // exceeds the sale price on many items and flips margins negative. Client wants purchase cost.
         const costFromPricing =
-          pr.totalCost && pr.totalCost > 0 ? pr.totalCost : pr.primaryCost && pr.primaryCost > 0 ? pr.primaryCost : 0;
+          pr.primaryCost && pr.primaryCost > 0 ? pr.primaryCost : pr.totalCost && pr.totalCost > 0 ? pr.totalCost : 0;
         if (cost <= 0 && costFromPricing > 0) cost = costFromPricing;
       }
 
-      const evalGrade = String(row[evalCol] ?? 'B').trim().toUpperCase();
+      // No default grade: inventory column first, else the evaluation-sheet join, else unknown.
+      // Defaulting to 'B' made every ungraded row classify as excess.
+      const evalGrade =
+        String(row[evalCol] ?? '').trim().toUpperCase() ||
+        (code ? String(gradeBySku.get(code) ?? '').trim().toUpperCase() : '');
       const needsRefill = parseNum(row[refillCol]) > 0;
       const statusUpper = String(row[statusCol] ?? '').trim().toUpperCase();
       const group = String(row[groupCol] ?? '').trim();
@@ -194,14 +214,16 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
         stock_level: stock,
         stock_capacity: stock * 2,
         // Don't set stock_age_days: 0 — it was misread as a «new SKU, 0 days» in triage.
-        priority_tag: tag,
+        // tag=null (no grade) → omit priority_tag entirely: the row renders unbucketed ("—"),
+        // and downstream counters skip it instead of inflating excess.
+        ...(tag ? { priority_tag: tag } : {}),
         procurement_status: statusUpper || undefined,
         price,
         cost_price: cost,
         ...(first_available_date ? { first_available_date } : {}),
       } as Product;
     });
-  }, [isEnterprise, procData?.inventory, procData?.pricing_policy, options.maxProducts]);
+  }, [isEnterprise, procData?.inventory, procData?.pricing_policy, procData?.item_evaluation, options.maxProducts]);
 
   const usingProcurement = procProducts.length > 0;
   const importedProductsAreErp = useMemo(
