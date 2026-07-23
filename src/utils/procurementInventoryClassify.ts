@@ -2,8 +2,7 @@
  * must match ProductIntelligence.procInventorySummary. */
 export type ProcurementStockTag = 'dead' | 'low' | 'healthy' | 'excess';
 
-/** `null` = unclassified: a row with no ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ grade must NOT be bucketed —
- * a missing grade is unknown, not excess (client decision). */
+/** `null` = unclassified: a missing ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ grade is unknown, not excess (client decision). */
 export function classifyProcurementInventoryRow(params: {
   stock: number;
   evalGrade: string;

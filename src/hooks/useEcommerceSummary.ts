@@ -91,10 +91,7 @@ type SkuStatsMap = Record<
   }
 >;
 
-export type ErpVelocityMap = SkuStatsMap;
-
-/** All-channel ERP per-SKU velocity (erp_sku_velocity chunks) — carries the ± sales split.
- * Separate hook so only surfaces that need it (Commercial Strategy) pay the read. */
+/** ERP per-SKU velocity (± sales split); separate hook so only Commercial Strategy pays the read. */
 export function useErpSkuVelocity() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;

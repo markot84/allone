@@ -74,8 +74,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
     });
   }, []);
 
-  // Persisted ids can reference deleted products; prune at use time (not init — the
-  // catalog loads async and an early prune would wipe the saved selection).
+  // Prune deleted-product ids at use time, not init — the catalog loads async and an early prune would wipe the saved selection.
   const validSelectedProductIds = useMemo(() => {
     if (products.length === 0) return selectedProductIds;
     const known = new Set(products.map(p => p.id));
@@ -100,7 +99,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
       discountPercent,
       scope,
       selectedCategories: Array.from(selectedCategories),
-      // Re-persist only ids that still exist — stops stale ids surviving Apply forever.
+      // Re-persist only ids that still exist, so stale ids don't survive Apply forever.
       selectedProductIds: Array.from(validSelectedProductIds),
     });
   }, [canApply, onApply, selectedPeriodId, periodName, discountPercent, scope, selectedCategories, validSelectedProductIds]);

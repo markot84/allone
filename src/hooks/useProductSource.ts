@@ -133,8 +133,7 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
     const pricingRows = ((procData?.pricing_policy ?? []) as unknown[]) as Record<string, unknown>[];
     const pricingBySku = buildPricingBySku(pricingRows);
 
-    // Grades usually live in the item_evaluation sheet, not the inventory sheet (e.g. safeblock:
-    // 842/929 SKUs graded there while the inventory grade column is empty). Join by code.
+    // Grades usually live in the item_evaluation sheet, not the inventory sheet — join by code.
     const evalRows = ((procData?.item_evaluation ?? []) as unknown[]) as Record<string, unknown>[];
     const gradeBySku = new Map<string, string>();
     if (evalRows.length) {
@@ -175,15 +174,13 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
       if (pr) {
         const fromPricingPrice = pr.avg || pr.list || pr.corp || 0;
         if (invPriceRaw <= 0 && fromPricingPrice > 0) price = fromPricingPrice;
-        // Primary (purchase) cost first: ΣΥΝΟΛΙΚΟ = primary + allocated MBC/ABC overheads, which
-        // exceeds the sale price on many items and flips margins negative. Client wants purchase cost.
+        // Primary (purchase) cost first — ΣΥΝΟΛΙΚΟ includes overheads and flips margins negative.
         const costFromPricing =
           pr.primaryCost && pr.primaryCost > 0 ? pr.primaryCost : pr.totalCost && pr.totalCost > 0 ? pr.totalCost : 0;
         if (cost <= 0 && costFromPricing > 0) cost = costFromPricing;
       }
 
-      // No default grade: inventory column first, else the evaluation-sheet join, else unknown.
-      // Defaulting to 'B' made every ungraded row classify as excess.
+      // No default grade (a 'B' default classified every ungraded row as excess).
       const evalGrade =
         String(row[evalCol] ?? '').trim().toUpperCase() ||
         (code ? String(gradeBySku.get(code) ?? '').trim().toUpperCase() : '');
@@ -214,8 +211,7 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
         stock_level: stock,
         stock_capacity: stock * 2,
         // Don't set stock_age_days: 0 — it was misread as a «new SKU, 0 days» in triage.
-        // tag=null (no grade) → omit priority_tag entirely: the row renders unbucketed ("—"),
-        // and downstream counters skip it instead of inflating excess.
+        // tag=null (no grade) → omit priority_tag so counters skip the row instead of inflating excess.
         ...(tag ? { priority_tag: tag } : {}),
         procurement_status: statusUpper || undefined,
         price,

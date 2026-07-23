@@ -352,20 +352,30 @@ export function WeightConfigurator({
   // ± sales split (ERP velocity store). Window selector for the sales_base preview column.
   const erpVelocity = useErpSkuVelocity();
   const [posNegWindow, setPosNegWindow] = useState<'lifetime' | '30d' | '90d'>('30d');
-  const posNegBySku = useMemo(() => {
-    const out = new Map<string, { pos: number; neg: number } | null>();
+  // Key-normalized once per data load; the window pick happens per rendered cell (≤10 rows),
+  // so toggling the window never re-walks the full velocity map.
+  const posNegRowsBySku = useMemo(() => {
+    const out = new Map<string, (typeof erpVelocity)[string]>();
     for (const [sku, row] of Object.entries(erpVelocity)) {
       if (row.soldPos == null) continue; // source can't split → leave absent, cell shows «—»
+      out.set(sku.trim().toLowerCase(), row);
+    }
+    return out;
+  }, [erpVelocity]);
+  const posNegFor = useCallback(
+    (sku: string): { pos: number; neg: number } | null => {
+      const row = posNegRowsBySku.get(sku.trim().toLowerCase());
+      if (!row) return null;
       const [pos, neg] =
         posNegWindow === 'lifetime'
           ? [row.soldPos, row.soldNeg]
           : posNegWindow === '30d'
             ? [row.soldPos30d, row.soldNeg30d]
             : [row.soldPos90d, row.soldNeg90d];
-      out.set(sku.trim().toLowerCase(), { pos: pos ?? 0, neg: neg ?? 0 });
-    }
-    return out;
-  }, [erpVelocity, posNegWindow]);
+      return { pos: pos ?? 0, neg: neg ?? 0 };
+    },
+    [posNegRowsBySku, posNegWindow]
+  );
 
   const normalizedSkuStats = useMemo(() => {
     if (!skuStats) return null;
@@ -630,8 +640,7 @@ export function WeightConfigurator({
   const triageScopedProductIds = useMemo(() => {
     if (!triageOrigin) return null;
     if (triageOrigin.productIds && triageOrigin.productIds.length > 0) {
-      // Intersect with the live catalog — persisted ids can reference deleted products,
-      // and the raw count would lie in the "Εστίαση από διάγνωση" header.
+      // Intersect with the live catalog — persisted ids of deleted products would inflate the scope count.
       const idSet = new Set(triageOrigin.productIds);
       const matched = products.filter((p) => idSet.has(p.id)).map((p) => p.id);
       return matched.length > 0 ? new Set(matched) : null;
@@ -666,8 +675,7 @@ export function WeightConfigurator({
   // Memoized AI prompt contexts — rebuilt only when triage or source coverage changes.
   const triagePromptCtx = useMemo(() => {
     if (!triageOrigin) return undefined;
-    // Same hygiene as the scope set: drop persisted SKUs that left the catalog so the AI
-    // prompt doesn't reason over products that no longer exist.
+    // Drop persisted SKUs that left the catalog so the AI prompt doesn't reason over deleted products.
     if (!Array.isArray(triageOrigin.skus) || triageOrigin.skus.length === 0 || products.length === 0) {
       return buildTriagePromptContext(triageOrigin);
     }
@@ -1323,8 +1331,7 @@ export function WeightConfigurator({
         duration: duration === 'ongoing' ? 'Ongoing' : duration ? `${duration} ημέρες` : undefined,
         monthlyBudget: activeStrategy?.monthlyBudget ?? null,
         segments: rfmSegments,
-        // The saved AI rationale describes the SAVED strategy — echo it only when the
-        // export matches it (same scenario, weights untouched), not a stale narrative.
+        // Echo the saved AI rationale only when the export matches the saved strategy (same scenario, untouched weights).
         channelRecommendation:
           selectedScenario === activeStrategy?.scenarioId && !hasManualWeightChanges
             ? activeStrategy?.channelRecommendation ?? null
@@ -1826,11 +1833,7 @@ export function WeightConfigurator({
                           columnId={col.id}
                           product={product}
                           rank={(currentPreviewPage - 1) * PREVIEW_PAGE_SIZE + index + 1}
-                          posNeg={
-                            col.id === 'sales_pos_neg'
-                              ? posNegBySku.get((product.sku || '').trim().toLowerCase()) ?? null
-                              : undefined
-                          }
+                          posNeg={col.id === 'sales_pos_neg' ? posNegFor(product.sku || '') : undefined}
                         />
                       ))}
                     </motion.tr>

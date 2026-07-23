@@ -1,5 +1,4 @@
-/** Zero-stock SKUs must not land in actionable commercial buckets (discontinue,
- * margin_bleeder) — strategy scopes are in-stock-only by decision. */
+/** Zero-stock SKUs must not land in discontinue/margin_bleeder — strategy scopes are in-stock-only. */
 import { describe, it, expect } from 'vitest';
 import { classifyAll } from './decisionBuckets';
 import type { Product } from '../types';

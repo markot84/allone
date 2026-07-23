@@ -37,8 +37,7 @@ type SkuStatsRow = {
   sold30d: number;
   sold90d: number;
   lastSaleAt: string | null;
-  /** Gross sales / returns split (units). Written only for backends whose documents distinguish
-   * credit notes (Megaventory); absent = the split is unknowable for this brand, UI shows «—». */
+  /** Gross/returns split (units); written only when the backend signs credit notes (MV), absent = UI shows «—». */
   soldPos?: number;
   soldNeg?: number;
   soldPos7d?: number;
@@ -595,8 +594,7 @@ export type ErpVelocityAccum = {
   sold30: Map<string, number>;
   sold90: Map<string, number>;
   lastSale: Map<string, number>;
-  /** Positive-quantity (sales-only) accumulation; returns derive as pos − net so the split
-   * needs 4 extra maps, not 8. Populated only by backends that sign credit notes (Megaventory). */
+  /** Sales-only accumulation (returns derive as pos − net); populated only by MV, which signs credit notes. */
   pos: Map<string, number>;
   pos7: Map<string, number>;
   pos30: Map<string, number>;
@@ -706,8 +704,7 @@ export async function computeErpSkuVelocity(brandId: string): Promise<void> {
   }
 
   const skuStats: Record<string, SkuStatsRow> = {};
-  // The ± split is only truthful where the source signs credit notes (Megaventory);
-  // for SoftOne the fields stay absent and the UI renders «—» instead of a fake 0.
+  // ± split only where the source signs credit notes (MV); elsewhere absent → UI «—», not a fake 0.
   const hasPosNeg = backend === 'megaventory_invoices';
   for (const sku of accum.sold.keys()) {
     const lastTs = accum.lastSale.get(sku);
