@@ -61,6 +61,8 @@ const MAGENTO_FETCH_TIMEOUT_MS = 30_000;
 const MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE = 50;
 /** Full-catalog fallback (ERP-less brands): max pages/run (×100 products), resume via cursor. */
 const MAGENTO_FULL_CATALOG_PAGE_BUDGET = 150;
+/** Stop the catalog loop before the 540s wall — a run killed mid-loop never writes the parent patch or cursor. */
+const MAGENTO_FULL_CATALOG_TIME_BUDGET_MS = 6 * 60 * 1000;
 
 /** Bounded retries (idempotent GETs) ONLY on timeout/network/5xx/429 — never other 4xx,
  * so the degraded catalog-401 path surfaces immediately. */
@@ -1457,6 +1459,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
       const productCursor = coerceSyncDate((connector as Record<string, unknown>).productsHistoryCursor);
       let lastProductUpdatedAt: Date | null = null;
       let pagesFetched = 0;
+      const catalogStart = Date.now();
       prodPage = 1;
       prodMore = true;
       logger.info(
@@ -1505,10 +1508,11 @@ export async function fetchMagentoData(brandId: string): Promise<{
 
         pagesFetched++;
         prodMore = prodPage * 100 < totalCount;
-        if (prodMore && pagesFetched >= MAGENTO_FULL_CATALOG_PAGE_BUDGET) {
+        // Time cap besides the page cap — dying at the function wall skips the patch/cursor and reruns redo the same pages.
+        if (prodMore && (pagesFetched >= MAGENTO_FULL_CATALOG_PAGE_BUDGET || Date.now() - catalogStart > MAGENTO_FULL_CATALOG_TIME_BUDGET_MS)) {
           productsBackfillIncomplete = true;
           prodMore = false;
-          logger.warnAlert(`[Magento] Full catalog page budget (${MAGENTO_FULL_CATALOG_PAGE_BUDGET}) reached for ${brandId}, resume next run`, { alertKey: ALERT.magentoSyncFailed });
+          logger.warnAlert(`[Magento] Full catalog budget reached for ${brandId} (${pagesFetched} pages, ${Math.round((Date.now() - catalogStart) / 1000)}s), resume next run`, { alertKey: ALERT.magentoSyncFailed });
         }
         prodPage++;
       }
@@ -1562,6 +1566,35 @@ export async function fetchMagentoData(brandId: string): Promise<{
         }
         if (!productsOk) break;
       }
+
+      // Configurables carry the parent-child links but are never in active-stock SKUs — fetch them too (~1-2k).
+      if (productsOk) {
+        prodPage = 1;
+        prodMore = true;
+        while (prodMore) {
+          const searchParams = new URLSearchParams({
+            'searchCriteria[pageSize]': '100',
+            'searchCriteria[currentPage]': String(prodPage),
+            'searchCriteria[filter_groups][0][filters][0][field]': 'type_id',
+            'searchCriteria[filter_groups][0][filters][0][value]': 'configurable',
+            'searchCriteria[filter_groups][0][filters][0][condition_type]': 'eq',
+          });
+          const productUrl = buildMagentoRestUrl(restApiBase, `products?${searchParams.toString()}`, storeCode);
+          const res = await magentoFetch(productUrl, { headers });
+          if (!res.ok) {
+            logger.warnAlert(`[Magento] Configurables fetch failed (${res.status}) page=${prodPage} for ${brandId}`, { alertKey: ALERT.magentoSyncFailed });
+            break;
+          }
+          const body = await res.json();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const products: any[] = body.items || [];
+          const totalCount: number = body.total_count || 0;
+          prodImportedCount += await ingestMagentoProductPage(db, brandId, products, categoryMap, idToSku, parentLinks);
+          // ponytail: 50-page cap (5k configurables) — enough for any real store, keeps us off the function wall.
+          prodMore = prodPage * 100 < totalCount && prodPage < 50;
+          prodPage++;
+        }
+      }
     }
 
     // Fill parentSku on child variants (so in the Ads Feed → item_group_id = parent SKU).
@@ -1576,6 +1609,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
       for (let i = 0; i < childEntries.length; i += 500) {
         const batch = db.batch();
         for (const [childId, parentIds] of childEntries.slice(i, i + 500)) {
+          // update() on a doc missing this run (e.g. zero-stock variant) fails the whole batch.
+          if (!idToSku.has(childId)) continue;
           const parentSkus = [...parentIds].map((pid) => idToSku.get(pid)).filter((v): v is string => Boolean(v));
           if (parentSkus.length === 0) continue;
           batch.update(db.collection('magento_products').doc(`mag_${childId}`), {

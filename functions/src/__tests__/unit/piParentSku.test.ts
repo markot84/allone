@@ -28,3 +28,22 @@ describe('parent_sku stamping', () => {
     expect(ps[2].variant_count).toBeUndefined();
   });
 });
+
+describe('collapseByParentSku', () => {
+  const { collapseByParentSku } = __test;
+  const v = (sku: string, parent: string | undefined, stock: number, qty?: number) =>
+    ({ id: sku, sku, name: sku, category: 'c', margin_tier: 'high', margin_percentage: 30,
+       stock_level: stock, stock_capacity: stock * 2, priority_tag: 'healthy', price: 10,
+       ...(parent ? { parent_sku: parent } : {}), ...(qty != null ? { qty_sold_period: qty } : {}) });
+
+  it('collapses siblings into one parent row with summed quantities and top-stock representative', () => {
+    const out = collapseByParentSku([v('X-1', 'X', 5, 2), v('X-2', 'X', 9, 3), v('Y-1', undefined, 1)]);
+    expect(out).toHaveLength(2);
+    const parent = out.find((r: { sku: string }) => r.sku === 'X');
+    expect(parent.stock_level).toBe(14);
+    expect(parent.qty_sold_period).toBe(5);
+    expect(parent.variant_count).toBe(2);
+    expect(parent.name).toBe('X-2'); // highest-stock representative
+    expect(out.find((r: { sku: string }) => r.sku === 'Y-1')).toBeTruthy();
+  });
+});

@@ -109,6 +109,8 @@ export type ProductIntelligenceQueryParams = {
   dateTo?: string;
   dateMode?: 'imported' | 'first_available';
   includeNoStock?: boolean;
+  /** Collapse variants sharing a declared parent_sku into one row per parent. */
+  groupByParent?: boolean;
 };
 
 type ProductIntelligenceQueryResult = {
@@ -1492,6 +1494,37 @@ export function classifyAggregateRecovery(
   return 'heal';
 }
 
+/** Collapse rows by parent_sku: top-stock variant carries price/margin/name; quantities sum; unparented pass through. */
+function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
+  const groups = new Map<string, CompactProduct[]>();
+  const out: CompactProduct[] = [];
+  for (const row of rows) {
+    if (!row.parent_sku) { out.push(row); continue; }
+    const g = groups.get(row.parent_sku);
+    if (g) g.push(row); else groups.set(row.parent_sku, [row]);
+  }
+  for (const [parent, members] of groups) {
+    const rep = members.reduce((a, b) => (b.stock_level > a.stock_level ? b : a));
+    const sum = (f: (p: CompactProduct) => number | undefined) =>
+      Math.round(members.reduce((t, p) => t + (f(p) || 0), 0) * 100) / 100;
+    const lastSale = members.map((p) => p.last_sale_at || '').sort().pop();
+    out.push({
+      ...rep,
+      id: `parent_${parent}`,
+      sku: parent,
+      stock_level: sum((p) => p.stock_level),
+      stock_capacity: sum((p) => p.stock_capacity),
+      ...(members.some((p) => p.stock_on_hand != null) ? { stock_on_hand: sum((p) => p.stock_on_hand) } : {}),
+      ...(members.some((p) => p.available_stock != null) ? { available_stock: sum((p) => p.available_stock) } : {}),
+      ...(members.some((p) => p.qty_sold_period != null) ? { qty_sold_period: sum((p) => p.qty_sold_period) } : {}),
+      ...(members.some((p) => p.qty_sold_lifetime != null) ? { qty_sold_lifetime: sum((p) => p.qty_sold_lifetime) } : {}),
+      ...(lastSale ? { last_sale_at: lastSale } : {}),
+      variant_count: members.length,
+    });
+  }
+  return out;
+}
+
 export async function queryProductIntelligenceRows(params: ProductIntelligenceQueryParams): Promise<ProductIntelligenceQueryResult> {
   const firestore = assertDb();
   const aggregateSnap = await firestore.doc(`product_intelligence/${params.brandId}`).get();
@@ -1512,8 +1545,10 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
   const pageCount = Math.max(1, aggregate.pagesByBucket?.[bucket] ?? 1);
   const rows = await loadBucketProductsFromPages(params.brandId, bucket, pageCount);
   const filtered = rows.filter((product) => matchesQuery(product, params));
+  // Collapse after filtering (variant-level filters stay precise), before sort/pagination.
+  const display = params.groupByParent ? collapseByParentSku(filtered) : filtered;
   const sorted = sortProducts(
-    filtered,
+    display,
     params.sortField ?? 'margin_percentage',
     params.sortDirection ?? 'desc',
   );
@@ -1824,6 +1859,7 @@ export async function refreshCompetitiveInventoryLookup(brandId: string): Promis
 export const __test = {
   productFromRow,
   stampVariantCounts,
+  collapseByParentSku,
   stockBucket,
   summaryForProducts,
   canServeAggregateQuery,

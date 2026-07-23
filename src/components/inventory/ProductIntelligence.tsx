@@ -179,6 +179,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const [brandInclude, setBrandInclude] = useState<string[] | null>(null);
   const [tagInclude, setTagInclude] = useState<string[] | null>(null);
   const [includeNoStock, setIncludeNoStock] = useState(false);
+  const [groupByParent, setGroupByParent] = useState(false);
   const [marginFilter, setMarginFilter] = useState<string>('all');
   const [stockAgeFilter, setStockAgeFilter] = useState<'all' | 'dead' | 'near-dead' | 'high-margin-low-stock'>('all');
   const [stockCardFilter, setStockCardFilter] = useState<'all' | 'healthy' | 'excess' | 'dead' | 'low'>('all');
@@ -267,7 +268,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     dateTo: productDateTo || undefined,
     dateMode: productDateMode,
     includeNoStock,
-  }), [PAGE_SIZE, searchQuery, categoryInclude, brandInclude, effectiveTagFilter, marginFilter, stockAgeFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode, includeNoStock]);
+    ...(groupByParent ? { groupByParent: true } : {}),
+  }), [PAGE_SIZE, searchQuery, categoryInclude, brandInclude, effectiveTagFilter, marginFilter, stockAgeFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode, includeNoStock, groupByParent]);
   const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage, serverQuery);
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -888,6 +890,18 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 className="rounded border-[#D1D5DB] text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]/30"
               />
               <span className="whitespace-nowrap">Εμφάνιση no stock</span>
+            </label>
+            <label
+              className="flex min-h-[38px] items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#374151]"
+              title="Οι παραλλαγές με δηλωμένη σχέση parent-child (Magento) εμφανίζονται ως μία γραμμή ανά parent, με αθροισμένο απόθεμα/πωλήσεις."
+            >
+              <input
+                type="checkbox"
+                checked={groupByParent}
+                onChange={(e) => { setGroupByParent(e.target.checked); setCurrentPage(1); }}
+                className="rounded border-[#D1D5DB] text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]/30"
+              />
+              <span className="whitespace-nowrap">Ομαδοποίηση Parent SKU</span>
             </label>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Margin tier</span>

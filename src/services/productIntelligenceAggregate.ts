@@ -61,6 +61,8 @@ export type ProductIntelligenceQuery = {
   dateTo?: string;
   dateMode?: 'imported' | 'first_available';
   includeNoStock?: boolean;
+  /** Collapse variants sharing a declared parent SKU into one row per parent. */
+  groupByParent?: boolean;
 };
 
 export type ProductIntelligenceQueryResult = {
