@@ -463,6 +463,34 @@ function chunkArray<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
+/** Patch parentSkus/itemGroupId onto child docs; merge-set so unsynced children get an invisible stub. */
+async function patchMagentoParentLinks(
+  db: Firestore,
+  parentLinks: { childId: string; parentId: string }[],
+  idToSku: Map<string, string>,
+): Promise<void> {
+  if (parentLinks.length === 0) return;
+  const childToParents = new Map<string, Set<string>>();
+  for (const { childId, parentId } of parentLinks) {
+    if (!childToParents.has(childId)) childToParents.set(childId, new Set());
+    childToParents.get(childId)!.add(parentId);
+  }
+  const childEntries = [...childToParents.entries()];
+  for (let i = 0; i < childEntries.length; i += 500) {
+    const batch = db.batch();
+    for (const [childId, parentIds] of childEntries.slice(i, i + 500)) {
+      const parentSkus = [...parentIds].map((pid) => idToSku.get(pid)).filter((v): v is string => Boolean(v));
+      if (parentSkus.length === 0) continue;
+      batch.set(db.collection('magento_products').doc(`mag_${childId}`), {
+        parentSkus,
+        itemGroupId: parentSkus[0],
+      }, { merge: true });
+    }
+    await batch.commit();
+  }
+  parentLinks.length = 0;
+}
+
 async function loadActiveStockSkus(db: Firestore, brandId: string): Promise<string[]> {
   const snap = await db.collection('products').where('brandId', '==', brandId).where('stock_level', '>', 0).get();
   const skus = new Set<string>();
@@ -1523,6 +1551,36 @@ export async function fetchMagentoData(brandId: string): Promise<{
       }
     } else {
       // ── Active-stock scope (ERP-backed): SKU-filtered enrichment ──────
+      // Configurables + parent patch FIRST — the enrichment below can eat the whole function window.
+      {
+        prodPage = 1;
+        prodMore = true;
+        while (prodMore) {
+          const searchParams = new URLSearchParams({
+            'searchCriteria[pageSize]': '100',
+            'searchCriteria[currentPage]': String(prodPage),
+            'searchCriteria[filter_groups][0][filters][0][field]': 'type_id',
+            'searchCriteria[filter_groups][0][filters][0][value]': 'configurable',
+            'searchCriteria[filter_groups][0][filters][0][condition_type]': 'eq',
+          });
+          const productUrl = buildMagentoRestUrl(restApiBase, `products?${searchParams.toString()}`, storeCode);
+          const res = await magentoFetch(productUrl, { headers });
+          if (!res.ok) {
+            logger.warnAlert(`[Magento] Configurables fetch failed (${res.status}) page=${prodPage} for ${brandId}`, { alertKey: ALERT.magentoSyncFailed });
+            break;
+          }
+          const body = await res.json();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const products: any[] = body.items || [];
+          const totalCount: number = body.total_count || 0;
+          prodImportedCount += await ingestMagentoProductPage(db, brandId, products, categoryMap, idToSku, parentLinks);
+          // ponytail: 150-page cap (15k configurables) — e-tennis exceeded 5k; raise again if a store ever tops this.
+          prodMore = prodPage * 100 < totalCount && prodPage < 150;
+          prodPage++;
+        }
+        await patchMagentoParentLinks(db, parentLinks, idToSku);
+      }
+
       const activeSkuChunks = chunkArray(activeStockSkus, MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE);
 
       for (const skuChunk of activeSkuChunks) {
@@ -1567,60 +1625,10 @@ export async function fetchMagentoData(brandId: string): Promise<{
         if (!productsOk) break;
       }
 
-      // Configurables carry the parent-child links but are never in active-stock SKUs — fetch them too (~1-2k).
-      if (productsOk) {
-        prodPage = 1;
-        prodMore = true;
-        while (prodMore) {
-          const searchParams = new URLSearchParams({
-            'searchCriteria[pageSize]': '100',
-            'searchCriteria[currentPage]': String(prodPage),
-            'searchCriteria[filter_groups][0][filters][0][field]': 'type_id',
-            'searchCriteria[filter_groups][0][filters][0][value]': 'configurable',
-            'searchCriteria[filter_groups][0][filters][0][condition_type]': 'eq',
-          });
-          const productUrl = buildMagentoRestUrl(restApiBase, `products?${searchParams.toString()}`, storeCode);
-          const res = await magentoFetch(productUrl, { headers });
-          if (!res.ok) {
-            logger.warnAlert(`[Magento] Configurables fetch failed (${res.status}) page=${prodPage} for ${brandId}`, { alertKey: ALERT.magentoSyncFailed });
-            break;
-          }
-          const body = await res.json();
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const products: any[] = body.items || [];
-          const totalCount: number = body.total_count || 0;
-          prodImportedCount += await ingestMagentoProductPage(db, brandId, products, categoryMap, idToSku, parentLinks);
-          // ponytail: 50-page cap (5k configurables) — enough for any real store, keeps us off the function wall.
-          prodMore = prodPage * 100 < totalCount && prodPage < 50;
-          prodPage++;
-        }
-      }
     }
 
     // Fill parentSku on child variants (so in the Ads Feed → item_group_id = parent SKU).
-    // Done with targeted updates after all products are written (streaming mode).
-    if (parentLinks.length > 0) {
-      const childToParents = new Map<string, Set<string>>();
-      for (const { childId, parentId } of parentLinks) {
-        if (!childToParents.has(childId)) childToParents.set(childId, new Set());
-        childToParents.get(childId)!.add(parentId);
-      }
-      const childEntries = [...childToParents.entries()];
-      for (let i = 0; i < childEntries.length; i += 500) {
-        const batch = db.batch();
-        for (const [childId, parentIds] of childEntries.slice(i, i + 500)) {
-          // update() on a doc missing this run (e.g. zero-stock variant) fails the whole batch.
-          if (!idToSku.has(childId)) continue;
-          const parentSkus = [...parentIds].map((pid) => idToSku.get(pid)).filter((v): v is string => Boolean(v));
-          if (parentSkus.length === 0) continue;
-          batch.update(db.collection('magento_products').doc(`mag_${childId}`), {
-            parentSkus,
-            itemGroupId: parentSkus[0],
-          });
-        }
-        await batch.commit();
-      }
-    }
+    await patchMagentoParentLinks(db, parentLinks, idToSku);
 
     if (prodImportedCount > 0) {
       totalImported += prodImportedCount;
