@@ -43,6 +43,10 @@ type CompactProduct = {
   seasonality_tag?: string;
   reorder_point?: number;
   reorder_qty?: number;
+  /** Declared parent (Magento itemGroupId) — real relations only, never heuristics. */
+  parent_sku?: string;
+  /** Sibling rows sharing parent_sku (incl. this one). */
+  variant_count?: number;
   source?: string;
   createdAt?: string;
 };
@@ -393,6 +397,8 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     ...(text(row.seasonality_tag) ? { seasonality_tag: text(row.seasonality_tag) } : {}),
     ...(optionalNumber(row.reorder_point) != null ? { reorder_point: optionalNumber(row.reorder_point) } : {}),
     ...(optionalNumber(row.reorder_qty) != null ? { reorder_qty: optionalNumber(row.reorder_qty) } : {}),
+    // itemGroupId = declared Magento parent (configurable_product_links).
+    ...(text(row.itemGroupId) && text(row.itemGroupId) !== sku ? { parent_sku: text(row.itemGroupId) } : {}),
     ...(asIsoDate(row.createdAt ?? row.updatedAt) ? { createdAt: asIsoDate(row.createdAt ?? row.updatedAt) } : {}),
     source: sourceKind,
   };
@@ -758,6 +764,22 @@ async function loadEcommerceCatalogCollection(
   return read;
 }
 
+/** Stamp variant_count on every row with a declared parent_sku. */
+function stampVariantCounts(products: CompactProduct[]): number {
+  const sizes = new Map<string, number>();
+  for (const p of products) {
+    if (p.parent_sku) sizes.set(p.parent_sku, (sizes.get(p.parent_sku) || 0) + 1);
+  }
+  let stamped = 0;
+  for (const p of products) {
+    if (p.parent_sku) {
+      p.variant_count = sizes.get(p.parent_sku);
+      stamped++;
+    }
+  }
+  return stamped;
+}
+
 async function overlayMagentoCatalogDetails(brandId: string, bySku: Map<string, CompactProduct>): Promise<number> {
   const firestore = assertDb();
   let cursor: QueryDocumentSnapshot | null = null;
@@ -783,6 +805,7 @@ async function overlayMagentoCatalogDetails(brandId: string, bySku: Map<string, 
         category: existing.category && existing.category !== 'Uncategorized' ? existing.category : detail.category,
         ...(existing.subcategory ? {} : detail.subcategory ? { subcategory: detail.subcategory } : {}),
         ...(existing.barcode ? {} : detail.barcode ? { barcode: detail.barcode } : {}),
+        ...(existing.parent_sku ? {} : detail.parent_sku ? { parent_sku: detail.parent_sku } : {}),
       });
     }
     if (snap.size < READ_PAGE_SIZE) break;
@@ -1070,8 +1093,10 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
   const overlay = hasErp
     ? await loadMegaventoryProductOverlay(brandId, bySku, stockResult.byProductId)
     : { rowsRead: 0, overlaysApplied: 0, erpOnlyProducts: 0 };
+  const products = [...bySku.values()].filter((product) => !isDemoProduct(product) && !isNonMerchandiseProduct(product));
+  stampVariantCounts(products);
   return {
-    products: [...bySku.values()].filter((product) => !isDemoProduct(product) && !isNonMerchandiseProduct(product)),
+    products,
     sourceRowsRead:
       megaventoryApiRowsRead +
       megaventoryApiCatalogGapRead +
@@ -1798,6 +1823,7 @@ export async function refreshCompetitiveInventoryLookup(brandId: string): Promis
 /** Test-only export — unit tests exercise the real code, not copies. */
 export const __test = {
   productFromRow,
+  stampVariantCounts,
   stockBucket,
   summaryForProducts,
   canServeAggregateQuery,
