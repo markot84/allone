@@ -1353,7 +1353,12 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
 function SkuRow({ row }: { row: MarketingPlanSkuSuggestion }) {
   return (
     <tr className="border-t border-[#E5E7EB] hover:bg-[#FAFAFA]">
-      <td className="px-3 py-2 font-mono text-xs text-[#1A1A1A]">{row.sku}</td>
+      <td className="px-3 py-2 font-mono text-xs text-[#1A1A1A]">
+        {row.sku}
+        {row.variantCount != null && row.variantCount > 1 && (
+          <span className="ml-1 text-[10px] text-[#9CA3AF]">×{row.variantCount}</span>
+        )}
+      </td>
       <td className="px-3 py-2">
         <p className="font-medium text-[#1A1A1A]">{row.name}</p>
         <p className="text-xs text-[#6B7280]">{[row.category, row.brand].filter(Boolean).join(' · ')}</p>

@@ -70,6 +70,8 @@ export type MarketingPlanSkuSuggestion = {
   marginPct?: number;
   daysOfCover?: number;
   confidence: 'high' | 'medium' | 'low';
+  /** Sibling variants merged into this row (declared parent-SKU grouping). */
+  variantCount?: number;
 };
 
 export type MarketingPlanInsight = {
@@ -464,6 +466,8 @@ export function buildMarketingPlanInsight(input: {
   lastYearOrders: EcommerceRawOrder[];
   inventoryProducts?: Product[];
   procurementSignals?: Record<string, SkuSignal>;
+  /** sku → declared parent SKU (Magento itemGroupId); groups variant opportunities into one slot. */
+  parentSkuBySku?: Record<string, string>;
 }): MarketingPlanInsight {
   const lastYearFromDate = shiftIsoDateByYears(input.period.fromDate, -1);
   const lastYearToDate = shiftIsoDateByYears(input.period.toDate, -1);
@@ -576,7 +580,7 @@ export function buildMarketingPlanInsight(input: {
   let inventoryCoveragePct: number;
 
   if (hasErp) {
-    const built = buildErpDrivenReorder(universeSignals, demandByKey, bridgedSkus);
+    const built = buildErpDrivenReorder(universeSignals, demandByKey, bridgedSkus, input.parentSkuBySku);
     reorderPlan = built.reorderPlan;
     skuSuggestions = built.skuSuggestions;
     totalSkusCovered = built.totalSkus;
@@ -634,7 +638,8 @@ export function buildMarketingPlanInsight(input: {
 function buildErpDrivenReorder(
   signals: Record<string, SkuSignal>,
   demandByKey: Map<string, { units: number; revenue: number }>,
-  bridgedSkus?: Map<string, 'exact' | 'fuzzy'>
+  bridgedSkus?: Map<string, 'exact' | 'fuzzy'>,
+  parentSkuBySku?: Record<string, string>
 ): { reorderPlan: MarketingPlanReorderGroup[]; skuSuggestions: MarketingPlanSkuSuggestion[]; totalSkus: number } {
   type ErpGroup = {
     category: string; subcategory: string; brand: string;
@@ -785,7 +790,40 @@ function buildErpDrivenReorder(
     })
     .slice(0, 16);
 
-  const skuSuggestions = skuRows
+  // Declared parent-SKU grouping: variants of one parent take ONE opportunity slot (summed
+  // quantities, top variant as representative) instead of filling the top-30 with sizes.
+  let suggestionRows = skuRows;
+  if (parentSkuBySku) {
+    const byParent = new Map<string, { row: MarketingPlanSkuSuggestion; sortValue: number; members: number }>();
+    const singles: { row: MarketingPlanSkuSuggestion; sortValue: number }[] = [];
+    for (const r of skuRows) {
+      const parent = parentSkuBySku[r.row.sku];
+      if (!parent || parent === r.row.sku) { singles.push(r); continue; }
+      const g = byParent.get(parent);
+      if (!g) { byParent.set(parent, { row: { ...r.row, sku: parent }, sortValue: r.sortValue, members: 1 }); continue; }
+      const keepNew = r.sortValue > g.sortValue;
+      const rep = keepNew ? r.row : g.row;
+      byParent.set(parent, {
+        row: {
+          ...rep,
+          sku: parent,
+          lastYearUnits: g.row.lastYearUnits + r.row.lastYearUnits,
+          lastYearRevenue: +(g.row.lastYearRevenue + r.row.lastYearRevenue).toFixed(2),
+          currentStock: g.row.currentStock + r.row.currentStock,
+          estimatedReorderQty: g.row.estimatedReorderQty + r.row.estimatedReorderQty,
+          reorderQtySource: g.row.reorderQtySource === 'erp' || r.row.reorderQtySource === 'erp' ? 'erp' : 'estimated',
+        },
+        sortValue: g.sortValue + r.sortValue,
+        members: g.members + 1,
+      });
+    }
+    suggestionRows = [
+      ...singles,
+      ...[...byParent.values()].map((g) => ({ row: { ...g.row, ...(g.members > 1 ? { variantCount: g.members } : {}) }, sortValue: g.sortValue })),
+    ];
+  }
+
+  const skuSuggestions = suggestionRows
     .sort((a, b) => b.sortValue - a.sortValue)
     .slice(0, 30)
     .map((r) => r.row);

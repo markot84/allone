@@ -33,6 +33,19 @@ const PRODUCT_FIELDS = [
   'available_stock', 'stock_on_hand', 'stock_level', 'cost_price', 'price',
 ];
 
+/** sku → declared parent (magento_products itemGroupId); streamed + projected, ~25k docs max. */
+async function loadParentSkuMap(brandId: string): Promise<Record<string, string>> {
+  const query = db().collection('magento_products').where('brandId', '==', brandId).select('sku', 'itemGroupId');
+  const map: Record<string, string> = {};
+  for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
+    const d = doc.data();
+    const sku = String(d.sku || '').trim();
+    const parent = String(d.itemGroupId || '').trim();
+    if (sku && parent && parent !== sku) map[sku] = parent;
+  }
+  return map;
+}
+
 async function streamProducts(brandId: string): Promise<Product[]> {
   const query = db().collection('products').where('brandId', '==', brandId).select(...PRODUCT_FIELDS);
   const products: Product[] = [];
@@ -61,9 +74,10 @@ export async function refreshMarketingPlanInsightAggregate(
 
   try {
     // 1) products (streamed, projected) + 2) procurement signals
-    const [products, sigSnap] = await Promise.all([
+    const [products, sigSnap, parentSkuBySku] = await Promise.all([
       streamProducts(brandId),
       db().doc(`procurement_signals/${brandId}`).get(),
+      loadParentSkuMap(brandId),
     ]);
     const sigData = sigSnap.data() || {};
     const signals = JSON.parse((sigData.skuSignalsJson as string) || '{}') as Record<string, any>;
@@ -92,6 +106,7 @@ export async function refreshMarketingPlanInsightAggregate(
         lastYearOrders,
         inventoryProducts: products,
         procurementSignals: signals,
+        parentSkuBySku,
       });
     }
 
