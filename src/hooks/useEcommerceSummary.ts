@@ -81,8 +81,34 @@ interface StockMovementRaw {
 
 type SkuStatsMap = Record<
   string,
-  { stock: number; sold: number; sold7d?: number; sold30d?: number; sold90d?: number; lastSaleAt?: string | null }
+  {
+    stock: number; sold: number; sold7d?: number; sold30d?: number; sold90d?: number; lastSaleAt?: string | null;
+    /** Gross/returns split — present only when the ERP backend signs credit notes (Megaventory). */
+    soldPos?: number; soldNeg?: number;
+    soldPos7d?: number; soldNeg7d?: number;
+    soldPos30d?: number; soldNeg30d?: number;
+    soldPos90d?: number; soldNeg90d?: number;
+  }
 >;
+
+export type ErpVelocityMap = SkuStatsMap;
+
+/** All-channel ERP per-SKU velocity (erp_sku_velocity chunks) — carries the ± sales split.
+ * Separate hook so only surfaces that need it (Commercial Strategy) pay the read. */
+export function useErpSkuVelocity() {
+  const { currentBrand } = useBrand();
+  const brandId = currentBrand?.id ?? null;
+  const { data } = useQuery({
+    queryKey: ['erp_sku_velocity', brandId],
+    queryFn: () => (brandId ? fetchSkuStatsFromChunks(brandId, 'erp_sku_velocity') : Promise.resolve({} as SkuStatsMap)),
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    enabled: !!brandId,
+  });
+  return data ?? {};
+}
 
 export type SkuMovementMap = Record<
   string,
@@ -105,9 +131,9 @@ function parseSkuStats(raw: EcommerceSummaryRaw | null | undefined): SkuStatsMap
 /** Macrotask yield so the main thread can breathe between chunk parses. */
 const yieldToMain = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-async function fetchSkuStatsFromChunks(brandId: string): Promise<SkuStatsMap> {
+async function fetchSkuStatsFromChunks(brandId: string, collectionName = 'sku_stats'): Promise<SkuStatsMap> {
   try {
-    const chunksSnap = await getDocs(collection(db, 'sku_stats', brandId, 'chunks'));
+    const chunksSnap = await getDocs(collection(db, collectionName, brandId, 'chunks'));
     if (chunksSnap.empty) return {};
     const merged: SkuStatsMap = {};
     // Parse each chunk (~900KB) in a separate task with a yield between — a single

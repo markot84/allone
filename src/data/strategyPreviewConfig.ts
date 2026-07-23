@@ -13,6 +13,7 @@ export type PreviewColumnId =
   | 'priority_tag'
   | 'revenue_potential'
   | 'sales_signal'
+  | 'sales_pos_neg'
   | 'benchmark_signal'
   | 'score';
 
@@ -129,6 +130,7 @@ export const strategyPreviewConfigs: Record<string, StrategyPreviewConfig> = {
       { id: 'category', label: 'Κατηγορία' },
       { id: 'stock', label: 'Απόθεμα' },
       { id: 'sales_signal', label: 'Πωλήσεις' },
+      { id: 'sales_pos_neg', label: 'Πωλήσεις ±', tooltip: 'Πωλήσεις / επιστροφές (τεμάχια) στην επιλεγμένη περίοδο, από τα παραστατικά του ERP. «—» όταν η πηγή δεν διαχωρίζει επιστροφές.' },
       { id: 'margin', label: 'Περιθώριο' },
       { id: 'score', label: 'Βαθμολογία', tooltip: SCORE_TOOLTIPS.sales_base },
     ],

@@ -64,7 +64,7 @@ import {
   productInPriceBenchmarkScopeWithLookup,
 } from '../../utils/priceBenchmarkStrategy';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
-import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useEcommerceSummary, useErpSkuVelocity } from '../../hooks/useEcommerceSummary';
 import { useRefreshAggregates } from '../../hooks/useAggregates';
 import { useProcurement } from '../../hooks/useProcurement';
 import { getEffectiveStockLevel, getStockAgeDays } from '../../utils/productUtils';
@@ -83,10 +83,13 @@ const PreviewCell = memo(function PreviewCell({
   columnId,
   product,
   rank,
+  posNeg,
 }: {
   columnId: PreviewColumnId;
   product: Product & { composite_score?: number };
   rank: number;
+  /** Gross/returns units for the selected window; null = source can't split (show «—»). */
+  posNeg?: { pos: number; neg: number } | null;
 }) {
   const effectiveStock = getEffectiveStockLevel(product);
   const stockCapacity = Math.max(product.stock_capacity || 0, 1);
@@ -203,6 +206,24 @@ const PreviewCell = memo(function PreviewCell({
       return (
         <td className="py-2 pr-2 w-20 hidden sm:table-cell">
           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${tone}`}>{label}</span>
+        </td>
+      );
+    }
+    case 'sales_pos_neg': {
+      if (!posNeg) {
+        return (
+          <td className="py-2 pr-2 w-20 hidden sm:table-cell">
+            <span className="text-[10px] text-[#9CA3AF]">—</span>
+          </td>
+        );
+      }
+      return (
+        <td className="py-2 pr-2 w-20 hidden sm:table-cell">
+          <span className="text-[10px] font-mono">
+            <span className="text-emerald-700">+{posNeg.pos}</span>
+            {' / '}
+            <span className={posNeg.neg > 0 ? 'text-rose-700' : 'text-[#9CA3AF]'}>−{posNeg.neg}</span>
+          </span>
         </td>
       );
     }
@@ -327,6 +348,25 @@ export function WeightConfigurator({
   });
 
   const benchmarkLookupMap = useMemo(() => buildBenchmarkLookup(benchmarks), [benchmarks]);
+
+  // ± sales split (ERP velocity store). Window selector for the sales_base preview column.
+  const erpVelocity = useErpSkuVelocity();
+  const [posNegWindow, setPosNegWindow] = useState<'lifetime' | '30d' | '90d'>('30d');
+  const posNegBySku = useMemo(() => {
+    const out = new Map<string, { pos: number; neg: number } | null>();
+    for (const [sku, row] of Object.entries(erpVelocity)) {
+      if (row.soldPos == null) continue; // source can't split → leave absent, cell shows «—»
+      const [pos, neg] =
+        posNegWindow === 'lifetime'
+          ? [row.soldPos, row.soldNeg]
+          : posNegWindow === '30d'
+            ? [row.soldPos30d, row.soldNeg30d]
+            : [row.soldPos90d, row.soldNeg90d];
+      out.set(sku.trim().toLowerCase(), { pos: pos ?? 0, neg: neg ?? 0 });
+    }
+    return out;
+  }, [erpVelocity, posNegWindow]);
+
   const normalizedSkuStats = useMemo(() => {
     if (!skuStats) return null;
     const entries = Object.entries(skuStats).map(([sku, stats]) => [sku.trim().toLowerCase(), stats] as const);
@@ -1733,6 +1773,20 @@ export function WeightConfigurator({
                         ) : (
                           col.label
                         )}
+                        {col.id === 'sales_pos_neg' && (
+                          <span className="flex gap-1 mt-0.5">
+                            {([['30d', '30δ'], ['90d', '90δ'], ['lifetime', 'Όλα']] as const).map(([w, label]) => (
+                              <button
+                                key={w}
+                                type="button"
+                                onClick={() => setPosNegWindow(w)}
+                                className={`text-[9px] px-1 rounded ${posNegWindow === w ? 'bg-[#1A1A1A] text-white' : 'bg-[#F3F4F6] text-[#4A4A4A]'}`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </span>
+                        )}
                       </th>
                     );
                   })}
@@ -1756,6 +1810,11 @@ export function WeightConfigurator({
                           columnId={col.id}
                           product={product}
                           rank={(currentPreviewPage - 1) * PREVIEW_PAGE_SIZE + index + 1}
+                          posNeg={
+                            col.id === 'sales_pos_neg'
+                              ? posNegBySku.get((product.sku || '').trim().toLowerCase()) ?? null
+                              : undefined
+                          }
                         />
                       ))}
                     </motion.tr>

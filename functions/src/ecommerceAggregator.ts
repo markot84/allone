@@ -37,6 +37,16 @@ type SkuStatsRow = {
   sold30d: number;
   sold90d: number;
   lastSaleAt: string | null;
+  /** Gross sales / returns split (units). Written only for backends whose documents distinguish
+   * credit notes (Megaventory); absent = the split is unknowable for this brand, UI shows «—». */
+  soldPos?: number;
+  soldNeg?: number;
+  soldPos7d?: number;
+  soldNeg7d?: number;
+  soldPos30d?: number;
+  soldNeg30d?: number;
+  soldPos90d?: number;
+  soldNeg90d?: number;
 };
 
 async function writeSkuStatsChunked(
@@ -585,10 +595,19 @@ export type ErpVelocityAccum = {
   sold30: Map<string, number>;
   sold90: Map<string, number>;
   lastSale: Map<string, number>;
+  /** Positive-quantity (sales-only) accumulation; returns derive as pos − net so the split
+   * needs 4 extra maps, not 8. Populated only by backends that sign credit notes (Megaventory). */
+  pos: Map<string, number>;
+  pos7: Map<string, number>;
+  pos30: Map<string, number>;
+  pos90: Map<string, number>;
 };
 
 export function emptyErpVelocityAccum(): ErpVelocityAccum {
-  return { sold: new Map(), sold7: new Map(), sold30: new Map(), sold90: new Map(), lastSale: new Map() };
+  return {
+    sold: new Map(), sold7: new Map(), sold30: new Map(), sold90: new Map(), lastSale: new Map(),
+    pos: new Map(), pos7: new Map(), pos30: new Map(), pos90: new Map(),
+  };
 }
 
 /** Fold one megaventory_invoices document into the velocity accumulator (exported for unit tests). */
@@ -617,6 +636,10 @@ export function accumulateErpInvoiceVelocity(
     if (inW30) accum.sold30.set(sku, (accum.sold30.get(sku) || 0) + qty);
     if (inW90) accum.sold90.set(sku, (accum.sold90.get(sku) || 0) + qty);
     if (sign > 0) {
+      accum.pos.set(sku, (accum.pos.get(sku) || 0) + qty);
+      if (inW7) accum.pos7.set(sku, (accum.pos7.get(sku) || 0) + qty);
+      if (inW30) accum.pos30.set(sku, (accum.pos30.get(sku) || 0) + qty);
+      if (inW90) accum.pos90.set(sku, (accum.pos90.get(sku) || 0) + qty);
       const prev = accum.lastSale.get(sku) || 0;
       if (ts > prev) accum.lastSale.set(sku, ts);
     }
@@ -683,8 +706,20 @@ export async function computeErpSkuVelocity(brandId: string): Promise<void> {
   }
 
   const skuStats: Record<string, SkuStatsRow> = {};
+  // The ± split is only truthful where the source signs credit notes (Megaventory);
+  // for SoftOne the fields stay absent and the UI renders «—» instead of a fake 0.
+  const hasPosNeg = backend === 'megaventory_invoices';
   for (const sku of accum.sold.keys()) {
     const lastTs = accum.lastSale.get(sku);
+    // returns = gross positive − net (both pre-clamp), stored as a positive magnitude.
+    const split = (posMap: Map<string, number>, netMap: Map<string, number>) => {
+      const pos = Math.max(0, Math.round(posMap.get(sku) || 0));
+      return { pos, neg: Math.max(0, pos - Math.round(netMap.get(sku) || 0)) };
+    };
+    const life = split(accum.pos, accum.sold);
+    const w7 = split(accum.pos7, accum.sold7);
+    const w30 = split(accum.pos30, accum.sold30);
+    const w90 = split(accum.pos90, accum.sold90);
     skuStats[sku] = {
       stock: 0, // stock comes from the catalog overlay; velocity store carries sales only
       sold: Math.max(0, Math.round(accum.sold.get(sku) || 0)),
@@ -692,6 +727,14 @@ export async function computeErpSkuVelocity(brandId: string): Promise<void> {
       sold30d: Math.max(0, Math.round(accum.sold30.get(sku) || 0)),
       sold90d: Math.max(0, Math.round(accum.sold90.get(sku) || 0)),
       lastSaleAt: lastTs ? new Date(lastTs).toISOString() : null,
+      ...(hasPosNeg
+        ? {
+            soldPos: life.pos, soldNeg: life.neg,
+            soldPos7d: w7.pos, soldNeg7d: w7.neg,
+            soldPos30d: w30.pos, soldNeg30d: w30.neg,
+            soldPos90d: w90.pos, soldNeg90d: w90.neg,
+          }
+        : {}),
     };
   }
   await writeSkuStatsChunked(db, brandId, skuStats, Object.keys(skuStats).length, {
