@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Product } from '../types';
 import {
-  getFallbackDecisionKey,
   groupProductsForDecisionExport,
   isActionableStockProduct,
 } from './actionableProducts';
@@ -27,11 +26,6 @@ describe('actionableProducts', () => {
     expect(isActionableStockProduct(product({ stock_level: 0 }))).toBe(false);
     expect(isActionableStockProduct(product({ stock_level: 3, procurement_status: 'ΑΝΕΝΕΡΓΟ' }))).toBe(false);
     expect(isActionableStockProduct(product({ stock_level: 3, procurement_status: 'ACTIVE' }))).toBe(true);
-  });
-
-  it('uses SKU prefix as fallback decision key for size variants', () => {
-    expect(getFallbackDecisionKey('001005-42')).toBe('001005');
-    expect(getFallbackDecisionKey('SHOE-RED-XL')).toBe('SHOE-RED');
   });
 
   it('groups variants by Magento itemGroupId before SKU fallback', () => {

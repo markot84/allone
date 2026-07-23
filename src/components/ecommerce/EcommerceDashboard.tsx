@@ -560,8 +560,7 @@ export function EcommerceDashboard() {
       .sort((a, b) => b.revenue - a.revenue);
   }, [rawOrdersLoaded, topProductAgg, ecomm.topProducts, parentSkuOf, hasParentOf]);
 
-  /** Parent SKU only: group by catalog itemGroupId (Magento); where missing, conservatively strip a
-   * recognized size/gauge suffix (see resolveParentSku). */
+  /** Parent SKU only: group by declared catalog itemGroupId (Magento); no heuristic fallback. */
   const parentProductsForTables = useMemo<TopProductRow[]>(() => {
     const parentMap = new Map<string, { revenue: number; quantity: number; name: string }>();
     for (const product of topProductsForTables) {

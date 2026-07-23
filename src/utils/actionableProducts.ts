@@ -31,27 +31,6 @@ const INACTIVE_STATUS_MARKERS = [
   'εξαντλη',
 ];
 
-const SIZE_SUFFIXES = new Set([
-  'xxs',
-  'xs',
-  's',
-  'm',
-  'l',
-  'xl',
-  'xxl',
-  'xxxl',
-  '2xs',
-  '2xl',
-  '3xl',
-  '4xl',
-  '5xl',
-  'one',
-  'onesize',
-  'os',
-  'uni',
-  'unique',
-]);
-
 export function getEffectiveStock(product: Product): number {
   return Number(product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0) || 0;
 }
@@ -70,32 +49,15 @@ function normalizeSkuPart(value: string): string {
   return value.trim().replace(/\s+/g, '').toUpperCase();
 }
 
-function looksLikeVariantSuffix(part: string): boolean {
-  const normalized = normalizeSkuPart(part).toLowerCase();
-  if (!normalized) return false;
-  if (SIZE_SUFFIXES.has(normalized)) return true;
-  if (/^\d{1,3}([.,]\d)?$/.test(normalized)) return true;
-  if (/^(eu|us|uk)?\d{1,3}([.,]\d)?$/.test(normalized)) return true;
-  return false;
-}
-
-export function getFallbackDecisionKey(sku: string): string {
-  const normalized = normalizeSkuPart(sku);
-  if (!normalized) return '';
-  const parts = normalized.split(/[-_/]/).filter(Boolean);
-  if (parts.length <= 1) return normalized;
-  const last = parts[parts.length - 1];
-  if (looksLikeVariantSuffix(last)) return parts.slice(0, -1).join('-');
-  return parts[0];
-}
-
+/** Declared relations only (Magento itemGroupId) — the old split/first-segment fallback grouped
+ * unrelated SKUs by prefix coincidence; without a declared parent a SKU is its own group (matches PI). */
 export function getProductDecisionKey(
   product: Product,
   enrichment?: MagentoProductEnrichment | null
 ): string {
   const itemGroupId = normalizeSkuPart(enrichment?.itemGroupId ?? '');
   if (itemGroupId) return itemGroupId;
-  return getFallbackDecisionKey(product.sku || product.id);
+  return normalizeSkuPart(product.sku || product.id);
 }
 
 export function groupProductsForDecisionExport(
