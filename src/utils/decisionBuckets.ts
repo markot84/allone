@@ -291,12 +291,14 @@ function classifyOne(
   }
 
   // 2) Discontinue — status match or lifetime=0 with old stock
+  // stock > 0 on both arms: with nothing on hand there is nothing to clear/act on,
+  // and zero-stock SKUs would seed strategy scopes PER-179 deliberately keeps in-stock-only.
   if (
-    statusMatchesDiscontinue(status) ||
-    (typeof qtyLifetime === 'number' &&
-      qtyLifetime === 0 &&
-      ageDays >= t.discontinueMinAgeDays &&
-      stock > 0)
+    stock > 0 &&
+    (statusMatchesDiscontinue(status) ||
+      (typeof qtyLifetime === 'number' &&
+        qtyLifetime === 0 &&
+        ageDays >= t.discontinueMinAgeDays))
   ) {
     buckets.push('discontinue');
     reasons.discontinue = statusMatchesDiscontinue(status)
@@ -338,8 +340,10 @@ function classifyOne(
     reasons.hot_seller = `${qty30d} τμχ/30d (top ${Math.round(t.hotSellerTopPercentile * 100)}%), μικτό περιθώριο ${margin.toFixed(0)}%.`;
   }
 
-  // 6) Margin Bleeder — sells but margin very low
+  // 6) Margin Bleeder — sells but margin very low. Gated on stock: a sold-out bleeder
+  // is not actionable through a commercial strategy (nothing left to reprice/move).
   if (
+    stock > 0 &&
     typeof qty30d === 'number' &&
     qty30d > 0 &&
     typeof margin === 'number' &&

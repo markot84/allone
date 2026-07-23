@@ -630,7 +630,11 @@ export function WeightConfigurator({
   const triageScopedProductIds = useMemo(() => {
     if (!triageOrigin) return null;
     if (triageOrigin.productIds && triageOrigin.productIds.length > 0) {
-      return new Set(triageOrigin.productIds);
+      // Intersect with the live catalog — persisted ids can reference deleted products,
+      // and the raw count would lie in the "Εστίαση από διάγνωση" header.
+      const idSet = new Set(triageOrigin.productIds);
+      const matched = products.filter((p) => idSet.has(p.id)).map((p) => p.id);
+      return matched.length > 0 ? new Set(matched) : null;
     }
     if (triageOrigin.skus && triageOrigin.skus.length > 0) {
       const skuSet = new Set(triageOrigin.skus.map((sku) => sku.trim().toLowerCase()).filter(Boolean));
@@ -660,10 +664,17 @@ export function WeightConfigurator({
   const triageScopeCount = triageScopedProductIds?.size ?? 0;
 
   // Memoized AI prompt contexts — rebuilt only when triage or source coverage changes.
-  const triagePromptCtx = useMemo(
-    () => buildTriagePromptContext(triageOrigin),
-    [triageOrigin]
-  );
+  const triagePromptCtx = useMemo(() => {
+    if (!triageOrigin) return undefined;
+    // Same hygiene as the scope set: drop persisted SKUs that left the catalog so the AI
+    // prompt doesn't reason over products that no longer exist.
+    if (!Array.isArray(triageOrigin.skus) || triageOrigin.skus.length === 0 || products.length === 0) {
+      return buildTriagePromptContext(triageOrigin);
+    }
+    const known = new Set(products.map((p) => (p.sku || '').trim().toLowerCase()));
+    const skus = triageOrigin.skus.filter((s) => known.has(s.trim().toLowerCase()));
+    return buildTriagePromptContext({ ...triageOrigin, skus });
+  }, [triageOrigin, products]);
   const provenancePromptCtx = useMemo(
     () => buildProvenancePromptContext(signalCoverage, productSourceCount),
     [signalCoverage, productSourceCount]
@@ -1312,7 +1323,12 @@ export function WeightConfigurator({
         duration: duration === 'ongoing' ? 'Ongoing' : duration ? `${duration} ημέρες` : undefined,
         monthlyBudget: activeStrategy?.monthlyBudget ?? null,
         segments: rfmSegments,
-        channelRecommendation: activeStrategy?.channelRecommendation ?? null,
+        // The saved AI rationale describes the SAVED strategy — echo it only when the
+        // export matches it (same scenario, weights untouched), not a stale narrative.
+        channelRecommendation:
+          selectedScenario === activeStrategy?.scenarioId && !hasManualWeightChanges
+            ? activeStrategy?.channelRecommendation ?? null
+            : null,
       });
       toast.success('Strategy Plan exported!');
     } catch { toast.error('Export failed'); }

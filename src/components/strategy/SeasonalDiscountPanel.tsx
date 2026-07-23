@@ -74,14 +74,22 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
     });
   }, []);
 
+  // Persisted ids can reference deleted products; prune at use time (not init — the
+  // catalog loads async and an early prune would wipe the saved selection).
+  const validSelectedProductIds = useMemo(() => {
+    if (products.length === 0) return selectedProductIds;
+    const known = new Set(products.map(p => p.id));
+    return new Set(Array.from(selectedProductIds).filter(id => known.has(id)));
+  }, [products, selectedProductIds]);
+
   const affectedCount = useMemo(() => {
     if (scope === 'all') return products.length;
     if (scope === 'categories') return products.filter(p => selectedCategories.has(p.category)).length;
-    return selectedProductIds.size;
-  }, [scope, products, selectedCategories, selectedProductIds]);
+    return validSelectedProductIds.size;
+  }, [scope, products, selectedCategories, validSelectedProductIds]);
 
   const canApply = periodName.trim().length > 0 && discountPercent > 0 && (
-    scope === 'all' || (scope === 'categories' && selectedCategories.size > 0) || (scope === 'products' && selectedProductIds.size > 0)
+    scope === 'all' || (scope === 'categories' && selectedCategories.size > 0) || (scope === 'products' && validSelectedProductIds.size > 0)
   );
 
   const handleApply = useCallback(() => {
@@ -92,9 +100,10 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
       discountPercent,
       scope,
       selectedCategories: Array.from(selectedCategories),
-      selectedProductIds: Array.from(selectedProductIds),
+      // Re-persist only ids that still exist — stops stale ids surviving Apply forever.
+      selectedProductIds: Array.from(validSelectedProductIds),
     });
-  }, [canApply, onApply, selectedPeriodId, periodName, discountPercent, scope, selectedCategories, selectedProductIds]);
+  }, [canApply, onApply, selectedPeriodId, periodName, discountPercent, scope, selectedCategories, validSelectedProductIds]);
 
   return (
     <motion.div
