@@ -968,6 +968,41 @@ async function loadReceiptDates(brandId: string): Promise<Map<string, string>> {
   return bySku;
 }
 
+/** Read the chunked receipt suppliers (megaventory_receipts/{brandId}/supplier_chunks) → normalized sku → supplier name. */
+async function loadReceiptSuppliers(brandId: string): Promise<Map<string, string>> {
+  const firestore = assertDb();
+  const bySku = new Map<string, string>();
+  const parent = await firestore.doc(`megaventory_receipts/${brandId}`).get().catch(() => null);
+  if (!parent?.exists || num(parent.data()?.supplierChunkCount) <= 0) return bySku;
+  const snap = await firestore.collection(`megaventory_receipts/${brandId}/supplier_chunks`).orderBy(FieldPath.documentId()).get();
+  for (const doc of snap.docs) {
+    const raw = text(doc.data().receiptSuppliersJson);
+    if (!raw) continue;
+    try {
+      for (const [sku, v] of Object.entries(JSON.parse(raw) as Record<string, { s?: string }>)) {
+        if (v?.s) bySku.set(normalizeSku(sku), v.s);
+      }
+    } catch (error) {
+      logger.warn(`[ProductIntelligence] bad supplier chunk for ${brandId}/${doc.id}:`, { err: error });
+    }
+  }
+  return bySku;
+}
+
+/** Fill missing product.supplier from the latest inbound-receipt supplier (never overrides an ERP-declared one). */
+function applyReceiptSupplierOverlay(products: Map<string, CompactProduct>, supplierBySku: Map<string, string>): number {
+  if (supplierBySku.size === 0) return 0;
+  let applied = 0;
+  for (const [sku, product] of products.entries()) {
+    if (product.supplier) continue;
+    const supplier = supplierBySku.get(sku);
+    if (!supplier) continue;
+    product.supplier = supplier;
+    applied += 1;
+  }
+  return applied;
+}
+
 /** Overlay real supplier-receipt dates onto first_available_date so Stock Age reflects when stock arrived.
  * When all-channel ERP velocity is present (useShelfAgeDead), also reclassify no-recent-sales stock by
  * shelf age — genuinely old, unsold-in-any-channel stock becomes dead. Without all-channel velocity the
@@ -1088,6 +1123,8 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
   const erpVelocity = hasErp ? await loadErpSkuVelocity(brandId) : { rowsRead: 0, bySku: new Map<string, SkuStatsRow>() };
   const hasErpVelocity = erpVelocity.bySku.size > 0;
   const velocityBySku = hasErp ? mergeVelocityPreferErp(skuStats.bySku, erpVelocity.bySku) : skuStats.bySku;
+  // Supplier fill must precede the velocity/receipt overlays — their priority_tag recomputes read leadDaysForSupplier.
+  if (hasErp) applyReceiptSupplierOverlay(bySku, await loadReceiptSuppliers(brandId));
   const skuStatsApplied = applySkuStatsOverlay(bySku, velocityBySku);
   // Real supplier-receipt dates → stock age (ERP catalog only); shelf-age dead only when all-channel
   // ERP velocity backs it, so in-store-only sellers aren't mislabelled dead.

@@ -93,6 +93,7 @@ import {
   sampleMegaventoryCustomFields,
   recomputeMegaventoryProductTotals,
   mergeMegaventoryApiCatalogProducts,
+  backfillMegaventoryReceiptDates,
   setDb as setMegaventoryDb,
 } from './megaventoryConnector';
 import { decideStaleRecovery, isJobWriteOwned, MAX_STALE_RESUMES } from './megaventorySyncPlan';
@@ -3768,6 +3769,36 @@ export const refreshAggregates = onRequest(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshAggregates]', { alertKey: ALERT.aggregateStatsFailed, err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/** POST /megaventoryReceiptBackfill { brandId } — resumable inbound-docs re-walk for receipt dates + per-SKU suppliers; re-POST until complete:true. */
+export const megaventoryReceiptBackfill = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 540, memory: '1GiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
+  async (req, res) => {
+    if (applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
+      const { brandId, maxPagesPerType } = req.body as { brandId?: string; maxPagesPerType?: number };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
+        return;
+      }
+      const result = await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, () =>
+        backfillMegaventoryReceiptDates(brandId, {
+          maxRuntimeMs: 8 * 60 * 1000,
+          ...(typeof maxPagesPerType === 'number' && maxPagesPerType > 0 ? { maxPagesPerType } : {}),
+        }),
+      );
+      res.status(200).json(result);
+    } catch (error) {
+      logger.error('[megaventoryReceiptBackfill]', { err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }

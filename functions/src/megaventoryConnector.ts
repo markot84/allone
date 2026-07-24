@@ -18,6 +18,7 @@ import {
   MEGAVENTORY_NORMALIZED_SOURCE,
   type MegaventoryNormalizationCounts,
 } from './megaventoryNormalizer';
+import { supplierDocId } from './erpConnectorFirestore';
 import { refreshMegaventoryRfmSegments, type MegaventoryRfmCounts } from './megaventoryRfm';
 import { refreshProcurementSignals } from './procurementSignals';
 import { refreshStockMovement } from './stockMovementTracker';
@@ -1435,42 +1436,90 @@ export function mergeEarliestReceiptDates(
   }
 }
 
+/** Latest supplier per SKU from inbound documents (newest date wins; date kept so cross-pass merges stay order-independent). */
+export function mergeLatestReceiptSuppliers(
+  into: Map<string, { d: string; s: string }>,
+  docs: Array<{ date: string; supplier?: string; lineItems: Array<Record<string, unknown>> }>
+): void {
+  for (const d of docs) {
+    const date = (d.date || '').slice(0, 10);
+    const supplier = String(d.supplier ?? '').trim();
+    if (!date || !supplier) continue;
+    for (const li of d.lineItems || []) {
+      const sku = String((li.sku as unknown) ?? '').trim();
+      if (!sku) continue;
+      const cur = into.get(sku);
+      if (!cur || date >= cur.d) into.set(sku, { d: date, s: supplier });
+    }
+  }
+}
+
 const RECEIPTS_CHUNK_BYTES = 900_000;
 
-/** Read the chunked receipt-date map (sku → earliest YYYY-MM-DD) for merge across backfill passes. */
-async function readReceiptDatesChunked(db: Firestore, brandId: string): Promise<Record<string, string>> {
-  const out: Record<string, string> = {};
-  const snap = await db.doc(`megaventory_receipts/${brandId}`).collection('chunks').get();
+/** Read a chunked JSON map under megaventory_receipts/{brandId}/{sub} for merge across passes. */
+async function readReceiptChunkMap<T>(db: Firestore, brandId: string, sub: string, field: string): Promise<Record<string, T>> {
+  const out: Record<string, T> = {};
+  const snap = await db.doc(`megaventory_receipts/${brandId}`).collection(sub).get();
   for (const d of snap.docs) {
-    const json = (d.data() as { receiptDatesJson?: string }).receiptDatesJson;
+    const json = (d.data() as Record<string, string>)[field];
     if (!json) continue;
     try { Object.assign(out, JSON.parse(json)); } catch { /* skip bad chunk */ }
   }
   return out;
 }
 
-/** Persist sku → earliest receipt date under megaventory_receipts/{brandId}/chunks (parent holds metadata). */
-async function writeReceiptDatesChunked(db: Firestore, brandId: string, datesBySku: Record<string, string>): Promise<number> {
-  const skus = Object.keys(datesBySku).sort();
+/** Persist a sku-keyed map as JSON chunks under megaventory_receipts/{brandId}/{sub} (parent holds metadata). */
+async function writeReceiptChunkMap(
+  db: Firestore, brandId: string, sub: string, field: string,
+  bySku: Record<string, unknown>, meta: (chunkCount: number, skuCount: number) => Record<string, number>
+): Promise<number> {
+  const skus = Object.keys(bySku).sort();
   const chunks: string[] = [];
-  let bucket: Record<string, string> = {};
+  let bucket: Record<string, unknown> = {};
   let bytes = 2;
   for (const sku of skus) {
-    const eb = JSON.stringify({ [sku]: datesBySku[sku] }).length - 2;
+    const eb = JSON.stringify({ [sku]: bySku[sku] }).length - 2;
     if (bytes + eb > RECEIPTS_CHUNK_BYTES && Object.keys(bucket).length) { chunks.push(JSON.stringify(bucket)); bucket = {}; bytes = 2; }
-    bucket[sku] = datesBySku[sku];
+    bucket[sku] = bySku[sku];
     bytes += eb + 1;
   }
   if (Object.keys(bucket).length) chunks.push(JSON.stringify(bucket));
   const parent = db.doc(`megaventory_receipts/${brandId}`);
-  const chunksCol = parent.collection('chunks');
+  const chunksCol = parent.collection(sub);
   const existing = await chunksCol.get();
   const batch = db.batch();
   existing.docs.forEach((d) => batch.delete(d.ref));
-  chunks.forEach((json, i) => batch.set(chunksCol.doc(String(i)), { receiptDatesJson: json }));
-  batch.set(parent, { brandId, chunkCount: chunks.length, skuCount: skus.length, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  chunks.forEach((json, i) => batch.set(chunksCol.doc(String(i)), { [field]: json }));
+  batch.set(parent, { brandId, ...meta(chunks.length, skus.length), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   await batch.commit();
   return skus.length;
+}
+
+const readReceiptDatesChunked = (db: Firestore, brandId: string) =>
+  readReceiptChunkMap<string>(db, brandId, 'chunks', 'receiptDatesJson');
+const writeReceiptDatesChunked = (db: Firestore, brandId: string, datesBySku: Record<string, string>) =>
+  writeReceiptChunkMap(db, brandId, 'chunks', 'receiptDatesJson', datesBySku, (c, s) => ({ chunkCount: c, skuCount: s }));
+const readReceiptSuppliersChunked = (db: Firestore, brandId: string) =>
+  readReceiptChunkMap<{ d: string; s: string }>(db, brandId, 'supplier_chunks', 'receiptSuppliersJson');
+const writeReceiptSuppliersChunked = (db: Firestore, brandId: string, bySku: Record<string, { d: string; s: string }>) =>
+  writeReceiptChunkMap(db, brandId, 'supplier_chunks', 'receiptSuppliersJson', bySku, (c, s) => ({ supplierChunkCount: c, supplierSkuCount: s }));
+
+/** Create `suppliers` docs for names not yet present; existing docs (user-edited lead_time/tod) are never touched. */
+async function upsertMissingSuppliers(db: Firestore, brandId: string, names: Iterable<string>): Promise<number> {
+  const wanted = new Map<string, string>();
+  for (const n of names) { const name = String(n ?? '').trim(); if (name) wanted.set(supplierDocId(brandId, name), name); }
+  if (!wanted.size) return 0;
+  const refs = [...wanted.keys()].map((id) => db.collection('suppliers').doc(id));
+  const existing = await db.getAll(...refs);
+  const missing = existing.filter((snap) => !snap.exists);
+  for (let i = 0; i < missing.length; i += 400) {
+    const batch = db.batch();
+    for (const snap of missing.slice(i, i + 400)) {
+      batch.set(snap.ref, { name: wanted.get(snap.id), brandId, source: 'megaventory_receipts', updatedAt: FieldValue.serverTimestamp() });
+    }
+    await batch.commit();
+  }
+  return missing.length;
 }
 
 /** Historical receipt-date backfill: walk only inbound supplier DocumentTypeIds, derive earliest receipt
@@ -1494,9 +1543,13 @@ export async function backfillMegaventoryReceiptDates(
 
   const deadline = opts?.maxRuntimeMs ? Date.now() + opts.maxRuntimeMs : null;
   const datesBySku = new Map<string, string>(Object.entries(await readReceiptDatesChunked(db, brandId)));
+  const suppliersBySku = new Map<string, { d: string; s: string }>(Object.entries(await readReceiptSuppliersChunked(db, brandId)));
   // Per-type resume state persisted on the connector: each pass continues where the last left off and
   // skips already-exhausted types, so the walk completes across multiple budget-limited invocations.
-  const progress = { ...((conn.receiptBackfillProgress as Record<string, { cursor?: number | null; done?: boolean }>) ?? {}) };
+  // Pre-supplier-capture progress is discarded so the walk re-runs once for supplier names (min-merge keeps dates idempotent).
+  const progress = conn.receiptSupplierCapture === true
+    ? { ...((conn.receiptBackfillProgress as Record<string, { cursor?: number | null; done?: boolean }>) ?? {}) }
+    : {} as Record<string, { cursor?: number | null; done?: boolean }>;
   const errors: string[] = [];
   for (const rt of receiptTypes) {
     if (progress[rt.id]?.done) continue;
@@ -1517,15 +1570,22 @@ export async function backfillMegaventoryReceiptDates(
         initialCursor: progress[rt.id]?.cursor ?? null,
       },
     );
-    const docs = (rows as Record<string, unknown>[]).map((d) => ({ date: isoDate(mvField(d, 'DocumentDate')), lineItems: mvDocumentLineItems(d) }));
+    const docs = (rows as Record<string, unknown>[]).map((d) => ({
+      date: isoDate(mvField(d, 'DocumentDate')),
+      supplier: mvText(d, 'DocumentSupplierClientName', 'SupplierClientName', 'ClientName'),
+      lineItems: mvDocumentLineItems(d),
+    }));
     mergeEarliestReceiptDates(datesBySku, docs);
+    mergeLatestReceiptSuppliers(suppliersBySku, docs);
     if (error) { errors.push(error); progress[rt.id] = { cursor: nextCursor, done: false }; continue; }
     progress[rt.id] = { cursor: exhausted ? null : nextCursor, done: exhausted };
   }
   const complete = errors.length === 0 && receiptTypes.every((rt) => progress[rt.id]?.done === true);
   const skuCount = await writeReceiptDatesChunked(db, brandId, Object.fromEntries(datesBySku));
+  await writeReceiptSuppliersChunked(db, brandId, Object.fromEntries(suppliersBySku));
+  await upsertMissingSuppliers(db, brandId, new Set([...suppliersBySku.values()].map((v) => v.s)));
   await db.doc(`connectors/${brandId}`).set(
-    { megaventory: { receiptBackfillComplete: complete, receiptBackfillAt: FieldValue.serverTimestamp(), receiptBackfillSkuCount: skuCount, receiptBackfillProgress: progress } },
+    { megaventory: { receiptBackfillComplete: complete, receiptBackfillAt: FieldValue.serverTimestamp(), receiptBackfillSkuCount: skuCount, receiptBackfillProgress: progress, receiptSupplierCapture: true } },
     { merge: true }
   );
   logger.info(`[Megaventory] Receipt-date backfill for ${brandId}: ${skuCount} SKUs across ${receiptTypes.length} inbound types (complete=${complete}${errors.length ? `, errors=${errors.length}` : ''})`);
@@ -1835,14 +1895,20 @@ export async function fetchMegaventoryData(
       counts.invoices = items.length;
       counts.creditNotes = creditItems.length;
       totalImported += allDocItems.length;
-      // Merge earliest supplier-receipt date per SKU into megaventory_receipts (min-merge, idempotent).
+      // Merge receipt date (earliest, min-merge) + supplier (latest wins) per SKU into megaventory_receipts.
       if (receiptDocs.length) {
+        const mapped = receiptDocs.map((d) => ({
+          date: isoDate(mvField(d, 'DocumentDate')),
+          supplier: mvText(d, 'DocumentSupplierClientName', 'SupplierClientName', 'ClientName'),
+          lineItems: mvDocumentLineItems(d),
+        }));
         const receiptDatesBySku = new Map<string, string>(Object.entries(await readReceiptDatesChunked(db, brandId)));
-        mergeEarliestReceiptDates(
-          receiptDatesBySku,
-          receiptDocs.map((d) => ({ date: isoDate(mvField(d, 'DocumentDate')), lineItems: mvDocumentLineItems(d) }))
-        );
+        mergeEarliestReceiptDates(receiptDatesBySku, mapped);
         await writeReceiptDatesChunked(db, brandId, Object.fromEntries(receiptDatesBySku));
+        const receiptSuppliersBySku = new Map<string, { d: string; s: string }>(Object.entries(await readReceiptSuppliersChunked(db, brandId)));
+        mergeLatestReceiptSuppliers(receiptSuppliersBySku, mapped);
+        await writeReceiptSuppliersChunked(db, brandId, Object.fromEntries(receiptSuppliersBySku));
+        await upsertMissingSuppliers(db, brandId, new Set(mapped.map((m) => m.supplier).filter(Boolean)));
       }
       if (shouldStageInvoiceBackfill) {
         invoiceBackfillProgress = {
