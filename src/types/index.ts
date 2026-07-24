@@ -111,6 +111,8 @@ export interface Brand {
     defaultTod?: number;
     /** Reorder point as a multiple of the supplier lead time (1.5 = warn 50% before it runs out). Default 1.5. */
     reorderWarningMultiplier?: number;
+    /** Send the weekly Monday reorder email (Low Stock grouped by supplier) to daily-digest recipients. Default false. */
+    reorderEmailEnabled?: boolean;
   };
 }
 

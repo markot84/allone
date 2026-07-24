@@ -58,6 +58,7 @@ import {
 import { computeAggregatesForBrand, computeAggregatesForAllBrands } from './aggregateStats';
 import { evaluateAllBrandsServerSide } from './serverAlerts';
 import { sendDigestForAllBrands } from './dailyDigest';
+import { sendReorderEmailForBrand, sendReorderEmailsForAllBrands } from './reorderEmail';
 import { createTransporter, SENDER } from './smtpConfig';
 import {
   getShopifyAuthUrl,
@@ -2555,7 +2556,8 @@ type NightlyJobKey =
   | 'scheduledSyncFollowups'
   | 'scheduledAggregates'
   | 'scheduledAlerts'
-  | 'scheduledDigest';
+  | 'scheduledDigest'
+  | 'scheduledReorderEmail';
 
 async function markNightlyJob(
   job: NightlyJobKey,
@@ -2609,6 +2611,7 @@ const NIGHTLY_JOB_KEYS: NightlyJobKey[] = [
   'scheduledAggregates',
   'scheduledAlerts',
   'scheduledDigest',
+  'scheduledReorderEmail',
 ];
 
 /** A job that hasn't succeeded in this long is considered stale (jobs run daily). */
@@ -4289,6 +4292,64 @@ export const scheduledDigest = onSchedule(
       throw error;
     }
   })
+);
+
+export const scheduledReorderEmail = onSchedule(
+  {
+    schedule: 'every monday 07:45',
+    timeZone: 'Europe/Athens',
+    region: 'europe-west1',
+    memory: '512MiB',
+    timeoutSeconds: 300,
+    secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET],
+  },
+  async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
+    const startedAt = Date.now();
+    await markNightlyJob('scheduledReorderEmail', 'running', { message: 'Reorder email started' });
+    try {
+      logger.info('[scheduledReorderEmail] Starting reorder email run');
+      const { brands, emails } = await sendReorderEmailsForAllBrands();
+      const durationMs = Date.now() - startedAt;
+      await markNightlyJob('scheduledReorderEmail', 'success', {
+        durationMs,
+        message: `Completed: brands=${brands}, emails=${emails}`,
+      });
+      logger.info(`[scheduledReorderEmail] Completed: ${brands} brands, ${emails} emails sent`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const durationMs = Date.now() - startedAt;
+      await markNightlyJob('scheduledReorderEmail', 'failed', { durationMs, message: msg });
+      logger.error('[scheduledReorderEmail] Fatal error:', { err: error });
+      throw error;
+    }
+  })
+);
+
+/** POST /reorderEmailSend { brandId } — member-auth manual trigger for the per-supplier reorder email. */
+export const reorderEmailSend = onRequest(
+  { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
+  async (req, res) => {
+    if (applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
+        return;
+      }
+      const result = await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, () =>
+        sendReorderEmailForBrand(brandId),
+      );
+      res.status(200).json(result);
+    } catch (error) {
+      logger.error('[reorderEmailSend]', { err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
 );
 
 // ── Public: interest lead submission (landing, no auth) ─────────────────────

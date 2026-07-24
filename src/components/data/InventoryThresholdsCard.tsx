@@ -7,7 +7,7 @@ import { logger } from '../../utils/logger';
 import type { Brand } from '../../types';
 
 type Thresholds = NonNullable<Brand['inventoryThresholds']>;
-type FieldKey = keyof Thresholds;
+type FieldKey = Exclude<keyof Thresholds, 'reorderEmailEnabled'>;
 
 const FIELDS: { key: FieldKey; label: string; def: number; hint: string; step?: number }[] = [
   { key: 'velocityWindowDays', label: 'Παράθυρο πωλήσεων (ημέρες)', def: 30, hint: 'Σε πόσες ημέρες αναφέρεται η ταχύτητα πωλήσεων.' },
@@ -34,10 +34,15 @@ export function InventoryThresholdsCard() {
   }, [stored]);
 
   const [vals, setVals] = useState<Record<FieldKey, string>>(initial);
+  const [reorderEmail, setReorderEmail] = useState(stored?.reorderEmailEnabled ?? false);
   const [saving, setSaving] = useState(false);
   useEffect(() => setVals(initial), [currentBrand?.id, initial]);
+  useEffect(() => setReorderEmail(stored?.reorderEmailEnabled ?? false), [currentBrand?.id, stored]);
 
-  const dirty = useMemo(() => FIELDS.some((f) => vals[f.key] !== initial[f.key]), [vals, initial]);
+  const dirty = useMemo(
+    () => FIELDS.some((f) => vals[f.key] !== initial[f.key]) || reorderEmail !== (stored?.reorderEmailEnabled ?? false),
+    [vals, initial, reorderEmail, stored],
+  );
 
   const handleSave = async () => {
     if (!currentBrand) return;
@@ -46,6 +51,7 @@ export function InventoryThresholdsCard() {
       const n = Number(vals[f.key]);
       if (vals[f.key].trim() !== '' && Number.isFinite(n) && n > 0) next[f.key] = n;
     }
+    next.reorderEmailEnabled = reorderEmail;
     setSaving(true);
     try {
       await FirestoreService.updateDocument('brands', currentBrand.id, { inventoryThresholds: next } as Partial<Brand>);
@@ -96,6 +102,19 @@ export function InventoryThresholdsCard() {
           </label>
         ))}
       </div>
+
+      <label className="flex items-start gap-2 mt-4 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={reorderEmail}
+          onChange={(e) => setReorderEmail(e.target.checked)}
+          className="mt-0.5 accent-[var(--nts-accent)]"
+        />
+        <span className="flex flex-col gap-0.5">
+          <span className="text-[12px] font-medium text-[var(--nts-charcoal)]">Εβδομαδιαίο email επαναπαραγγελίας</span>
+          <span className="text-[11px] text-[var(--nts-medium-gray)]">Κάθε Δευτέρα πρωί: προϊόντα σε Low Stock ομαδοποιημένα ανά προμηθευτή, στους παραλήπτες του daily digest.</span>
+        </span>
+      </label>
 
       <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-[var(--nts-border-gray)]">
         {dirty && <span className="text-[11px] text-[var(--nts-medium-gray)]">Μη αποθηκευμένες αλλαγές</span>}
