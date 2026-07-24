@@ -1188,7 +1188,7 @@ async function loadCatalog(brandId: string): Promise<Map<string, CatalogDims>> {
         .where('brandId', '==', brandId)
         .orderBy(FieldPath.documentId())
         .limit(5000)
-        .select('sku', 'brand', 'category', 'name', 'product_type');
+        .select('sku', 'brand', 'category', 'name', 'product_type', 'product_subtype');
       if (cursor) query = query.startAfter(cursor);
       const snap = await query.get();
       snap.docs.forEach((doc) => {
@@ -1196,11 +1196,14 @@ async function loadCatalog(brandId: string): Promise<Map<string, CatalogDims>> {
         const sku = normalizeSku(row.sku);
         const brand = asString(row.brand);
         const productType = asString(row.product_type);
-        if (!sku || (!brand && !productType)) return;
+        const productSubtype = asString(row.product_subtype);
+        if (!sku || (!brand && !productType && !productSubtype)) return;
         const existing = catalog.get(sku);
         if (existing) {
           if (!existing.brand) existing.brand = brand;
           if (!existing.productType && productType) existing.productType = productType;
+          // Configured sub-type is authoritative — storefront path subcategory is only the fallback.
+          if (productSubtype) existing.subcategory = productSubtype;
         } else {
           const category = asString(row.category);
           catalog.set(sku, {
@@ -1209,7 +1212,7 @@ async function loadCatalog(brandId: string): Promise<Map<string, CatalogDims>> {
             brand,
             ...(productType ? { productType } : {}),
             category,
-            subcategory: '',
+            subcategory: asString(row.product_subtype),
             categoryPath: category ? [category] : [],
             stockOnHand: 0,
             qtySold: 0,

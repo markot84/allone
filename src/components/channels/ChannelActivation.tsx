@@ -680,7 +680,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           const mpn = String(enrichment?.mpn || '').trim();
           const brandValue = String(p.brand || enrichment?.manufacturer || '').trim();
           const identifierExists = (gtin || mpn || brandValue) ? 'yes' : 'no';
-          const productType = [p.category, p.subcategory].filter(Boolean).join(' > ');
+          // ERP product-type hierarchy first (CF1 > CF3); storefront category path as fallback.
+          const productType = [p.product_type || p.category, p.subcategory].filter(Boolean).join(' > ');
           const inStock = (p.stock_level || 0) > 0;
           const priceFmt = `${formatCurrency(p.price || 0, 2)} EUR`;
           const salePrice = (typeof p.compare_at_price === 'number' && p.compare_at_price > 0 && p.compare_at_price > p.price)

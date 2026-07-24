@@ -331,8 +331,9 @@ export async function updateMegaventoryConnectorSettings(
     stockLocationLabels?: string[] | null;
     brandCustomField?: number | null;
     productTypeCustomField?: number | null;
+    productSubtypeCustomField?: number | null;
   }
-): Promise<{ ok: boolean; error?: string; stockLocationsChanged?: boolean; brandCustomFieldChanged?: boolean; productTypeCustomFieldChanged?: boolean }> {
+): Promise<{ ok: boolean; error?: string; stockLocationsChanged?: boolean; brandCustomFieldChanged?: boolean; productTypeCustomFieldChanged?: boolean; productSubtypeCustomFieldChanged?: boolean }> {
   const db = getDb();
   const snap = await db.doc(`connectors/${brandId}`).get();
   if (!snap.exists) return { ok: false, error: 'Δεν υπάρχουν ρυθμίσεις Megaventory.' };
@@ -407,12 +408,26 @@ export async function updateMegaventoryConnectorSettings(
     }
   }
 
+  // Product-subtype source: same contract again (feeds the Subcategories dimension).
+  let productSubtypeCustomFieldChanged = false;
+  if (updates.productSubtypeCustomField !== undefined) {
+    const prev = positiveNumber(mv.productSubtypeCustomField);
+    const next = updates.productSubtypeCustomField === null ? null : positiveNumber(updates.productSubtypeCustomField);
+    if (next !== null && (next < 1 || next > 20)) {
+      return { ok: false, error: 'Το πεδίο υποκατηγορίας πρέπει να είναι μεταξύ 1 και 20.' };
+    }
+    if (next !== prev) {
+      patch['megaventory.productSubtypeCustomField'] = next === null ? FieldValue.delete() : next;
+      productSubtypeCustomFieldChanged = true;
+    }
+  }
+
   if (Object.keys(patch).length === 0) {
-    return { ok: true, stockLocationsChanged: false, brandCustomFieldChanged: false, productTypeCustomFieldChanged: false };
+    return { ok: true, stockLocationsChanged: false, brandCustomFieldChanged: false, productTypeCustomFieldChanged: false, productSubtypeCustomFieldChanged: false };
   }
 
   await db.doc(`connectors/${brandId}`).update(patch);
-  return { ok: true, stockLocationsChanged, brandCustomFieldChanged, productTypeCustomFieldChanged };
+  return { ok: true, stockLocationsChanged, brandCustomFieldChanged, productTypeCustomFieldChanged, productSubtypeCustomFieldChanged };
 }
 
 /** *Get endpoints with ReturnTopNRecords return top N descending by primary id; next page = same filters + And LessThan min(id) of the previous page. */
@@ -1238,6 +1253,7 @@ export async function mergeMegaventoryApiCatalogProducts(
         ...(cat ? { category: cat } : {}),
         ...(brand ? { brand } : {}),
         ...(String(p.product_type ?? '').trim() ? { product_type: String(p.product_type).trim() } : {}),
+        ...(String(p.product_subtype ?? '').trim() ? { subcategory: String(p.product_subtype).trim() } : {}),
         price: sell,
         cost_price: purchase,
         stock_level: stock,
@@ -1537,19 +1553,18 @@ export async function fetchMegaventoryData(
   // PER-176: brand = the manufacturer stored in a per-brand-configured MV custom field
   // (`connectors/{id}.megaventory.brandCustomField`, e.g. e-tennis=11 → ProductCustomField11).
   // Unset ⇒ no MV brand (blank). MV uses '-' for empty custom fields → treat as blank.
+  // Per-brand-configured MV custom fields (brand / product type / sub-type); MV uses '-' for empty.
   const brandCF = positiveNumber(conn.brandCustomField);
-  const mvBrand = (p: Record<string, unknown>): string => {
-    if (!brandCF) return '';
-    const v = String(p['ProductCustomField' + brandCF] ?? '').trim();
-    return v === '-' ? '' : v;
-  };
-  // Product type from a per-brand-configured MV custom field (same contract as brand).
   const productTypeCF = positiveNumber(conn.productTypeCustomField);
-  const mvProductType = (p: Record<string, unknown>): string => {
-    if (!productTypeCF) return '';
-    const v = String(p['ProductCustomField' + productTypeCF] ?? '').trim();
+  const productSubtypeCF = positiveNumber(conn.productSubtypeCustomField);
+  const mvCustomField = (p: Record<string, unknown>, n: number | null): string => {
+    if (!n) return '';
+    const v = String(p['ProductCustomField' + n] ?? '').trim();
     return v === '-' ? '' : v;
   };
+  const mvBrand = (p: Record<string, unknown>): string => mvCustomField(p, brandCF);
+  const mvProductType = (p: Record<string, unknown>): string => mvCustomField(p, productTypeCF);
+  const mvProductSubtype = (p: Record<string, unknown>): string => mvCustomField(p, productSubtypeCF);
 
   const mode = options.mode || 'manual';
   // Soft deadline so no invocation runs into the worker's hard timeout.
@@ -2043,6 +2058,7 @@ export async function fetchMegaventoryData(
             category: extractMvCategory(p as Record<string, unknown>),
             brand: mvBrand(p as Record<string, unknown>),
             product_type: mvProductType(p as Record<string, unknown>),
+            product_subtype: mvProductSubtype(p as Record<string, unknown>),
             unitOfMeasurement: p.ProductUnitOfMeasurement || '',
             sellingPrice: num(p.ProductSellingPrice),
             purchasePrice: num(p.ProductPurchasePrice),
@@ -2247,6 +2263,7 @@ export async function fetchMegaventoryData(
                 category: extractMvCategory(p as Record<string, unknown>),
                 brand: mvBrand(p as Record<string, unknown>),
                 product_type: mvProductType(p as Record<string, unknown>),
+                product_subtype: mvProductSubtype(p as Record<string, unknown>),
                 unitOfMeasurement: p.ProductUnitOfMeasurement || '',
                 sellingPrice: num(p.ProductSellingPrice),
                 purchasePrice: num(p.ProductPurchasePrice),

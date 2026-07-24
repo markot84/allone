@@ -1248,7 +1248,14 @@ function SegmentDetail({
   onExportActionPack,
 }: SegmentDetailProps) {
   type CatalogDim = 'brand' | 'product_type' | 'category' | 'subcategory' | 'sku';
-  const [catalogDim, setCatalogDim] = useState<CatalogDim>('category');
+  // Product type replaces the storefront Categories dim when the brand has it configured.
+  const hasProductTypes = (segment.behavioral?.product_type_affinity?.length ?? 0) > 0;
+  const [catalogDim, setCatalogDim] = useState<CatalogDim>(hasProductTypes ? 'product_type' : 'category');
+  // Segment switches keep the component alive — map a stale dim onto its visible counterpart.
+  const effectiveDim: CatalogDim =
+    hasProductTypes && catalogDim === 'category' ? 'product_type'
+    : !hasProductTypes && catalogDim === 'product_type' ? 'category'
+    : catalogDim;
 
   const behavioral = segment.behavioral;
   const hasCatalogRollups = behavioral?.catalog_match != null;
@@ -1259,7 +1266,7 @@ function SegmentDetail({
   const affinityForChart = (): CategoryAffinity[] => {
     if (!fromComputedOrders) return [];
     if (!hasCatalogRollups) return heuristicCats;
-    switch (catalogDim) {
+    switch (effectiveDim) {
       case 'brand':
         return (behavioral?.brand_affinity ?? []).filter((row) => !isGenericCatalogLabel(row.name));
       case 'product_type':
@@ -1309,7 +1316,7 @@ function SegmentDetail({
   };
 
   const leftChartTitle = hasCatalogRollups
-    ? `Mix κατανάλωσης · ${dimLabel[catalogDim]}`
+    ? `Mix κατανάλωσης · ${dimLabel[effectiveDim]}`
     : 'Consumption mix · Categories';
   const movementTone =
     movement && movement.countDelta !== 0
@@ -1380,15 +1387,14 @@ function SegmentDetail({
           )}
           {hasCatalogRollups && (
             <div className="flex flex-wrap gap-1.5 mb-3">
-              {(['brand', 'product_type', 'category', 'subcategory', 'sku'] as const)
-                .filter((d) => d !== 'product_type' || (behavioral?.product_type_affinity?.length ?? 0) > 0)
+              {(['brand', hasProductTypes ? 'product_type' : 'category', 'subcategory', 'sku'] as const)
                 .map((d) => (
                 <button
                   key={d}
                   type="button"
                   onClick={() => setCatalogDim(d)}
                   className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                    catalogDim === d
+                    effectiveDim === d
                       ? 'bg-[var(--nts-accent)] text-white'
                       : 'bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]'
                   }`}
