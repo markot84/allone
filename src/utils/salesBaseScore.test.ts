@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Product } from '../types';
-import { productMatchesSalesBasePreset } from './salesBaseScore';
+import { filterProductsByProfitMaxScope, productMatchesSalesBasePreset } from './salesBaseScore';
 
 function makeProduct(overrides: Partial<Product> = {}): Product {
   return {
@@ -62,5 +62,17 @@ describe('productMatchesSalesBasePreset', () => {
   it('does not treat 30d=0 as cold_last_sale_30d when last_sale_at is missing', () => {
     const product = makeProduct({ qty_sold_period: 0, revenue_period: 0 });
     expect(productMatchesSalesBasePreset(product, 'cold_last_sale_30d')).toBe(false);
+  });
+});
+
+describe('filterProductsByProfitMaxScope', () => {
+  const p = (over: Record<string, unknown>) => ({ id: 'x', sku: 'x', name: 'x', category: 'c', margin_tier: 'high', margin_percentage: 1, stock_level: 1, stock_capacity: 1, priority_tag: 'healthy', price: 1, ...over }) as never;
+  const items = [p({ brand: 'Nike', subcategory: 'Trail', product_type: 'Shoes' }), p({ brand: 'Asics', product_type: 'Balls' })];
+
+  it('empty scope passes everything; each dimension filters exact-match', () => {
+    expect(filterProductsByProfitMaxScope(items, { brandFilter: '', subcategoryFilter: '', productTypeFilter: '' })).toHaveLength(2);
+    expect(filterProductsByProfitMaxScope(items, { brandFilter: 'Nike', subcategoryFilter: '', productTypeFilter: '' })).toHaveLength(1);
+    expect(filterProductsByProfitMaxScope(items, { brandFilter: '', subcategoryFilter: '', productTypeFilter: 'Balls' })).toHaveLength(1);
+    expect(filterProductsByProfitMaxScope(items, { brandFilter: 'Nike', subcategoryFilter: '', productTypeFilter: 'Balls' })).toHaveLength(0);
   });
 });

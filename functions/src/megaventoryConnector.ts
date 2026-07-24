@@ -1237,6 +1237,7 @@ export async function mergeMegaventoryApiCatalogProducts(
         name,
         ...(cat ? { category: cat } : {}),
         ...(brand ? { brand } : {}),
+        ...(String(p.product_type ?? '').trim() ? { product_type: String(p.product_type).trim() } : {}),
         price: sell,
         cost_price: purchase,
         stock_level: stock,

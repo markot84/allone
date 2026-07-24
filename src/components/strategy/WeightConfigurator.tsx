@@ -54,6 +54,8 @@ import { getPreviewConfig, type PreviewColumnId } from '../../data/strategyPrevi
 import { calculateCompositeScore, type CompositeScoreContext } from '../../utils/compositeScore';
 import {
   filterProductsBySalesBaseScope,
+  filterProductsByProfitMaxScope,
+  productInProfitMaxScope,
   productParticipatesInSalesBase,
   salesMomentumLabel,
 } from '../../utils/salesBaseScore';
@@ -74,7 +76,7 @@ import { exportStrategyPlan } from '../../services/segmentActionPack';
 import { useToast } from '../common/Toast';
 import { Tooltip } from '../common';
 import type { SeasonalPeriod } from '../../data/seasonalPeriods';
-import type { Product, PriceBenchmarkStrategyScope, SalesBaseScope } from '../../types';
+import type { Product, PriceBenchmarkStrategyScope, ProfitMaxScope, SalesBaseScope } from '../../types';
 import { logger } from '../../utils/logger';
 import { sanitizeSpreadsheetCell, sanitizeRow } from '../../utils/spreadsheetSafe';
 
@@ -377,6 +379,18 @@ export function WeightConfigurator({
     [posNegRowsBySku, posNegWindow]
   );
 
+  // Distinct values for the Profit Max scope selects; product_type appears only when data exists.
+  const profitMaxScopeOptions = useMemo(() => {
+    const brands = new Set<string>(); const subcategories = new Set<string>(); const productTypes = new Set<string>();
+    for (const p of products) {
+      if (p.brand) brands.add(p.brand);
+      if (p.subcategory) subcategories.add(p.subcategory);
+      if (p.product_type) productTypes.add(p.product_type);
+    }
+    const sort = (x: Set<string>) => [...x].sort((a, b) => a.localeCompare(b));
+    return { brands: sort(brands), subcategories: sort(subcategories), productTypes: sort(productTypes) };
+  }, [products]);
+
   const normalizedSkuStats = useMemo(() => {
     if (!skuStats) return null;
     const entries = Object.entries(skuStats).map(([sku, stats]) => [sku.trim().toLowerCase(), stats] as const);
@@ -610,6 +624,7 @@ export function WeightConfigurator({
 
   const [pendingScenarioChange, setPendingScenarioChange] = useState<string | null>(null);
   const [salesBaseSetupOpen, setSalesBaseSetupOpen] = useState(false);
+  const [pendingProfitMaxScope, setPendingProfitMaxScope] = useState<ProfitMaxScope | null>(null);
   const [pendingSalesBaseScope, setPendingSalesBaseScope] = useState<SalesBaseScope | null>(null);
   const [priceBenchmarkSetupOpen, setPriceBenchmarkSetupOpen] = useState(false);
   const [pendingPriceBenchmarkScope, setPendingPriceBenchmarkScope] =
@@ -778,7 +793,7 @@ export function WeightConfigurator({
   const applyScenarioChange = useCallback((
     scenarioId: string,
     overrideDuration?: number | 'ongoing',
-    saveOptions?: { salesBaseScope?: SalesBaseScope; priceBenchmarkScope?: PriceBenchmarkStrategyScope },
+    saveOptions?: { salesBaseScope?: SalesBaseScope; priceBenchmarkScope?: PriceBenchmarkStrategyScope; profitMaxScope?: ProfitMaxScope },
   ) => {
     setSelectedScenario(scenarioId);
     setHasManualWeightChanges(false);
@@ -836,6 +851,9 @@ export function WeightConfigurator({
         : {}),
       ...(scenarioId === 'price_benchmark'
         ? { priceBenchmarkScope: saveOptions?.priceBenchmarkScope ?? defaultPriceBenchmarkScope }
+        : {}),
+      ...(scenarioId === 'profit_max' && saveOptions?.profitMaxScope
+        ? { profitMaxScope: saveOptions.profitMaxScope }
         : {}),
       ...(triageOrigin ? { triageOrigin } : {}),
     }).then((saved) => {
@@ -1028,6 +1046,12 @@ export function WeightConfigurator({
     
     setMixPanelOpen(false);
     setSeasonalPanelOpen(false);
+    if (scenarioId === 'profit_max') {
+      setPendingProfitMaxScope(
+        (activeStrategy as { profitMaxScope?: ProfitMaxScope })?.profitMaxScope ??
+          { brandFilter: '', subcategoryFilter: '', productTypeFilter: '' }
+      );
+    }
     startTransition(() => {
       setPendingScenarioChange(scenarioId);
     });
@@ -1039,7 +1063,11 @@ export function WeightConfigurator({
     const saveOpts: {
       salesBaseScope?: SalesBaseScope;
       priceBenchmarkScope?: PriceBenchmarkStrategyScope;
+      profitMaxScope?: ProfitMaxScope;
     } = {};
+    if (pendingScenarioChange === 'profit_max' && pendingProfitMaxScope) {
+      saveOpts.profitMaxScope = pendingProfitMaxScope;
+    }
     if (pendingScenarioChange === 'sales_base') {
       saveOpts.salesBaseScope =
         pendingSalesBaseScope ?? {
@@ -1062,7 +1090,7 @@ export function WeightConfigurator({
     }
     applyScenarioChange(pendingScenarioChange, selectedDuration, saveOpts);
     clearPendingScenario();
-  }, [pendingScenarioChange, pendingSalesBaseScope, pendingPriceBenchmarkScope, applyScenarioChange, clearPendingScenario]);
+  }, [pendingScenarioChange, pendingSalesBaseScope, pendingPriceBenchmarkScope, pendingProfitMaxScope, applyScenarioChange, clearPendingScenario]);
 
   const previewUiScenarioId =
     pendingScenarioChange === 'sales_base'
@@ -1094,6 +1122,12 @@ export function WeightConfigurator({
     }
     return undefined;
   }, [pendingScenarioChange, pendingPriceBenchmarkScope, selectedScenario, activeStrategy]);
+
+  const profitMaxScopeForPreview = useMemo(() => {
+    if (pendingScenarioChange === 'profit_max' && pendingProfitMaxScope) return pendingProfitMaxScope;
+    if (selectedScenario === 'profit_max') return (activeStrategy as { profitMaxScope?: ProfitMaxScope })?.profitMaxScope;
+    return undefined;
+  }, [pendingScenarioChange, pendingProfitMaxScope, selectedScenario, activeStrategy]);
 
   // Weights auto-sync from scenario selection; slider edits stay on the selected preset until save.
 
@@ -1189,6 +1223,9 @@ export function WeightConfigurator({
     if (strategyId === 'price_benchmark') {
       source = filterProductsByPriceBenchmarkScope(products, priceBenchmarkScopeForPreview, benchmarks);
     }
+    if (strategyId === 'profit_max') {
+      source = filterProductsByProfitMaxScope(products, profitMaxScopeForPreview);
+    }
     source = filterProductsByTriageScope(source);
 
     const scoreCtx: CompositeScoreContext | undefined =
@@ -1221,6 +1258,7 @@ export function WeightConfigurator({
     pendingScenarioChange,
     salesBaseScopeForPreview,
     priceBenchmarkScopeForPreview,
+    profitMaxScopeForPreview,
     benchmarks,
     filterProductsByTriageScope,
     benchmarkLookup,
@@ -1932,6 +1970,9 @@ export function WeightConfigurator({
           newScenarioId={pendingScenarioChange}
           currentDuration={duration}
           newDuration={scenarios.find(s => s.id === pendingScenarioChange)?.duration ?? 'ongoing'}
+          profitMaxScope={pendingScenarioChange === 'profit_max' ? pendingProfitMaxScope : undefined}
+          onProfitMaxScopeChange={pendingScenarioChange === 'profit_max' ? setPendingProfitMaxScope : undefined}
+          profitMaxScopeOptions={pendingScenarioChange === 'profit_max' ? profitMaxScopeOptions : undefined}
           impactProductFilter={buildImpactProductFilter(
             pendingScenarioChange === 'sales_base' && pendingSalesBaseScope
               ? (p) => productParticipatesInSalesBase(salesBaseProductById.get(p.id) ?? p, pendingSalesBaseScope)
@@ -1942,7 +1983,9 @@ export function WeightConfigurator({
                       pendingPriceBenchmarkScope,
                       benchmarkLookupMap,
                     )
-                : undefined
+                : pendingScenarioChange === 'profit_max' && pendingProfitMaxScope
+                  ? (p) => productInProfitMaxScope(p, pendingProfitMaxScope)
+                  : undefined
           )}
           scoreContext={
             pendingScenarioChange === 'price_benchmark' ? benchmarkScoreContext : undefined

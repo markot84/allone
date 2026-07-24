@@ -259,6 +259,13 @@ export interface SalesBaseScope {
   categorySource?: SalesBaseCategorySource;
 }
 
+/** Scope filter for Profit Maximization: '' = no filter on that dimension. */
+export interface ProfitMaxScope {
+  brandFilter: string;
+  subcategoryFilter: string;
+  productTypeFilter: string;
+}
+
 /** Preset filter for the Price Benchmarking (GMC) strategy. */
 export type PriceBenchmarkPresetId = 'below_market' | 'all_benchmarked';
 
@@ -428,6 +435,8 @@ export interface Product {
   supplier?: string;
   /** Commercial brand (Brand column in import) — optional */
   brand?: string;
+  /** Per-brand-configured product type (e.g. Clothes, Shoes). */
+  product_type?: string;
   /** Product barcode / GTIN from ERP. */
   barcode?: string;
   gtin?: string;

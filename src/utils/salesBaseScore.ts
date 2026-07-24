@@ -1,4 +1,4 @@
-import type { Product, SalesBaseCategorySource, SalesBasePresetId, SalesBaseScope } from '../types';
+import type { Product, ProfitMaxScope, SalesBaseCategorySource, SalesBasePresetId, SalesBaseScope } from '../types';
 import { coerceToDate } from './coerceDate';
 import { getStockAgeDays } from './productUtils';
 
@@ -274,6 +274,21 @@ export function productParticipatesInSalesBase(product: Product, scope: SalesBas
     return false;
   }
   return productMatchesSalesBasePreset(product, scope.preset);
+}
+
+/** Exact-match scope predicate; '' = dimension off. */
+export function productInProfitMaxScope(p: Product, scope?: ProfitMaxScope | null): boolean {
+  if (!scope) return true;
+  return (
+    (!scope.brandFilter || (p.brand || '') === scope.brandFilter) &&
+    (!scope.subcategoryFilter || (p.subcategory || '') === scope.subcategoryFilter) &&
+    (!scope.productTypeFilter || (p.product_type || '') === scope.productTypeFilter)
+  );
+}
+
+export function filterProductsByProfitMaxScope(products: Product[], scope?: ProfitMaxScope | null): Product[] {
+  if (!scope || (!scope.brandFilter && !scope.subcategoryFilter && !scope.productTypeFilter)) return products;
+  return products.filter((p) => productInProfitMaxScope(p, scope));
 }
 
 export function filterProductsBySalesBaseScope(
