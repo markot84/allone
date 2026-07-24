@@ -1481,6 +1481,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
     // (0 SKUs) → fall back to a direct full-catalog sync, else the catalog never syncs.
     const useFullCatalogFallback = productsMode === 'full_catalog';
     let fullCatalogResumeCursor: Date | null = null;
+    let enrichNextIdx: number | null = null;
 
     if (useFullCatalogFallback) {
       // ── Full catalog fallback (no ERP stock source) ──────────────────
@@ -1583,7 +1584,20 @@ export async function fetchMagentoData(brandId: string): Promise<{
 
       const activeSkuChunks = chunkArray(activeStockSkus, MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE);
 
-      for (const skuChunk of activeSkuChunks) {
+      // Resume cursor + time budget: without them every run restarts at chunk 0 and dies at the
+      // function wall on the same chunks — the tail of the catalog would never sync.
+      const enrichStart = Date.now();
+      const enrichResumeIdx = Math.min(
+        Math.max(0, Number((connector as Record<string, unknown>).activeStockEnrichIdx ?? 0) || 0),
+        activeSkuChunks.length
+      );
+      for (let chunkIdx = enrichResumeIdx; chunkIdx < activeSkuChunks.length; chunkIdx++) {
+        if (Date.now() - enrichStart > MAGENTO_FULL_CATALOG_TIME_BUDGET_MS) {
+          enrichNextIdx = chunkIdx;
+          logger.warnAlert(`[Magento] Active-stock enrichment budget reached for ${brandId} at chunk ${chunkIdx}/${activeSkuChunks.length}, resume next run`, { alertKey: ALERT.magentoSyncFailed });
+          break;
+        }
+        const skuChunk = activeSkuChunks[chunkIdx];
         prodPage = 1;
         prodMore = true;
         while (prodMore) {
@@ -1653,6 +1667,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
       connectorPatch['magento.productCatalogAccessCheckedAt'] = FieldValue.serverTimestamp();
       connectorPatch['magento.productSyncScope'] = productsMode;
       connectorPatch['magento.activeStockSkuCount'] = activeStockSkus.length;
+      connectorPatch['magento.activeStockEnrichIdx'] = enrichNextIdx ?? FieldValue.delete();
       // Full-catalog fallback: keep cursor if cut by budget, otherwise clear it.
       connectorPatch['magento.productsHistoryCursor'] = fullCatalogResumeCursor
         ? fullCatalogResumeCursor
