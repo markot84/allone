@@ -1813,7 +1813,7 @@ function MvCustomFieldSelect({
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
         disabled={disabled}
-        className="max-w-[360px] rounded-md border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-sm text-[#111827] shadow-sm disabled:opacity-50"
+        className="w-full max-w-[280px] truncate rounded-md border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-sm text-[#111827] shadow-sm disabled:opacity-50"
       >
         <option value="">{emptyLabel}</option>
         {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => {
