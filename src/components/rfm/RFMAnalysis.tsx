@@ -1247,7 +1247,7 @@ function SegmentDetail({
   onExportCustomers,
   onExportActionPack,
 }: SegmentDetailProps) {
-  type CatalogDim = 'brand' | 'category' | 'subcategory' | 'sku';
+  type CatalogDim = 'brand' | 'product_type' | 'category' | 'subcategory' | 'sku';
   const [catalogDim, setCatalogDim] = useState<CatalogDim>('category');
 
   const behavioral = segment.behavioral;
@@ -1262,6 +1262,8 @@ function SegmentDetail({
     switch (catalogDim) {
       case 'brand':
         return (behavioral?.brand_affinity ?? []).filter((row) => !isGenericCatalogLabel(row.name));
+      case 'product_type':
+        return (behavioral?.product_type_affinity ?? []).filter((row) => !isGenericCatalogLabel(row.name));
       case 'category':
         return catalogCats.length > 0 ? catalogCats : heuristicCats;
       case 'subcategory':
@@ -1300,6 +1302,7 @@ function SegmentDetail({
 
   const dimLabel: Record<CatalogDim, string> = {
     brand: 'Brands',
+    product_type: 'Product Types',
     category: 'Categories',
     subcategory: 'Subcategories',
     sku: 'SKU',
@@ -1377,7 +1380,9 @@ function SegmentDetail({
           )}
           {hasCatalogRollups && (
             <div className="flex flex-wrap gap-1.5 mb-3">
-              {(['brand', 'category', 'subcategory', 'sku'] as const).map((d) => (
+              {(['brand', 'product_type', 'category', 'subcategory', 'sku'] as const)
+                .filter((d) => d !== 'product_type' || (behavioral?.product_type_affinity?.length ?? 0) > 0)
+                .map((d) => (
                 <button
                   key={d}
                   type="button"

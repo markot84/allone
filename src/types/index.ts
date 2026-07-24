@@ -309,6 +309,8 @@ export interface BehavioralProfile {
   /** Catalog-backed category (platform + ERP). */
   category_affinity_catalog?: CategoryAffinity[];
   brand_affinity?: CategoryAffinity[];
+  /** Present only for brands with a configured product-type source. */
+  product_type_affinity?: CategoryAffinity[];
   subcategory_affinity?: CategoryAffinity[];
   sku_affinity?: CategoryAffinity[];
   /** Percentage of line turnover matched to catalog (not line_fallback). */

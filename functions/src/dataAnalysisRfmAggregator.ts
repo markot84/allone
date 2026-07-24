@@ -119,6 +119,8 @@ type CatalogDims = {
   sku: string;
   name: string;
   brand: string;
+  /** Per-brand-configured product type (MV custom field / native source). */
+  productType?: string;
   category: string;
   subcategory: string;
   categoryPath: string[];
@@ -162,6 +164,7 @@ type SegmentAgg = {
   hourCounts: Map<string, number>;
   category: Map<string, AffinityAgg>;
   brand: Map<string, AffinityAgg>;
+  productType: Map<string, AffinityAgg>;
   subcategory: Map<string, AffinityAgg>;
   sku: Map<string, AffinityAgg>;
   lineCount: number;
@@ -545,6 +548,9 @@ function behavioralProfile(segment: SegmentAgg, totalRevenue: number, globalAov:
       lines_matched: segment.matchedLineCount,
     },
     brand_affinity: affinityRows(segment.brand, segment.revenue, 10),
+    ...(segment.productType.size > 0
+      ? { product_type_affinity: affinityRows(segment.productType, segment.revenue, 10) }
+      : {}),
     category_affinity_catalog: affinityRows(segment.category, segment.revenue, 10),
     subcategory_affinity: affinityRows(segment.subcategory, segment.revenue, 10),
     sku_affinity: affinityRows(segment.sku, segment.revenue, 10),
@@ -939,6 +945,7 @@ function computeScope(orders: NormalizedOrder[], catalog: Map<string, CatalogDim
       hourCounts: new Map<string, number>(),
       category: new Map<string, AffinityAgg>(),
       brand: new Map<string, AffinityAgg>(),
+      productType: new Map<string, AffinityAgg>(),
       subcategory: new Map<string, AffinityAgg>(),
       sku: new Map<string, AffinityAgg>(),
       lineCount: 0,
@@ -999,6 +1006,7 @@ function computeScope(orders: NormalizedOrder[], catalog: Map<string, CatalogDim
       }
       bumpAffinity(group.category, category, revenue, quantity, order.orderId, sku, dims);
       if (brand) bumpAffinity(group.brand, brand, revenue, quantity, order.orderId, sku, dims);
+      if (dims?.productType) bumpAffinity(group.productType, dims.productType, revenue, quantity, order.orderId, sku, dims);
       if (subcategoryFallback) {
         bumpAffinity(group.subcategory, subcategoryFallback, revenue, quantity, order.orderId, sku, dims);
       }
@@ -1147,10 +1155,12 @@ async function loadCatalog(brandId: string): Promise<Map<string, CatalogDims>> {
         const pathSubcategory = rawPath.length > 1 ? rawPath[rawPath.length - 1] : '';
         const subcategory = asString(row.subcategory || row.sub_category || pathSubcategory);
         const brand = asString(row.brand || row.manufacturer || row.vendor);
+        const productType = asString(row.product_type || row.productType);
         catalog.set(sku, {
           sku,
           name: asString(row.name || row.title),
           brand,
+          ...(productType ? { productType } : {}),
           category,
           subcategory,
           categoryPath: rawPath.length ? rawPath : [category, subcategory].filter(Boolean),
@@ -1178,23 +1188,26 @@ async function loadCatalog(brandId: string): Promise<Map<string, CatalogDims>> {
         .where('brandId', '==', brandId)
         .orderBy(FieldPath.documentId())
         .limit(5000)
-        .select('sku', 'brand', 'category', 'name');
+        .select('sku', 'brand', 'category', 'name', 'product_type');
       if (cursor) query = query.startAfter(cursor);
       const snap = await query.get();
       snap.docs.forEach((doc) => {
         const row = doc.data();
         const sku = normalizeSku(row.sku);
         const brand = asString(row.brand);
-        if (!sku || !brand) return;
+        const productType = asString(row.product_type);
+        if (!sku || (!brand && !productType)) return;
         const existing = catalog.get(sku);
         if (existing) {
           if (!existing.brand) existing.brand = brand;
+          if (!existing.productType && productType) existing.productType = productType;
         } else {
           const category = asString(row.category);
           catalog.set(sku, {
             sku,
             name: asString(row.name),
             brand,
+            ...(productType ? { productType } : {}),
             category,
             subcategory: '',
             categoryPath: category ? [category] : [],

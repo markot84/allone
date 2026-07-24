@@ -1803,6 +1803,7 @@ function MegaventoryCustomReportSettingsInline({
   initialEnabled,
   initialStockLocations,
   initialBrandCustomField,
+  initialProductTypeCustomField,
   canManage,
   onSaved,
 }: {
@@ -1811,6 +1812,7 @@ function MegaventoryCustomReportSettingsInline({
   initialEnabled: boolean;
   initialStockLocations: string[];
   initialBrandCustomField: number | null;
+  initialProductTypeCustomField: number | null;
   canManage: boolean;
   onSaved: () => void;
 }) {
@@ -1821,6 +1823,7 @@ function MegaventoryCustomReportSettingsInline({
   const [locLoading, setLocLoading] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
   const [brandCustomField, setBrandCustomField] = useState<number | null>(initialBrandCustomField);
+  const [productTypeCustomField, setProductTypeCustomField] = useState<number | null>(initialProductTypeCustomField);
   const [cfSamples, setCfSamples] = useState<{ n: number; fillPct: number; samples: string[] }[]>([]);
   const [cfLoading, setCfLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1831,7 +1834,8 @@ function MegaventoryCustomReportSettingsInline({
     setEnabled(initialEnabled);
     setStockLocations(initialStockLocations);
     setBrandCustomField(initialBrandCustomField);
-  }, [initialReportId, initialEnabled, initialStockLocations, initialBrandCustomField]);
+    setProductTypeCustomField(initialProductTypeCustomField);
+  }, [initialReportId, initialEnabled, initialStockLocations, initialBrandCustomField, initialProductTypeCustomField]);
 
   // Sample CF1–20 from Megaventory so the admin can see which field holds the brand (PER-176).
   useEffect(() => {
@@ -1907,6 +1911,7 @@ function MegaventoryCustomReportSettingsInline({
           // Names of the selected warehouses → stored for the PI badge (so it can label the filter).
           stockLocationLabels: stockLocations.map((id) => locations.find((l) => l.id === id)?.name || id),
           brandCustomField,
+          productTypeCustomField,
         }),
       });
 
@@ -2016,6 +2021,30 @@ function MegaventoryCustomReportSettingsInline({
           })}
         </select>
         {cfLoading && <p className="mt-1 text-xs text-[#6B7280]">Φόρτωση δειγμάτων πεδίων…</p>}
+      </div>
+      <div className="mb-3 rounded-md border border-[#E5E7EB] bg-white p-2.5">
+        <label htmlFor={`mv-ptype-cf-${brandId}`} className="mb-1 block text-xs font-medium text-[#374151]">
+          Πεδίο product type (Data Analysis)
+        </label>
+        <p className="mb-2 text-xs text-[#6B7280]">
+          Ποιο custom field κρατά τον τύπο προϊόντος (π.χ. Clothes, Shoes). Η αλλαγή απαιτεί πλήρη επανασυγχρονισμό για να ενημερωθεί.
+        </p>
+        <select
+          id={`mv-ptype-cf-${brandId}`}
+          value={productTypeCustomField ?? ''}
+          onChange={(e) => setProductTypeCustomField(e.target.value ? Number(e.target.value) : null)}
+          disabled={!canManage || saving}
+          className="max-w-[360px] rounded-md border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-sm text-[#111827] shadow-sm disabled:opacity-50"
+        >
+          <option value="">— Κανένα (χωρίς product type)</option>
+          {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => {
+            const s = cfSamples.find((f) => f.n === n);
+            const hint = s && s.samples.length ? ` — ${s.samples.slice(0, 3).join(', ')} (${s.fillPct}%)` : '';
+            return (
+              <option key={n} value={n}>{`CF${n}${hint}`}</option>
+            );
+          })}
+        </select>
       </div>
       <button
         type="button"
@@ -3580,6 +3609,7 @@ export function ConnectorsPanel() {
                           initialEnabled={(state as any).customReportEnabled !== false}
                           initialStockLocations={((state as any).stockLocations ?? []) as string[]}
                           initialBrandCustomField={((state as any).brandCustomField as number | null) ?? null}
+                          initialProductTypeCustomField={((state as any).productTypeCustomField as number | null) ?? null}
                           canManage={canManageConnectors}
                           onSaved={() => {
                             void fetchStates();

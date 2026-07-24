@@ -330,8 +330,9 @@ export async function updateMegaventoryConnectorSettings(
     stockLocations?: string[] | null;
     stockLocationLabels?: string[] | null;
     brandCustomField?: number | null;
+    productTypeCustomField?: number | null;
   }
-): Promise<{ ok: boolean; error?: string; stockLocationsChanged?: boolean; brandCustomFieldChanged?: boolean }> {
+): Promise<{ ok: boolean; error?: string; stockLocationsChanged?: boolean; brandCustomFieldChanged?: boolean; productTypeCustomFieldChanged?: boolean }> {
   const db = getDb();
   const snap = await db.doc(`connectors/${brandId}`).get();
   if (!snap.exists) return { ok: false, error: 'Δεν υπάρχουν ρυθμίσεις Megaventory.' };
@@ -392,12 +393,26 @@ export async function updateMegaventoryConnectorSettings(
     }
   }
 
+  // Product-type source: same contract as brandCustomField — a change needs a fresh ProductGet walk.
+  let productTypeCustomFieldChanged = false;
+  if (updates.productTypeCustomField !== undefined) {
+    const prev = positiveNumber(mv.productTypeCustomField);
+    const next = updates.productTypeCustomField === null ? null : positiveNumber(updates.productTypeCustomField);
+    if (next !== null && (next < 1 || next > 20)) {
+      return { ok: false, error: 'Το πεδίο product type πρέπει να είναι μεταξύ 1 και 20.' };
+    }
+    if (next !== prev) {
+      patch['megaventory.productTypeCustomField'] = next === null ? FieldValue.delete() : next;
+      productTypeCustomFieldChanged = true;
+    }
+  }
+
   if (Object.keys(patch).length === 0) {
-    return { ok: true, stockLocationsChanged: false, brandCustomFieldChanged: false };
+    return { ok: true, stockLocationsChanged: false, brandCustomFieldChanged: false, productTypeCustomFieldChanged: false };
   }
 
   await db.doc(`connectors/${brandId}`).update(patch);
-  return { ok: true, stockLocationsChanged, brandCustomFieldChanged };
+  return { ok: true, stockLocationsChanged, brandCustomFieldChanged, productTypeCustomFieldChanged };
 }
 
 /** *Get endpoints with ReturnTopNRecords return top N descending by primary id; next page = same filters + And LessThan min(id) of the previous page. */
@@ -1527,6 +1542,13 @@ export async function fetchMegaventoryData(
     const v = String(p['ProductCustomField' + brandCF] ?? '').trim();
     return v === '-' ? '' : v;
   };
+  // Product type from a per-brand-configured MV custom field (same contract as brand).
+  const productTypeCF = positiveNumber(conn.productTypeCustomField);
+  const mvProductType = (p: Record<string, unknown>): string => {
+    if (!productTypeCF) return '';
+    const v = String(p['ProductCustomField' + productTypeCF] ?? '').trim();
+    return v === '-' ? '' : v;
+  };
 
   const mode = options.mode || 'manual';
   // Soft deadline so no invocation runs into the worker's hard timeout.
@@ -2019,6 +2041,7 @@ export async function fetchMegaventoryData(
             longDescription: p.ProductLongDescription || '',
             category: extractMvCategory(p as Record<string, unknown>),
             brand: mvBrand(p as Record<string, unknown>),
+            product_type: mvProductType(p as Record<string, unknown>),
             unitOfMeasurement: p.ProductUnitOfMeasurement || '',
             sellingPrice: num(p.ProductSellingPrice),
             purchasePrice: num(p.ProductPurchasePrice),
@@ -2222,6 +2245,7 @@ export async function fetchMegaventoryData(
                 longDescription: p.ProductLongDescription || '',
                 category: extractMvCategory(p as Record<string, unknown>),
                 brand: mvBrand(p as Record<string, unknown>),
+                product_type: mvProductType(p as Record<string, unknown>),
                 unitOfMeasurement: p.ProductUnitOfMeasurement || '',
                 sellingPrice: num(p.ProductSellingPrice),
                 purchasePrice: num(p.ProductPurchasePrice),

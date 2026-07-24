@@ -2298,7 +2298,7 @@ export const connectorSaveCredentials = onRequest(
         });
         res.status(200).json(result);
       } else if (provider === 'megaventory') {
-        const { apiKey: mvKey, megaventorySettingsOnly, customReportId, customReportEnabled, stockLocations, stockLocationLabels, brandCustomField } = req.body as {
+        const { apiKey: mvKey, megaventorySettingsOnly, customReportId, customReportEnabled, stockLocations, stockLocationLabels, brandCustomField, productTypeCustomField } = req.body as {
           apiKey?: string;
           megaventorySettingsOnly?: boolean;
           customReportId?: string;
@@ -2306,6 +2306,7 @@ export const connectorSaveCredentials = onRequest(
           stockLocations?: string[];
           stockLocationLabels?: string[];
           brandCustomField?: number | null;
+          productTypeCustomField?: number | null;
         };
         if (megaventorySettingsOnly) {
           const updated = await updateMegaventoryConnectorSettings(brandId, {
@@ -2314,6 +2315,7 @@ export const connectorSaveCredentials = onRequest(
             stockLocations: stockLocations !== undefined ? stockLocations : undefined,
             stockLocationLabels: stockLocationLabels !== undefined ? stockLocationLabels : undefined,
             brandCustomField: brandCustomField !== undefined ? brandCustomField : undefined,
+            productTypeCustomField: productTypeCustomField !== undefined ? productTypeCustomField : undefined,
           });
           if (!updated.ok) {
             res.status(400).json({ success: false, error: updated.error || 'Αποτυχία ενημέρωσης' });
@@ -2323,7 +2325,7 @@ export const connectorSaveCredentials = onRequest(
           let resyncQueued = false;
           // Brand field changed → brand only lands on a fresh ProductGet walk, so reset the catalog
           // checkpoint and enqueue a full re-sync (which then refreshes PI). PER-176.
-          if (updated.brandCustomFieldChanged) {
+          if (updated.brandCustomFieldChanged || updated.productTypeCustomFieldChanged) {
             await resetMegaventoryResumableState(admin.firestore(), brandId);
             const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
             await admin.firestore().collection('connector_sync_jobs').doc(jobId).set({
