@@ -142,7 +142,7 @@ function buildGroupSection(group: ReorderGroup): string {
     </div>`;
 }
 
-function buildReorderHtml(brandName: string, groups: ReorderGroup[], productCount: number): string {
+export function buildReorderHtml(brandName: string, groups: ReorderGroup[], productCount: number): string {
   const date = new Date().toLocaleDateString('el-GR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; background: #F9FAFB;">
