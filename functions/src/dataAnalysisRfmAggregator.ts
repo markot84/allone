@@ -121,6 +121,8 @@ type CatalogDims = {
   brand: string;
   /** Per-brand-configured product type (MV custom field / native source). */
   productType?: string;
+  /** Declared parent SKU (Magento itemGroupId) — SKU affinity groups variants by it. */
+  parentSku?: string;
   category: string;
   subcategory: string;
   categoryPath: string[];
@@ -1010,7 +1012,7 @@ function computeScope(orders: NormalizedOrder[], catalog: Map<string, CatalogDim
       if (subcategoryFallback) {
         bumpAffinity(group.subcategory, subcategoryFallback, revenue, quantity, order.orderId, sku, dims);
       }
-      bumpAffinity(group.sku, sku || fallbackCategory(line), revenue, quantity, order.orderId, sku, dims);
+      bumpAffinity(group.sku, dims?.parentSku || sku || fallbackCategory(line), revenue, quantity, order.orderId, sku, dims);
     }
   });
 
@@ -1156,11 +1158,13 @@ async function loadCatalog(brandId: string): Promise<Map<string, CatalogDims>> {
         const subcategory = asString(row.subcategory || row.sub_category || pathSubcategory);
         const brand = asString(row.brand || row.manufacturer || row.vendor);
         const productType = asString(row.product_type || row.productType);
+        const parentSku = asString(row.itemGroupId || row.parent_sku);
         catalog.set(sku, {
           sku,
           name: asString(row.name || row.title),
           brand,
           ...(productType ? { productType } : {}),
+          ...(parentSku && parentSku !== sku ? { parentSku } : {}),
           category,
           subcategory,
           categoryPath: rawPath.length ? rawPath : [category, subcategory].filter(Boolean),

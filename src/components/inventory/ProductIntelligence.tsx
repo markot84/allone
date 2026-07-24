@@ -179,7 +179,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const [brandInclude, setBrandInclude] = useState<string[] | null>(null);
   const [tagInclude, setTagInclude] = useState<string[] | null>(null);
   const [includeNoStock, setIncludeNoStock] = useState(false);
-  const [groupByParent, setGroupByParent] = useState(false);
+  // Default ON: parent grouping is the platform default; no-op for brands without declared relations.
+  const [groupByParent, setGroupByParent] = useState(true);
   const [marginFilter, setMarginFilter] = useState<string>('all');
   const [stockAgeFilter, setStockAgeFilter] = useState<'all' | 'dead' | 'near-dead' | 'high-margin-low-stock'>('all');
   const [stockCardFilter, setStockCardFilter] = useState<'all' | 'healthy' | 'excess' | 'dead' | 'low'>('all');
