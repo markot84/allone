@@ -16,7 +16,7 @@ import * as prodIntel from './lib/productIntelligenceAggregator.js';
 import * as rfm from './lib/dataAnalysisRfmAggregator.js';
 import * as aggStats from './lib/aggregateStats.js';
 
-const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
+const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'allone-9e685';
 const args = process.argv.slice(2);
 const flags = Object.fromEntries(args.filter((a) => a.startsWith('--')).map((a) => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? true]));
 const keyPath = args.find((a) => !a.startsWith('--')) || process.env.GOOGLE_APPLICATION_CREDENTIALS;

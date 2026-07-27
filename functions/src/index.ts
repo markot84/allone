@@ -13,13 +13,10 @@ const GEMINI_SECRET = defineSecret('GEMINI_API_KEY');
 const SMTP_EMAIL_SECRET = defineSecret('SMTP_EMAIL');
 /** SMTP: password or App Password */
 const SMTP_PASSWORD_SECRET = defineSecret('SMTP_PASSWORD');
-// OpenCart sync egresses through fixed-IP VPC connector pp-opencart-connector (store firewall
-// allowlist); it exists only in prod, so gate on GCLOUD_PROJECT — non-prod deploys without VPC.
-const PROD_PROJECT_ID = 'performance-plus-4a5b2';
-const OPENCART_EGRESS_OPTIONS: { vpcConnector?: string; vpcConnectorEgressSettings?: 'ALL_TRAFFIC' } =
-  process.env.GCLOUD_PROJECT === PROD_PROJECT_ID
-    ? { vpcConnector: 'pp-opencart-connector', vpcConnectorEgressSettings: 'ALL_TRAFFIC' }
-    : {};
+// OpenCart sync used to egress through fixed-IP VPC connector pp-opencart-connector, which lives
+// in another project entirely — referencing it from here would fail to deploy. No connector is
+// attached until one is created in this project and named below.
+const OPENCART_EGRESS_OPTIONS: { vpcConnector?: string; vpcConnectorEgressSettings?: 'ALL_TRAFFIC' } = {};
 import { nestDottedKeys } from './firestorePatch';
 import { sanitizeOAuthReturnOrigin } from './oauthRedirect';
 import { validateImportUrl, safeFetch } from './urlValidator';

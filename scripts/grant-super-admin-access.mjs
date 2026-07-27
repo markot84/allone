@@ -4,7 +4,7 @@ import { initializeApp, cert, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
-const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
+const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'allone-9e685';
 // Don't commit super-admin emails / brand ids; pass via env (comma-separated), e.g.
 //   SUPER_ADMIN_EMAILS="a@x.com,b@y.com" SUPER_ADMIN_BRAND_IDS="brand1,brand2" node scripts/grant-super-admin-access.mjs
 const EMAILS = (process.env.SUPER_ADMIN_EMAILS || '')

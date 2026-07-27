@@ -2,7 +2,7 @@ import admin from 'firebase-admin';
 
 const brandFilter = (process.argv[2] || 'tennis').toLowerCase();
 
-admin.initializeApp({ projectId: 'performance-plus-4a5b2' });
+admin.initializeApp({ projectId: 'allone-9e685' });
 const db = admin.firestore();
 
 const brands = await db.collection('brands').get();

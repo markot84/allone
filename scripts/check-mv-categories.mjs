@@ -2,7 +2,7 @@ import admin from 'firebase-admin';
 
 const brandId = process.argv[2] || 'e-tennis';
 
-admin.initializeApp({ projectId: 'performance-plus-4a5b2' });
+admin.initializeApp({ projectId: 'allone-9e685' });
 const db = admin.firestore();
 
 console.log(`=== products coverage for brand "${brandId}" ===\n`);
