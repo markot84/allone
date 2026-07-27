@@ -1,0 +1,66 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Generated at dev/build time. Keeping it out of Git prevents each deploy
+# from leaving the working tree dirty on the next build.
+src/generated/buildInfo.json
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment variables
+.env
+.env.local
+.env.staging
+.env.production
+.env.production.local
+.env.development.local
+
+# Cloud Functions — μυστικά ανά project (το .env.example παραμένει στο repo)
+functions/.env*
+!functions/.env.example
+
+# Docs
+docs/
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+functions/lib/
+functions/node_modules/
+
+# Test artifacts
+coverage/
+functions/coverage/
+playwright-report/
+test-results/
+/blob-report/
+.playwright/
+
+# Local one-off scripts and secrets — never commit
+.tmp/
+.tmp_docs/
+.creds
+
+internal/*

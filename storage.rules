@@ -1,0 +1,34 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Mirrors isBrandMember in firestore.rules: member doc exists OR user created the brand.
+    // Uses cross-service Firestore reads which are admin-level and bypass Firestore rules.
+    function isBrandMember(brandId) {
+      return request.auth != null && (
+        firestore.exists(/databases/(default)/documents/brands/$(brandId)/members/$(request.auth.uid))
+        || firestore.get(/databases/(default)/documents/brands/$(brandId)).data.createdBy == request.auth.uid
+      );
+    }
+
+    // Brand assets: only members of the brand can read/write its assets.
+    match /brands/{brandId}/assets/{assetType}/{fileName} {
+      allow read: if isBrandMember(brandId);
+
+      // Deletes carry no request.resource — gate on auth + membership only.
+      allow delete: if isBrandMember(brandId);
+
+      // Uploads/updates must additionally pass size & content-type checks.
+      // SEC-L7: explicit raster allow-list instead of image/.* — excludes image/svg+xml,
+      // which can carry inline <script> (stored XSS when served same-origin).
+      allow write: if isBrandMember(brandId)
+        && request.resource.size < 5 * 1024 * 1024 // Max 5MB
+        && request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    }
+
+    // Deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,4 @@
+SKU,Name,Category,Margin Tier,Margin Percentage,Stock Level,Stock Capacity,Stock Age Days,Price,Priority Tag
+PROD-TEST-001,Laptop Pro,Electronics,high,38.0,45,200,20,899.00,New Launch
+PROD-TEST-002,Wireless Mouse,Electronics,medium,28.5,320,500,90,29.99,
+PROD-TEST-003,Desk Lamp,Home,low,18.0,80,150,45,49.99,Brand Push

@@ -1,0 +1,804 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Super admin: UIDs listed in appConfig/superAdmins.uids (seeded once via .tmp/seed-super-admins.mjs)
+    function isSuperAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/appConfig/superAdmins)
+        && 'uids' in get(/databases/$(database)/documents/appConfig/superAdmins).data
+        && get(/databases/$(database)/documents/appConfig/superAdmins).data.uids is list
+        && get(/databases/$(database)/documents/appConfig/superAdmins).data.uids.hasAny([request.auth.uid]);
+    }
+
+    // Helper: check user is member, creator, or super admin
+    function isBrandMember(brandId) {
+      return isSuperAdmin()
+        || (request.auth != null
+            && (exists(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid))
+                // SEC-L15: guard the createdBy get() with exists() (mirrors isBrandOwnerOrAdmin)
+                // so a missing brand doc evaluates to false instead of erroring.
+                || (exists(/databases/$(database)/documents/brands/$(brandId))
+                    && get(/databases/$(database)/documents/brands/$(brandId)).data.createdBy == request.auth.uid)));
+    }
+
+    // Owner ή admin του brand. Ο δημιουργός θεωρείται owner για legacy brands χωρίς members doc.
+    function isBrandOwnerOrAdmin(brandId) {
+      return isSuperAdmin()
+        || (request.auth != null
+            && exists(/databases/$(database)/documents/brands/$(brandId))
+            && get(/databases/$(database)/documents/brands/$(brandId)).data.createdBy == request.auth.uid)
+        || (request.auth != null
+            && exists(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid))
+            && get(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid)).data.role in ['owner', 'admin']);
+    }
+
+    // Ιεραρχία ρόλων (owner > admin > member). Χρησιμοποιείται για να μπλοκάρει
+    // ΜΟΝΟ self-escalation (PP-05) επιτρέποντας self-demotion (μεταβίβαση ιδιοκτησίας).
+    function roleRank(r) {
+      return r == 'owner' ? 3 : (r == 'admin' ? 2 : 1);
+    }
+
+    // OAuth connectors: ιδιοκτήτης, admin, δημιουργός brand (ίδιο με Cloud Functions)
+    function canManageBrandConnectors(brandId) {
+      return isSuperAdmin()
+        || (request.auth != null
+            && exists(/databases/$(database)/documents/brands/$(brandId))
+            && get(/databases/$(database)/documents/brands/$(brandId)).data.createdBy == request.auth.uid)
+        || isBrandOwnerOrAdmin(brandId);
+    }
+
+    // Briefing / coordination: sender (member of brandId) may create in-app notifications for other members
+    function canCreateNotificationForRecipient(recipientUid) {
+      let b = request.resource.data.brandId;
+      let d = request.resource.data;
+      return request.auth != null
+        && b is string
+        && b.size() > 0
+        && isBrandMember(b)
+        && exists(/databases/$(database)/documents/brands/$(b)/members/$(recipientUid))
+        // PP-15: constrain the payload a member may inject into another member's
+        // feed — well-formed coordination notification only, bounded sizes. (Full
+        // protection against a teammate sending a deceptive message would require
+        // creating these server-side; this blocks malformed/oversized injection.)
+        && d.type is string && d.type.size() > 0 && d.type.size() <= 64
+        && d.title is string && d.title.size() <= 300
+        && d.body is string && d.body.size() <= 4000;
+    }
+
+    // Brand-scoped docs store their owning brand in `brandId`. Authorization for
+    // update is evaluated on the EXISTING value (`resource.data.brandId`), so
+    // without this guard a member could PATCH `brandId` to another tenant and
+    // re-home / inject the doc. Every brand-scoped `update` pins it immutable.
+    function brandIdUnchanged() {
+      return request.resource.data.brandId == resource.data.brandId;
+    }
+
+    // Collection-group access for `members` subcollections — REQUIRED for the
+    // `collectionGroup('members') where userId == request.auth.uid` query the
+    // SPA runs on sign-in to discover the user's brands. The nested rule at
+    // /brands/{brandId}/members only applies to direct-path reads; CG queries
+    // need their own top-level rule with {path=**}.
+    match /{path=**}/members/{memberId} {
+      allow read: if request.auth != null
+        && resource.data.userId is string
+        && resource.data.userId == request.auth.uid;
+    }
+
+    // Users: own profile, or super-admin read for the admin dashboard.
+    match /users/{userId} {
+      allow read: if request.auth != null && (request.auth.uid == userId || isSuperAdmin());
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // User notifications subcollection
+    match /users/{userId}/notifications/{notifId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && (
+        request.auth.uid == userId
+        || canCreateNotificationForRecipient(userId)
+      );
+      allow update, delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Brands: only members may read (super admins also, for the admin dashboard);
+    // creator must match auth uid on create.
+    match /brands/{brandId} {
+      allow read: if isBrandMember(brandId) || isSuperAdmin();
+      allow create: if request.auth != null
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120;
+      // SEC-M2: `createdBy` is trusted as a membership/ownership signal (isBrandMember,
+      // isBrandOwnerOrAdmin, Storage rules) but was mutable on update — letting an
+      // owner/admin re-point it to their own uid and keep a persistent backdoor even
+      // after being removed from members. Pin it immutable; a normal update (which never
+      // changes createdBy) still passes since request.resource.data carries it unchanged.
+      allow update: if isBrandOwnerOrAdmin(brandId)
+        && request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if isBrandOwnerOrAdmin(brandId);
+
+      // Brand members — προσοχή: collection group query `where userId == request.auth.uid` ΔΕΝ πρέπει
+      // να βασίζεται μόνο σε isBrandMember(), γιατί το exists(.../members/$(uid)) είναι το ίδιο doc
+      // και οδηγεί σε permission denied (κυκλική εξάρτηση κανόνων).
+      match /members/{memberId} {
+        allow read: if request.auth != null && (
+          isSuperAdmin()
+          || memberId == request.auth.uid
+          || (resource.data.userId is string && resource.data.userId == request.auth.uid)
+          || isBrandMember(brandId)
+        );
+        // Self-provision is limited to the brand CREATOR claiming their own `owner`
+        // doc on first use. Every invitee joins via the server-side `acceptInvite`
+        // Cloud Function (Admin SDK, bypasses rules), which pins role to the invite.
+        // This blocks self-join-as-owner on an arbitrary brand (PP-02).
+        allow create: if isSuperAdmin()
+          || (request.auth != null
+              && request.auth.uid == memberId
+              // SEC-M10: pin the userId payload to the caller too, so a creator cannot mint
+              // a member doc carrying another user's userId (collection-group query spoofing).
+              && request.resource.data.userId == request.auth.uid
+              && request.resource.data.role == 'owner'
+              && exists(/databases/$(database)/documents/brands/$(brandId))
+              && get(/databases/$(database)/documents/brands/$(brandId)).data.createdBy == request.auth.uid);
+        // Role changes: an owner/admin may change roles, but may NOT raise their OWN
+        // role (blocks admin→owner self-escalation, PP-05). Self-DEMOTION is allowed
+        // so an owner can hand off ownership and step down. A member may update their
+        // own non-role fields (settings/department/etc.).
+        allow update: if isSuperAdmin()
+          || (isBrandOwnerOrAdmin(brandId)
+              && !(request.auth.uid == memberId
+                   && request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])
+                   && roleRank(request.resource.data.role) > roleRank(resource.data.role)))
+          || (request.auth.uid == memberId
+              && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+        allow delete: if isSuperAdmin() || isBrandOwnerOrAdmin(brandId) || request.auth.uid == memberId;
+        // Προτιμήσεις ειδοποιήσεων: ανάγνωση από μέλη του brand.
+        // Ο ίδιος ο χρήστης διαχειρίζεται τα settings του, ενώ owner/admin μπορούν να αλλάζουν μόνο τα notification settings μελών.
+        match /settings/{settingsId} {
+          allow read: if isBrandMember(brandId);
+          allow write: if request.auth != null
+            && isBrandMember(brandId)
+            && exists(/databases/$(database)/documents/brands/$(brandId)/members/$(memberId))
+            && (
+            request.auth.uid == memberId
+            || (settingsId == 'notifications' && (isSuperAdmin() || isBrandOwnerOrAdmin(brandId)))
+          );
+        }
+      }
+
+      // Morning briefing cache (per-day documents)
+      match /briefings/{briefingId} {
+        allow read, write: if isBrandMember(brandId);
+      }
+
+      // Mark agent conversation sessions (per-brand, multi-turn history).
+      // Brand isolation: τα sessions ζουν κάτω από το brand και απαιτούν membership.
+      match /mark_sessions/{sessionId} {
+        allow read, write: if isBrandMember(brandId);
+      }
+
+      // Legacy collection (πρώην Nilia) — διατηρείται μόνο για migration read.
+      match /nilia_sessions/{sessionId} {
+        allow read, write: if isBrandMember(brandId);
+      }
+
+      // Server-side aggregated stats (products, segments, campaigns)
+      match /aggregates/{type} {
+        allow read: if isBrandMember(brandId);
+        allow write: if false;
+      }
+    }
+
+    // Invites: the doc id is `inv_<token>` where the token is an unguessable
+    // UUID, so a single-doc `get` (by someone who holds the link) is the access
+    // control. `list` is denied to stop enumeration of every brand's invite
+    // tokens + recipient emails (PP-01). The client looks invites up by id.
+    //
+    // Only a brand owner/admin/creator (or super admin) may create/modify an
+    // invite — blocks forging cross-tenant invites (PP-03). The accepting user no
+    // longer writes invites; the `acceptInvite` Cloud Function consumes them
+    // server-side via the Admin SDK.
+    match /invites/{inviteId} {
+      allow get: if true;
+      allow list: if false;
+      // Any brand MEMBER may invite a teammate, but only owner/admin/creator may mint
+      // elevated-role invites — a plain member can create only role:'member' invites
+      // (no escalation-by-invite, since acceptInvite pins the new member's role to the
+      // invite). Non-members still can't forge invites for a brand (PP-03).
+      allow create: if request.auth != null
+        && isBrandMember(request.resource.data.brandId)
+        && (canManageBrandConnectors(request.resource.data.brandId)
+            || request.resource.data.role == 'member');
+      allow update, delete: if canManageBrandConnectors(resource.data.brandId);
+    }
+
+    // Brand-scoped collections: verify user is member of the doc's brandId
+    match /products/{productId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /segments/{segmentId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /campaigns/{campaignId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /content/{contentId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /analytics/{analyticsId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /organic/{organicId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /market_briefs/{briefId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /import_jobs/{jobId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /connector_sync_jobs/{jobId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /custom/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /active_strategies/{strategyId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /feed_sources/{sourceId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /channel_activations/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /suppliers/{supplierId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /procurement_inventory/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /procurement_costing/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /procurement_item_evaluation/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /procurement_customer_evaluation/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /procurement_pricing_policy/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /procurement_fiscal_year/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /procurement_statistics/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /procurement_snapshots/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      match /chunks/{chunkId} {
+        allow read: if request.auth != null
+          && isBrandMember(get(/databases/$(database)/documents/procurement_snapshots/$(docId)).data.brandId);
+        allow write: if request.auth != null
+          && isBrandMember(get(/databases/$(database)/documents/procurement_snapshots/$(docId)).data.brandId);
+      }
+    }
+    match /segment_customers/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /api_keys/{keyId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    // Connectors: keyed by brandId directly
+    match /connectors/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if canManageBrandConnectors(brandId);
+    }
+    // Connector rules: split from connectors doc to keep it lean
+    match /connector_rules/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if canManageBrandConnectors(brandId);
+    }
+    // Changelog: super-admin only (read + write). Authored and viewed solely from
+    // the Super Admin dashboard; no end-user "what's new" surface exists (PER-93).
+    match /changelog/{entryId} {
+      allow read: if isSuperAdmin();
+      allow write: if isSuperAdmin();
+    }
+    // App config docs (seeded by .tmp/seed-app-config.mjs and .tmp/seed-super-admins.mjs).
+    // SECURITY: writes are gated on super-admin status; reads are per-doc to balance
+    // privilege escalation risk against the need for unauthenticated pages to read URLs/signup mode.
+    //
+    // - publicConfig: SPA URLs / region / signup mode → public read (used by the
+    //   unauthenticated marketing landing and legal pages before sign-in completes).
+    // - notifications: backend recipient lists → client read locked off; Cloud Functions
+    //   reach this doc via Admin SDK which bypasses rules.
+    // - superAdmins: UID/email allowlist → super-admin read only. The SPA's
+    //   loadSuperAdmins() catches the permission denial for normal users and
+    //   treats them as non-admin; an actual super-admin passes isSuperAdmin().
+    //   This stops any authenticated user harvesting the admin email list.
+    // - other appConfig docs default to authenticated read.
+    match /appConfig/publicConfig {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+    match /appConfig/notifications {
+      allow read: if false;
+      allow write: if isSuperAdmin();
+    }
+    match /appConfig/superAdmins {
+      allow read: if isSuperAdmin();
+      allow write: if isSuperAdmin();
+    }
+    match /appConfig/{docId} {
+      // Firestore OR's overlapping match blocks, so this wildcard must NOT re-grant
+      // read on docs with stricter specific rules above — otherwise `superAdmins`
+      // (isSuperAdmin only) and `notifications` (no client read) leak to any
+      // authenticated user. Exclude them explicitly.
+      allow read: if request.auth != null && !(docId in ['superAdmins', 'notifications']);
+      allow write: if isSuperAdmin();
+    }
+    // Automation settings & alerts
+    match /automation_settings/{brandId} {
+      // Read: any member. Write: owner/admin/creator (or super admin) only —
+      // automation triggers can drive ad spend, so configuration is restricted to
+      // brand managers rather than every member (PP-14).
+      allow read: if isBrandMember(brandId);
+      allow write: if canManageBrandConnectors(brandId);
+    }
+    match /automation_alerts/{alertId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    // Coordination: decisions, tasks, comments, activity
+    match /decisions/{decisionId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /tasks/{taskId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /comments/{commentId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /activity/{activityId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    // Orders
+    match /orders/{orderId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    // Price benchmarks (keyed by brandId)
+    match /price_benchmarks/{brandId} {
+      allow read, write: if isBrandMember(brandId);
+      match /skus/{skuId} {
+        allow read, write: if isBrandMember(brandId);
+      }
+    }
+    // Competitor settings & ads (keyed by brandId)
+    match /competitor_settings/{brandId} {
+      allow read, write: if isBrandMember(brandId);
+    }
+    match /competitor_ads/{brandId} {
+      allow read, write: if isBrandMember(brandId);
+      match /ads/{adId} {
+        allow read, write: if isBrandMember(brandId);
+      }
+    }
+    // Search intelligence & price insights (keyed by brandId)
+    match /search_intelligence/{brandId} {
+      allow read, write: if isBrandMember(brandId);
+    }
+    match /price_insights/{brandId} {
+      allow read, write: if isBrandMember(brandId);
+    }
+    // GA4 analytics data (keyed by brandId)
+    match /ga4_data/{brandId} {
+      allow read, write: if isBrandMember(brandId);
+      match /chunks/{chunkId} {
+        allow read, write: if isBrandMember(brandId);
+      }
+    }
+    // Search Console query rows (keyed by brandId; Cloud Functions write via Admin SDK)
+    match /search_console_data/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
+    // E-commerce summary (keyed by brandId, server-write only)
+    match /ecommerce_summary/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
+    // Business-wide revenue from ERP invoices / SALDOC (server-write only)
+    match /business_revenue_summary/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
+    // Data Analysis RFM aggregate + diagnostics (server-write only)
+    match /data_analysis_rfm/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
+    match /data_analysis_diagnostics/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
+    // Product Intelligence server aggregate (connector-backed catalogs)
+    match /product_intelligence/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
+    match /product_intelligence_pages/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /product_intelligence_inventory/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+      match /chunks/{chunkId} {
+        allow read: if isBrandMember(brandId);
+        allow write: if false;
+      }
+    }
+    // Stock movement is split from ecommerce_summary to keep large SKU maps under Firestore's 1MB doc limit.
+    match /stock_movement/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
+    // SKU stats — chunked layout. Splitting was forced by big-catalog brands (e-tennis, safeblock)
+    // whose 12K+ SKUs crashed the parent ecommerce_summary write past Firestore's 1 MiB doc limit.
+    match /sku_stats/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+      match /chunks/{chunkId} {
+        allow read: if isBrandMember(brandId);
+        allow write: if false;
+      }
+    }
+    // Procurement signals — server-aggregated per-SKU map (keyed by brandId)
+    match /procurement_signals/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
+    // E-commerce connector data (Shopify, WooCommerce, OpenCart, Magento)
+    match /shopify_orders/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /shopify_products/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /woo_orders/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /woo_products/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /opencart_orders/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /opencart_products/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /magento_orders/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /magento_products/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    // Magento admin search terms (popular queries) — ένα doc ανά brand
+    match /magento_popular_searches/{brandId} {
+      allow read: if request.auth != null && isBrandMember(brandId);
+      allow write: if false;
+    }
+    // Megaventory ERP connector data (invoices/orders/products/stock/suppliers)
+    match /megaventory_invoices/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /megaventory_sales_orders/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /megaventory_purchase_orders/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /megaventory_products/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /megaventory_stock/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /megaventory_suppliers/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /megaventory_custom_report_rows/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    // SoftOne Web Services (CUSTOMER / ITEM / SALDOC / PURDOC browsers)
+    match /softone_customers/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /softone_items/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /softone_sales_documents/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /softone_purchase_documents/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    // Epsilon Smart e-Shop API
+    match /epsilonnet_eshop_items/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /epsilonnet_eshop_balances/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    // Entersoft Web API — Public Query σειρές
+    match /entersoft_public_query_rows/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    // Shared strategy packages: a share link contains the unguessable doc id, so a
+    // single-doc `get` is the access control (the client reads by id). `list` is
+    // denied to stop unauthenticated enumeration of every shared package. Create by
+    // auth users, update/delete by creator only.
+    match /shared_packages/{packageId} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if request.auth != null
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.createdBy == request.auth.uid;
+    }
+
+    // B2B Accounts — brand-scoped subcollection (Account Health Score)
+    match /b2b_accounts/{brandId}/accounts/{accountId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandMember(brandId);
+    }
+
+    // HR Employees — brand-scoped subcollection
+    match /hr_employees/{brandId}/employees/{employeeId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandOwnerOrAdmin(brandId);
+    }
+
+    // HR Leaves — brand-scoped subcollection
+    match /hr_leaves/{brandId}/leaves/{leaveId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandOwnerOrAdmin(brandId);
+    }
+
+    // Offers — brand-scoped
+    match /offers/{offerId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
+    // Territory reps — brand-scoped subcollection
+    match /territories/{brandId}/reps/{repId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandOwnerOrAdmin(brandId);
+    }
+
+    // Territory assignments — brand-scoped subcollection
+    match /territories/{brandId}/assignments/{assignmentId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandOwnerOrAdmin(brandId);
+    }
+
+    match /commercial_actions/{actionId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
+    match /commercial_decision_events/{eventId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
+    match /marketing_plans/{planId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
+    // «Εμπορικές Πληροφορίες» — γνώση/ένστικτο επιχειρηματία (brand-scoped, client-written).
+    // Τροφοδοτεί Mark, Marketing Plan, πρόβλεψη πωλήσεων, εμπορικές πολιτικές.
+    match /commercial_info/{infoId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
+    // Policy Impact precomputed result cache (client-written, brand-scoped). Μικρό doc με τα ήδη
+    // υπολογισμένα price/marketing decisions ώστε ο βαρύς υπολογισμός να γίνεται μία φορά ανά περίοδο.
+    match /commercial_scenario_cache/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+        && brandIdUnchanged();
+      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
+    // Marketing interest leads — εγγραφή μόνο μέσω Cloud Functions · ανάγνωση super admin
+    match /interest_leads/{leadId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
+
+    // Nightly scheduler health/status — write μόνο από Cloud Functions (Admin SDK), read από authenticated users
+    match /system_health/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // AI token/cost logging — write μόνο από Cloud Functions (Admin SDK), read super admin
+    match /ai_usage/{usageId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
+
+    // Rate limiter counters — write/read μόνο από Cloud Functions (Admin SDK).
+    // Κανένας client δεν πρέπει να τα διαβάσει ή να τα παρακάμψει.
+    match /rate_limits/{docId} {
+      allow read, write: if false;
+    }
+  }
+}

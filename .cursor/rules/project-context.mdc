@@ -1,0 +1,118 @@
+---
+description: Project architecture, stack, conventions and current status for Performance+
+alwaysApply: true
+---
+
+# Performance+ — Project Context
+
+## Stack
+- **Frontend**: React 18 + TypeScript + Vite, Tailwind CSS, Recharts, Framer Motion, @primer/react, lucide-react
+- **Backend**: Firebase Cloud Functions (2nd gen, Node 20, region `europe-west1`)
+- **Database**: Firestore (security rules in `firestore.rules`)
+- **Auth**: Firebase Auth (email + Google)
+- **Hosting**: Firebase Hosting (`dist/`)
+- **State**: React Query (`@tanstack/react-query`) for server state, React Context for auth/brand
+
+## Project Structure
+
+```
+src/
+  App.tsx              # Hash-based routing (VALID_SECTIONS), renderContent() switch
+  components/
+    layout/AppShell.tsx # Sidebar nav (navItems array, SectionId type)
+    dashboard/          # DashboardOverview — main KPI dashboard
+    roi/                # ROIAttribution — revenue, ROAS, True ROAS
+    analytics/          # GA4Analytics — web analytics page
+    ecommerce/          # EcommerceDashboard — e-commerce explorer
+    campaigns/          # CampaignsPage — Google Ads & Meta campaigns
+    data/               # ConnectorsPanel — connector management UI
+    inventory/          # ProductIntelligence — products & stock
+    rfm/                # RFM segmentation
+    strategy/           # WeightConfigurator — commercial strategy
+    channels/           # ChannelActivation
+    competitive/        # CompetitorInsights — price bench & ad monitoring
+    coordination/       # BriefingBoard — department coordination
+    help/               # Help — knowledge base UI
+    common/             # Card, CardHeader, KPICard, Badge, Button, Tooltip, etc.
+  hooks/                # React Query hooks (useBrand, useCampaigns, useGA4Data, useEcommerceSummary, etc.)
+  services/             # FirestoreService, import.ts, insights, reportExport
+  data/knowledgeBase.ts # Help articles & categories
+  config/firebase.ts    # Firebase client config
+  contexts/BrandContext.tsx # Multi-brand context
+
+functions/src/
+  index.ts              # All Cloud Function exports (HTTP + scheduled)
+  shopifyConnector.ts   # Shopify OAuth + data sync
+  woocommerceConnector.ts # WooCommerce API sync
+  opencartConnector.ts  # OpenCart API sync
+  magentoConnector.ts   # Magento Bearer token sync
+  ga4Connector.ts       # GA4 analytics sync
+  googleAdsConnector.ts # Google Ads campaigns sync
+  metaConnector.ts      # Meta campaigns sync
+  merchantConnector.ts  # Google Merchant Center price benchmarks
+  competitorMonitor.ts  # Meta Ad Library competitor monitoring
+  ecommerceAggregator.ts # Server-side e-commerce summary computation
+  oauthRedirect.ts      # OAuth redirect URL helper
+```
+
+## Key Patterns
+
+### Routing
+Hash-based: `#dashboard`, `#ecommerce`, `#roi`, etc. Defined in `App.tsx` → `VALID_SECTIONS` array and `renderContent()` switch. Nav items in `AppShell.tsx` → `navItems` array with `SectionId` type.
+
+### Adding a new page
+1. Create component in `src/components/<name>/`
+2. Add to `VALID_SECTIONS` in `App.tsx`
+3. Add `case` in `renderContent()` (use `lazy()` for code splitting)
+4. Add to `SectionId` type in `AppShell.tsx`
+5. Add nav item in `navItems` array
+
+### Data hooks
+Pattern: `useQuery` + `getDoc`/`getDocs` from Firestore. See `useGA4Data.ts` or `useEcommerceSummary.ts` as reference. Always use `staleTime: 10min`, key by `brandId`.
+
+### Connectors
+OAuth flow: `connectorAuth` → external OAuth → `connectorCallback` → token stored in `connectors/{brandId}`.
+API key flow: `connectorSaveCredentials` → credentials stored in `connectors/{brandId}`.
+Sync: `connectorSync` (manual) or `scheduledSync` (daily cron). Each connector writes to its own collection + `import_jobs`.
+
+### Firestore Collections
+- `connectors/{brandId}` — connector configs & credentials (one doc per brand)
+- `import_jobs` — sync logs (brandId-filtered)
+- `shopify_orders`, `woo_orders`, `opencart_orders`, `magento_orders` — order data
+- `shopify_products`, `woo_products`, `opencart_products`, `magento_products` — product data
+- `ecommerce_summary/{brandId}` — aggregated e-commerce KPIs (server-write only)
+- `ga4_data/{brandId}` — GA4 analytics data
+- `campaigns/{docId}` — imported campaign data
+- `products/{docId}` — imported product data
+- `brands/{brandId}` — brand config
+- `brand_members/{brandId}` — brand membership
+
+### E-commerce Aggregation
+`ecommerceAggregator.ts` → `computeEcommerceSummary(brandId)` reads all connected platform orders, computes totalRevenue/orderCount/aov/revenueByDay/revenueByMonth/revenueByPlatform/topProducts, writes to `ecommerce_summary/{brandId}`. Called after each e-commerce sync and in scheduledSync.
+
+## Deploy
+```bash
+npm run build                    # Frontend only (tsc + vite)
+npm run firebase:deploy:full     # Frontend build + functions build + `firebase deploy` (hosting, functions, rules)
+npm run deploy:full              # `firebase:deploy:full` → `git add -A` → commit αν υπάρχουν αλλαγές → `git push`
+```
+
+Προαιρετικό μήνυμα commit: `DEPLOY_COMMIT_MSG="μήνυμα" npm run deploy:full`
+
+**Agent:** Όταν ο χρήστης ζητάει **«full deploy»** (ή ισοδύναμο), εκτέλεσε `npm run deploy:full` από το root του repo.
+
+## Current Status (April 2026)
+
+### Completed features
+- All connectors operational: Google Ads, Meta, GA4, Shopify, WooCommerce, OpenCart, Magento, Merchant Center
+- E-commerce Explorer page (`#ecommerce`) with KPIs, daily revenue chart, platform breakdown, top products, recent orders
+- Dashboard e-commerce summary card with sparkline
+- ROI Attribution: e-shop Revenue, True ROAS, Revenue Gap, store revenue trend line
+- Firestore security rules: tenant isolation on all collections
+- Help/Knowledge Base: 6 articles for Connectors & E-commerce category
+- UX polish: loading states, status badges, table hover/sort, responsive tables, chart tooltip consistency
+
+### Known warnings (pre-existing, not blockers)
+- Vite circular dependency warnings (recharts re-exports, hooks barrel file) — cosmetic
+- Node 20 deprecation notice — upgrade to Node 22 before Oct 2026
+- `firebase-functions` package version warning — upgrade when ready for breaking changes

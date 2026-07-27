@@ -1,0 +1,9 @@
+{
+  "name": "tmp-seeders",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "firebase-admin": "^13.10.0"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "name": "performance-plus-functions",
+  "private": true,
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage --passWithNoTests",
+    "test:integration": "firebase emulators:exec --only firestore --project=demo-test \"vitest run --config vitest.integration.config.ts\"",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "22"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "busboy": "^1.6.0",
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^7.2.5",
+    "google-auth-library": "^10.6.1",
+    "nodemailer": "^8.0.7",
+    "uuid": "^11.1.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@types/busboy": "^1.5.4",
+    "@types/nodemailer": "^7.0.11",
+    "@types/uuid": "^10.0.0",
+    "@vitest/coverage-v8": "^4.1.8",
+    "firebase-tools": "^15.20.0",
+    "typescript": "~5.7.0",
+    "vitest": "^4.1.8"
+  },
+  "overrides": {
+    "path-to-regexp": "0.1.13",
+    "node-forge": "^1.4.0",
+    "protobufjs": "^7.5.8",
+    "uuid": "^11.1.1",
+    "qs": "^6.15.0"
+  }
+}

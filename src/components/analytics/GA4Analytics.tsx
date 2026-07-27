@@ -1,0 +1,1182 @@
+import { useState, useMemo } from 'react';
+import {
+  BarChart3,
+  Globe,
+  Search,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
+import { Card, CardHeader, KPICard, PageHeader } from '../common';
+import { useGA4Data, type OrganicSearchSource } from '../../hooks/useGA4Data';
+import { useGA4PeriodTotals } from '../../hooks/useGA4PeriodTotals';
+import type { KPICardData } from '../common/KPICard';
+import { formatCurrency } from '../../utils/format';
+import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
+import { DateRangePicker } from '../ui/DateRangePicker';
+import { useBrand } from '../../hooks/useBrand';
+import { getBrandHistoryStartISO } from '../../utils/brandHistoryStart';
+
+type TrafficRow = {
+  channel: string;
+  sessions: number;
+  users: number;
+  newUsers: number;
+  conversions: number;
+  totalRevenue: number;
+};
+
+const CHANNEL_COLORS: Record<string, string> = {
+  'Organic Search': '#34D399',
+  'Organic Social': '#4ADE80',
+  'Direct': '#A78BFA',
+  'Paid Search': '#3B82F6',
+  'Paid Social': '#EC4899',
+  'Paid Other': '#F59E0B',
+  'Cross-network': '#6366F1',
+  'Email': '#FB923C',
+  'Referral': '#FBBF24',
+  'Display': '#06B6D4',
+  'Affiliates': '#A855F7',
+  'Unassigned': '#9CA3AF',
+  'Social': '#F472B6',
+  '(Other)': '#9CA3AF',
+  'Λοιπά κανάλια': '#78716C',
+};
+const DEFAULT_COLOR = '#94A3B8';
+
+/** Default channel group for Google organic search — EN/EL to match GA4 across locale settings. */
+function isOrganicSearchDefaultChannel(channel: string): boolean {
+  const n = channel.normalize('NFKC').trim().toLowerCase();
+  if (n === 'organic search' || n === 'οργανική αναζήτηση') return true;
+  const hasOrganic = n.includes('organic') || n.includes('οργανικ');
+  const searchLike = n.includes('search') || n.includes('αναζήτηση');
+  const excludesSocial =
+    !n.includes('social') &&
+    !n.includes('κοινων') &&
+    !n.includes('shopping') &&
+    !n.includes('αγορές');
+  return hasOrganic && searchLike && excludesSocial;
+}
+
+/** Recharts Area needs ≥2 points to render a visible line. */
+function padSparklineForChart(values: number[]): number[] {
+  if (values.length === 0) return [];
+  if (values.length === 1) return [values[0], values[0]];
+  return values;
+}
+
+/** Date YYYY-MM-DD → DD/MM/YYYY for tooltips */
+function formatDateTooltipEl(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  if (!y || !m || !d) return ymd;
+  return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+}
+
+type SortField = 'pageViews' | 'sessions' | 'bounceRate';
+type OrganicSortField =
+  | 'clicks'
+  | 'impressions'
+  | 'position'
+  | 'sessions'
+  | 'users'
+  | 'conversions'
+  | 'estConversions'
+  | 'estRevenue'
+  | 'totalRevenue';
+
+type OrganicSearchRow = {
+  label: string;
+  clicks?: number;
+  impressions?: number;
+  ctr?: number;
+  position?: number;
+  sessions?: number;
+  users?: number;
+  conversions?: number;
+  /** GSC + GA4 blended: values estimated by click share against GA4 Organic Search. */
+  estConversions?: number;
+  estRevenue?: number;
+  totalRevenue?: number;
+};
+
+export function GA4Analytics() {
+  const {
+    propertyName,
+    dailyEntries,
+    trafficSources,
+    dailyTrafficByChannel,
+    organicSearchFallbackRows,
+    searchConsoleRows,
+    organicSearchSource,
+    isSearchConsoleConnected,
+    searchConsoleSiteName,
+    searchConsoleDateRange,
+    topPages,
+    dateRange,
+    isLoading,
+    hasData,
+  } = useGA4Data();
+
+  // Date range: local override (session-only) falls back to global
+  const { fromDate: globalFrom, toDate: globalTo, period: globalPeriod, setPeriod: setGlobalPeriod, setCustomRange } = useGlobalDate();
+  const [localDateFrom, setLocalDateFrom] = useState('');
+  const [localDateTo,   setLocalDateTo]   = useState('');
+  const { currentBrand } = useBrand();
+  const brandHistoryStartISO = getBrandHistoryStartISO(currentBrand);
+  const rawFrom = localDateFrom || globalFrom;
+  const rawTo   = localDateTo   || globalTo;
+  const effectiveFrom = brandHistoryStartISO && rawFrom < brandHistoryStartISO ? brandHistoryStartISO : rawFrom;
+  const effectiveTo   = rawTo;
+  const hasLocalOverride = !!(localDateFrom || localDateTo);
+
+  // Filter daily entries by effective date range
+  const filteredDailyEntries = useMemo(
+    () => dailyEntries.filter(d => d.date >= effectiveFrom && d.date <= effectiveTo),
+    [dailyEntries, effectiveFrom, effectiveTo]
+  );
+
+  // Recompute totals from filtered entries
+  const totals = useMemo(() => {
+    if (filteredDailyEntries.length === 0)
+      return { sessions: 0, users: 0, newUsers: 0, pageViews: 0, bounceRate: 0, conversions: 0, avgDuration: 0, addToCarts: 0 };
+    const sum = filteredDailyEntries.reduce(
+      (acc, d) => ({
+        sessions: acc.sessions + d.sessions,
+        users: acc.users + d.totalUsers,
+        newUsers: acc.newUsers + d.newUsers,
+        pageViews: acc.pageViews + d.pageViews,
+        bounceRate: acc.bounceRate + d.bounceRate,
+        conversions: acc.conversions + d.conversions,
+        avgDuration: acc.avgDuration + d.avgSessionDuration,
+        addToCarts: acc.addToCarts + (typeof d.addToCarts === 'number' ? d.addToCarts : 0),
+      }),
+      { sessions: 0, users: 0, newUsers: 0, pageViews: 0, bounceRate: 0, conversions: 0, avgDuration: 0, addToCarts: 0 }
+    );
+    const n = filteredDailyEntries.length;
+    return { ...sum, bounceRate: sum.bounceRate / n, avgDuration: sum.avgDuration / n };
+  }, [filteredDailyEntries]);
+
+  // GA4-deduplicated period totals (align with GA4 UI for Users/New users); daily totalUsers/newUsers
+  // don't sum correctly. KPI cards use these when available, else fall back to daily-sum `totals`.
+  const { periodTotals } = useGA4PeriodTotals(effectiveFrom, effectiveTo, hasData);
+  const usingPeriodTotals = !!periodTotals;
+  const displayTotals = useMemo(() => {
+    if (!periodTotals) return totals;
+    return {
+      sessions: periodTotals.sessions,
+      users: periodTotals.totalUsers,
+      newUsers: periodTotals.newUsers,
+      pageViews: periodTotals.pageViews,
+      bounceRate: periodTotals.bounceRate,
+      conversions: periodTotals.conversions,
+      avgDuration: periodTotals.avgSessionDuration,
+      addToCarts: periodTotals.addToCarts,
+    };
+  }, [periodTotals, totals]);
+
+  // weeklyChange from the filtered daily entries (last 7 vs previous 7)
+  const weeklyChange = useMemo(() => {
+    if (filteredDailyEntries.length < 14) return null;
+    const last7 = filteredDailyEntries.slice(-7);
+    const prev7 = filteredDailyEntries.slice(-14, -7);
+    const sum = (arr: typeof filteredDailyEntries, fn: (d: typeof filteredDailyEntries[0]) => number) => arr.reduce((a, d) => a + fn(d), 0);
+    const avg = (arr: typeof filteredDailyEntries, fn: (d: typeof filteredDailyEntries[0]) => number) =>
+      arr.length ? sum(arr, fn) / arr.length : 0;
+    const pct = (prev: number, curr: number) => prev > 0 ? ((curr - prev) / prev) * 100 : null;
+    return {
+      sessions: pct(sum(prev7, d => d.sessions), sum(last7, d => d.sessions)),
+      users: pct(sum(prev7, d => d.totalUsers), sum(last7, d => d.totalUsers)),
+      conversions: pct(sum(prev7, d => d.conversions), sum(last7, d => d.conversions)),
+      newUsers: pct(sum(prev7, d => d.newUsers), sum(last7, d => d.newUsers)),
+      pageViews: pct(sum(prev7, d => d.pageViews), sum(last7, d => d.pageViews)),
+      bounceRate: pct(avg(prev7, d => d.bounceRate), avg(last7, d => d.bounceRate)),
+      avgDuration: pct(avg(prev7, d => d.avgSessionDuration), avg(last7, d => d.avgSessionDuration)),
+      addToCarts: pct(sum(prev7, d => (typeof d.addToCarts === 'number' ? d.addToCarts : 0)), sum(last7, d => (typeof d.addToCarts === 'number' ? d.addToCarts : 0))),
+    };
+  }, [filteredDailyEntries]);
+
+  /** Per-channel totals built only from GA4 daily data (sessionDefaultChannelGroup × date), summing
+   * `dailyTrafficByChannel` days in the period — `dailyMetrics` can differ and yield an empty intersection. */
+  const { trafficSourcesForPeriod, channelMixSource } = useMemo(() => {
+    type Row = {
+      channel: string;
+      sessions: number;
+      users: number;
+      newUsers: number;
+      conversions: number;
+      totalRevenue: number;
+    };
+    type MixSource = 'daily' | 'full_sync' | 'empty';
+
+    const aggregateFromDaily = (): Row[] => {
+      const daily = dailyTrafficByChannel;
+      if (!daily || Object.keys(daily).length === 0) return [];
+      const map = new Map<string, Row>();
+      for (const date of Object.keys(daily)) {
+        if (date < effectiveFrom || date > effectiveTo) continue;
+        const chans = daily[date];
+        if (!chans || typeof chans !== 'object') continue;
+        for (const [channel, m] of Object.entries(chans)) {
+          const cur = map.get(channel) || {
+            channel,
+            sessions: 0,
+            users: 0,
+            newUsers: 0,
+            conversions: 0,
+            totalRevenue: 0,
+          };
+          cur.sessions += m.sessions || 0;
+          cur.users += m.users || 0;
+          cur.newUsers += m.newUsers || 0;
+          cur.conversions += m.conversions || 0;
+          cur.totalRevenue += m.totalRevenue || 0;
+          map.set(channel, cur);
+        }
+      }
+      return [...map.values()]
+        .filter((r) => r.sessions > 0 || r.conversions > 0 || r.totalRevenue > 0)
+        .sort((a, b) => b.sessions - a.sessions);
+    };
+
+    const fromDaily = aggregateFromDaily();
+    if (fromDaily.length > 0) {
+      return { trafficSourcesForPeriod: fromDaily, channelMixSource: 'daily' satisfies MixSource };
+    }
+
+    if (trafficSources.length > 0) {
+      return {
+        trafficSourcesForPeriod: trafficSources.map((s) => ({
+          channel: s.channel,
+          sessions: s.sessions,
+          users: s.users,
+          newUsers: s.newUsers ?? 0,
+          conversions: s.conversions,
+          totalRevenue: s.totalRevenue ?? 0,
+        })),
+        channelMixSource: 'full_sync' satisfies MixSource,
+      };
+    }
+
+    return { trafficSourcesForPeriod: [], channelMixSource: 'empty' satisfies MixSource };
+  }, [dailyTrafficByChannel, effectiveFrom, effectiveTo, trafficSources]);
+
+  const displayTrafficSources = useMemo((): TrafficRow[] => {
+    return trafficSourcesForPeriod.map((s) => ({
+      channel: s.channel,
+      sessions: s.sessions,
+      users: s.users,
+      newUsers: s.newUsers ?? 0,
+      conversions: s.conversions,
+      totalRevenue: s.totalRevenue ?? 0,
+    }));
+  }, [trafficSourcesForPeriod]);
+
+  /** Sum of conversions and revenue only for the GA4 default channel "Organic Search" (same logic as the channels table). */
+  const organicSearchChannelTotals = useMemo(() => {
+    let conversions = 0;
+    let totalRevenue = 0;
+    for (const s of trafficSourcesForPeriod) {
+      if (!isOrganicSearchDefaultChannel(s.channel)) continue;
+      conversions += s.conversions ?? 0;
+      totalRevenue += s.totalRevenue ?? 0;
+    }
+    return { conversions, totalRevenue };
+  }, [trafficSourcesForPeriod]);
+
+  const [pageSearch, setPageSearch] = useState('');
+  const [sortField, setSortField] = useState<SortField>('pageViews');
+  const [sortAsc, setSortAsc] = useState(false);
+  const [showAllPages, setShowAllPages] = useState(false);
+  const [organicSearchText, setOrganicSearchText] = useState('');
+  const [organicSortField, setOrganicSortField] = useState<OrganicSortField>('clicks');
+  const [organicSortAsc, setOrganicSortAsc] = useState(false);
+  const [showAllOrganicRows, setShowAllOrganicRows] = useState(false);
+
+  const chartData = useMemo(() => {
+    if (filteredDailyEntries.length === 0) return [];
+    const step = filteredDailyEntries.length > 30 ? 7 : 1;
+    const aggregated: { date: string; sessions: number; users: number; conversions: number }[] = [];
+    for (let i = 0; i < filteredDailyEntries.length; i += step) {
+      const chunk = filteredDailyEntries.slice(i, i + step);
+      aggregated.push({
+        date: chunk[0].date.slice(5),
+        sessions: chunk.reduce((a, d) => a + d.sessions, 0),
+        users: chunk.reduce((a, d) => a + d.totalUsers, 0),
+        conversions: chunk.reduce((a, d) => a + d.conversions, 0),
+      });
+    }
+    return aggregated;
+  }, [filteredDailyEntries]);
+
+  const pieData = useMemo(() => {
+    const sorted = [...displayTrafficSources].sort((a, b) => b.sessions - a.sessions);
+    if (sorted.length <= 9) {
+      return sorted.map((s) => ({
+        name: s.channel,
+        value: s.sessions,
+        color: CHANNEL_COLORS[s.channel] || DEFAULT_COLOR,
+      }));
+    }
+    const top = sorted.slice(0, 8);
+    const restSessions = sorted.slice(8).reduce((a, s) => a + s.sessions, 0);
+    return [
+      ...top.map((s) => ({
+        name: s.channel,
+        value: s.sessions,
+        color: CHANNEL_COLORS[s.channel] || DEFAULT_COLOR,
+      })),
+      { name: 'Λοιπά κανάλια', value: restSessions, color: '#78716C' },
+    ];
+  }, [displayTrafficSources]);
+
+  /** Sum of pie slices (balances with the table; may differ slightly from GA4 totals). */
+  const pieSlicesTotal = useMemo(
+    () => pieData.reduce((a, p) => a + Number(p.value || 0), 0),
+    [pieData]
+  );
+
+  const pieRechartsKey = `${effectiveFrom}|${effectiveTo}|${channelMixSource}|${pieData.map((p) => p.name).join(',')}|${pieData.map((p) => Number(p.value).toFixed(4)).join(',')}`;
+
+  const filteredPages = useMemo(() => {
+    let pages = topPages.filter(
+      (p) => !pageSearch || p.path.toLowerCase().includes(pageSearch.toLowerCase())
+    );
+    pages = [...pages].sort((a, b) =>
+      sortAsc ? a[sortField] - b[sortField] : b[sortField] - a[sortField]
+    );
+    return showAllPages ? pages : pages.slice(0, 15);
+  }, [topPages, pageSearch, sortField, sortAsc, showAllPages]);
+
+  const filteredSearchConsoleRows = useMemo(
+    () => searchConsoleRows.filter((row) => row.date >= effectiveFrom && row.date <= effectiveTo),
+    [searchConsoleRows, effectiveFrom, effectiveTo]
+  );
+
+  const filteredOrganicFallbackRows = useMemo(
+    () => organicSearchFallbackRows.filter((row) => row.date >= effectiveFrom && row.date <= effectiveTo),
+    [organicSearchFallbackRows, effectiveFrom, effectiveTo]
+  );
+
+  const organicRows = useMemo<OrganicSearchRow[]>(() => {
+    if (organicSearchSource === 'gsc') {
+      const grouped = new Map<string, { clicks: number; impressions: number; weightedPosition: number }>();
+      for (const row of filteredSearchConsoleRows) {
+        const current = grouped.get(row.query) || { clicks: 0, impressions: 0, weightedPosition: 0 };
+        current.clicks += row.clicks;
+        current.impressions += row.impressions;
+        current.weightedPosition += row.position * row.impressions;
+        grouped.set(row.query, current);
+      }
+      return [...grouped.entries()].map(([label, value]) => ({
+        label,
+        clicks: value.clicks,
+        impressions: value.impressions,
+        ctr: value.impressions > 0 ? value.clicks / value.impressions : 0,
+        position: value.impressions > 0 ? value.weightedPosition / value.impressions : 0,
+      }));
+    }
+
+    if (organicSearchSource === 'ga4_fallback') {
+      const grouped = new Map<string, { sessions: number; users: number; conversions: number; totalRevenue: number }>();
+      for (const row of filteredOrganicFallbackRows) {
+        const current = grouped.get(row.path) || { sessions: 0, users: 0, conversions: 0, totalRevenue: 0 };
+        current.sessions += row.sessions;
+        current.users += row.users;
+        current.conversions += row.conversions;
+        current.totalRevenue += typeof row.totalRevenue === 'number' ? row.totalRevenue : 0;
+        grouped.set(row.path, current);
+      }
+      return [...grouped.entries()].map(([label, value]) => ({
+        label,
+        sessions: value.sessions,
+        users: value.users,
+        conversions: value.conversions,
+        totalRevenue: value.totalRevenue > 0 ? value.totalRevenue : undefined,
+      }));
+    }
+
+    return [];
+  }, [organicSearchSource, filteredOrganicFallbackRows, filteredSearchConsoleRows]);
+
+  /** Estimated conversions/revenue per GSC query: the sum matches the GA4 Organic Search channel for the same period. */
+  const organicRowsDisplay = useMemo((): OrganicSearchRow[] => {
+    if (organicSearchSource !== 'gsc') return organicRows;
+    const sumClicks = organicRows.reduce((acc, r) => acc + (r.clicks || 0), 0);
+    const { conversions: osConv, totalRevenue: osRev } = organicSearchChannelTotals;
+    return organicRows.map((r) => ({
+      ...r,
+      estConversions: sumClicks > 0 ? (osConv * (r.clicks || 0)) / sumClicks : 0,
+      estRevenue: sumClicks > 0 ? (osRev * (r.clicks || 0)) / sumClicks : 0,
+    }));
+  }, [organicRows, organicSearchSource, organicSearchChannelTotals]);
+
+  const visibleOrganicSortField: OrganicSortField =
+    organicSearchSource === 'gsc'
+      ? ['clicks', 'impressions', 'position', 'estConversions', 'estRevenue'].includes(organicSortField)
+        ? organicSortField
+        : 'clicks'
+      : organicSearchSource === 'ga4_fallback'
+        ? ['sessions', 'users', 'conversions', 'totalRevenue'].includes(organicSortField)
+          ? organicSortField
+          : 'sessions'
+        : organicSortField;
+
+  const filteredOrganicRows = useMemo(() => {
+    const query = organicSearchText.trim().toLowerCase();
+    let rows = organicRowsDisplay.filter((row) => !query || row.label.toLowerCase().includes(query));
+    rows = [...rows].sort((a, b) => {
+      const direction = organicSortAsc ? 1 : -1;
+      const left = Number(a[visibleOrganicSortField] || 0);
+      const right = Number(b[visibleOrganicSortField] || 0);
+      return direction * (left - right);
+    });
+    return showAllOrganicRows ? rows : rows.slice(0, 15);
+  }, [
+    organicRowsDisplay,
+    organicSearchText,
+    visibleOrganicSortField,
+    organicSortAsc,
+    showAllOrganicRows,
+  ]);
+
+  /** Sparklines aligned with the date filter (not always the "last 14" from the whole sync). */
+  const sparkFiltered = useMemo(() => filteredDailyEntries.slice(-14), [filteredDailyEntries]);
+
+  const kpiTooltipBase = useMemo(() => {
+    const period = `${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}`;
+    const sync =
+      dateRange?.start && dateRange?.end
+        ? `Αποθηκευμένο εύρος από το τελευταίο GA4 sync: ${formatDateTooltipEl(dateRange.start)} — ${formatDateTooltipEl(dateRange.end)}. Για ημέρες εκτός αυτού του εύρους δεν υπάρχουν ημερήσια σημεία.`
+        : 'Τα ημερήσια σημεία προέρχονται από το τελευταίο GA4 sync.';
+    const cmp =
+      'Η σύγκριση «vs 7 ημ.» συγκρίνει τις τελευταίες 7 ημέρες της περιόδου με τις 7 προηγούμενες (απαιτούνται τουλάχιστον 14 ημέρες με δεδομένα εντός της περιόδου).';
+    const spark =
+      'Η μικρή γραμμή δείχνει έως τις 14 πιο πρόσφατες ημέρες με δεδομένα στην επιλεγμένη περίοδο.';
+    return { period, sync, cmp, spark };
+  }, [effectiveFrom, effectiveTo, dateRange?.start, dateRange?.end]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) setSortAsc(!sortAsc);
+    else {
+      setSortField(field);
+      setSortAsc(false);
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) =>
+    sortField === field ? (
+      sortAsc ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+    ) : null;
+
+  const handleOrganicSort = (field: OrganicSortField) => {
+    if (organicSortField === field) setOrganicSortAsc(!organicSortAsc);
+    else {
+      setOrganicSortField(field);
+      setOrganicSortAsc(field === 'position');
+    }
+  };
+
+  const OrganicSortIcon = ({ field }: { field: OrganicSortField }) =>
+    visibleOrganicSortField === field ? (
+      organicSortAsc ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+    ) : null;
+
+  if (isLoading) {
+    return (
+      <div className="py-16 text-center text-[#6B7280]">
+        <div className="animate-spin h-8 w-8 border-2 border-orange-400 border-t-transparent rounded-full mx-auto mb-3" />
+        Φόρτωση GA4 δεδομένων...
+      </div>
+    );
+  }
+
+  if (!hasData) {
+    return (
+      <div className="py-16 text-center">
+        <Globe size={48} className="mx-auto mb-4 text-[#D1D5DB]" />
+        <h3 className="text-lg font-semibold text-[#1A1A1A] mb-2">Δεν υπάρχουν GA4 δεδομένα</h3>
+        <p className="text-sm text-[#6B7280]">
+          Συνδέστε το Google Analytics 4 από τις Συνδέσεις (sidebar) και κάντε Sync.
+        </p>
+      </div>
+    );
+  }
+
+  const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString('el-GR');
+  const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
+  const fmtDuration = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = Math.round(s % 60);
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  const round1 = (v: number | null | undefined) => (v != null ? Math.round(v * 10) / 10 : undefined);
+  const organicSourceMeta: Record<OrganicSearchSource, { label: string; subtitle: string; badgeClass: string }> = {
+    gsc: {
+      label: 'Google Search Console',
+      subtitle: searchConsoleSiteName
+        ? `Πραγματικά search queries από ${searchConsoleSiteName}. Οι ενδείξεις «Μετατροπές (εκτ.)» και «Έσοδα (εκτ.)» προέρχονται από το GA4 (κανάλι Organic Search, ίδια περίοδο με τον πίνακα καναλιών) και κατανέμονται ανά query με βάση το μερίδιο clicks στο GSC — δεν είναι άμεσο keyword attribution.`
+        : 'Πραγματικά search queries από το Search Console. Οι ενδείξεις μετατροπών/έσοδου είναι εκτιμώμενες από το GA4 (Organic Search) κατά κατανομή με clicks GSC.',
+      badgeClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    },
+    ga4_fallback: {
+      label: 'GA4 (organic landing)',
+      subtitle:
+        'Οργανικές σελίδες εισόδου από το GA4 όταν δεν υπάρχει σύνδεση Search Console. Τα έσοδα ανά path εμφανίζονται όταν το property επιστρέφει totalRevenue για αυτή την αναφορά.',
+      badgeClass: 'border-orange-200 bg-orange-50 text-orange-700',
+    },
+    none: {
+      label: 'Χωρίς πηγή',
+      subtitle: 'Συνδέστε Search Console για πραγματικά queries ή κάντε sync GA4 για fallback landing pages',
+      badgeClass: 'border-slate-200 bg-slate-50 text-slate-600',
+    },
+  };
+  const activeOrganicMeta = organicSourceMeta[organicSearchSource];
+
+  const primaryKpis: KPICardData[] = [
+    {
+      label: 'Συνεδρίες',
+      value: fmt(displayTotals.sessions),
+      change: round1(weeklyChange?.sessions),
+      changeLabel: 'vs 7 ημ.',
+      trend: weeklyChange?.sessions != null ? (weeklyChange.sessions >= 0 ? 'up' : 'down') : undefined,
+      sparklineData: sparkFiltered.map((d) => d.sessions),
+      tooltip: `Άθροισμα συνεδριών (sessions) για την επιλεγμένη περίοδο (${kpiTooltipBase.period}).\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`,
+    },
+    {
+      label: 'Χρήστες',
+      value: fmt(displayTotals.users),
+      change: round1(weeklyChange?.users),
+      changeLabel: 'vs 7 ημ.',
+      trend: weeklyChange?.users != null ? (weeklyChange.users >= 0 ? 'up' : 'down') : undefined,
+      sparklineData: sparkFiltered.map((d) => d.totalUsers),
+      tooltip: usingPeriodTotals
+        ? `Μοναδικοί χρήστες de-duplicated για όλη την περίοδο (${kpiTooltipBase.period}) — ίδιος υπολογισμός με το GA4 UI.\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`
+        : `Άθροισμα μοναδικών χρηστών (totalUsers ανά ημέρα) για την περίοδο (${kpiTooltipBase.period}). Στο GA4 είναι «εντός ημέρας», όχι de-duplicated σε όλη την περίοδο.\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`,
+    },
+    {
+      label: 'Νέοι χρήστες',
+      value: fmt(displayTotals.newUsers),
+      change: round1(weeklyChange?.newUsers),
+      changeLabel: 'vs 7 ημ.',
+      trend: weeklyChange?.newUsers != null ? (weeklyChange.newUsers >= 0 ? 'up' : 'down') : undefined,
+      sparklineData: sparkFiltered.map((d) => d.newUsers),
+      tooltip: usingPeriodTotals
+        ? `Νέοι χρήστες de-duplicated για όλη την περίοδο (${kpiTooltipBase.period}) — ίδιος υπολογισμός με το GA4 UI.\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`
+        : `Άθροισμα νέων χρηστών ανά ημέρα για την περίοδο (${kpiTooltipBase.period}).\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`,
+    },
+    {
+      label: 'Μετατροπές',
+      value: fmt(displayTotals.conversions),
+      change: round1(weeklyChange?.conversions),
+      changeLabel: 'vs 7 ημ.',
+      trend: weeklyChange?.conversions != null ? (weeklyChange.conversions >= 0 ? 'up' : 'down') : undefined,
+      sparklineData: sparkFiltered.map((d) => d.conversions),
+      tooltip: `Άθροισμα μετατροπών από την ημερήσια αναφορά GA4 για την περίοδο (${kpiTooltipBase.period}). Αντιστοιχεί στα key events / μετρήσεις μετατροπής όπως στο GA4.\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`,
+    },
+  ];
+
+  const secondaryKpis: KPICardData[] = [
+    {
+      label: 'Bounce rate',
+      value: fmtPct(displayTotals.bounceRate),
+      change: round1(weeklyChange?.bounceRate),
+      changeLabel: 'vs 7 ημ.',
+      trend: weeklyChange?.bounceRate != null ? (weeklyChange.bounceRate >= 0 ? 'up' : 'down') : undefined,
+      sparklineData: padSparklineForChart(sparkFiltered.map((d) => d.bounceRate * 100)),
+      tooltip: `Μέσος όρος bounce rate ανά ημέρα για την περίοδο (${kpiTooltipBase.period}), μετά μέσος όρος των ημερών (όχι bounce σε επίπεδο περιόδου).\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`,
+    },
+    {
+      label: 'Μέση διάρκεια',
+      value: fmtDuration(displayTotals.avgDuration),
+      change: round1(weeklyChange?.avgDuration),
+      changeLabel: 'vs 7 ημ.',
+      trend: weeklyChange?.avgDuration != null ? (weeklyChange.avgDuration >= 0 ? 'up' : 'down') : undefined,
+      sparklineData: padSparklineForChart(sparkFiltered.map((d) => d.avgSessionDuration)),
+      tooltip: `Μέσος όρος διάρκειας session (λεπτά:δευτ.) ανά ημέρα για την περίοδο (${kpiTooltipBase.period}).\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`,
+    },
+    {
+      label: 'Προβολές σελίδων',
+      value: fmt(displayTotals.pageViews),
+      change: round1(weeklyChange?.pageViews),
+      changeLabel: 'vs 7 ημ.',
+      trend: weeklyChange?.pageViews != null ? (weeklyChange.pageViews >= 0 ? 'up' : 'down') : undefined,
+      sparklineData: padSparklineForChart(sparkFiltered.map((d) => d.pageViews)),
+      tooltip: `Άθροισμα προβολών οθόνης/σελίδας (screenPageViews) για την περίοδο (${kpiTooltipBase.period}).\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`,
+    },
+    {
+      label: 'Προσθήκες στο καλάθι',
+      value: fmt(displayTotals.addToCarts),
+      change: round1(weeklyChange?.addToCarts),
+      changeLabel: 'vs 7 ημ.',
+      trend: weeklyChange?.addToCarts != null ? (weeklyChange.addToCarts >= 0 ? 'up' : 'down') : undefined,
+      sparklineData: padSparklineForChart(sparkFiltered.map((d) => (typeof d.addToCarts === 'number' ? d.addToCarts : 0))),
+      tooltip: `Μετρήσεις GA4 «addToCarts»: πόσες φορές προστέθηκαν προϊόντα στο καλάθι (${kpiTooltipBase.period}). Δεν είναι ίδιο με «εγκαταλειφθέντα καλάθια» (session χωρίς αγορά)· για εκεί χρειάζεται funnel/exploration στο GA4.\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`,
+    },
+  ];
+
+  return (
+    <div className="space-y-8">
+      <PageHeader
+        title={
+          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-[var(--nts-charcoal)] sm:text-2xl">
+            <BarChart3 size={24} className="shrink-0 text-orange-500" />
+            Αναλυτικά ιστού (GA4)
+          </h2>
+        }
+        description={
+          <p className="text-[14px] text-[var(--nts-medium-gray)]">
+            Ιδιότητα GA4:{' '}
+            <span className="font-medium text-[var(--nts-charcoal)]">{propertyName}</span>
+            {dateRange && (
+              <span className="ml-2 text-xs text-[#6B7280]">
+                (τελευταίος συγχρονισμός: {formatDateTooltipEl(dateRange.start)} — {formatDateTooltipEl(dateRange.end)})
+              </span>
+            )}
+          </p>
+        }
+        actions={
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <div className="-mx-1 max-w-full overflow-x-auto pb-1 sm:mx-0 sm:overflow-visible sm:pb-0">
+            <div className="flex w-max items-center gap-1 rounded-lg bg-gray-100 p-1 sm:w-auto">
+              {GLOBAL_PERIOD_OPTIONS.map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => { setGlobalPeriod(opt.key); setLocalDateFrom(''); setLocalDateTo(''); }}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    !hasLocalOverride && globalPeriod === opt.key
+                      ? 'bg-white text-[var(--nts-orange)] shadow-sm font-semibold'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            </div>
+            <DateRangePicker
+              from={effectiveFrom}
+              to={effectiveTo}
+              // Writes to the GLOBAL (persisted per-brand) context so the custom period survives refresh.
+              onChange={(f, t) => { setLocalDateFrom(''); setLocalDateTo(''); setCustomRange(f, t); }}
+              onClear={() => { setLocalDateFrom(''); setLocalDateTo(''); setGlobalPeriod('current_month'); }}
+            />
+          </div>
+        }
+      />
+
+      {/* KPI Cards — Primary row */}
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {primaryKpis.map((kpi, i) => (
+            <KPICard key={kpi.label} kpi={kpi} index={i} />
+          ))}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {secondaryKpis.map((kpi, i) => (
+            <KPICard key={kpi.label} kpi={kpi} index={i + 4} />
+          ))}
+        </div>
+      </div>
+
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Sessions & Users Trend */}
+        <Card className="lg:col-span-2">
+          <CardHeader
+            title="Επισκεψιμότητα"
+            subtitle="Τάση συνεδριών και χρηστών"
+          />
+          <div className="p-4 pt-0">
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="gradSessions" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F97316" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradUsers" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <RechartsTooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
+                  formatter={(value: number | undefined, name: string | undefined) => [
+                    `${Number(value ?? 0).toLocaleString('el-GR')}`,
+                    name === 'users' ? 'Χρήστες' : 'Συνεδρίες',
+                  ]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="sessions"
+                  stroke="#F97316"
+                  fill="url(#gradSessions)"
+                  strokeWidth={2}
+                  name="sessions"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="users"
+                  stroke="#3B82F6"
+                  fill="url(#gradUsers)"
+                  strokeWidth={2}
+                  name="users"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* Traffic Channels Pie */}
+        <Card>
+          <CardHeader
+            title={
+              <span className="inline-flex items-center gap-2">
+                Κανάλια Επισκεψιμότητας
+                {channelMixSource === 'full_sync' && (
+                  <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                    Πλήρης περίοδος συγχρονισμού
+                  </span>
+                )}
+              </span>
+            }
+            subtitle={
+              channelMixSource === 'daily'
+                ? `Sessions ανά GA4 Default Channel Group για ${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}. Είναι traffic attribution, όχι πραγματική απόδοση Google Ads / Meta.`
+                : channelMixSource === 'full_sync'
+                  ? `⚠️ Δεν υπάρχουν ημερήσια ανά κανάλι στο τελευταίο sync — δείχνουμε το συνολικό διαθέσιμο ιστορικό. Τα labels είναι GA4 attribution groups, όχι διαφημιστική πραγματικότητα.`
+                  : `Δεν υπάρχουν δεδομένα GA4 ακόμη. Κάντε σύνδεση/sync από τις Συνδέσεις.`
+            }
+          />
+          <div className="p-4 pt-0">
+            <p className="mb-3 text-[11px] leading-snug text-[#6B7280]">
+              Ομαδοποίηση GA4 ανά <strong>Default Channel Group</strong>. Τα paid groups εδώ περιγράφουν πώς το GA4
+              αποδίδει την επισκεψιμότητα και μπορεί να διαφέρουν από Google Ads / Meta imports, spend και ROAS.
+            </p>
+            <div className="flex flex-col items-center">
+              <div className="relative w-full h-[200px] max-w-[280px] mx-auto">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      key={pieRechartsKey}
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={58}
+                      outerRadius={88}
+                      paddingAngle={2}
+                      dataKey="value"
+                      nameKey="name"
+                      isAnimationActive={pieData.length > 0}
+                    >
+                      {pieData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip
+                      formatter={(value, name) => [
+                        `${Number(value ?? 0).toLocaleString('el-GR', { maximumFractionDigits: 1 })} συνεδρίες`,
+                        String(name),
+                      ]}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                  aria-hidden
+                >
+                  <div className="text-center px-1 min-w-0 max-w-[min(7rem,32%)]">
+                    <div className="text-lg font-bold text-[#111827] tabular-nums leading-none tracking-tight">
+                      {Math.round(pieSlicesTotal).toLocaleString('el-GR')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p className="text-[11px] text-center text-[#6B7280] mt-1.5 mb-0 max-w-sm px-1 leading-snug">
+                Σύνολο συνεδριών (άθροισμα καναλιών)
+              </p>
+              <div
+                className="mt-3 grid w-full max-w-lg grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 justify-items-start sm:justify-items-center"
+                role="list"
+              >
+                {pieData.map((entry) => (
+                  <div
+                    key={entry.name}
+                    className="flex min-w-0 max-w-full items-center gap-1.5"
+                    role="listitem"
+                    title={entry.name}
+                  >
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} />
+                    <span className="min-w-0 break-words text-left text-[11px] leading-snug text-[#374151]">
+                      {entry.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+        {/* Traffic Channels Detail Table */}
+        <Card>
+        <CardHeader
+          title={
+            <span className="inline-flex items-center gap-2">
+              Ανάλυση Απόδοσης Επισκεψιμότητας (GA4 attribution)
+              {channelMixSource === 'full_sync' && (
+                <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                  Πλήρης περίοδος συγχρονισμού
+                </span>
+              )}
+            </span>
+          }
+          subtitle={
+            channelMixSource === 'full_sync'
+              ? `⚠️ Σύνολο διαθέσιμου ιστορικού: το τελευταίο sync δεν είχε ημερήσια breakdown ανά κανάλι, άρα αγνοείται το επιλεγμένο εύρος. Τα κανάλια είναι GA4 Default Channel Groups, όχι πραγματική απόδοση διαφημιστικών πλατφορμών.`
+              : `Ίδιο εύρος με το ημερολόγιο (${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}). Τα κανάλια είναι GA4 Default Channel Groups / attribution labels, όχι Google Ads ή Meta performance. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
+          }
+        />
+        <div className="p-4 pt-0 overflow-x-auto">
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+            Τα paid rows εδώ είναι ταξινόμηση επισκεψιμότητας από το GA4. Δεν αντικαθιστούν τα πραγματικά Google Ads / Meta δεδομένα
+            spend, campaigns και ROAS που έρχονται από τους διαφημιστικούς connectors.
+          </div>
+          {displayTrafficSources.length === 0 ? (
+            <div className="py-6 text-center text-sm text-[#6B7280]">
+              <BarChart3 size={32} className="mx-auto mb-2 text-[#D1D5DB]" />
+              <p className="font-medium text-[#374151] mb-1">Δεν υπάρχουν δεδομένα καναλιών</p>
+              <p>Το report των channel groups δεν ήταν διαθέσιμο κατά το τελευταίο sync.<br />
+                Δοκιμάστε <strong>Sync τώρα</strong> από τη σελίδα Συνδέσεις.</p>
+            </div>
+          ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-[#6B7280] border-b border-[#F3F4F6]">
+                <th className="pb-2 font-medium">GA4 attribution group</th>
+                <th className="pb-2 font-medium text-right">Sessions</th>
+                <th className="pb-2 font-medium text-right">Χρήστες</th>
+                <th className="pb-2 font-medium text-right">Νέοι χρήστες</th>
+                <th className="pb-2 font-medium text-right">Μετατροπές</th>
+                <th className="pb-2 font-medium text-right">Έσοδα (GA4)</th>
+                <th className="pb-2 font-medium text-right">Έσοδο / μετ.</th>
+                <th className="pb-2 font-medium text-right">Conv. rate</th>
+                <th className="pb-2 font-medium text-right">Μερίδιο</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                const totalSessions = displayTrafficSources.reduce((a, x) => a + x.sessions, 0);
+                return displayTrafficSources.map((s) => {
+                const share = totalSessions > 0 ? (s.sessions / totalSessions) * 100 : 0;
+                const convRate = s.sessions > 0 ? (s.conversions / s.sessions) * 100 : 0;
+                return (
+                  <tr key={s.channel} className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA]">
+                    <td className="py-2 flex items-center gap-2">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: CHANNEL_COLORS[s.channel] || DEFAULT_COLOR }}
+                      />
+                      {s.channel}
+                    </td>
+                    <td className="py-2 text-right font-medium">{s.sessions.toLocaleString()}</td>
+                    <td className="py-2 text-right">{s.users.toLocaleString()}</td>
+                    <td className="py-2 text-right">{(s.newUsers || 0).toLocaleString()}</td>
+                    <td className="py-2 text-right">{s.conversions.toLocaleString()}</td>
+                    <td className="py-2 text-right font-mono text-[#1A1A1A]">
+                      €{formatCurrency(s.totalRevenue ?? 0, 0)}
+                    </td>
+                    <td className="py-2 text-right font-mono text-[#374151] text-xs">
+                      {s.conversions > 0
+                        ? `€${formatCurrency((s.totalRevenue ?? 0) / s.conversions, 2)}`
+                        : '—'}
+                    </td>
+                    <td className="py-2 text-right">{convRate.toFixed(1)}%</td>
+                    <td className="py-2 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="w-16 h-1.5 bg-[#F3F4F6] rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.min(share, 100)}%`,
+                              backgroundColor: CHANNEL_COLORS[s.channel] || DEFAULT_COLOR,
+                            }}
+                          />
+                        </div>
+                        <span className="text-xs w-10 text-right">{share.toFixed(1)}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              });
+              })()}
+            </tbody>
+          </table>
+          )}
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Organic Search Terms" subtitle={activeOrganicMeta.subtitle} />
+        <div className="p-4 pt-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-medium ${activeOrganicMeta.badgeClass}`}>
+                {activeOrganicMeta.label}
+              </span>
+              {(organicSearchSource === 'gsc' ? searchConsoleDateRange : dateRange) && (
+                <span className="text-xs text-[#6B7280]">
+                  Συγχρ.:{' '}
+                  {formatDateTooltipEl(
+                    (organicSearchSource === 'gsc' ? searchConsoleDateRange : dateRange)!.start
+                  )}{' '}
+                  —{' '}
+                  {formatDateTooltipEl(
+                    (organicSearchSource === 'gsc' ? searchConsoleDateRange : dateRange)!.end
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {organicSearchSource === 'none' ? (
+            <div className="py-6 text-center text-sm text-[#6B7280]">
+              <Search size={30} className="mx-auto mb-2 text-[#D1D5DB]" />
+              <p className="font-medium text-[#374151] mb-1">Δεν υπάρχουν διαθέσιμα organic search terms</p>
+              <p>
+                {isSearchConsoleConnected
+                  ? 'Το Search Console connector είναι συνδεδεμένο, αλλά δεν επέστρεψε query rows στο τελευταίο sync για αυτό το brand.'
+                  : 'Συνδέστε το Google Search Console για πραγματικά queries. Αν δεν υπάρχει GSC, το GA4 fallback θα εμφανίσει οργανικά landing pages μετά από sync.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="relative mb-3">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                <input
+                  type="text"
+                  placeholder={organicSearchSource === 'gsc' ? 'Αναζήτηση query...' : 'Αναζήτηση landing page...'}
+                  value={organicSearchText}
+                  onChange={(e) => setOrganicSearchText(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none"
+                />
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-[#6B7280] border-b border-[#F3F4F6]">
+                      <th className="pb-2 font-medium">{organicSearchSource === 'gsc' ? 'Query' : 'Landing page'}</th>
+                      {organicSearchSource === 'gsc' ? (
+                        <>
+                          <th className="pb-2 font-medium text-right cursor-pointer select-none" onClick={() => handleOrganicSort('clicks')}>
+                            Clicks <OrganicSortIcon field="clicks" />
+                          </th>
+                          <th className="pb-2 font-medium text-right cursor-pointer select-none" onClick={() => handleOrganicSort('impressions')}>
+                            Impressions <OrganicSortIcon field="impressions" />
+                          </th>
+                          <th className="pb-2 font-medium text-right">CTR</th>
+                          <th className="pb-2 font-medium text-right cursor-pointer select-none" onClick={() => handleOrganicSort('position')}>
+                            Avg. position <OrganicSortIcon field="position" />
+                          </th>
+                          <th
+                            className="pb-2 font-medium text-right cursor-pointer select-none max-w-[110px]"
+                            title="Από GA4 (Organic Search), κατανομή ανά clicks GSC"
+                            onClick={() => handleOrganicSort('estConversions')}
+                          >
+                            Μετ. (εκτ.) <OrganicSortIcon field="estConversions" />
+                          </th>
+                          <th
+                            className="pb-2 font-medium text-right cursor-pointer select-none max-w-[110px]"
+                            title="Από GA4 totalRevenue (Organic Search), κατανομή ανά clicks GSC"
+                            onClick={() => handleOrganicSort('estRevenue')}
+                          >
+                            Έσοδα (εκτ.) <OrganicSortIcon field="estRevenue" />
+                          </th>
+                        </>
+                      ) : (
+                        <>
+                          <th className="pb-2 font-medium text-right cursor-pointer select-none" onClick={() => handleOrganicSort('sessions')}>
+                            Sessions <OrganicSortIcon field="sessions" />
+                          </th>
+                          <th className="pb-2 font-medium text-right cursor-pointer select-none" onClick={() => handleOrganicSort('users')}>
+                            Users <OrganicSortIcon field="users" />
+                          </th>
+                          <th className="pb-2 font-medium text-right cursor-pointer select-none" onClick={() => handleOrganicSort('conversions')}>
+                            Conversions <OrganicSortIcon field="conversions" />
+                          </th>
+                          <th
+                            className="pb-2 font-medium text-right cursor-pointer select-none"
+                            title="Από GA4 organic landing rows όταν το property επιτρέπει totalRevenue"
+                            onClick={() => handleOrganicSort('totalRevenue')}
+                          >
+                            Έσοδα (€) <OrganicSortIcon field="totalRevenue" />
+                          </th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredOrganicRows.map((row) => (
+                      <tr key={row.label} className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA]">
+                        <td className={`py-2 ${organicSearchSource === 'ga4_fallback' ? 'font-mono text-xs text-[#374151]' : 'text-[#111827]'}`} title={row.label}>
+                          <div className="max-w-[460px] truncate">{row.label}</div>
+                        </td>
+                        {organicSearchSource === 'gsc' ? (
+                          <>
+                            <td className="py-2 text-right font-medium">{(row.clicks || 0).toLocaleString('el-GR')}</td>
+                            <td className="py-2 text-right">{(row.impressions || 0).toLocaleString('el-GR')}</td>
+                            <td className="py-2 text-right">{fmtPct(row.ctr || 0)}</td>
+                            <td className="py-2 text-right">{(row.position || 0).toFixed(1)}</td>
+                            <td className="py-2 text-right text-[#374151]">
+                              {(row.estConversions ?? 0).toLocaleString('el-GR', {
+                                maximumFractionDigits: 1,
+                                minimumFractionDigits: 0,
+                              })}
+                            </td>
+                            <td className="py-2 text-right text-[#374151] whitespace-nowrap">
+                              €{formatCurrency(row.estRevenue ?? 0, 0)}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="py-2 text-right font-medium">{(row.sessions || 0).toLocaleString('el-GR')}</td>
+                            <td className="py-2 text-right">{(row.users || 0).toLocaleString('el-GR')}</td>
+                            <td className="py-2 text-right">{(row.conversions || 0).toLocaleString('el-GR')}</td>
+                            <td className="py-2 text-right whitespace-nowrap">
+                              {row.totalRevenue != null && row.totalRevenue > 0
+                                ? `€${formatCurrency(row.totalRevenue, 0)}`
+                                : '—'}
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {organicSearchSource === 'gsc' && (
+                <p className="mt-2 text-[11px] leading-relaxed text-[#6B7280]">
+                  Το άθροισμα των στηλών «Μετ. (εκτ.)» και «Έσοδα (εκτ.)» στον πίνακα προσεγγίζει την αντίστοιχη γραμμή Organic Search στον πίνακα καναλιών πάνω (ίδια περίοδος), εκτός από στρογγυλοποίηση.
+                </p>
+              )}
+
+              {filteredOrganicRows.length === 0 && (
+                <div className="py-6 text-center text-sm text-[#6B7280]">
+                  Δεν βρέθηκαν organic rows για το επιλεγμένο διάστημα.
+                </div>
+              )}
+
+              {organicRowsDisplay.length > 15 && (
+                <button
+                  onClick={() => setShowAllOrganicRows(!showAllOrganicRows)}
+                  className="mt-3 text-xs text-orange-600 hover:text-orange-700 font-medium"
+                >
+                  {showAllOrganicRows ? 'Λιγότερα' : `Εμφάνιση όλων (${organicRowsDisplay.length})`}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </Card>
+
+      {/* Top Pages */}
+      <Card>
+        <CardHeader
+          title="Κορυφαίες σελίδες"
+          subtitle="Τελευταίο GA4 sync· ανεξάρτητο από το ημερολόγιο της σελίδας."
+        />
+        <div className="p-4 pt-0">
+          {/* Search */}
+          <div className="relative mb-3">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+            <input
+              type="text"
+              placeholder="Αναζήτηση σελίδας..."
+              value={pageSearch}
+              onChange={(e) => setPageSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none"
+            />
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-[#6B7280] border-b border-[#F3F4F6]">
+                  <th className="pb-2 font-medium">Διαδρομή σελίδας</th>
+                  <th
+                    className="pb-2 font-medium text-right cursor-pointer select-none"
+                    onClick={() => handleSort('pageViews')}
+                  >
+                    Προβολές <SortIcon field="pageViews" />
+                  </th>
+                  <th
+                    className="pb-2 font-medium text-right cursor-pointer select-none"
+                    onClick={() => handleSort('sessions')}
+                  >
+                    Sessions <SortIcon field="sessions" />
+                  </th>
+                  <th className="pb-2 font-medium text-right">Νέοι χρήστες</th>
+                  <th
+                    className="pb-2 font-medium text-right cursor-pointer select-none"
+                    onClick={() => handleSort('bounceRate')}
+                  >
+                    Bounce rate <SortIcon field="bounceRate" />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPages.map((p) => (
+                  <tr key={p.path} className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA]">
+                    <td className="py-2 font-mono text-xs text-[#374151] max-w-[400px] truncate" title={p.path}>
+                      {p.path}
+                    </td>
+                    <td className="py-2 text-right font-medium">{p.pageViews.toLocaleString()}</td>
+                    <td className="py-2 text-right">{p.sessions.toLocaleString()}</td>
+                    <td className="py-2 text-right">{((p as any).newUsers || 0).toLocaleString()}</td>
+                    <td className="py-2 text-right">
+                      <span
+                        className={`${
+                          p.bounceRate > 0.7 ? 'text-red-500' : p.bounceRate > 0.4 ? 'text-orange-500' : 'text-amber-500'
+                        }`}
+                      >
+                        {(p.bounceRate * 100).toFixed(1)}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {topPages.length > 15 && (
+            <button
+              onClick={() => setShowAllPages(!showAllPages)}
+              className="mt-3 text-xs text-orange-600 hover:text-orange-700 font-medium"
+            >
+              {showAllPages ? 'Λιγότερα' : `Εμφάνιση όλων (${topPages.length})`}
+            </button>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}

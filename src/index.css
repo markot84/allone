@@ -1,0 +1,508 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* Keep tokens used by legacy components, but soften contrast */
+  --nts-white: #ffffff;
+  --nts-dark-gray: #30363d;     /* softer than near-black */
+  --nts-charcoal: #24292f;
+  --nts-medium-gray: #57606a;
+  --nts-light-gray: #f6f8fa;
+  --nts-border-gray: #d0d7de;
+
+  /* Background scale (white → black, soft intensity) */
+  --nts-bg-pure: #ffffff;
+  --nts-bg-subtle: #fafafa;
+  --nts-bg-muted: #f5f5f5;
+  --nts-bg-strong: #e5e5e5;
+  --nts-bg-dark: #171717;
+
+  /* Accent – solid, strong orange */
+  --nts-accent: #F97316;
+  --nts-accent-hover: #EA580C;
+  --nts-accent-light: #FFEDD5;
+
+  /* Accent (legacy – links) — classic default (blue links, as before) */
+  --nts-orange: #0969da;
+  --nts-orange-hover: #0550ae;
+  --nts-orange-light: #ddf4ff;
+
+  /* App chrome (header + sidebar) & canvas — classic: neutral dark + white canvas */
+  --app-chrome-bg: #111111;
+  --app-canvas-bg: #ffffff;
+  
+  /* Semantic Colors */
+  --success: #22C55E;
+  --success-light: #DCFCE7;
+  --warning: #F59E0B;
+  --warning-light: #FEF3C7;
+  --danger: #EF4444;
+  --danger-light: #FEE2E2;
+  --info: #6B7280;
+  --info-light: #F3F4F6;
+
+  /* Chart secondary series (warm neutral instead of cold blue) */
+  --nts-chart-secondary: #78716C;
+  --nts-chart-secondary-light: #E7E5E4;
+  
+  /* Segment Colors (for RFM clusters) */
+  --champions: #22C55E;
+  --loyal: #3B82F6;
+  --potential: #8B5CF6;
+  --at-risk: #F59E0B;
+  --lost: #EF4444;
+}
+
+/* Accent themes (per-user, via data-accent on <html>): accent drives links/active-nav,
+   chrome gets colored-dark, canvas a light wash; semantic colors stay fixed. */
+:root[data-accent="orange"] {
+  --nts-accent: #F97316;
+  --nts-accent-hover: #EA580C;
+  --nts-accent-light: #FFEDD5;
+  --nts-orange: #F97316;
+  --nts-orange-hover: #EA580C;
+  --nts-orange-light: #FFEDD5;
+  --app-chrome-bg: #7C2D12;
+  --app-canvas-bg: #FFF7F0;
+}
+:root[data-accent="blue"] {
+  --nts-accent: #2563EB;
+  --nts-accent-hover: #1D4ED8;
+  --nts-accent-light: #DBEAFE;
+  --nts-orange: #2563EB;
+  --nts-orange-hover: #1D4ED8;
+  --nts-orange-light: #DBEAFE;
+  --app-chrome-bg: #1E3A8A;
+  --app-canvas-bg: #F3F7FF;
+}
+:root[data-accent="violet"] {
+  --nts-accent: #7C3AED;
+  --nts-accent-hover: #6D28D9;
+  --nts-accent-light: #EDE9FE;
+  --nts-orange: #7C3AED;
+  --nts-orange-hover: #6D28D9;
+  --nts-orange-light: #EDE9FE;
+  --app-chrome-bg: #4C1D95;
+  --app-canvas-bg: #F8F5FF;
+}
+:root[data-accent="emerald"] {
+  --nts-accent: #059669;
+  --nts-accent-hover: #047857;
+  --nts-accent-light: #D1FAE5;
+  --nts-orange: #059669;
+  --nts-orange-hover: #047857;
+  --nts-orange-light: #D1FAE5;
+  --app-chrome-bg: #064E3B;
+  --app-canvas-bg: #F1FBF6;
+}
+:root[data-accent="teal"] {
+  --nts-accent: #0D9488;
+  --nts-accent-hover: #0F766E;
+  --nts-accent-light: #CCFBF1;
+  --nts-orange: #0D9488;
+  --nts-orange-hover: #0F766E;
+  --nts-orange-light: #CCFBF1;
+  --app-chrome-bg: #134E4A;
+  --app-canvas-bg: #F0FAF9;
+}
+:root[data-accent="rose"] {
+  --nts-accent: #E11D48;
+  --nts-accent-hover: #BE123C;
+  --nts-accent-light: #FFE4E6;
+  --nts-orange: #E11D48;
+  --nts-orange-hover: #BE123C;
+  --nts-orange-light: #FFE4E6;
+  --app-chrome-bg: #9F1239;
+  --app-canvas-bg: #FFF4F6;
+}
+
+/* ── Combos: accent + opposite chrome (duo-tone, like classic with character) ──── */
+:root[data-accent="midnight"] {
+  --nts-accent: #38BDF8;
+  --nts-accent-hover: #0EA5E9;
+  --nts-accent-light: #E0F2FE;
+  --nts-orange: #38BDF8;
+  --nts-orange-hover: #0EA5E9;
+  --nts-orange-light: #E0F2FE;
+  --app-chrome-bg: #0B1220;
+  --app-canvas-bg: #F5FAFF;
+}
+:root[data-accent="royal"] {
+  --nts-accent: #F59E0B;
+  --nts-accent-hover: #D97706;
+  --nts-accent-light: #FEF3C7;
+  --nts-orange: #F59E0B;
+  --nts-orange-hover: #D97706;
+  --nts-orange-light: #FEF3C7;
+  --app-chrome-bg: #312E81;
+  --app-canvas-bg: #FAF8FF;
+}
+:root[data-accent="forest"] {
+  --nts-accent: #84CC16;
+  --nts-accent-hover: #65A30D;
+  --nts-accent-light: #ECFCCB;
+  --nts-orange: #84CC16;
+  --nts-orange-hover: #65A30D;
+  --nts-orange-light: #ECFCCB;
+  --app-chrome-bg: #14271C;
+  --app-canvas-bg: #F6FCF0;
+}
+:root[data-accent="crimson"] {
+  --nts-accent: #EC4899;
+  --nts-accent-hover: #DB2777;
+  --nts-accent-light: #FCE7F3;
+  --nts-orange: #EC4899;
+  --nts-orange-hover: #DB2777;
+  --nts-orange-light: #FCE7F3;
+  --app-chrome-bg: #18181B;
+  --app-canvas-bg: #FFF6FB;
+}
+:root[data-accent="ocean"] {
+  --nts-accent: #14B8A6;
+  --nts-accent-hover: #0D9488;
+  --nts-accent-light: #CCFBF1;
+  --nts-orange: #14B8A6;
+  --nts-orange-hover: #0D9488;
+  --nts-orange-light: #CCFBF1;
+  --app-chrome-bg: #0C4A6E;
+  --app-canvas-bg: #F0FBFC;
+}
+
+/* ── Tri-color: accent + chrome + secondary (chart) ──────────────────────────── */
+:root[data-accent="sunset"] {
+  --nts-accent: #F97316;
+  --nts-accent-hover: #EA580C;
+  --nts-accent-light: #FFEDD5;
+  --nts-orange: #F97316;
+  --nts-orange-hover: #EA580C;
+  --nts-orange-light: #FFEDD5;
+  --app-chrome-bg: #4C1D95;
+  --app-canvas-bg: #FFF7F2;
+  --nts-chart-secondary: #E11D48;
+  --nts-chart-secondary-light: #FFE4E6;
+}
+:root[data-accent="tropic"] {
+  --nts-accent: #14B8A6;
+  --nts-accent-hover: #0D9488;
+  --nts-accent-light: #CCFBF1;
+  --nts-orange: #14B8A6;
+  --nts-orange-hover: #0D9488;
+  --nts-orange-light: #CCFBF1;
+  --app-chrome-bg: #0C4A6E;
+  --app-canvas-bg: #F0FBFA;
+  --nts-chart-secondary: #84CC16;
+  --nts-chart-secondary-light: #ECFCCB;
+}
+:root[data-accent="aurora"] {
+  --nts-accent: #38BDF8;
+  --nts-accent-hover: #0EA5E9;
+  --nts-accent-light: #E0F2FE;
+  --nts-orange: #38BDF8;
+  --nts-orange-hover: #0EA5E9;
+  --nts-orange-light: #E0F2FE;
+  --app-chrome-bg: #0B1220;
+  --app-canvas-bg: #F5FAFF;
+  --nts-chart-secondary: #A855F7;
+  --nts-chart-secondary-light: #F3E8FF;
+}
+:root[data-accent="berry"] {
+  --nts-accent: #EC4899;
+  --nts-accent-hover: #DB2777;
+  --nts-accent-light: #FCE7F3;
+  --nts-orange: #EC4899;
+  --nts-orange-hover: #DB2777;
+  --nts-orange-light: #FCE7F3;
+  --app-chrome-bg: #18181B;
+  --app-canvas-bg: #FFF6FB;
+  --nts-chart-secondary: #8B5CF6;
+  --nts-chart-secondary-light: #EDE9FE;
+}
+:root[data-accent="patriot"] {
+  --nts-accent: #2563EB;
+  --nts-accent-hover: #1D4ED8;
+  --nts-accent-light: #DBEAFE;
+  --nts-orange: #2563EB;
+  --nts-orange-hover: #1D4ED8;
+  --nts-orange-light: #DBEAFE;
+  --app-chrome-bg: #1E3A8A;
+  --app-canvas-bg: #FFFFFF;
+  --nts-chart-secondary: #DC2626;
+  --nts-chart-secondary-light: #FEE2E2;
+}
+
+/* Do NOT zero out margins/paddings globally with Primer — breaks layout. Keep only box-sizing. */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
+  height: 100%;
+}
+
+#root {
+  width: 100%;
+  max-width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Prevent flex/grid children from overflowing their containers */
+* {
+  min-width: 0;
+  scroll-behavior: smooth;
+}
+
+/* Recharts sizing – no !important so inline styles win for height */
+.recharts-responsive-container {
+  width: 100%;
+}
+
+.recharts-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.recharts-surface {
+  width: 100%;
+  height: 100%;
+}
+
+/* Mobile menu animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--nts-bg-subtle);
+  color: var(--fgColor-default, var(--nts-dark-gray));
+  line-height: 1.5;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--nts-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--nts-accent-hover);
+  text-decoration: underline;
+}
+
+/* App shell logo (onDark): white wordmark + orange + — over Primer / global `a` */
+.perf-plus-logo--on-dark .perf-plus-logo-word {
+  color: #ffffff !important;
+}
+.perf-plus-logo--on-dark .perf-plus-logo-plus {
+  color: #f97316 !important;
+}
+
+/* Let Primer manage the heading scale for consistency */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 600;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Dark sidebar overrides for Primer NavList */
+.sidebar-dark nav button,
+.sidebar-dark nav a,
+.sidebar-dark li button,
+.sidebar-dark li a {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+.sidebar-dark nav button:hover,
+.sidebar-dark nav a:hover,
+.sidebar-dark li button:hover,
+.sidebar-dark li a:hover {
+  color: rgba(255, 255, 255, 0.9) !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+.sidebar-dark [aria-current="page"],
+.sidebar-dark [aria-current="page"]:hover {
+  background-color: rgba(255, 255, 255, 0.07) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+.sidebar-dark [aria-current="page"]::before {
+  background-color: var(--nts-accent) !important;
+}
+.sidebar-dark nav svg,
+.sidebar-dark li svg {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+.sidebar-dark [aria-current="page"] svg {
+  color: var(--nts-accent) !important;
+}
+
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--nts-light-gray);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Animation utilities */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slideIn {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Mark orb: smoother, more technical orange treatment than the generic pulse. */
+@keyframes markOrbBreath {
+  0%, 100% {
+    box-shadow:
+      0 6px 18px rgba(15, 23, 42, 0.12),
+      0 0 0 1px rgba(245, 104, 18, 0.18),
+      0 0 16px rgba(245, 104, 18, 0.18);
+    transform: translateZ(0) scale(1);
+  }
+  45% {
+    box-shadow:
+      0 8px 22px rgba(15, 23, 42, 0.14),
+      0 0 0 1px rgba(245, 104, 18, 0.34),
+      0 0 24px rgba(245, 104, 18, 0.28);
+    transform: translateZ(0) scale(1.018);
+  }
+  70% {
+    box-shadow:
+      0 7px 20px rgba(15, 23, 42, 0.13),
+      0 0 0 1px rgba(245, 104, 18, 0.24),
+      0 0 18px rgba(245, 104, 18, 0.22);
+    transform: translateZ(0) scale(1.008);
+  }
+}
+
+@keyframes markOrbRing {
+  0%, 100% {
+    opacity: 0.34;
+    transform: scale(0.92) rotate(0deg);
+  }
+  50% {
+    opacity: 0.68;
+    transform: scale(1.04) rotate(18deg);
+  }
+}
+
+.mark-launcher-orb,
+.mark-avatar-orb {
+  position: relative;
+  isolation: isolate;
+  aspect-ratio: 1 / 1;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.98) 0%, rgba(255, 247, 237, 0.96) 30%, rgba(255, 255, 255, 0.92) 100%);
+}
+
+.mark-launcher-orb {
+  animation: markOrbBreath 4.8s cubic-bezier(0.42, 0, 0.2, 1) infinite;
+}
+
+.mark-launcher-orb::before,
+.mark-avatar-orb::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  border: 1px solid rgba(245, 104, 18, 0.42);
+  background:
+    linear-gradient(90deg, transparent 48%, rgba(245, 104, 18, 0.18) 49%, rgba(245, 104, 18, 0.18) 51%, transparent 52%),
+    linear-gradient(0deg, transparent 48%, rgba(245, 104, 18, 0.14) 49%, rgba(245, 104, 18, 0.14) 51%, transparent 52%);
+  mix-blend-mode: multiply;
+  animation: markOrbRing 7.2s ease-in-out infinite;
+}
+
+.mark-launcher-orb::after {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(245, 104, 18, 0.24) 0%, rgba(245, 104, 18, 0.08) 42%, transparent 72%);
+  animation: markOrbRing 5.8s ease-in-out infinite reverse;
+}
+
+.mark-orb-img {
+  filter: hue-rotate(-12deg) saturate(1.38) contrast(1.12) brightness(0.98);
+  opacity: 0.96;
+  position: relative;
+  z-index: 0;
+  display: block;
+  border-radius: inherit;
+}
+
+.mark-avatar-orb-thinking {
+  animation: markOrbBreath 4.8s cubic-bezier(0.42, 0, 0.2, 1) infinite;
+}
+
+/* Stagger animation delays */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.3s; }
