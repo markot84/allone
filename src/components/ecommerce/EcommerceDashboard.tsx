@@ -252,8 +252,7 @@ export function EcommerceDashboard() {
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const channelDaily = useEcommerceChannelDaily();
 
-  // Catalog parent SKUs (Magento itemGroupId) group reliably where a catalog exists; otherwise the
-  // resolver falls back to a conservative suffix-strip.
+  // Parent SKUs come only from declared catalog relations (Magento itemGroupId) — no heuristics.
   const productEnrichment = useMagentoProductEnrichment();
   const parentSkuOf = useMemo(() => {
     const bySku = productEnrichment.bySku;
@@ -326,7 +325,13 @@ export function EcommerceDashboard() {
   const [orderRows, setOrderRows] = useState<RowsPerPage>(20);
   const [orderPage, setOrderPage] = useState(1);
   const [prodSearch, setProdSearch] = useState('');
-  const [prodScope, setProdScope] = useState<ProductScope>('all');
+  const [prodScope, setProdScopeState] = useState<ProductScope>(() =>
+    typeof window !== 'undefined' && window.localStorage.getItem('pp.ecommerce.prodScope') === 'parents_only' ? 'parents_only' : 'all'
+  );
+  const setProdScope = (next: ProductScope) => {
+    setProdScopeState(next);
+    try { window.localStorage.setItem('pp.ecommerce.prodScope', next); } catch { /* private mode */ }
+  };
   const [prodRows, setProdRows] = useState<RowsPerPage>(20);
   const [prodPage, setProdPage] = useState(1);
 
@@ -538,16 +543,11 @@ export function EcommerceDashboard() {
     };
   }, [rawOrdersLoaded, oftState, revenueOrdersForTables]);
 
+  // No server-summary fallback: its window differs from the selected period, so the amounts would
+  // silently swap once the accurate aggregation lands — show loading instead of misleading figures.
+  const topProductsPending = !rawOrdersLoaded || topProductAgg == null;
   const topProductsForTables = useMemo<TopProductRow[]>(() => {
-    // While the chunked aggregation is in flight (or before raw orders load), fall back to the
-    // server `ecomm.topProducts` summary — same as the previous !rawOrdersLoaded branch.
-    if (!rawOrdersLoaded || topProductAgg == null) {
-      return ecomm.topProducts.map((product) => ({
-        ...product,
-        parentSku: parentSkuOf(product.sku),
-        hasDerivedParent: hasParentOf(product.sku),
-      }));
-    }
+    if (!rawOrdersLoaded || topProductAgg == null) return [];
     return topProductAgg
       .map((data) => ({
         sku: data.sku,
@@ -558,7 +558,7 @@ export function EcommerceDashboard() {
         hasDerivedParent: hasParentOf(data.sku),
       }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, [rawOrdersLoaded, topProductAgg, ecomm.topProducts, parentSkuOf, hasParentOf]);
+  }, [rawOrdersLoaded, topProductAgg, parentSkuOf, hasParentOf]);
 
   /** Parent SKU only: group by declared catalog itemGroupId (Magento); no heuristic fallback. */
   const parentProductsForTables = useMemo<TopProductRow[]>(() => {
@@ -1114,11 +1114,15 @@ export function EcommerceDashboard() {
                 <option value="100">100 / σελίδα</option>
                 <option value="all">Προβολή όλων</option>
               </select>
-              <Tooltip content="Όλα τα SKUs: κάθε προϊόν όπως πωλήθηκε (parent+child ενοποιημένα). Μόνο Parent SKUs: ομαδοποίηση παραλλαγών — πρώτα από τον κατάλογο (Magento item_group_id), αλλιώς κόβεται μόνο αναγνωρισμένο μέγεθος/gauge (π.χ. -1.30mm, -L3, -XL).">
+              <Tooltip content="Όλα τα SKUs: κάθε προϊόν όπως πωλήθηκε. Μόνο Parent SKUs: ομαδοποίηση παραλλαγών με βάση τις δηλωμένες σχέσεις parent/variant του καταλόγου Magento (item_group_id) — προϊόντα χωρίς δηλωμένη σχέση εμφανίζονται ως έχουν.">
                 <span className="text-[11px] text-[#9CA3AF]">Filters</span>
               </Tooltip>
             </div>
-            {pagedProducts.length > 0 ? (
+            {topProductsPending ? (
+              <p className="text-xs text-[#6B7280] py-6 text-center">Υπολογισμός ακριβών στοιχείων περιόδου…</p>
+            ) : prodScope === 'parents_only' && productEnrichment.isLoading ? (
+              <p className="text-xs text-[#6B7280] py-6 text-center">Φόρτωση καταλόγου για ομαδοποίηση Parent SKU…</p>
+            ) : pagedProducts.length > 0 ? (
               <div className="overflow-x-auto -mx-5 px-5">
                 <table className="w-full text-left text-xs" style={{ minWidth: 340 }}>
                   <thead>

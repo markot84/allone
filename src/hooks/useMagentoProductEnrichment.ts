@@ -165,7 +165,8 @@ export function useMagentoProductEnrichment() {
     bySkuLower,
     byItemGroupId,
     byItemGroupIdLower,
-    isLoading: connectorQuery.isPending || productsQuery.isPending,
+    // isPending alone stays true forever on disabled queries — require an actual in-flight fetch.
+    isLoading: (connectorQuery.isPending && connectorQuery.isFetching) || (productsQuery.isPending && productsQuery.isFetching),
     isConnected: config.connected,
     productCatalogAccess: config.productCatalogAccess,
     lastSyncProducts: config.lastSyncProducts ?? 0,

@@ -1156,7 +1156,9 @@ async function loadCatalog(brandId: string): Promise<Map<string, CatalogDims>> {
         const category = asString(row.category || row.category_name || rawPath[0]);
         const pathSubcategory = rawPath.length > 1 ? rawPath[rawPath.length - 1] : '';
         const subcategory = asString(row.subcategory || row.sub_category || pathSubcategory);
-        const brand = asString(row.brand || row.manufacturer || row.vendor);
+        const brandRaw = asString(row.brand || row.manufacturer || row.vendor);
+        // Pure-numeric magento manufacturer = unresolved attribute option id, not a label.
+        const brand = /^\d+$/.test(brandRaw) ? '' : brandRaw;
         const productType = asString(row.product_type || row.productType);
         const parentSku = asString(row.itemGroupId || row.parent_sku);
         catalog.set(sku, {
@@ -1204,7 +1206,7 @@ async function loadCatalog(brandId: string): Promise<Map<string, CatalogDims>> {
         if (!sku || (!brand && !productType && !productSubtype)) return;
         const existing = catalog.get(sku);
         if (existing) {
-          if (!existing.brand) existing.brand = brand;
+          if (brand) existing.brand = brand;
           if (!existing.productType && productType) existing.productType = productType;
           // Configured sub-type is authoritative — storefront path subcategory is only the fallback.
           if (productSubtype) existing.subcategory = productSubtype;

@@ -73,6 +73,8 @@ interface SalesBaseSetupModalProps {
   /** Windows available from stock movement tracking. */
   hasMovementWindows?: { d7: boolean; d30: boolean; d90: boolean; any: boolean };
   onRefreshStats?: () => Promise<void>;
+  /** True while the bounded product source is still loading — shows a loading note instead of a false 0. */
+  productsLoading?: boolean;
 }
 
 export function SalesBaseSetupModal({
@@ -86,6 +88,7 @@ export function SalesBaseSetupModal({
   stockMovementBaselineDate,
   hasMovementWindows,
   onRefreshStats,
+  productsLoading = false,
 }: SalesBaseSetupModalProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshDone, setRefreshDone] = useState(false);
@@ -461,8 +464,14 @@ export function SalesBaseSetupModal({
 
             <div className="rounded-lg border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/5 px-3 py-2">
               <p className="text-xs font-medium text-[#1A1A1A]">
-                Σύνολο <span className="text-[var(--nts-accent)]">{totalMatched.toLocaleString('el-GR')}</span> SKU
-                ταιριάζουν με τα κριτήρια.
+                {productsLoading && totalMatched === 0 ? (
+                  <>Φόρτωση καταλόγου προϊόντων…</>
+                ) : (
+                  <>
+                    Σύνολο <span className="text-[var(--nts-accent)]">{totalMatched.toLocaleString('el-GR')}</span> SKU
+                    ταιριάζουν με τα κριτήρια.
+                  </>
+                )}
                 {excludedCategories.length > 0 && (
                   <span className="text-[10px] text-[#6B7280] font-normal ml-1">
                     (εξαιρούνται {excludedCategories.length} κατηγορίες)
@@ -482,7 +491,7 @@ export function SalesBaseSetupModal({
               </div>
             )}
 
-            {totalMatched === 0 && (
+            {totalMatched === 0 && !productsLoading && (
               <p className="text-xs text-center text-[#9CA3AF] py-6">Δεν βρέθηκε κανένα SKU που να ικανοποιεί τα επιλεγμένα φίλτρα ή preset.</p>
             )}
           </div>

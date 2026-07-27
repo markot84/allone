@@ -305,6 +305,7 @@ export function WeightConfigurator({
     usingProcurement,
     sourceLabel: sourceProductDataSourceLabel,
     sourceKind: sourceProductSourceKind,
+    isLoading: sourceProductsLoading,
   } = useBoundedProductSource();
   // staticFirstPage: read ONLY .aggregate; avoids the unfiltered CF (~1.5k reads) per mount.
   const serverProductIntelligence = useProductIntelligenceAggregate('all', 1, {}, { staticFirstPage: true });
@@ -1997,6 +1998,7 @@ export function WeightConfigurator({
         isOpen={salesBaseSetupOpen}
         onClose={() => setSalesBaseSetupOpen(false)}
         products={salesBaseProducts}
+        productsLoading={sourceProductsLoading}
         initialScope={
           activeStrategy?.scenarioId === 'sales_base'
             ? (activeStrategy as { salesBaseScope?: SalesBaseScope }).salesBaseScope

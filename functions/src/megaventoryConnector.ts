@@ -1220,7 +1220,7 @@ export async function mergeMegaventoryApiCatalogProducts(
   // Read the full catalog from megaventory_products (persisted, already normalized) instead of an
   // in-memory ProductGet set — gap-fill works without holding the whole 87k-SKU catalog in one invocation.
   const catalogSnap = await db.collection('megaventory_products').where('brandId', '==', brandId)
-    .select('sku', 'mvDeletedAt', 'stockOnHand', 'sellingPrice', 'purchasePrice', 'name', 'category', 'brand')
+    .select('sku', 'mvDeletedAt', 'stockOnHand', 'sellingPrice', 'purchasePrice', 'name', 'category', 'brand', 'product_type', 'product_subtype')
     .get();
   const items: { id: string; data: Record<string, unknown> }[] = [];
   const seenSku = new Set<string>();
