@@ -4,7 +4,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 // Staging only. Do not change this fallback to a production URL.
-const STAGING_BASE_URL = 'https://performanceplus-staging.web.app';
+const STAGING_BASE_URL = 'https://allone-9e685.web.app';
 
 const baseURL = process.env.E2E_BASE_URL?.trim() || STAGING_BASE_URL;
 

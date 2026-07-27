@@ -25,14 +25,15 @@ import { initializeApp, cert, applicationDefault, getApps } from 'firebase-admin
 import { getFirestore } from 'firebase-admin/firestore';
 
 // ── Target project selection ────────────────────────────────────────────────
-// Defaults to staging so a prod write is ALWAYS a conscious, explicit choice:
-//   node seed-runtime-config.mjs                       → staging (default)
-//   node seed-runtime-config.mjs --project production  → production
+// allone has a single Firebase project, so every alias resolves to it — there is
+// no separate prod to write to by accident:
+//   node seed-runtime-config.mjs                       → allone-9e685
+//   node seed-runtime-config.mjs --project production  → allone-9e685
 // Aliases mirror .firebaserc. The service-account guard below additionally
 // refuses to run if the credential's project_id doesn't match the target.
 const PROJECT_IDS = {
-  staging: 'performanceplus-staging',
-  production: 'performance-plus-4a5b2',
+  staging: 'allone-9e685',
+  production: 'allone-9e685',
 };
 
 function resolveTargetProjectId(argv) {

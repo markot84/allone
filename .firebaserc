@@ -1,7 +1,7 @@
 {
   "projects": {
-    "default": "performanceplus-staging",
-    "staging": "performanceplus-staging",
-    "production": "performance-plus-4a5b2"
+    "default": "allone-9e685",
+    "staging": "allone-9e685",
+    "production": "allone-9e685"
   }
 }

@@ -11,7 +11,7 @@ import { initializeApp, cert, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 
-const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
+const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'allone-9e685';
 const BUCKET = process.env.STORAGE_BUCKET || `${PROJECT_ID}.appspot.com`;
 const args = process.argv.slice(2);
 const flags = Object.fromEntries(args.filter((a) => a.startsWith('--')).map((a) => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? true]));

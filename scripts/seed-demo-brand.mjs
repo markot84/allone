@@ -6,7 +6,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 // ── Config ───────────────────────────────────────────────────────────────────
-const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
+const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'allone-9e685';
 const FUNCTIONS_REGION = 'europe-west1';
 const VAT = 0.24;
 
