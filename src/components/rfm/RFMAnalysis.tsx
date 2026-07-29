@@ -1046,12 +1046,12 @@ function TabButton({ active, onClick, icon, label, tooltipTitle, tooltipBody, to
       {hasTooltip && (
         <div
           role="tooltip"
-          className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 opacity-0 transition-all duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100"
+          className="pointer-events-none absolute left-0 top-full z-50 mt-2 opacity-0 transition-all duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100"
         >
           <div className="relative w-[280px] rounded-xl border border-[#E5E5E5] bg-white p-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
             <div
               aria-hidden="true"
-              className="absolute -top-1.5 left-1/2 -translate-x-1/2 rotate-45 h-3 w-3 border-l border-t border-[#E5E5E5] bg-white"
+              className="absolute -top-1.5 left-8 rotate-45 h-3 w-3 border-l border-t border-[#E5E5E5] bg-white"
             />
             {tooltipTitle && (
               <p className="text-[13px] font-semibold text-[#1A1A1A]">{tooltipTitle}</p>
