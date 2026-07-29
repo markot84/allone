@@ -1806,8 +1806,8 @@ export function WeightConfigurator({
             }
             icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           />
-          <div className="-mx-2">
-            <table className="w-full table-fixed">
+          <div className="-mx-2 overflow-x-auto">
+            <table className="w-full table-fixed min-w-[760px]">
               <thead>
                 <tr className="text-left text-[11px] text-[#4A4A4A] border-b border-[#E5E5E5]">
                   {previewConfig.columns.map((col) => {
