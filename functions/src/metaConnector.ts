@@ -106,15 +106,7 @@ function toYmd(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-function fromYmd(ymd: string): Date {
-  return new Date(`${ymd}T00:00:00.000Z`);
-}
 
-function addDays(ymd: string, days: number): string {
-  const d = fromYmd(ymd);
-  d.setUTCDate(d.getUTCDate() + days);
-  return toYmd(d);
-}
 
 function isRetriableFirestoreWriteError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);

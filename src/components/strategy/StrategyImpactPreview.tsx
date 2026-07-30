@@ -12,7 +12,7 @@ import {
   ChevronDown,
   Check,
   Clock,
-  Infinity
+  Infinity as InfinityIcon
 } from 'lucide-react';
 import { Button } from '../common';
 import { useBoundedProductSource } from '../../hooks/useBoundedProductSource';
@@ -288,7 +288,7 @@ export function StrategyImpactSummary({
                   : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
               }`}
             >
-              <Infinity size={11} />
+              <InfinityIcon size={11} />
             </button>
           </div>
         </div>
@@ -627,7 +627,7 @@ export function StrategyImpactModal({
                 }`}
                 title="Συνεχής — χωρίς αυτόματη λήξη"
               >
-                <Infinity size={12} aria-hidden />
+                <InfinityIcon size={12} aria-hidden />
                 Συνεχής
               </button>
             </div>

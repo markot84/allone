@@ -2328,7 +2328,7 @@ export async function importFile(
         break;
       }
       
-      case 'custom':
+      case 'custom': {
         result.warnings.push(`${type} import is not yet fully implemented`);
         // Batch store as raw data
         const rawItems = objects.map((obj, i) => ({
@@ -2350,6 +2350,7 @@ export async function importFile(
         });
         result.imported = objects.length;
         break;
+      }
     }
 
     result.success = result.failed === 0;

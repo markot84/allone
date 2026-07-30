@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Check, Clock, Euro, Infinity, Layers, Package, Percent, Rocket, Scale, Settings, ShoppingBag, TrendingUp } from 'lucide-react';
+import { Check, Clock, Euro, Infinity as InfinityIcon, Layers, Package, Percent, Rocket, Scale, Settings, ShoppingBag, TrendingUp } from 'lucide-react';
 import { scenarios } from '../../data';
 
 interface ScenarioSelectorProps {
@@ -102,7 +102,7 @@ export function ScenarioSelector({
                 return (
                   <div className="flex items-center gap-1 mt-2">
                     {dur === 'ongoing'
-                      ? <Infinity size={12} className="text-[#9CA3AF]" />
+                      ? <InfinityIcon size={12} className="text-[#9CA3AF]" />
                       : <Clock size={12} className="text-[#9CA3AF]" />
                     }
                     <span className="text-[10px] text-[#9CA3AF]">

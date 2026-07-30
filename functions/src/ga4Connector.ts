@@ -25,7 +25,7 @@ const GA4_ADMIN_API = 'https://analyticsadmin.googleapis.com/v1beta';
 /** Normalize GA4 Default Channel Group labels to a canonical key so session vs first-user reports merge
  * reliably across "(direct)", Greek labels, and "(not set)" vs "Unassigned". */
 function normalizeDefaultChannelGroup(name: string): string {
-  let s = name
+  const s = name
     .normalize('NFKC')
     .trim()
     .toLowerCase()
@@ -945,7 +945,7 @@ export async function fetchGA4Data(
     }
 
     // Daily organic revenue (sessionDefaultChannelGroup rows whose canonical label includes "organic") — ROI revenue trend.
-    let organicRevenueByDay: Record<string, number> = {};
+    const organicRevenueByDay: Record<string, number> = {};
     try {
       const dateRangeOr = { startDate: formatDate(startDate), endDate: formatDate(endDate) };
       const orgDailyBody = {

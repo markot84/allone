@@ -111,7 +111,7 @@ function padSparklineForChart(values: number[]): number[] {
 }
 
 function normalizeMethodLabel(value: string | null | undefined): string {
-  let s = String(value || '')
+  const s = String(value || '')
     .replace(/\r\n/g, '\n')
     .trim();
   const firstPara = s.split(/\n+/)[0] ?? s;

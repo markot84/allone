@@ -648,7 +648,6 @@ export const importData = onRequest(
       let fileBuffer: Buffer | null = null;
       let fileName = 'import.csv';
       let importType: ImportType = 'products';
-      let channelOverride: string | undefined;
 
       const fields: Record<string, string> = {};
 
@@ -672,7 +671,7 @@ export const importData = onRequest(
       });
 
       importType = (fields.type as ImportType) || 'products';
-      channelOverride = fields.channel;
+      const channelOverride: string | undefined = fields.channel;
 
       if (!fileBuffer) {
         res.status(400).json({ error: 'No file uploaded' });
@@ -702,7 +701,6 @@ export const importData = onRequest(
 
       res.status(200).json(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       logger.error('Import failed:', { alertKey: ALERT.importDataFailed, err: error });
       res.status(500).json({ error: 'Import failed — check file format and try again' });
     }
@@ -823,7 +821,6 @@ export const generateApiKey = onRequest(
         res.status(200).json({ apiKey: key, brandId });
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       logger.error('Generate API key failed:', { alertKey: ALERT.generateApiKeyFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -1060,7 +1057,6 @@ export const connectorAuth = onRequest(
       res.status(200).json({ authUrl });
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('Request failed:', { alertKey: ALERT.connectorAuthFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -1339,7 +1335,6 @@ export const connectorDisconnect = onRequest(
       res.status(200).json({ success: true });
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('Request failed:', { alertKey: ALERT.connectorDisconnectFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -1438,7 +1433,6 @@ export const connectorSelectAccount = onRequest(
       res.status(200).json(result);
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('Request failed:', { alertKey: ALERT.connectorSelectAccountFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -2463,7 +2457,6 @@ export const connectorSaveCredentials = onRequest(
       }
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('Request failed:', { alertKey: ALERT.connectorSaveCredentialsFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -2539,7 +2532,6 @@ export const importMagentoSearchTerms = onRequest(
       res.status(200).json({ success: true, imported: cleaned.length });
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[Magento] Admin search terms import failed:', { alertKey: ALERT.importMagentoSearchTermsFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -3417,7 +3409,6 @@ export const geminiProxy = onRequest(
 
       res.status(200).json({ text });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       logger.error('[geminiProxy] Gemini error:', { alertKey: ALERT.unkeyed, err: error });
       res.status(500).json({ error: 'AI request failed — please try again' });
     }
@@ -3770,7 +3761,6 @@ export const refreshAggregates = onRequest(
       }
       res.status(200).json({ success: true, brandId });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshAggregates]', { alertKey: ALERT.aggregateStatsFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -3881,7 +3871,6 @@ export const refreshDataAnalysisRfm = onRequest(
       const result = await refreshDataAnalysisRfmAggregate(brandId);
       res.status(200).json({ success: true, brandId, action: 'run', result });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshDataAnalysisRfm]', { alertKey: ALERT.dataAnalysisRfmFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -3912,7 +3901,6 @@ export const refreshProductIntelligence = onRequest(
       const result = await refreshProductIntelligenceAggregate(brandId);
       res.status(200).json({ success: true, brandId, result });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshProductIntelligence]', { alertKey: ALERT.productIntelligenceFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -3977,7 +3965,6 @@ export const queryProductIntelligence = onRequest(
       const result = await queryProductIntelligenceRows(req.body);
       res.status(200).json({ success: true, brandId, result });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[queryProductIntelligence]', { alertKey: ALERT.productIntelligenceFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -4080,7 +4067,6 @@ export const refreshCompetitiveInventory = onRequest(
       const result = await refreshCompetitiveInventoryLookup(brandId);
       res.status(200).json({ success: true, brandId, result });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshCompetitiveInventory]', { alertKey: ALERT.competitorMonitorFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -4116,7 +4102,6 @@ export const captureStock = onRequest(
       const movement = await computeStockMovement(brandId);
       res.status(200).json({ success: true, brandId, captured, movement });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[captureStock]', { alertKey: ALERT.stockMovementTrackFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -4151,7 +4136,6 @@ export const refreshSignals = onRequest(
       const result = await refreshProcurementSignals(brandId);
       res.status(200).json({ success: true, brandId, ...result });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshSignals]', { alertKey: ALERT.procurementSignalsFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }

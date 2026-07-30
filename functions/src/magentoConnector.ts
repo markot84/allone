@@ -14,7 +14,6 @@ import {
   coerceSyncDate,
   toMagentoDateTime,
   toYmd,
-  type ConnectorSyncMode,
 } from './syncPolicy';
 
 let _db: Firestore | null = null;
@@ -234,7 +233,7 @@ function getStoreMediaBaseUrl(config: MagentoStoreConfig | null): string {
 
 /** Consistent with the e-commerce chart: BOX/lockers in one bucket, split ACS+ΕΛΤΑ labels. */
 function normalizeMagentoShippingDescription(raw: string | null | undefined): string {
-  let s = String(raw || '')
+  const s = String(raw || '')
     .replace(/\s+/g, ' ')
     .trim();
   if (!s) return '';

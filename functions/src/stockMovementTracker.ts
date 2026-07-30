@@ -275,7 +275,7 @@ export async function captureStockSnapshot(brandId: string): Promise<{
   }
   const connectedPlatforms = ECOMMERCE_PROVIDERS.filter((p) => connData[p]?.connected);
 
-  let connectorMap = new Map<string, number>();
+  const connectorMap = new Map<string, number>();
   if (connectedPlatforms.length > 0) {
     const arrays = await Promise.all(
       connectedPlatforms.map((p) => readPlatformStockBySku(db, brandId, p))
@@ -482,7 +482,6 @@ export async function computeStockMovement(brandId: string): Promise<{
     movement[sku] = entry;
   }
 
-  const skuMovementJson = JSON.stringify(movement);
   const stockMovementChunkCount = await writeJsonChunks(
     db,
     `stock_movement/${brandId}/chunks`,

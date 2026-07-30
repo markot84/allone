@@ -772,7 +772,7 @@ export function getCampaignMonthlyAttributedValueInPeriod(
       const frac = bucketOverlapFraction(dateKey, fromDate, toDate, { metaMonthBuckets });
       if (frac <= 0) continue;
       const val = attributedRevenueFromDailyRow(raw, usePurchase) * frac;
-      let ym = dateKey.slice(0, 7);
+      const ym = dateKey.slice(0, 7);
       if (!/^\d{4}-\d{2}$/.test(ym)) continue;
       out.set(ym, (out.get(ym) || 0) + val);
     }

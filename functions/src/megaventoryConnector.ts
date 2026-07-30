@@ -1145,7 +1145,7 @@ function num(value: unknown): number {
 function isoDate(value: unknown): string {
   if (!value) return '';
   const s = String(value);
-  const mvMatch = s.match(/\/Date\((\-?\d+)(?:[+\-]\d+)?\)\//);
+  const mvMatch = s.match(/\/Date\((-?\d+)(?:[+-]\d+)?\)\//);
   if (mvMatch) {
     const millis = Number(mvMatch[1]);
     if (Number.isFinite(millis)) {
@@ -1714,7 +1714,6 @@ export async function fetchMegaventoryData(
   let rfmSkippedReason = '';
   let customReportRowsSnapshot: Record<string, unknown>[] = [];
   let apiCatalogGapFillCount = 0;
-  let productGetExhausted = false;
   // Did each ancillary phase finish (fetch+write) on THIS pass — feeds the ingestionComplete gate.
   let ordersDoneThisPass = false;
   let stockDoneThisPass = false;
@@ -2186,7 +2185,7 @@ export async function fetchMegaventoryData(
       needsContinuation = true;
       logger.warn(`[Megaventory] InventoryLocationStockGet truncated by budget for ${brandId} (${stRowsRaw.length} rows) — deferring stock to continuation pass`);
     } else {
-      let stocks: any[] = normalizeInventoryStockRows(stRowsRaw);
+      const stocks: any[] = normalizeInventoryStockRows(stRowsRaw);
       const items = stocks.map((s, idx) => ({
         id: `mv_stk_${s.productID || s.ProductId || s.productSKU || idx}_${s.inventoryLocationID || s.InventoryLocationId || 'main'}`,
         data: {

@@ -172,7 +172,7 @@ export function SalesChannelRulesEditor() {
     lastServerSigApplied.current = '';
     userEditedDraftsRef.current = false;
     setDrafts([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [brandId]);
 
   /** Sync from Firestore into drafts; if the user has dirty edits, don't overwrite from refetch. */

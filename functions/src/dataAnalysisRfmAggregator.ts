@@ -83,7 +83,6 @@ async function writeSegmentCustomers(
 
 type RevenueSourceMode = 'eshop_classified' | 'eshop_all' | 'erp';
 type RfmStatus = 'running' | 'ready' | 'failed';
-type RfmScopeId = 'identified' | 'all';
 
 type RawLineItem = {
   sku?: string;

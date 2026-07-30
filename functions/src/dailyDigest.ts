@@ -21,25 +21,6 @@ interface AlertDoc {
   createdAt: string;
 }
 
-interface ProductAgg {
-  totalSkus: number;
-  deadStock: { count: number; value: number };
-  totalInventoryValue: number;
-}
-
-interface SegmentAgg {
-  totalCustomers: number;
-  atRiskPercentage: number;
-  championsPercentage: number;
-}
-
-interface CampaignAgg {
-  totalCampaigns: number;
-  totalSpend: number;
-  totalRevenue: number;
-  avgRoas: number;
-}
-
 interface PeriodMetrics {
   dateKey: string;
   label: string;

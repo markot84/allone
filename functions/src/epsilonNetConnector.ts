@@ -242,7 +242,7 @@ export async function fetchEpsilonNetData(brandId: string): Promise<EpsilonNetSy
     return { success: false, imported: 0, error: 'Epsilon Net: λείπουν διαπιστευτήρια' };
   }
 
-  let loginRes = await epsilonLogin(subKey, email, password);
+  const loginRes = await epsilonLogin(subKey, email, password);
   if (!loginRes.ok) return { success: false, imported: 0, error: loginRes.error };
 
   let bearerJwt = loginRes.data.jwt.replace(/^Bearer\s+/i, '');
