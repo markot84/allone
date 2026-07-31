@@ -514,6 +514,10 @@ export async function fetchGA4Data(
     return { success: false, imported: 0, error: 'GA4 not connected or no property selected' };
   }
 
+  // Report sections degrade independently; without this the sync claims a clean run while
+  // whole breakdowns are missing.
+  const degraded: string[] = [];
+
   try {
     const refreshTokenPlain = decryptToken(conn.refreshToken);
     if (!refreshTokenPlain) {
@@ -792,6 +796,7 @@ export async function fetchGA4Data(
       void usedChannelDimension;
     } catch (e) {
       logger.warn('[GA4] Traffic sources query failed:', { err: e });
+      degraded.push('traffic sources');
     }
 
     /** Many properties return 0 for purchaseRevenue/totalRevenue on sessionDefaultChannelGroup alone;
@@ -881,6 +886,7 @@ export async function fetchGA4Data(
       }
     } catch (e) {
       logger.warn('[GA4] Purchase-by-channel merge failed:', { err: e });
+      degraded.push('purchase by channel');
     }
 
     // New users per acquisition channel — merge onto session-channel rows (same labels via fuzzy match)
@@ -942,6 +948,7 @@ export async function fetchGA4Data(
       }
     } catch (e) {
       logger.warn('[GA4] New users by channel query failed:', { err: e });
+      degraded.push('new users by channel');
     }
 
     // Daily organic revenue (sessionDefaultChannelGroup rows whose canonical label includes "organic") — ROI revenue trend.
@@ -998,6 +1005,7 @@ export async function fetchGA4Data(
       }
     } catch (e) {
       logger.warn('[GA4] organicRevenueByDay query failed:', { err: e });
+      degraded.push('organic revenue by day');
     }
 
     let organicSearchFallbackRows: GA4OrganicFallbackRow[] = [];
@@ -1090,6 +1098,7 @@ export async function fetchGA4Data(
       }
     } catch (e) {
       logger.warn('[GA4] organicSearchFallbackRows query failed:', { err: e });
+      degraded.push('organic landing pages');
     }
 
     // Top pages
@@ -1132,6 +1141,7 @@ export async function fetchGA4Data(
       }
     } catch (e) {
       logger.warn('[GA4] Top pages query failed:', { err: e });
+      degraded.push('top pages');
     }
 
     /** Date × channel → metrics (for the calendar filter in Web Analytics). */
@@ -1390,6 +1400,7 @@ export async function fetchGA4Data(
       }
     } catch (e) {
       logger.warn('[GA4] dailyTrafficByChannel exception:', { err: e });
+      degraded.push('daily traffic by channel');
     }
 
     // Save to Firestore — split large fields into subcollection to stay under 1 MiB doc limit
@@ -1439,13 +1450,13 @@ export async function fetchGA4Data(
       brandId,
       type: 'analytics',
       source: 'ga4_api',
-      status: 'completed',
+      status: degraded.length ? 'partial' : 'completed',
       imported: dayCount,
       trafficChannels: Object.keys(trafficSources).length,
       dailyChannelDays: Object.keys(dailyTrafficByChannel).length,
       topPagesCount: topPages.length,
-      failed: 0,
-      errors: [],
+      failed: degraded.length,
+      errors: degraded,
       createdAt: FieldValue.serverTimestamp(),
     });
 
@@ -1456,6 +1467,11 @@ export async function fetchGA4Data(
     );
 
     logger.info(`[GA4] Saved ${dayCount} days of data for brand ${brandId}`);
+    if (degraded.length) {
+      const msg = `GA4 synced with missing sections: ${degraded.join(', ')}`;
+      logger.warnAlert(`[GA4] ${msg} for brand ${brandId}`, { alertKey: ALERT.ga4SyncFailed });
+      return { success: false, imported: dayCount, error: msg };
+    }
     return { success: true, imported: dayCount };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
