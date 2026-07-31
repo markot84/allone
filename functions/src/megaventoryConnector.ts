@@ -2421,6 +2421,19 @@ export async function fetchMegaventoryData(
     } // end deleted-scan reserve guard
     } // end deleted-scan ingestion guard
 
+    // ── Early completion marker ──────────────────────────────────────
+    // Documents/products/stock are written; stamp `lastSyncAt` BEFORE the long tail (custom report,
+    // gap-fill, RFM, procurement). A pass killed in that tail — which is what happens on large
+    // brands — used to leave the UI showing the previous day's sync date.
+    try {
+      await db.doc(`connectors/${brandId}`).update({
+        'megaventory.lastSyncAt': FieldValue.serverTimestamp(),
+        ...(counts.products > 0 ? { 'megaventory.lastSyncProducts': counts.products } : {}),
+      });
+    } catch (markErr) {
+      logger.warn(`[Megaventory] early lastSyncAt mark failed for ${brandId}: ${markErr instanceof Error ? markErr.message : String(markErr)}`);
+    }
+
     // ── Custom saved report (e.g. Performance / stock — CustomReportGetData) ──
     const reportId = String(conn.customReportId || '').trim();
     const reportEnabled = conn.customReportEnabled !== false;
@@ -2458,16 +2471,6 @@ export async function fetchMegaventoryData(
         errors.push(`CustomReport (${reportId}): ${msg}`);
         logger.warnAlert(`[Megaventory] Custom report sync failed brand ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
       }
-    }
-
-    // ── Early completion marker ──────────────────────────────────────
-    // Core data is written; mark visible `lastSyncAt` HERE so the UI shows a fresh sync even if the heavy steps (gap-fill/RFM/procurement) run long or time out.
-    try {
-      await db.doc(`connectors/${brandId}`).update({
-        'megaventory.lastSyncAt': FieldValue.serverTimestamp(),
-      });
-    } catch (markErr) {
-      logger.warn(`[Megaventory] early lastSyncAt mark failed for ${brandId}: ${markErr instanceof Error ? markErr.message : String(markErr)}`);
     }
 
     // Gap-fill purges & rewrites the ENTIRE api-catalog from megaventory_products; runs ONLY when the catalog is COMPLETE
