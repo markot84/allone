@@ -9,6 +9,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
 } from 'firebase/firestore';
@@ -361,27 +362,29 @@ describe('F. self-join and invite forging', () => {
 // G. brandId is immutable on update
 
 describe('G. brandId immutability on update', () => {
-  it('denies a member re-homing a doc to another brand by changing brandId', async () => {
-    const db = authed(MEMBER_A);
+  // products writes are owner/admin-tier, so brandIdUnchanged() is probed with ADMIN_A —
+  // a plain member is denied one step earlier (see W. write tiers).
+  it('denies an admin re-homing a doc to another brand by changing brandId', async () => {
+    const db = authed(ADMIN_A);
     // brandIdUnchanged() pins request.resource.data.brandId == resource.data.brandId.
     await assertFails(
       updateDoc(doc(db, 'products/prodA'), { brandId: BRAND_B }),
     );
   });
 
-  it('allows a member updating other fields while keeping brandId the same', async () => {
-    const db = authed(MEMBER_A);
+  it('allows an admin updating other fields while keeping brandId the same', async () => {
+    const db = authed(ADMIN_A);
     await assertSucceeds(
       updateDoc(doc(db, 'products/prodA'), { name: 'renamed', brandId: BRAND_A }),
     );
   });
 
   it('denies changing brandId even when the new brand is also one the user belongs to', async () => {
-    // Seed a user who is a member of BOTH brands, then try to move prodA → BRAND_B.
+    // Seed an admin of BOTH brands, then try to move prodA → BRAND_B.
     await seed(async (db) => {
-      await seedMember(db, BRAND_B, MEMBER_A, 'member');
+      await seedMember(db, BRAND_B, ADMIN_A, 'admin');
     });
-    const db = authed(MEMBER_A);
+    const db = authed(ADMIN_A);
     await assertFails(
       updateDoc(doc(db, 'products/prodA'), { brandId: BRAND_B }),
     );
@@ -642,5 +645,87 @@ describe('L. member create userId pin', () => {
     await assertFails(
       setDoc(doc(db, `brands/${BRAND_C}/members/${CREATOR_C}`), { userId: OUTSIDER, role: 'owner' }),
     );
+  });
+});
+
+// W. write tiers on business-critical collections (PER-70): reads stay member-level,
+// destructive/bulk writes require owner/admin. Members must keep working where the
+// product intends member-level action (commercial_actions create/update).
+
+describe('W. write tiers: products (owner/admin only)', () => {
+  it('denies a plain member creating a product', async () => {
+    const db = authed(MEMBER_A);
+    await assertFails(
+      setDoc(doc(db, 'products/newProd'), { brandId: BRAND_A, name: 'sneaked in' }),
+    );
+  });
+
+  it('denies a plain member updating a product', async () => {
+    const db = authed(MEMBER_A);
+    await assertFails(
+      updateDoc(doc(db, 'products/prodA'), { name: 'renamed', brandId: BRAND_A }),
+    );
+  });
+
+  it('denies a plain member deleting a product (catalog wipe)', async () => {
+    const db = authed(MEMBER_A);
+    await assertFails(deleteDoc(doc(db, 'products/prodA')));
+  });
+
+  it('still lets a plain member READ products', async () => {
+    const db = authed(MEMBER_A);
+    await assertSucceeds(getDoc(doc(db, 'products/prodA')));
+  });
+
+  for (const [label, uid] of [['admin', ADMIN_A], ['owner', OWNER_A]] as const) {
+    it(`lets an ${label} create, update and delete products`, async () => {
+      const db = authed(uid);
+      await assertSucceeds(setDoc(doc(db, `products/new_${uid}`), { brandId: BRAND_A, name: 'ok' }));
+      await assertSucceeds(updateDoc(doc(db, 'products/prodA'), { name: 'ok', brandId: BRAND_A }));
+      await assertSucceeds(deleteDoc(doc(db, 'products/prodA')));
+    });
+  }
+
+  it("denies another brand's owner writing our products", async () => {
+    const db = authed(MEMBER_B); // owner/creator of BRAND_B
+    await assertFails(updateDoc(doc(db, 'products/prodA'), { name: 'x', brandId: BRAND_A }));
+  });
+});
+
+describe('W2. write tiers: orders (owner/admin only; connectors write via Admin SDK)', () => {
+  beforeEach(async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, 'orders/orderA'), { brandId: BRAND_A, total: 10 });
+    });
+  });
+
+  it('denies a plain member creating, updating or deleting an order', async () => {
+    const db = authed(MEMBER_A);
+    await assertFails(setDoc(doc(db, 'orders/newOrder'), { brandId: BRAND_A, total: 1 }));
+    await assertFails(updateDoc(doc(db, 'orders/orderA'), { total: 999, brandId: BRAND_A }));
+    await assertFails(deleteDoc(doc(db, 'orders/orderA')));
+  });
+
+  it('lets an admin write orders and a member still read them', async () => {
+    await assertSucceeds(updateDoc(doc(authed(ADMIN_A), 'orders/orderA'), { total: 20, brandId: BRAND_A }));
+    await assertSucceeds(getDoc(doc(authed(MEMBER_A), 'orders/orderA')));
+  });
+});
+
+describe('W3. write tiers: commercial_actions (member create/update, owner-admin delete)', () => {
+  it('lets a plain member create and update a commercial action', async () => {
+    const db = authed(MEMBER_A);
+    await assertSucceeds(setDoc(doc(db, 'commercial_actions/caNew'), { brandId: BRAND_A, payload: 'x' }));
+    await assertSucceeds(updateDoc(doc(db, 'commercial_actions/caA'), { payload: 'y', brandId: BRAND_A }));
+  });
+
+  it('denies a plain member deleting a commercial action', async () => {
+    const db = authed(MEMBER_A);
+    await assertFails(deleteDoc(doc(db, 'commercial_actions/caA')));
+  });
+
+  it('lets an admin delete a commercial action', async () => {
+    const db = authed(ADMIN_A);
+    await assertSucceeds(deleteDoc(doc(db, 'commercial_actions/caA')));
   });
 });
