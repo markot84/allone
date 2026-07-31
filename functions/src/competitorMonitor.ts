@@ -467,7 +467,7 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
       brandId,
       type: 'competitor_ads',
       source: 'meta_ad_library',
-      status: 'completed',
+      status: warnings.length ? 'partial' : 'completed',
       imported: totalAds,
       newAds,
       createdAt: FieldValue.serverTimestamp(),
@@ -476,5 +476,13 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
     logger.warn(`[Competitor] Failed to log import job: ${e}`);
   }
 
-  return { success: true, totalAds, newAds, warnings: warnings.length > 0 ? warnings : undefined };
+  // Per-competitor failures were only warned about; without an `error` the nightly wrap logs a
+  // cheerful success and nobody learns the Ad Library sync is dead.
+  return {
+    success: warnings.length === 0,
+    totalAds,
+    newAds,
+    warnings: warnings.length > 0 ? warnings : undefined,
+    ...(warnings.length ? { error: warnings[0] } : {}),
+  };
 }

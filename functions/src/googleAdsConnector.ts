@@ -143,11 +143,19 @@ async function commitCampaignSliceAdaptive(campaigns: any[]): Promise<void> {
   }
 }
 
-async function commitCampaignsOneByOne(campaigns: any[]): Promise<void> {
+/** Returns how many single-doc writes failed, so a partly-failed fallback can't read as success. */
+async function commitCampaignsOneByOne(campaigns: any[]): Promise<number> {
+  let failed = 0;
   for (const campaign of campaigns) {
     const ref = getDb().collection('campaigns').doc(campaign.id);
-    await ref.set(campaign, { merge: true });
+    try {
+      await ref.set(campaign, { merge: true });
+    } catch (e) {
+      failed++;
+      logger.warn(`[GoogleAds] Single-doc write failed for campaign ${campaign.id}:`, { err: e });
+    }
   }
+  return failed;
 }
 
 async function deleteStaleGoogleAdsCampaignDocsForCustomer(
@@ -636,6 +644,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   `;
 
   let totalImported = 0;
+  let writeFailures = 0;
 
   // Helper: run a GAQL search with optional login-customer-id
   const searchUrl = `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/googleAds:search`;
@@ -1301,7 +1310,13 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
         `[GoogleAds] Batched writes failed for ${customerId}, falling back to sequential single-doc writes:`,
         { err: writeErr }
       );
-      await commitCampaignsOneByOne(prepared);
+      writeFailures = await commitCampaignsOneByOne(prepared);
+      if (writeFailures > 0) {
+        logger.warnAlert(
+          `[GoogleAds] ${writeFailures}/${prepared.length} campaign writes failed for customer ${customerId} after batch fallback`,
+          { alertKey: ALERT.googleAdsSyncFailed }
+        );
+      }
     }
     if (prepared.length > 0) {
       totalImported = prepared.length;
@@ -1323,10 +1338,10 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     brandId,
     type: 'campaigns',
     source: 'google_ads_api',
-    status: 'completed',
+    status: writeFailures ? 'partial' : 'completed',
     imported: totalImported,
-    failed: 0,
-    errors: [],
+    failed: writeFailures,
+    errors: writeFailures ? [`${writeFailures} campaign writes failed`] : [],
     createdAt: FieldValue.serverTimestamp(),
   });
 
@@ -1343,7 +1358,9 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     { merge: true }
   );
 
-  return { success: true, imported: totalImported };
+  return writeFailures
+    ? { success: false, imported: totalImported, error: `${writeFailures} campaign writes failed` }
+    : { success: true, imported: totalImported };
 }
 
 /** Fetch search terms and keywords from Google Ads (last 90 days). */

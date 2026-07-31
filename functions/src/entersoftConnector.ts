@@ -216,7 +216,12 @@ function normalizePQRows(data: unknown): Record<string, unknown>[] {
       try {
         const p = JSON.parse(d.PQResults) as unknown;
         if (Array.isArray(p)) return p as Record<string, unknown>[];
-      } catch {
+      } catch (e) {
+        // Unparseable payload used to look identical to "no data" downstream.
+        logger.warnAlert('[Entersoft] PQResults JSON parse failed — treating as zero rows', {
+          alertKey: ALERT.entersoftSyncFailed,
+          err: e,
+        });
         return [];
       }
     }
