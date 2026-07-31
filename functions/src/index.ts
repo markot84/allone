@@ -1273,6 +1273,12 @@ export const connectorDisconnect = onRequest(
         return;
       }
 
+      // Success-path audit: high-value credential change, attributed to actor/brand/provider.
+      // A finish hook covers every 200 exit of this handler (Admin-SDK writes bypass rules history).
+      res.once('finish', () => {
+        if (res.statusCode === 200) logger.info('[audit] connector disconnected', { brandId, provider, actorUid: decoded.uid });
+      });
+
 
       const clearPayload: Record<string, unknown> = {
         connected: false,
@@ -2201,6 +2207,12 @@ export const connectorSaveCredentials = onRequest(
         denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors');
         return;
       }
+
+      // Success-path audit: high-value credential change, attributed to actor/brand/provider.
+      // A finish hook covers every 200 exit of this handler (Admin-SDK writes bypass rules history).
+      res.once('finish', () => {
+        if (res.statusCode === 200) logger.info('[audit] connector credentials saved', { brandId, provider, actorUid: decoded.uid });
+      });
 
 
       if (provider === 'meta') {
