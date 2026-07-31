@@ -636,11 +636,16 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
       FROM ProductView
     `;
 
+    // A failed report query must not read as an empty-but-successful sync: without this the
+    // connector stays permanently green and permanently empty (e.g. a revoked GMC grant).
+    const queryFailures: string[] = [];
+
     let compRows: any[] = [];
     try {
       compRows = await searchMerchantReports(merchantId, accessToken, competitivenessQuery, 'PriceCompetitiveness');
     } catch (e) {
       logger.warn('[Merchant] PriceCompetitiveness query failed:', { err: e });
+      queryFailures.push(`PriceCompetitiveness: ${e instanceof Error ? e.message : String(e)}`);
     }
 
     let catalogRows: any[] = [];
@@ -648,6 +653,27 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
       catalogRows = await searchMerchantReports(merchantId, accessToken, productCatalogQuery, 'ProductView');
     } catch (e) {
       logger.warn('[Merchant] ProductView catalog query failed:', { err: e });
+      queryFailures.push(`ProductView: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    if (queryFailures.length) {
+      const msg = `Merchant reports failed — ${queryFailures.join(' | ')}`;
+      logger.warnAlert(`[Merchant] ${msg} (brand ${brandId}, account ${merchantId})`, {
+        alertKey: ALERT.merchantSyncFailed,
+      });
+      await getDb().collection('import_jobs').add({
+        brandId,
+        type: 'price_benchmarks',
+        source: 'merchant_api',
+        status: 'failed',
+        imported: 0,
+        withMarketBenchmark: 0,
+        insightsImported: 0,
+        failed: queryFailures.length,
+        errors: queryFailures,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      return { success: false, imported: 0, withMarketBenchmark: 0, error: msg };
     }
 
     logger.info(
