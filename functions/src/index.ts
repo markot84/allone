@@ -563,6 +563,13 @@ export const importData = onRequest(
       return;
     }
 
+    // Per-IP throttle BEFORE key verification — blunts key-guessing sprays.
+    const ipRl = await enforceRateLimit({ key: `importData:ip:${getClientIp(req)}`, limit: 30, windowSeconds: 300 });
+    if (!ipRl.allowed) {
+      sendRateLimitExceeded(res, ipRl.resetInSeconds, 'importData');
+      return;
+    }
+
     const apiKey = authHeader.slice(7).trim();
     const auth = await verifyApiKey(apiKey);
     if (!auth) {
@@ -571,6 +578,12 @@ export const importData = onRequest(
     }
 
     const { brandId } = auth;
+    // Per-brand throttle — a valid (member-mintable) key no longer permits unlimited imports.
+    const brandRl = await enforceRateLimit({ key: `importData:${brandId}`, limit: 20, windowSeconds: 300 });
+    if (!brandRl.allowed) {
+      sendRateLimitExceeded(res, brandRl.resetInSeconds, 'importData');
+      return;
+    }
     logger.info(`Import request for brand: ${brandId}`);
 
     try {
@@ -645,22 +658,31 @@ export const importData = onRequest(
         return;
       }
 
-      // Multipart form data
-      const bb = Busboy({ headers: req.headers, limits: { fileSize: 50 * 1024 * 1024, files: 1 } });
+      // Multipart form data — full busboy limits so a crafted body can't inflate memory:
+      // one file, few small fields, and every limit event is a hard 413, never silent truncation.
+      const bb = Busboy({
+        headers: req.headers,
+        limits: { fileSize: 50 * 1024 * 1024, files: 1, fields: 20, parts: 25, fieldSize: 10 * 1024 },
+      });
       let fileBuffer: Buffer | null = null;
       let fileName = 'import.csv';
       let importType: ImportType = 'products';
+      let limitHit: string | null = null;
 
       const fields: Record<string, string> = {};
 
       bb.on('field', (name: string, val: string) => {
         fields[name] = val;
       });
+      bb.on('fieldsLimit', () => { limitHit = 'too many fields'; });
+      bb.on('partsLimit', () => { limitHit = 'too many parts'; });
+      bb.on('filesLimit', () => { limitHit = 'too many files'; });
 
       bb.on('file', (_fieldname: string, file: NodeJS.ReadableStream, info: { filename: string }) => {
         fileName = info.filename || 'import.csv';
         const chunks: Buffer[] = [];
         file.on('data', (chunk: Buffer) => chunks.push(chunk));
+        file.on('limit', () => { limitHit = 'file too large (max 50MB)'; });
         file.on('end', () => {
           fileBuffer = Buffer.concat(chunks);
         });
@@ -671,6 +693,11 @@ export const importData = onRequest(
         bb.on('error', reject);
         bb.end(req.rawBody);
       });
+
+      if (limitHit) {
+        res.status(413).json({ error: `Upload rejected: ${limitHit}` });
+        return;
+      }
 
       importType = (fields.type as ImportType) || 'products';
       const channelOverride: string | undefined = fields.channel;
@@ -1245,6 +1272,7 @@ export const connectorDisconnect = onRequest(
         denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors');
         return;
       }
+
 
       const clearPayload: Record<string, unknown> = {
         connected: false,
@@ -2173,6 +2201,7 @@ export const connectorSaveCredentials = onRequest(
         denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors');
         return;
       }
+
 
       if (provider === 'meta') {
         // PER-172: store a pasted System User token, encrypted, with no expiresAt (durable).
