@@ -55,6 +55,21 @@ export function applyStrictCors(req: Request, res: Response): boolean {
   return false;
 }
 
+/** Send a 401/403 AND leave security telemetry behind — silent denials make enumeration,
+ * brute force, and horizontal-privilege probing invisible. Endpoint + IP come off the
+ * response's own request; uid rides in via the ambient log context or explicit ctx. */
+export function denyAndLog(res: Response, status: number, error: string, ctx?: Record<string, unknown>): void {
+  const req = res.req;
+  logger.warn('[authz] request denied', {
+    status,
+    endpoint: req?.hostname || req?.path || '',
+    ip: req ? getClientIp(req as unknown as Request) : '',
+    reason: error,
+    ...ctx,
+  });
+  res.status(status).json({ error });
+}
+
 export function getClientIp(req: Request): string {
   const xff = req.headers['x-forwarded-for'];
   const raw = Array.isArray(xff) ? xff[0] : xff;

@@ -166,7 +166,7 @@ import {
   setDb as setTikTokDb,
 } from './tiktokConnector';
 import { persistInterestLead } from './interestLead';
-import { applyStrictCors, enforceRateLimit, getClientIp, sendRateLimitExceeded } from './security';
+import { applyStrictCors, denyAndLog, enforceRateLimit, getClientIp, sendRateLimitExceeded } from './security';
 import { ALERT } from './utils/alertKeys';
 import { runWithLogContext } from './utils/logContext';
 import { getRequestId } from './utils/requestContext';
@@ -559,14 +559,14 @@ export const importData = onRequest(
 
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Missing Authorization header. Use: Bearer {API_KEY}' });
+      denyAndLog(res, 401, 'Missing Authorization header. Use: Bearer {API_KEY}');
       return;
     }
 
     const apiKey = authHeader.slice(7).trim();
     const auth = await verifyApiKey(apiKey);
     if (!auth) {
-      res.status(403).json({ error: 'Invalid or inactive API key' });
+      denyAndLog(res, 403, 'Invalid or inactive API key');
       return;
     }
 
@@ -722,7 +722,7 @@ export const fetchImportUrl = onRequest(
 
     const authHeader = req.headers.authorization || '';
     if (!authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Missing Authorization header' });
+      denyAndLog(res, 401, 'Missing Authorization header');
       return;
     }
     let uid = '';
@@ -730,7 +730,7 @@ export const fetchImportUrl = onRequest(
       const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
       uid = decoded.uid;
     } catch {
-      res.status(401).json({ error: 'Invalid or expired token' });
+      denyAndLog(res, 401, 'Invalid or expired token');
       return;
     }
 
@@ -788,7 +788,7 @@ export const generateApiKey = onRequest(
 
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Missing Firebase ID token' });
+      denyAndLog(res, 401, 'Missing Firebase ID token');
       return;
     }
 
@@ -804,7 +804,7 @@ export const generateApiKey = onRequest(
         }
 
         if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-          res.status(403).json({ error: 'Not a member of this brand' });
+          denyAndLog(res, 403, 'Not a member of this brand');
           return;
         }
 
@@ -919,7 +919,7 @@ export const connectorAuth = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -941,7 +941,7 @@ export const connectorAuth = onRequest(
       }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors');
         return;
       }
 
@@ -1231,7 +1231,7 @@ export const connectorDisconnect = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -1242,7 +1242,7 @@ export const connectorDisconnect = onRequest(
       if (!brandId || !provider) { res.status(400).json({ error: 'Missing params' }); return; }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors');
         return;
       }
 
@@ -1353,7 +1353,7 @@ export const connectorSelectAccount = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -1370,7 +1370,7 @@ export const connectorSelectAccount = onRequest(
       }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors');
         return;
       }
 
@@ -1380,10 +1380,7 @@ export const connectorSelectAccount = onRequest(
       if (sub?.pendingAccountSelection) {
         const owner = sub.oauthInitiatedByUid as string | undefined;
         if (!owner || owner !== decoded.uid) {
-          res.status(403).json({
-            error:
-              'Η επιλογή λογαριασμού δεν ταιριάζει με τον τρέχοντα χρήστη. Αποσυνδέστε ή ξανασυνδέστε το connector από Συνδέσεις.',
-          });
+          denyAndLog(res, 403, 'Η επιλογή λογαριασμού δεν ταιριάζει με τον τρέχοντα χρήστη. Αποσυνδέστε ή ξανασυνδέστε το connector από Συνδέσεις.');
           return;
         }
       }
@@ -1451,7 +1448,7 @@ export const connectorSync = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     let brandId = '';
     let provider = '';
@@ -1467,7 +1464,7 @@ export const connectorSync = onRequest(
       if (!brandId || !provider) { res.status(400).json({ error: 'Missing params' }); return; }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors');
         return;
       }
 
@@ -1610,7 +1607,7 @@ export const ga4PeriodTotals = onRequest(
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
@@ -1622,7 +1619,7 @@ export const ga4PeriodTotals = onRequest(
       if (!brandId || !startDate || !endDate) { res.status(400).json({ error: 'Missing params' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'forbidden' });
+        denyAndLog(res, 403, 'forbidden');
         return;
       }
 
@@ -2156,7 +2153,7 @@ export const connectorSaveCredentials = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -2173,7 +2170,7 @@ export const connectorSaveCredentials = onRequest(
       }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors');
         return;
       }
 
@@ -2475,7 +2472,7 @@ export const importMagentoSearchTerms = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -2493,7 +2490,7 @@ export const importMagentoSearchTerms = onRequest(
       }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να εισάγει Magento search terms' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να εισάγει Magento search terms');
         return;
       }
 
@@ -3180,7 +3177,7 @@ export const acceptInvite = onRequest(
     }
     const authHeader = req.headers.authorization || '';
     if (!authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Missing Authorization header' });
+      denyAndLog(res, 401, 'Missing Authorization header');
       return;
     }
     let uid = '';
@@ -3190,7 +3187,7 @@ export const acceptInvite = onRequest(
       uid = decoded.uid;
       callerEmail = (decoded.email || '').trim().toLowerCase();
     } catch {
-      res.status(401).json({ error: 'Invalid or expired token' });
+      denyAndLog(res, 401, 'Invalid or expired token');
       return;
     }
 
@@ -3236,7 +3233,7 @@ export const acceptInvite = onRequest(
       const inviteEmail = (inviteData.email || '').trim().toLowerCase();
       if (inviteEmail && inviteEmail !== callerEmail) {
         logger.warn('[acceptInvite] email mismatch', { uid, brandId });
-        res.status(403).json({ error: 'This invite was issued to a different email address' });
+        denyAndLog(res, 403, 'This invite was issued to a different email address');
         return;
       }
 
@@ -3304,7 +3301,7 @@ export const geminiProxy = onRequest(
     // Verify Firebase ID token
     const authHeader = req.headers.authorization || '';
     if (!authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Missing Authorization header' });
+      denyAndLog(res, 401, 'Missing Authorization header');
       return;
     }
     const idToken = authHeader.slice(7);
@@ -3313,7 +3310,7 @@ export const geminiProxy = onRequest(
       const decoded = await admin.auth().verifyIdToken(idToken);
       decodedUid = decoded.uid;
     } catch {
-      res.status(401).json({ error: 'Invalid or expired token' });
+      denyAndLog(res, 401, 'Invalid or expired token');
       return;
     }
 
@@ -3338,16 +3335,17 @@ export const geminiProxy = onRequest(
           (await userHasAnyBrandMembership(decodedUid));
       }
       if (!hasBrandAccess) {
-        res.status(403).json({
-          error: requestedBrandId
-            ? 'Forbidden: not a member of the requested brand'
-            : 'Forbidden: account is not a member of any brand',
-        });
+        denyAndLog(
+          res,
+          403,
+          requestedBrandId ? 'Forbidden: not a member of the requested brand' : 'Forbidden: account is not a member of any brand',
+          { brandId: requestedBrandId || null }
+        );
         return;
       }
     } catch (err) {
       logger.error('[geminiProxy] brand-membership check failed', { alertKey: ALERT.unkeyed, err });
-      res.status(403).json({ error: 'Forbidden' });
+      denyAndLog(res, 403, 'Forbidden');
       return;
     }
 
@@ -3454,12 +3452,12 @@ export const webSearch = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization || '';
-    if (!authHeader.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
     let uid = '';
     try {
       uid = (await admin.auth().verifyIdToken(authHeader.slice(7).trim())).uid;
     } catch {
-      res.status(401).json({ error: 'Invalid or expired token' });
+      denyAndLog(res, 401, 'Invalid or expired token');
       return;
     }
 
@@ -3496,7 +3494,7 @@ export const sendEmailNotification = onRequest(
 
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Unauthorized' });
+      denyAndLog(res, 401, 'Unauthorized');
       return;
     }
     let callerUid: string;
@@ -3504,7 +3502,7 @@ export const sendEmailNotification = onRequest(
       const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
       callerUid = decoded.uid;
     } catch {
-      res.status(401).json({ error: 'Invalid token' });
+      denyAndLog(res, 401, 'Invalid token');
       return;
     }
 
@@ -3525,7 +3523,7 @@ export const sendEmailNotification = onRequest(
     // Caller must be a member of the brand on whose behalf they are sending.
     if (!(await verifyBrandMembership(callerUid, brandId))) {
       logger.warn('[sendEmailNotification] caller not a member of brand', { callerUid, brandId });
-      res.status(403).json({ error: 'Forbidden' });
+      denyAndLog(res, 403, 'Forbidden');
       return;
     }
 
@@ -3618,7 +3616,7 @@ export const sendInviteEmail = onRequest(
 
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Unauthorized' });
+      denyAndLog(res, 401, 'Unauthorized');
       return;
     }
     let callerUid: string;
@@ -3626,7 +3624,7 @@ export const sendInviteEmail = onRequest(
       const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
       callerUid = decoded.uid;
     } catch {
-      res.status(401).json({ error: 'Invalid token' });
+      denyAndLog(res, 401, 'Invalid token');
       return;
     }
 
@@ -3643,7 +3641,7 @@ export const sendInviteEmail = onRequest(
     // Caller must have invite-management rights on the brand (owner / admin / brand creator / super admin).
     if (!(await verifyBrandConnectorManagement(callerUid, brandId))) {
       logger.warn('[sendInviteEmail] caller lacks brand management rights', { callerUid, brandId });
-      res.status(403).json({ error: 'Forbidden' });
+      denyAndLog(res, 403, 'Forbidden');
       return;
     }
 
@@ -3756,7 +3754,7 @@ export const refreshAggregates = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -3766,7 +3764,7 @@ export const refreshAggregates = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+        denyAndLog(res, 403, 'Not a member of this brand');
         return;
       }
 
@@ -3804,13 +3802,13 @@ export const megaventoryReceiptBackfill = onRequest(
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
     try {
       const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
       const { brandId, maxPagesPerType } = req.body as { brandId?: string; maxPagesPerType?: number };
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+        denyAndLog(res, 403, 'Not a member of this brand');
         return;
       }
       const result = await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, () =>
@@ -3838,13 +3836,13 @@ export const magentoRefundBackfill = onRequest(
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
     try {
       const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
       const { brandId, maxPages } = req.body as { brandId?: string; maxPages?: number };
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+        denyAndLog(res, 403, 'Not a member of this brand');
         return;
       }
       // Optional `maxPages` lets the first prod run be bounded (validate on ~100 orders before the
@@ -3876,7 +3874,7 @@ export const refreshDataAnalysisRfm = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -3886,7 +3884,7 @@ export const refreshDataAnalysisRfm = onRequest(
 
       if (action === 'diagnostic') {
         if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-          res.status(403).json({ error: 'Not a member of this brand' });
+          denyAndLog(res, 403, 'Not a member of this brand');
           return;
         }
         const result = await computeDataAnalysisRfmDiagnostic(brandId);
@@ -3895,7 +3893,7 @@ export const refreshDataAnalysisRfm = onRequest(
       }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να ανανεώσει το Data Analysis aggregate' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να ανανεώσει το Data Analysis aggregate');
         return;
       }
       const result = await refreshDataAnalysisRfmAggregate(brandId);
@@ -3914,7 +3912,7 @@ export const refreshProductIntelligence = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -3923,7 +3921,7 @@ export const refreshProductIntelligence = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        denyAndLog(res, 403, 'Δεν υπάρχει πρόσβαση στο brand');
         return;
       }
 
@@ -3947,7 +3945,7 @@ export const refreshErpVelocity = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -3956,7 +3954,7 @@ export const refreshErpVelocity = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        denyAndLog(res, 403, 'Δεν υπάρχει πρόσβαση στο brand');
         return;
       }
 
@@ -3979,7 +3977,7 @@ export const queryProductIntelligence = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -3988,7 +3986,7 @@ export const queryProductIntelligence = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        denyAndLog(res, 403, 'Δεν υπάρχει πρόσβαση στο brand');
         return;
       }
 
@@ -4009,14 +4007,14 @@ export const megaventoryListLocations = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     let uid: string;
     try {
       uid = (await admin.auth().verifyIdToken(authHeader.slice(7).trim())).uid;
     } catch {
       // Invalid/expired token is a normal client occurrence — 401, never an alertable error.
-      res.status(401).json({ error: 'Invalid auth' });
+      denyAndLog(res, 401, 'Invalid auth');
       return;
     }
     try {
@@ -4024,7 +4022,7 @@ export const megaventoryListLocations = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(uid, brandId))) {
-        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        denyAndLog(res, 403, 'Δεν υπάρχει πρόσβαση στο brand');
         return;
       }
 
@@ -4048,20 +4046,20 @@ export const megaventorySampleCustomFields = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     let uid: string;
     try {
       uid = (await admin.auth().verifyIdToken(authHeader.slice(7).trim())).uid;
     } catch {
-      res.status(401).json({ error: 'Invalid auth' });
+      denyAndLog(res, 401, 'Invalid auth');
       return;
     }
     try {
       const { brandId } = req.body as { brandId?: string };
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
       if (!(await verifyBrandMembership(uid, brandId))) {
-        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        denyAndLog(res, 403, 'Δεν υπάρχει πρόσβαση στο brand');
         return;
       }
       const result = await sampleMegaventoryCustomFields(brandId);
@@ -4081,7 +4079,7 @@ export const refreshCompetitiveInventory = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -4090,7 +4088,7 @@ export const refreshCompetitiveInventory = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        denyAndLog(res, 403, 'Δεν υπάρχει πρόσβαση στο brand');
         return;
       }
 
@@ -4114,7 +4112,7 @@ export const captureStock = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -4124,7 +4122,7 @@ export const captureStock = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+        denyAndLog(res, 403, 'Not a member of this brand');
         return;
       }
 
@@ -4149,7 +4147,7 @@ export const refreshSignals = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -4159,7 +4157,7 @@ export const refreshSignals = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+        denyAndLog(res, 403, 'Not a member of this brand');
         return;
       }
 
@@ -4185,7 +4183,7 @@ export const refreshMarketingPlanInsight = onRequest(
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -4195,7 +4193,7 @@ export const refreshMarketingPlanInsight = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+        denyAndLog(res, 403, 'Not a member of this brand');
         return;
       }
 
@@ -4346,13 +4344,13 @@ export const reorderEmailSend = onRequest(
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
     try {
       const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
       const { brandId } = req.body as { brandId?: string };
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+        denyAndLog(res, 403, 'Not a member of this brand');
         return;
       }
       const result = await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, () =>
