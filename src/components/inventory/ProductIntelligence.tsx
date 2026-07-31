@@ -36,6 +36,7 @@ import {
 import type { ExcelFilterOption } from '../common';
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import { useBrand } from '../../hooks/useBrand';
+import { useIsBrandOwnerOrAdmin } from '../../hooks/useIsBrandOwnerOrAdmin';
 import { usePlan } from '../../hooks/usePlan';
 import { useProcurementSignals } from '../../hooks/useProcurementSignals';
 import { useSuppliers } from '../../hooks/useSuppliers';
@@ -219,6 +220,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, []);
 
   const { currentBrand } = useBrand();
+  const canManageCatalog = useIsBrandOwnerOrAdmin();
   const brandId = currentBrand?.id ?? null;
   const lowDaysOfCover = currentBrand?.inventoryThresholds?.lowDaysOfCover ?? 30;
   const excessDaysOfCover = currentBrand?.inventoryThresholds?.excessDaysOfCover ?? 120;
@@ -623,7 +625,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               size="sm"
               icon={<Trash2 size={14} />}
               onClick={handleDeleteProducts}
-              disabled={effectiveSourceLoading || isDeleting || !currentBrand?.id}
+              disabled={effectiveSourceLoading || isDeleting || !currentBrand?.id || !canManageCatalog}
+              title={canManageCatalog ? undefined : 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαγράψει τον κατάλογο'}
               className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] text-[#DC2626] hover:bg-[#FEE2E2] sm:flex-initial sm:basis-auto"
             >
               {isDeleting ? (

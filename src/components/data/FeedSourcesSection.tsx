@@ -6,12 +6,14 @@ import { useBrand } from '../../hooks/useBrand';
 import { FEED_SOURCE_OPTIONS } from '../../data/feedSourceConfig';
 import { FeedSourcesService } from '../../services/feedSources';
 import { importFile } from '../../services/import';
+import { useIsBrandOwnerOrAdmin } from '../../hooks/useIsBrandOwnerOrAdmin';
 import { auth, buildFunctionUrl, getAppCheckHeader } from '../../config/firebase';
 import { useQueryClient } from '@tanstack/react-query';
 import type { FeedSource } from '../../types';
 
 export function FeedSourcesSection() {
   const { currentBrand } = useBrand();
+  const canManageCatalog = useIsBrandOwnerOrAdmin();
   const { feedSources, isLoading, create, update, remove, isCreating, isDeleting } = useFeedSources();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -57,6 +59,10 @@ export function FeedSourcesSection() {
 
   const handleSync = async (source: FeedSource) => {
     if (!currentBrand?.id) return;
+    if (!canManageCatalog) {
+      toast.error('Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να συγχρονίσει feed προϊόντων.');
+      return;
+    }
     setSyncingId(source.id);
     try {
       // Fetch server-side: most feed hosts don't allow cross-origin browser

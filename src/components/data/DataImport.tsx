@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../hooks/useBrand';
+import { useIsBrandOwnerOrAdmin } from '../../hooks/useIsBrandOwnerOrAdmin';
 import { useRefreshProcurementSignals } from '../../hooks/useProcurementSignals';
 import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink, Package, Users, BarChart3, Euro, ClipboardList } from 'lucide-react';
 import { Card, Button, Spinner, ProgressBar, useToast, Badge, PageHeader } from '../common';
@@ -118,6 +119,7 @@ function ProcurementApiInfo() {
 
 export function DataImport({ initialType }: DataImportProps = {}) {
   const { currentBrand } = useBrand();
+  const canManageCatalog = useIsBrandOwnerOrAdmin();
   const [selectedType, setSelectedType] = useState<ImportType>(initialType ?? 'products');
 
   useEffect(() => {
@@ -311,6 +313,10 @@ export function DataImport({ initialType }: DataImportProps = {}) {
     }
     if (!currentBrand) {
       toast.error('Επιλέξτε ή δημιουργήστε brand πριν την εισαγωγή.');
+      return;
+    }
+    if (!canManageCatalog) {
+      toast.error('Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να κάνει εισαγωγή δεδομένων.');
       return;
     }
 

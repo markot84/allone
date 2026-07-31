@@ -229,10 +229,11 @@ service cloud.firestore {
     // Brand-scoped collections: verify user is member of the doc's brandId
     match /products/{productId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
-      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
-      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+      // Writes are bulk catalog import / feed sync / catalog wipe — owner/admin only.
+      allow create: if request.auth != null && isBrandOwnerOrAdmin(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId)
         && brandIdUnchanged();
-      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow delete: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId);
     }
     match /segments/{segmentId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
@@ -494,10 +495,11 @@ service cloud.firestore {
     // Orders
     match /orders/{orderId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
-      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
-      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+      // Orders arrive via connectors (Admin SDK); no client write path exists — owner/admin only.
+      allow create: if request.auth != null && isBrandOwnerOrAdmin(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId)
         && brandIdUnchanged();
-      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow delete: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId);
     }
     // Price benchmarks (keyed by brandId)
     match /price_benchmarks/{brandId} {
@@ -769,10 +771,12 @@ service cloud.firestore {
 
     match /commercial_actions/{actionId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      // Acting on an action is ordinary operator work — create/update stay member-level,
+      // destructive delete is owner/admin.
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
       allow update: if request.auth != null && isBrandMember(resource.data.brandId)
         && brandIdUnchanged();
-      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow delete: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId);
     }
 
     match /commercial_decision_events/{eventId} {
