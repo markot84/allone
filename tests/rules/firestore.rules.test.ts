@@ -819,3 +819,36 @@ describe('Y. server-write-only aggregates are client-immutable', () => {
     await assertFails(getDoc(doc(authed(MEMBER_B), `product_intelligence/${BRAND_A}`)));
   });
 });
+
+// W4. feed_sources: a feed source drives catalog imports, so managing one is the same
+// owner/admin tier as importing (PER-70 follow-up).
+
+describe('W4. write tiers: feed_sources (owner/admin only)', () => {
+  beforeEach(async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, 'feed_sources/fsA'), { brandId: BRAND_A, name: 'A feed', url: 'https://x/feed.xml' });
+    });
+  });
+
+  it('lets a plain member read feed sources', async () => {
+    await assertSucceeds(getDoc(doc(authed(MEMBER_A), 'feed_sources/fsA')));
+  });
+
+  it('denies a plain member creating, editing or deleting a feed source', async () => {
+    const db = authed(MEMBER_A);
+    await assertFails(setDoc(doc(db, 'feed_sources/fsNew'), { brandId: BRAND_A, name: 'sneaked', url: 'https://x' }));
+    await assertFails(updateDoc(doc(db, 'feed_sources/fsA'), { url: 'https://evil/feed.xml', brandId: BRAND_A }));
+    await assertFails(deleteDoc(doc(db, 'feed_sources/fsA')));
+  });
+
+  it('lets an admin manage feed sources', async () => {
+    const db = authed(ADMIN_A);
+    await assertSucceeds(setDoc(doc(db, 'feed_sources/fsNew'), { brandId: BRAND_A, name: 'ok', url: 'https://x' }));
+    await assertSucceeds(updateDoc(doc(db, 'feed_sources/fsA'), { url: 'https://ok/feed.xml', brandId: BRAND_A }));
+    await assertSucceeds(deleteDoc(doc(db, 'feed_sources/fsA')));
+  });
+
+  it("denies another brand's member touching our feed sources", async () => {
+    await assertFails(updateDoc(doc(authed(MEMBER_B), 'feed_sources/fsA'), { url: 'https://x', brandId: BRAND_A }));
+  });
+});

@@ -304,10 +304,11 @@ service cloud.firestore {
     }
     match /feed_sources/{sourceId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
-      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
-      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+      // A feed source drives catalog imports, so managing one is the same tier as importing.
+      allow create: if request.auth != null && isBrandOwnerOrAdmin(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId)
         && brandIdUnchanged();
-      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow delete: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId);
     }
     match /channel_activations/{docId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
