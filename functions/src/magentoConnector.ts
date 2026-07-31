@@ -462,9 +462,43 @@ function chunkArray<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
-/** Patch parentSkus/itemGroupId onto child docs; merge-set so unsynced children get an invisible stub. */
+/** Fill idToSku for child ids the sync never fetched (zero-stock children in active-stock scope),
+ * via a lightweight id→sku lookup, so their parent-link docs carry sku/brandId and stay visible
+ * to the PI catalog overlay instead of remaining invisible stubs. */
+async function resolveChildSkus(
+  restApiBase: string,
+  storeCode: string | undefined,
+  headers: Record<string, string>,
+  parentLinks: { childId: string; parentId: string }[],
+  idToSku: Map<string, string>,
+): Promise<void> {
+  const missing = [...new Set(parentLinks.map((l) => l.childId))].filter((id) => !idToSku.has(id));
+  for (const chunk of chunkArray(missing, 100)) {
+    const params = new URLSearchParams({
+      'searchCriteria[pageSize]': '100',
+      'searchCriteria[filter_groups][0][filters][0][field]': 'entity_id',
+      'searchCriteria[filter_groups][0][filters][0][value]': chunk.join(','),
+      'searchCriteria[filter_groups][0][filters][0][condition_type]': 'in',
+      fields: 'items[id,sku]',
+    });
+    const res = await magentoFetch(buildMagentoRestUrl(restApiBase, `products?${params.toString()}`, storeCode), { headers });
+    if (!res.ok) {
+      logger.warn(`[Magento] Child sku resolve failed (${res.status}) for ${chunk.length} ids`);
+      continue;
+    }
+    const body = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const it of (body.items || []) as any[]) {
+      if (it?.id && it?.sku) idToSku.set(String(it.id), String(it.sku));
+    }
+  }
+}
+
+/** Patch parentSkus/itemGroupId onto child docs; merge-set. Children never otherwise synced get a
+ * doc with sku/brandId (when resolvable) so the PI overlay can still graft the parent link. */
 async function patchMagentoParentLinks(
   db: Firestore,
+  brandId: string,
   parentLinks: { childId: string; parentId: string }[],
   idToSku: Map<string, string>,
 ): Promise<void> {
@@ -480,9 +514,11 @@ async function patchMagentoParentLinks(
     for (const [childId, parentIds] of childEntries.slice(i, i + 500)) {
       const parentSkus = [...parentIds].map((pid) => idToSku.get(pid)).filter((v): v is string => Boolean(v));
       if (parentSkus.length === 0) continue;
+      const childSku = idToSku.get(childId) || '';
       batch.set(db.collection('magento_products').doc(`mag_${childId}`), {
         parentSkus,
         itemGroupId: parentSkus[0],
+        ...(childSku ? { sku: childSku, brandId } : {}),
       }, { merge: true });
     }
     await batch.commit();
@@ -1578,7 +1614,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
           prodMore = prodPage * 100 < totalCount && prodPage < 150;
           prodPage++;
         }
-        await patchMagentoParentLinks(db, parentLinks, idToSku);
+        await resolveChildSkus(restApiBase, storeCode, headers, parentLinks, idToSku);
+        await patchMagentoParentLinks(db, brandId, parentLinks, idToSku);
       }
 
       const activeSkuChunks = chunkArray(activeStockSkus, MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE);
@@ -1641,7 +1678,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
     }
 
     // Fill parentSku on child variants (so in the Ads Feed → item_group_id = parent SKU).
-    await patchMagentoParentLinks(db, parentLinks, idToSku);
+    await resolveChildSkus(restApiBase, storeCode, headers, parentLinks, idToSku);
+    await patchMagentoParentLinks(db, brandId, parentLinks, idToSku);
 
     if (prodImportedCount > 0) {
       totalImported += prodImportedCount;
