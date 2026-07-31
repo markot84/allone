@@ -729,3 +729,93 @@ describe('W3. write tiers: commercial_actions (member create/update, owner-admin
     await assertSucceeds(deleteDoc(doc(db, 'commercial_actions/caA')));
   });
 });
+
+// X. connector / automation write tier: reading config is member-level, but changing
+// credentials or automation (which can drive ad spend) is owner/admin/creator only
+// (canManageBrandConnectors).
+
+describe('X. write tiers: connectors, connector_rules, automation_settings', () => {
+  const CONFIG_DOCS = ['connectors', 'connector_rules', 'automation_settings'] as const;
+
+  beforeEach(async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, `connector_rules/${BRAND_A}`), { salesChannels: [] });
+      await setDoc(doc(db, `automation_settings/${BRAND_A}`), { enabled: false });
+    });
+  });
+
+  for (const coll of CONFIG_DOCS) {
+    it(`${coll}: a plain member can read but NOT write`, async () => {
+      const db = authed(MEMBER_A);
+      await assertSucceeds(getDoc(doc(db, `${coll}/${BRAND_A}`)));
+      await assertFails(setDoc(doc(db, `${coll}/${BRAND_A}`), { hijacked: true }));
+    });
+
+    it(`${coll}: an admin may write`, async () => {
+      const db = authed(ADMIN_A);
+      await assertSucceeds(setDoc(doc(db, `${coll}/${BRAND_A}`), { touched: 'admin' }, { merge: true }));
+    });
+
+    it(`${coll}: the brand owner/creator may write`, async () => {
+      const db = authed(OWNER_A);
+      await assertSucceeds(setDoc(doc(db, `${coll}/${BRAND_A}`), { touched: 'owner' }, { merge: true }));
+    });
+
+    it(`${coll}: another brand's owner may neither read nor write`, async () => {
+      const db = authed(MEMBER_B);
+      await assertFails(getDoc(doc(db, `${coll}/${BRAND_A}`)));
+      await assertFails(setDoc(doc(db, `${coll}/${BRAND_A}`), { hijacked: true }));
+    });
+  }
+});
+
+// Y. server-write-only collections: written by Cloud Functions via the Admin SDK
+// (which bypasses rules); NO client identity may write them, not even owner or super-admin.
+
+describe('Y. server-write-only aggregates are client-immutable', () => {
+  // One representative per family: brand-keyed aggregate, field-keyed page doc,
+  // connector mirror, and a chunk subcollection.
+  const SERVER_ONLY_BRAND_KEYED = [
+    'ecommerce_summary',
+    'data_analysis_rfm',
+    'product_intelligence',
+    'erp_sku_velocity',
+    'procurement_signals',
+  ] as const;
+
+  beforeEach(async () => {
+    await seed(async (db) => {
+      for (const coll of SERVER_ONLY_BRAND_KEYED) {
+        await setDoc(doc(db, `${coll}/${BRAND_A}`), { seeded: true });
+      }
+      await setDoc(doc(db, 'product_intelligence_pages/pageA'), { brandId: BRAND_A, rows: [] });
+      await setDoc(doc(db, 'magento_products/mag_1'), { brandId: BRAND_A, sku: 'X' });
+    });
+  });
+
+  for (const coll of SERVER_ONLY_BRAND_KEYED) {
+    it(`${coll}: member reads, but owner/admin/super-admin all fail to write`, async () => {
+      await assertSucceeds(getDoc(doc(authed(MEMBER_A), `${coll}/${BRAND_A}`)));
+      for (const uid of [MEMBER_A, ADMIN_A, OWNER_A, SUPER_ADMIN]) {
+        await assertFails(setDoc(doc(authed(uid), `${coll}/${BRAND_A}`), { tampered: true }, { merge: true }));
+      }
+      await assertFails(deleteDoc(doc(authed(OWNER_A), `${coll}/${BRAND_A}`)));
+    });
+  }
+
+  it('product_intelligence_pages: readable by a member, never client-writable', async () => {
+    await assertSucceeds(getDoc(doc(authed(MEMBER_A), 'product_intelligence_pages/pageA')));
+    await assertFails(
+      updateDoc(doc(authed(OWNER_A), 'product_intelligence_pages/pageA'), { rows: ['tampered'] }),
+    );
+  });
+
+  it('magento_products (connector mirror): readable by a member, never client-writable', async () => {
+    await assertSucceeds(getDoc(doc(authed(MEMBER_A), 'magento_products/mag_1')));
+    await assertFails(updateDoc(doc(authed(ADMIN_A), 'magento_products/mag_1'), { sku: 'tampered' }));
+  });
+
+  it('denies a cross-brand member reading a server-written aggregate', async () => {
+    await assertFails(getDoc(doc(authed(MEMBER_B), `product_intelligence/${BRAND_A}`)));
+  });
+});
