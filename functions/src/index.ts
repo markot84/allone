@@ -2,6 +2,8 @@ import * as admin from 'firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { beforeUserCreated, HttpsError as IdentityHttpsError } from 'firebase-functions/v2/identity';
+import { signupAllowed, type InviteLike } from './signupPolicy';
 import { logger } from './utils/logger';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -3137,6 +3139,34 @@ export const scheduledProductIntelligence = onSchedule(
 
 /** POST /geminiProxy (Bearer FIREBASE_ID_TOKEN) — { systemPrompt, userPrompt, model?, temperature? }
  * → { text }. The API key stays server-side (Firebase Secret). */
+
+/** Server-side invite-only signup gate, all providers (password + Google). The AuthContext check
+ * is advisory UX; this blocks account creation unless open mode (PUBLIC_SIGNUP_MODE=open),
+ * super-admin email, or a pending invite (addressed to the email, or an open one). */
+export const signupGate = beforeUserCreated({ region: 'europe-west1' }, async (event) => {
+  if ((process.env.PUBLIC_SIGNUP_MODE || '').trim() === 'open') return;
+  const email = (event.data?.email || '').trim().toLowerCase();
+  const { emails: superAdminEmails } = await loadSuperAdmins();
+  const inviteDocs = (snap: FirebaseFirestore.QuerySnapshot | null): InviteLike[] =>
+    snap ? snap.docs.map((d) => d.data() as InviteLike) : [];
+  const [matching, open] = await Promise.all([
+    email ? db.collection('invites').where('email', '==', email).limit(50).get() : Promise.resolve(null),
+    db.collection('invites').where('email', '==', '').limit(50).get(),
+  ]);
+  const allowed = signupAllowed({
+    mode: undefined,
+    email,
+    superAdminEmails,
+    matchingInvites: inviteDocs(matching),
+    openInvites: inviteDocs(open),
+  });
+  if (allowed) return;
+  logger.warn('[signupGate] blocked signup without invite', {
+    email: email.replace(/^(.).*(@.*)$/, '$1***$2'),
+    provider: event.data?.providerData?.[0]?.providerId ?? 'unknown',
+  });
+  throw new IdentityHttpsError('permission-denied', 'Signups are invite-only. Ask a brand admin for an invite.');
+});
 
 /** Server-side brand-invite join (Bearer token, Body { token } → { ok, brandId, role }). Membership
  * is provisioned via Admin SDK; the invite's `role`/email are authoritative, consumed single-use. */
