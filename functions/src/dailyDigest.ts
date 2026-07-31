@@ -252,7 +252,7 @@ async function sendDigestForBrand(brandId: string, brandName: string, transporte
       });
 
       sent++;
-      logger.info(`[Digest] Sent to ${email} for brand ${brandName}`);
+      logger.info('[Digest] Sent digest', { email, brandName });
     } catch (err) {
       logger.warnAlert(`[Digest] Failed for user ${userId}:`, { alertKey: ALERT.dailyDigestFailed, err });
     }

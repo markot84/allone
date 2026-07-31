@@ -222,7 +222,7 @@ export async function sendReorderEmailForBrand(
 
       await transporter!.sendMail({ from: SENDER, to: email, subject: built.subject, html: built.html });
       sent++;
-      logger.info(`[Reorder] Sent to ${email} for brand ${brandId}`);
+      logger.info('[Reorder] Sent reorder email', { email, brandId });
     } catch (err) {
       logger.warn(`[Reorder] Failed for user ${userId}:`, { err });
     }
