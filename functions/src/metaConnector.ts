@@ -608,6 +608,9 @@ async function runMetaCampaignsSync(brandId: string): Promise<{
   await deleteStaleMetaCampaignDocsForAccounts(brandId, adAccountIds);
 
   let totalImported = 0;
+  // Breakdown/status sections degrade independently of campaign imports; without this a single
+  // successful campaign write reports a clean sync and clears lastImportError.
+  const degraded: string[] = [];
   const accessToken = decryptToken(connector.accessToken);
   if (!accessToken) {
     return { success: false, imported: 0, error: 'Meta token unavailable — reconnect required' };
@@ -766,6 +769,7 @@ async function runMetaCampaignsSync(brandId: string): Promise<{
         logger.info(`[Meta] Geo breakdown aggregated for ${geoByCampaign.size} campaigns`);
       } catch (e) {
         logger.warn(`[Meta] Geo breakdown call failed: ${e}`);
+        degraded.push('geo breakdown');
       }
 
       // ── Geographic sub-country: country + region (Meta naming: "region" ≈ area, not always a city) ──
@@ -835,6 +839,7 @@ async function runMetaCampaignsSync(brandId: string): Promise<{
         logger.info(`[Meta] Country+region geo aggregated for ${geoCityByCampaign.size} campaigns`);
       } catch (e) {
         logger.warn(`[Meta] Geo country+region breakdown failed: ${e}`);
+        degraded.push('geo country/region breakdown');
       }
 
       // Fetch campaign statuses (effective_status) from the Campaigns API
@@ -857,6 +862,7 @@ async function runMetaCampaignsSync(brandId: string): Promise<{
         logger.info(`[Meta] Fetched statuses for ${campaignStatusMap.size} campaigns in ${actAccountId}`);
       } catch (e) {
         logger.warn(`[Meta] Failed to fetch campaign statuses for ${actAccountId}: ${e}`);
+        degraded.push('campaign statuses');
       }
 
       // Fallback: if monthly daily insights returned empty, fetch a compact account-level snapshot.
@@ -889,6 +895,7 @@ async function runMetaCampaignsSync(brandId: string): Promise<{
           logger.info(`[Meta] Fallback fetched ${allRows.length} rows for ${actAccountId}`);
         } catch (e) {
           logger.warn(`[Meta] Fallback call failed for ${actAccountId}: ${e}`);
+          degraded.push('fallback insights');
         }
       }
 
@@ -1191,22 +1198,24 @@ async function runMetaCampaignsSync(brandId: string): Promise<{
       }
     } catch (err) {
       logger.error(`[Meta] Error for account ${accountId}:`, { alertKey: ALERT.metaSyncFailed, err });
+      degraded.push(`account ${accountId}`);
     }
   }
 
-  const importStatus = totalImported > 0 ? 'completed' : 'failed';
+  const importStatus = totalImported > 0 ? (degraded.length ? 'partial' : 'completed') : 'failed';
   await getDb().collection('import_jobs').add({
     brandId,
     type: 'campaigns',
     source: 'meta_api',
     status: importStatus,
     imported: totalImported,
-    failed: totalImported > 0 ? 0 : 1,
-    errors: totalImported > 0 ? [] : ['Meta sync produced no campaign writes (check logs / Firestore limits)'],
+    failed: totalImported > 0 ? degraded.length : 1,
+    errors: totalImported > 0 ? degraded : ['Meta sync produced no campaign writes (check logs / Firestore limits)'],
     createdAt: FieldValue.serverTimestamp(),
   });
 
   if (totalImported > 0) {
+    const partialMsg = degraded.length ? `Meta synced with missing sections: ${degraded.join(', ')}` : '';
     await getDb().doc(`connectors/${brandId}`).set(
       {
         meta: {
@@ -1214,11 +1223,17 @@ async function runMetaCampaignsSync(brandId: string): Promise<{
           historyLoadedUntilYear: historyLoaded
             ? Number(connector.historyLoadedUntilYear) || historyStartYear
             : historyStartYear,
-          lastImportError: FieldValue.delete(),
+          ...(partialMsg
+            ? { lastImportError: partialMsg, lastImportErrorAt: Date.now() }
+            : { lastImportError: FieldValue.delete() }),
         },
       },
       { merge: true }
     );
+    if (partialMsg) {
+      logger.warnAlert(`[Meta] ${partialMsg} (brand ${brandId})`, { alertKey: ALERT.metaSyncFailed });
+      return { success: false, imported: totalImported, error: partialMsg };
+    }
     return { success: true, imported: totalImported };
   }
 
