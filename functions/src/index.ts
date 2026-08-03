@@ -469,6 +469,12 @@ async function importProducts(
     } catch (e) {
       logger.warn(`[importProducts] stock movement refresh failed for ${brandId}:`, { err: e });
     }
+    // Nightly PI rebuilds are connector-gated, so an imported catalog refreshes only here.
+    try {
+      await refreshProductIntelligenceAggregate(brandId);
+    } catch (e) {
+      logger.warn(`[importProducts] product intelligence refresh failed for ${brandId}:`, { err: e });
+    }
   }
 
   if (suppliers.size > 0) {

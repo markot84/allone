@@ -10,7 +10,7 @@ export function setDb(firestore: Firestore): void {
   db = firestore;
 }
 
-type ProductSourceKind = 'erp' | 'connector_catalog';
+type ProductSourceKind = 'erp' | 'connector_catalog' | 'manual';
 type StockBucket = 'healthy' | 'excess' | 'dead' | 'low' | 'no_stock';
 
 type CompactProduct = {
@@ -1077,7 +1077,7 @@ async function loadMegaventoryProductOverlay(
   return { rowsRead, overlaysApplied, erpOnlyProducts };
 }
 
-async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<{
+async function loadConnectorProducts(brandId: string, hasErp: boolean, manual = false): Promise<{
   products: CompactProduct[];
   sourceRowsRead: number;
   megaventoryApiRowsRead: number;
@@ -1102,14 +1102,17 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
     // for non-SoftOne brands, so this is a no-op there.
     softoneRowsRead = await loadCatalogCollection(brandId, 'softone_items', 'erp', bySku);
   }
-  const ecommerceCatalogRowsRead = hasErp
-    ? 0
-    : (await Promise.all([
-        loadCatalogCollection(brandId, 'magento_products', 'connector_catalog', bySku),
-        loadCatalogCollection(brandId, 'shopify_products', 'connector_catalog', bySku),
-        loadCatalogCollection(brandId, 'woo_products', 'connector_catalog', bySku),
-        loadEcommerceCatalogCollection(brandId, 'opencart_products', bySku),
-      ])).reduce((sum, rowsRead) => sum + rowsRead, 0);
+  // Manual mode: the brand's own `products` docs are the catalog.
+  const ecommerceCatalogRowsRead = manual
+    ? await loadCatalogCollection(brandId, 'products', 'manual', bySku)
+    : hasErp
+      ? 0
+      : (await Promise.all([
+          loadCatalogCollection(brandId, 'magento_products', 'connector_catalog', bySku),
+          loadCatalogCollection(brandId, 'shopify_products', 'connector_catalog', bySku),
+          loadCatalogCollection(brandId, 'woo_products', 'connector_catalog', bySku),
+          loadEcommerceCatalogCollection(brandId, 'opencart_products', bySku),
+        ])).reduce((sum, rowsRead) => sum + rowsRead, 0);
   const magentoDetailRowsRead = hasErp ? await overlayMagentoCatalogDetails(brandId, bySku) : 0;
   // #8: stock totals come from the pre-summed (already warehouse-filtered) megaventory_products mirrors
   // — no per-location re-scan of megaventory_stock (the old DEADLINE-prone read on large brands).
@@ -1749,27 +1752,21 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
   const connector = await hasConnectorCatalog(brandId);
   // Explicit setting picks ERP vs e-shop catalog; unset → connector detection (current behaviour).
   const useErp = stockOverride ? stockOverride === 'erp' : connector.hasErp;
-  if (!connector.connected) {
-    await ref.set({
-      brandId,
-      status: 'skipped',
-      reason: 'no_connector_catalog',
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    return { success: true, skipped: true, brandId };
-  }
+  // No catalog connector → build from the brand's imported `products` docs instead of skipping.
+  const useManual = !connector.connected;
+  const sourceLabel = useManual ? 'Manual upload' : connector.sourceLabel;
 
   await ref.set({
     brandId,
     status: 'running',
-    sourceLabel: connector.sourceLabel,
+    sourceLabel,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
   try {
     const [syncVersion, catalogResult] = await Promise.all([
       computeBrandSyncVersion(brandId),
-      loadConnectorProducts(brandId, useErp),
+      loadConnectorProducts(brandId, useManual ? false : useErp, useManual),
     ]);
     const {
       products,
@@ -1784,6 +1781,16 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       stockOverlaysApplied,
       erpOnlyProducts,
     } = catalogResult;
+    // Nothing imported either → skip as before.
+    if (useManual && products.length === 0) {
+      await ref.set({
+        brandId,
+        status: 'skipped',
+        reason: 'no_connector_catalog',
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return { success: true, skipped: true, brandId };
+    }
     const summary = summaryForProducts(products);
     const pagesByBucket = await writePageDocs(brandId, products);
     const competitiveInventory = await writeCompetitiveInventoryLookup(brandId, products);
@@ -1802,8 +1809,8 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
     const payload = {
       brandId,
       status: 'ready',
-      sourceLabel: connector.sourceLabel,
-      sourceKind: useErp ? 'erp' : 'connector_catalog',
+      sourceLabel,
+      sourceKind: useManual ? 'manual' : useErp ? 'erp' : 'connector_catalog',
       totalCount: products.length,
       syncVersion: syncVersion.version,
       latestSyncAt: syncVersion.latestSyncAt,
@@ -1837,7 +1844,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
     };
     await ref.set(payload, { merge: true });
     logger.info(
-      `[ProductIntelligence] ${brandId}: totalCount=${products.length} sourceRowsRead=${sourceRowsRead} sourceLabel=${connector.sourceLabel}`
+      `[ProductIntelligence] ${brandId}: totalCount=${products.length} sourceRowsRead=${sourceRowsRead} sourceLabel=${sourceLabel}`
     );
     return {
       success: true,
