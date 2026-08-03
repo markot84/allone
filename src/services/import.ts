@@ -745,7 +745,7 @@ function parseLooseNumber(value: string | number | null | undefined): number {
 
 // Validate and transform Products
 // Primary schema: FINAL_Unified_Production_Schema (SKU_ID, Product_Name, Category, Sell_Price, Cost_Price, Stock_On_Hand, Qty_Sold_Period, Revenue_Period, Supplier, Brand, First_Available_Date, Last_Sale_Date, Priority_Flag, Stock_Age_Days, Gross_Profit, Gross_Margin_%, Margin_Tier)
-function validateProduct(row: Record<string, string>, index: number): { valid: boolean; data?: Product; error?: string } {
+export function validateProduct(row: Record<string, string>, index: number): { valid: boolean; data?: Product; error?: string } {
   // Debug: log keys for first rows. DEV-gated — logs include commercial values
   // (price/cost/margin/SKU) and must not run in production.
   if (import.meta.env.DEV && index < 3) {
@@ -771,7 +771,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   const marginTier = pick(row, 'margin_tier', 'margin_category', 'tier');
   const marginPct = pick(row, 'margin_percentage', 'margin_pct', 'margin', 'margin_%', 'gross_margin_%', 'gross_margin', 'gross_margin_pct', 'profit_margin', 'profit', 'κέρδος', 'περιθώριο', 'μικτό_κέρδος');
   // Stock level - Greek: "Διαθεσιμότητα" = Availability/Stock Level (normalized: "διαθεσιμότητα")
-  const stockLevel = pick(row, 'διαθεσιμότητα', 'stock_on_hand', 'Stock_On_Hand', 'stock_level', 'Stock_Level', 'stock', 'Stock', 'quantity', 'Quantity', 'qty', 'Qty', 'inventory', 'Inventory', 'on_hand', 'On_Hand', 'units', 'Units', 'απόθεμα', 'ποσότητα', 'available_stock', 'Available_Stock', 'δυναμικό_υπόλοιπο', 'κίνηση', 'availability');
+  const stockLevel = pick(row, 'διαθεσιμότητα', 'stock_on_hand', 'Stock_On_Hand', 'stock_level', 'Stock_Level', 'stock', 'Stock', 'quantity', 'Quantity', 'qty', 'Qty', 'inventory', 'Inventory', 'on_hand', 'On_Hand', 'units', 'Units', 'απόθεμα', 'ποσότητα', 'available_stock', 'Available_Stock', 'δυναμικό_υπόλοιπο', 'κίνηση', 'availability', 'υπόλοιπο');
   const stockOnHand = pick(row, 'stock_on_hand', 'on_hand', 'stock', 'quantity', 'qty', 'inventory', 'units', 'απόθεμα', 'ποσότητα');
   const availableStock = pick(row, 'available_stock', 'sellable_stock', 'free_stock', 'διαθέσιμο_απόθεμα', 'δυναμικό_υπόλοιπο');
   const stockCapacity = pick(row, 'stock_capacity', 'capacity', 'max_stock', 'max_quantity', 'χωρητικότητα', 'επιθυμητό_απόθεμα', 'αναμενόμενα', 'Αναμενόμενα');

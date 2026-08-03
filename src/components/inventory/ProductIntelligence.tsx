@@ -535,20 +535,36 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           }
         />
         <Card padding="lg" className="text-center py-12">
-          <p className="text-[#4A4A4A] mb-4">
-            Δεν υπάρχουν imported προϊόντα ακόμα.
-          </p>
-          <p className="text-sm text-[#4A4A4A]">
-            Ανεβάστε αρχείο ή συνδέστε πλατφόρμα από την{' '}
-            <button
-              type="button"
-              onClick={() => onSectionChange?.('data-products')}
-              className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
-            >
-              καρτέλα εισαγωγής προϊόντων
-            </button>
-            .
-          </p>
+          {serverIntelligence.buildFailed ? (
+            <>
+              <p className="text-[#4A4A4A] mb-4">
+                Ο κατάλογος δεν μπόρεσε να υπολογιστεί. Τα προϊόντα σας δεν έχουν χαθεί.
+              </p>
+              {serverIntelligence.buildError && (
+                <p className="text-sm text-[#4A4A4A] mb-4">{serverIntelligence.buildError}</p>
+              )}
+              <Button variant="secondary" onClick={triggerProductIntelligenceRebuild} disabled={piRebuilding}>
+                {piRebuilding ? 'Ανανέωση…' : 'Δοκιμή ξανά'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-[#4A4A4A] mb-4">
+                Δεν υπάρχουν imported προϊόντα ακόμα.
+              </p>
+              <p className="text-sm text-[#4A4A4A]">
+                Ανεβάστε αρχείο ή συνδέστε πλατφόρμα από την{' '}
+                <button
+                  type="button"
+                  onClick={() => onSectionChange?.('data-products')}
+                  className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
+                >
+                  καρτέλα εισαγωγής προϊόντων
+                </button>
+                .
+              </p>
+            </>
+          )}
         </Card>
       </div>
     );

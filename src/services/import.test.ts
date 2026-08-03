@@ -28,7 +28,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { XMLParser } from 'fast-xml-parser';
-import { previewFileForProducts, isCustomerLevelData, parseCSV, detectDelimiter, isHeaderlessStatSheet } from './import';
+import { previewFileForProducts, isCustomerLevelData, parseCSV, detectDelimiter, isHeaderlessStatSheet, validateProduct } from './import';
 import { makeProduct } from '../test/helpers';
 
 // ── Minimal DOMParser polyfill (DOM surface used by the two XML parsers) ──────
@@ -517,5 +517,23 @@ describe('isHeaderlessStatSheet', () => {
     expect(isHeaderlessStatSheet([['A']])).toBe(false);
     expect(isHeaderlessStatSheet([[]])).toBe(false);
     expect(isHeaderlessStatSheet([])).toBe(false);
+  });
+});
+
+describe('Greek stock header aliases', () => {
+  // Headers reach validateProduct normalized (lowercase, spaces→underscores).
+  const row = (h: Record<string, string>) => validateProduct(h, 0);
+
+  it('maps "Υπόλοιπο Φαρμακείου" to stock_level', () => {
+    const r = row({ sku: 'ABC1', name: 'Test Product', 'υπόλοιπο_φαρμακείου': '12', 'τιμή_πώλησης_με_φπα': '350' });
+    expect(r.valid).toBe(true);
+    expect(r.data?.stock_level).toBe(12);
+    expect(r.data?.price).toBe(350);
+  });
+
+  it('still maps the previously supported Greek stock headers', () => {
+    expect(row({ sku: 'ABC1', name: 'Test Product', 'διαθεσιμότητα': '7' }).data?.stock_level).toBe(7);
+    expect(row({ sku: 'ABC2', name: 'Test Product', 'δυναμικό_υπόλοιπο': '9' }).data?.stock_level).toBe(9);
+    expect(row({ sku: 'ABC3', name: 'Test Product', 'απόθεμα': '4' }).data?.stock_level).toBe(4);
   });
 });
