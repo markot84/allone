@@ -400,6 +400,21 @@ export function DataImport({ initialType }: DataImportProps = {}) {
         if (typesImported.has('products')) {
           queryClient.invalidateQueries({ queryKey: ['products', brandId] });
           queryClient.invalidateQueries({ queryKey: ['products'] });
+          // Product Intelligence is server-built, so imported products stay invisible without a rebuild.
+          const piBrandId = brandId;
+          if (piBrandId) {
+            void refreshProductIntelligenceOnServer(piBrandId)
+              .then(() => {
+                queryClient.invalidateQueries({ queryKey: ['productIntelligenceAggregate', piBrandId] });
+                queryClient.invalidateQueries({ queryKey: ['productIntelligencePage', piBrandId] });
+                queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', piBrandId] });
+              })
+              .catch((err: unknown) => {
+                if (import.meta.env.MODE === 'development') {
+                  logger.warn('[DataImport] product intelligence refresh failed:', { err });
+                }
+              });
+          }
         }
         if (typesImported.has('segments')) {
           queryClient.invalidateQueries({ queryKey: ['segments', brandId] });
