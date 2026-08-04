@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Zap, Lock, Bell, BellOff, Save, AlertTriangle, CheckCircle2, Info, X, Palette, Check } from 'lucide-react';
 import { Card, Button, Spinner, useToast, EnterpriseBadge, PageHeader } from '../common';
-import { ACCENT_PRESETS, readStoredAccent, setStoredAccent, type AccentId, type AccentPreset } from '../../theme/accentTheme';
+import { ACCENT_PICKER_ENABLED, ACCENT_PRESETS, readStoredAccent, setStoredAccent, type AccentId, type AccentPreset } from '../../theme/accentTheme';
 import { useAutomationSettings, useAutomationAlerts } from '../../hooks/useAutomation';
 import { usePlan } from '../../hooks/usePlan';
 import { useBrand } from '../../hooks/useBrand';
@@ -138,7 +138,8 @@ export function AutomationSettingsPage() {
         }
       />
 
-      {/* Appearance — per-user accent (localStorage) */}
+      {/* Appearance — per-user accent (localStorage), off while the brand palette is fixed. */}
+      {ACCENT_PICKER_ENABLED && (
       <Card padding="none">
         <div className="flex items-center gap-2 border-b border-[#F3F4F6] px-5 py-3.5">
           <Palette size={16} className="shrink-0 text-[var(--nts-accent-text)]" />
@@ -178,6 +179,7 @@ export function AutomationSettingsPage() {
           </div>
         </div>
       </Card>
+      )}
 
       {/* Active Alerts */}
       {newAlerts.length > 0 && (

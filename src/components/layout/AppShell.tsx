@@ -12,7 +12,7 @@ import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { AppSectionId, Brand } from '../../types';
 import { getModuleIdForSection, isSectionHidden } from '../../config/modules';
 import { validatePassword, PASSWORD_REQUIREMENTS_HINT } from '../../utils/passwordPolicy';
-import { ACCENT_PRESETS, readStoredAccent, setStoredAccent, type AccentId } from '../../theme/accentTheme';
+import { ACCENT_PICKER_ENABLED, ACCENT_PRESETS, readStoredAccent, setStoredAccent, type AccentId } from '../../theme/accentTheme';
 import {
   GearIcon,
   GraphIcon,
@@ -357,7 +357,8 @@ function AccountMenu({
               </div>
             </div>
 
-            {/* Accent color (per-user, localStorage) */}
+            {/* Accent color (per-user, localStorage) — off while the brand palette is fixed. */}
+            {ACCENT_PICKER_ENABLED && (
             <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
               <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 8 }}>
                 Χρώμα έμφασης
@@ -397,6 +398,7 @@ function AccountMenu({
                 })}
               </div>
             </div>
+            )}
 
             {/* Link providers */}
             {!hasPasswordProvider && (
@@ -803,7 +805,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                 onSelect={setCurrentBrand}
               />
             )}
-            <AccentMenu />
+            {ACCENT_PICKER_ENABLED && <AccentMenu />}
             <div style={{ position: 'relative', overflow: 'visible' }}>
               <NotificationBell onNavigate={(s) => onSectionChange(s)} />
             </div>

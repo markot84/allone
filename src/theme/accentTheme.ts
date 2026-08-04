@@ -1,5 +1,16 @@
 /** Per-user accent theming (localStorage) via `data-accent` on <html>; semantic
  *  colors stay readable. Overrides live in index.css (`:root[data-accent="..."]`). */
+
+/**
+ * Off for the v2 brand identity: colors.md fixes four logo-sampled colours and states they are not
+ * to be modified, so letting each user repaint the accent would defeat it. The CSS overrides these
+ * presets depend on are preserved but not imported (see src/styles/legacy-accent-themes.css), which
+ * means the pickers would appear to do nothing while this is false.
+ *
+ * Nothing here is deleted. To bring the feature back: set this to true and re-import
+ * legacy-accent-themes.css from index.css.
+ */
+export const ACCENT_PICKER_ENABLED = false;
 export type AccentId =
   | 'classic'
   | 'orange'
