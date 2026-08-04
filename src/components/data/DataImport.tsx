@@ -522,7 +522,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Data Import</h2>}
+        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Data Import</h2>}
         description={
           <p className="text-sm text-[#4A4A4A] sm:text-base">
             Import από CSV/Excel ή URL. Υποστηρίζονται: Products, Segments, Campaigns, Analytics. Για προϊόντα: ERP export, Google Ads, Meta Catalog.

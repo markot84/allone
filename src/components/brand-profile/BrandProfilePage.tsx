@@ -191,7 +191,7 @@ export function BrandProfilePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Brand Profile</h2>}
+        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Brand Profile</h2>}
         description={
           <p className="text-sm text-[#4A4A4A]">
             Ταυτότητα, archetype, tone of voice και ICPs που καθοδηγούν Mark, Marketing Plan και μελλοντικά διαφημιστικά μηνύματα.

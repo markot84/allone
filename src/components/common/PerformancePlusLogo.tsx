@@ -40,7 +40,7 @@ export function PerformancePlusLogo({
 
   return (
     <div
-      className={`inline-flex shrink-0 items-center justify-start bg-[#111827] ${className}`}
+      className={`inline-flex shrink-0 items-center justify-start bg-[var(--navy-500)] ${className}`}
       style={{
         borderRadius: pill,
         paddingLeft: paddingX,

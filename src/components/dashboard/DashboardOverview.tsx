@@ -952,7 +952,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   return (
     <div className="space-y-8">
       <PageHeader
-        title={<h2 className="text-xl font-bold tracking-tight text-[var(--nts-charcoal)] sm:text-2xl">{isB2B ? 'Owner Dashboard' : 'Dashboard'}</h2>}
+        title={<h2 className="text-xl font-bold tracking-tight text-[var(--text-heading)] sm:text-2xl">{isB2B ? 'Owner Dashboard' : 'Dashboard'}</h2>}
         description={
           <p className="text-[14px] text-[var(--nts-medium-gray)]">
             {isB2B ? (

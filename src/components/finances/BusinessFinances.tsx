@@ -274,7 +274,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     return (
       <div className="space-y-6">
         <PageHeader
-          title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Οικονομικά Επιχείρησης</h2>}
+          title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Οικονομικά Επιχείρησης</h2>}
           description={<p className="text-sm text-[#4A4A4A] sm:text-base">Τζίρος και οργανικά έσοδα (χωρίς campaigns)</p>}
         />
         <Card padding="lg" className="text-center py-12">
@@ -300,7 +300,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Οικονομικά Επιχείρησης</h2>}
+        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Οικονομικά Επιχείρησης</h2>}
         description={
           <p className="text-sm text-[#4A4A4A]">
             Πλήρης εικόνα τζίρου για την επιλεγμένη περίοδο

@@ -112,7 +112,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Sales Territory</h2>}
+        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Sales Territory</h2>}
         description={<p className="text-sm text-[#4A4A4A]">Διαχείριση γεωγραφικών περιοχών, εκχώρηση accounts σε sales reps και Reorder Intelligence.</p>}
       />
 

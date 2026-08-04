@@ -2103,7 +2103,7 @@ export function WeightConfigurator({
             >
               <ModalHeader
                 toolbarAriaLabel="Κλείσιμο"
-                title={<h2 className="text-xl font-bold text-[#1A1A1A]">Εξαγωγή product feed</h2>}
+                title={<h2 className="text-xl font-bold text-[var(--text-heading)]">Εξαγωγή product feed</h2>}
                 actions={
                   <button
                     type="button"

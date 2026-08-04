@@ -80,7 +80,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
       <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col gap-8 pb-10">
         <PageHeader
           toolbarAriaLabel="Ενέργειες AI Insights"
-          title={<h1 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">AI Insights</h1>}
+          title={<h1 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">AI Insights</h1>}
           description={
             <p className="text-sm text-[#4A5568] sm:text-base max-w-2xl">
               Αυτόματες αναλύσεις από προϊόντα, segments, e-commerce και RFM, με σύνδεση στις σχετικές ενότητες για άμεση συνέχεια εργασίας.

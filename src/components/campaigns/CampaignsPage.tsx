@@ -598,7 +598,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     return (
       <div className="space-y-6">
         <PageHeader
-          title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Campaigns</h2>}
+          title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Campaigns</h2>}
           description={
             <p className="text-sm text-[#4A4A4A] sm:text-base">Επισκόπηση και ανάλυση των καμπανιών σας</p>
           }
@@ -646,7 +646,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       <PageHeader
         className="!gap-2 lg:!gap-4 lg:!items-center"
         toolbarAriaLabel="Export and delete campaigns"
-        title={<h2 className="text-lg font-bold text-[#1A1A1A] sm:text-xl">Campaigns</h2>}
+        title={<h2 className="text-lg font-bold text-[var(--text-heading)] sm:text-xl">Campaigns</h2>}
         description={
           <p className="text-xs text-[#6B7280] sm:text-sm">
             Imported campaigns: {summaryStats.total}

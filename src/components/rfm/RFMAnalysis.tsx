@@ -299,7 +299,7 @@ export function RFMAnalysis() {
     return (
       <div className="space-y-6">
         <PageHeader
-          title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Data Analysis</h2>}
+          title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Data Analysis</h2>}
           actions={
             <Button
               variant="secondary"
@@ -363,7 +363,7 @@ export function RFMAnalysis() {
       <PageHeader
         className="gap-2 lg:gap-4 [&_.space-y-1]:space-y-0"
         toolbarAriaLabel="Εξαγωγή και διαγραφή segments"
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl leading-tight">Data Analysis</h2>}
+        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl leading-tight">Data Analysis</h2>}
         actions={
           <>
           <Button
@@ -960,7 +960,7 @@ function DataAnalysisSkeleton() {
     <div className="space-y-3" aria-busy="true" aria-label="Φόρτωση Data Analysis">
       <PageHeader
         className="gap-2 lg:gap-4 [&_.space-y-1]:space-y-0"
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl leading-tight">Data Analysis</h2>}
+        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl leading-tight">Data Analysis</h2>}
         actions={
           <>
             <div className="h-9 w-28 animate-pulse rounded-lg bg-[#F3F4F6]" />

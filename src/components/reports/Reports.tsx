@@ -177,7 +177,7 @@ export function Reports() {
     <div className="space-y-6">
       <PageHeader
         toolbarAriaLabel="Αναφορές"
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Reports & Analytics</h2>}
+        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Reports & Analytics</h2>}
         description={
           <p className="text-sm text-[#4A4A4A] sm:text-base">
             Generate, schedule, and export performance reports
@@ -470,7 +470,7 @@ function ScheduleModal({
       >
         <ModalHeader
           toolbarAriaLabel="Κλείσιμο"
-          title={<h3 className="text-lg font-bold text-[#1A1A1A]">Νέος Προγραμματισμός Report</h3>}
+          title={<h3 className="text-lg font-bold text-[var(--text-heading)]">Νέος Προγραμματισμός Report</h3>}
           actions={
             <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
               <X size={20} className="text-[#4A4A4A]" />
@@ -563,7 +563,7 @@ function CustomReportModal({
       >
         <ModalHeader
           toolbarAriaLabel="Κλείσιμο"
-          title={<h3 className="text-lg font-bold text-[#1A1A1A]">Προσαρμοσμένη αναφορά</h3>}
+          title={<h3 className="text-lg font-bold text-[var(--text-heading)]">Προσαρμοσμένη αναφορά</h3>}
           actions={
             <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
               <X size={20} className="text-[#4A4A4A]" />

@@ -109,7 +109,7 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
     <div className="space-y-6">
       <PageHeader
         toolbarAriaLabel="Brand"
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Τα Brands μου</h2>}
+        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Τα Brands μου</h2>}
         description={
           <p className="text-sm text-[#4A4A4A] sm:text-base">
             Επιλέξτε brand για να δείτε τα δεδομένα και την ανάλυσή του

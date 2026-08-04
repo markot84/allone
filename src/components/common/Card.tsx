@@ -82,7 +82,9 @@ export function CardHeader({ title, subtitle, icon, action, className = '' }: Ca
           </span>
         )}
         <div className="min-w-0">
-          <Heading as="h3" variant="small" style={{ margin: 0 }}>
+          {/* Navy is the dominant brand colour and headings are where it carries (colors.md §2).
+              Setting it here rather than at each call site is what puts it on every card title. */}
+          <Heading as="h3" variant="small" style={{ margin: 0, color: 'var(--text-heading)' }}>
             {title}
           </Heading>
           {subtitle &&

@@ -240,7 +240,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
             >
               <ModalHeader
                 toolbarAriaLabel="Κλείσιμο"
-                title={<h2 className="text-xl font-bold text-[#1A1A1A]">Η λήψη CSV ολοκληρώθηκε</h2>}
+                title={<h2 className="text-xl font-bold text-[var(--text-heading)]">Η λήψη CSV ολοκληρώθηκε</h2>}
                 actions={
                   <button
                     type="button"

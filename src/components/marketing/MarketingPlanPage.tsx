@@ -594,7 +594,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Marketing Plan</h2>}
+        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Marketing Plan</h2>}
         description={
           <p className="text-sm text-[#4A4A4A]">
             Εμπορικό πλάνο δράσης από περσινές πωλήσεις, τρέχον απόθεμα, καμπάνιες, κοινό και ανταγωνισμό.

@@ -869,7 +869,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     return (
       <div className="space-y-6">
         <PageHeader
-          title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">{pageTitle}</h2>}
+          title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">{pageTitle}</h2>}
           description={
             <p className="text-sm text-[#4A4A4A] sm:text-base">Μίξη καναλιών με AI βάσει εμπορικής στρατηγικής</p>
           }
@@ -896,7 +896,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     return (
       <div className="space-y-6">
         <PageHeader
-          title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">{pageTitle}</h2>}
+          title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">{pageTitle}</h2>}
           description={
             <p className="text-sm text-[#4A4A4A] sm:text-base">Μίξη καναλιών με AI βάσει εμπορικής στρατηγικής</p>
           }
@@ -925,7 +925,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     <div className="space-y-6">
       <PageHeader
         toolbarAriaLabel="Channel activation"
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">{pageTitle}</h2>}
+        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">{pageTitle}</h2>}
         description={
           <p className="text-[#4A4A4A]">
             <span className="font-medium text-[#1A1A1A]">{strategyName}</span>
@@ -1748,7 +1748,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
               <ModalHeader
                 toolbarAriaLabel="Κλείσιμο"
-                title={<h2 className="text-xl font-bold text-[#1A1A1A]">Επιλογή Format</h2>}
+                title={<h2 className="text-xl font-bold text-[var(--text-heading)]">Επιλογή Format</h2>}
                 actions={
                   <button type="button" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
                     <X size={20} className="text-[#4A4A4A]" />
@@ -1792,7 +1792,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               <ModalHeader
                 className="flex-shrink-0"
                 toolbarAriaLabel="Κλείσιμο"
-                title={<h2 className="text-xl font-bold text-[#1A1A1A]">Προεπισκόπηση feed</h2>}
+                title={<h2 className="text-xl font-bold text-[var(--text-heading)]">Προεπισκόπηση feed</h2>}
                 description={
                   <p className="text-sm text-[#4A4A4A]">
                     {previewFeed} · {formatNumber(previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} ενεργές γραμμές · δείγμα {Math.min(8, previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} γραμμών
@@ -1876,7 +1876,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
               <ModalHeader
                 toolbarAriaLabel="Κλείσιμο"
-                title={<h2 className="text-xl font-bold text-[#1A1A1A]">Εξαγωγή όλων των feeds</h2>}
+                title={<h2 className="text-xl font-bold text-[var(--text-heading)]">Εξαγωγή όλων των feeds</h2>}
                 actions={
                   <button type="button" onClick={() => setShowExportAllModal(false)} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
                     <X size={20} className="text-[#4A4A4A]" />
