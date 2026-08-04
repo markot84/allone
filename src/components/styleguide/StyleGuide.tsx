@@ -53,7 +53,18 @@ const SEGMENTS: Swatch[] = [
 ];
 
 /** Tokens whose accessible use is constrained; checked live against white. */
-const TEXT_ON_WHITE = ['--brand-navy', '--sky-500', '--orange-700', '--orange-600', '--orange-500', '--gold-500'];
+const TEXT_ON_WHITE = [
+  '--brand-navy',
+  '--sky-500',
+  '--orange-700',
+  '--orange-600',
+  '--orange-500',
+  '--gold-500',
+  // The chrome is white now, so its text colours are measured on the same ground as everything else.
+  '--chrome-fg',
+  '--chrome-fg-muted',
+  '--chrome-fg-subtle',
+];
 
 function toRgb(value: string): [number, number, number] | null {
   const hex = value.trim();
@@ -252,6 +263,126 @@ function MotionTable() {
   );
 }
 
+/**
+ * The chrome tokens in the arrangement they are actually used in.
+ *
+ * A stand-in for the header and sidebar, not the real AppShell — it exists so the combination can
+ * be judged (and its contrast measured) without an authenticated session. If AppShell's chrome
+ * changes, change this with it.
+ */
+function ChromePreview() {
+  const items = ['Dashboard', 'Data Analysis', 'Campaigns', 'Product Intelligence'];
+  // The pulse runs once and stops, as it must — remounting the item is what replays it for review.
+  const [pulseRun, setPulseRun] = useState(0);
+  return (
+    <div
+      style={{
+        border: '1px solid var(--border)',
+        borderRadius: 12,
+        overflow: 'hidden',
+        background: 'var(--chrome-bg)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '10px 14px',
+          borderBottom: '1px solid var(--chrome-border)',
+        }}
+      >
+        <span
+          style={{
+            font: '600 13px Inter, sans-serif',
+            color: 'var(--surface-0)',
+            background: '#111827',
+            borderRadius: 999,
+            padding: '5px 12px',
+          }}
+        >
+          Performance+
+        </span>
+        <span style={{ font: '400 13px Inter, sans-serif', color: 'var(--chrome-fg)' }}>Brand switcher</span>
+        <span style={{ font: '400 12px Inter, sans-serif', color: 'var(--chrome-fg-subtle)', marginLeft: 'auto' }}>
+          notifications · account
+        </span>
+        <button
+          type="button"
+          onClick={() => setPulseRun((run) => run + 1)}
+          style={{
+            font: '500 12px Inter, sans-serif',
+            color: 'var(--sky-500)',
+            background: 'var(--surface-0)',
+            border: '1px solid var(--border)',
+            borderRadius: 6,
+            padding: '4px 10px',
+            cursor: 'pointer',
+          }}
+        >
+          Replay cascade
+        </button>
+      </div>
+      <div style={{ display: 'flex', minHeight: 190 }}>
+        <nav
+          style={{
+            width: 210,
+            borderRight: '1px solid var(--chrome-border)',
+            padding: '12px 10px',
+            display: 'grid',
+            gap: 2,
+            alignContent: 'start',
+          }}
+        >
+          <span
+            style={{
+              font: '600 10px Inter, sans-serif',
+              color: 'var(--chrome-fg-subtle)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.16em',
+              padding: '4px 8px',
+            }}
+          >
+            Market &amp; Data
+          </span>
+          {items.map((label, index) => (
+            <span
+              key={index === 1 ? `${label}-${pulseRun}` : label}
+              className={index === 1 ? 'nav-cascade-pulse' : undefined}
+              style={{
+                font: '500 13px Inter, sans-serif',
+                color: index === 0 ? 'var(--chrome-fg)' : 'var(--chrome-fg-muted)',
+                background: index === 0 ? 'var(--chrome-control-hover)' : 'transparent',
+                borderRadius: 6,
+                padding: '7px 10px',
+              }}
+            >
+              {label}
+            </span>
+          ))}
+        </nav>
+        <div style={{ flex: 1, background: 'var(--app-canvas-bg)', padding: 16 }}>
+          <div
+            style={{
+              border: '1px solid var(--border)',
+              background: 'var(--surface-1)',
+              borderRadius: 10,
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              font: '400 13px Inter, sans-serif',
+              color: 'var(--text-muted)',
+            }}
+          >
+            canvas
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Presets that make the silhouette obviously different, so the radar can be judged at a glance. */
 const RADAR_PRESETS: { label: string; weights: Record<string, number> }[] = [
   { label: 'Ισορροπημένη', weights: { profit: 20, stock: 20, strategic: 20, revenue: 20, fit: 20 } },
@@ -393,6 +524,26 @@ export function StyleGuide() {
             >
               A link
             </a>
+          </div>
+        </Section>
+
+        <Section
+          title="App chrome"
+          description="Header and sidebar, light. The old chrome was a dark bar carrying white text at a dozen opacities; those are roles now, so switching back is a change to one token block rather than another sweep. The second nav item shows the cascade pulse."
+        >
+          <ChromePreview />
+          <div style={{ marginTop: 16 }}>
+            <SwatchGrid
+              items={[
+                { token: '--chrome-bg' },
+                { token: '--chrome-border' },
+                { token: '--chrome-fg' },
+                { token: '--chrome-fg-muted' },
+                { token: '--chrome-fg-subtle' },
+                { token: '--chrome-control-bg' },
+                { token: '--chrome-control-hover' },
+              ]}
+            />
           </div>
         </Section>
 

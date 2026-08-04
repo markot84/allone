@@ -74,6 +74,25 @@
   --seg-at-risk:   var(--gold-700);
   --seg-lost:      var(--text-muted);
 
+  /* ============ APP CHROME — header and sidebar ============ */
+  /* The chrome used to be a dark bar with white text at a dozen different opacities. Those are
+     roles, not values, so they live here: switching the chrome back to dark is changing this block,
+     not sweeping AppShell again. Navy is deliberately absent — colors.md §6 rules it out as a
+     large-surface background. */
+  --chrome-bg:             var(--surface-0);
+  --chrome-border:         var(--border);
+  --chrome-fg:             var(--text-primary);
+  --chrome-fg-muted:       var(--text-secondary);
+  /* NOT `--text-muted`. On the old dark bar these labels were white at 0.34 opacity; the same
+     faintness on white is `--text-muted`, which measures 2.58:1 — under the 4.5:1 the brief calls
+     non-negotiable, and under the 3:1 that non-text UI needs too. Group labels and the chrome's
+     icon buttons are text and controls, so they take the secondary weight (7.69:1) instead.
+     `/styleguide` measures all three. */
+  --chrome-fg-subtle:      var(--text-secondary);
+  --chrome-control-bg:     var(--surface-1);
+  --chrome-control-border: var(--border);
+  --chrome-control-hover:  var(--surface-2);
+
   /* ============ STRATEGY FACTORS — the five weights in the Configurator ============ */
   /* Categorical, so they need to stay distinguishable from each other; drawn from the palette
      rather than invented. The radar itself is a single orange shape (colors.md §5) — these colour
@@ -126,10 +145,7 @@
   --nts-orange-hover: var(--sky-700);
   --nts-orange-light: var(--sky-50);
 
-  /* Header and sidebar stay a neutral dark, NOT navy: colors.md §6 rules navy out as a
-     large-surface background in this version. Turning the chrome light is a separate decision —
-     it needs AppShell's white-on-dark text restyled with it. */
-  --app-chrome-bg: #111111;
+  --app-chrome-bg: var(--chrome-bg);
   --app-canvas-bg: var(--surface-0);
 
   --success-light: #D3F8E6;
@@ -162,9 +178,9 @@ td[data-numeric],
 /**
  * Cascade pulse: a module lighting up as a weight change reaches it.
  *
- * colors.md §5 specifies surface-2 → orange-50 → surface-1, which assumes the light canvas. The
- * sidebar is still the neutral dark chrome, so the same idea is carried by an orange wash and an
- * edge marker, which read on dark. Switch to the §5 sequence if the chrome goes light.
+ * The surface-2 → orange-50 → surface-1 sequence of colors.md §5, now that the chrome is light and
+ * the sequence applies as written. The orange edge marker carries the signal — the wash alone is
+ * too quiet to register at 120ms intervals.
  */
 .nav-cascade-pulse {
   animation: nav-cascade-pulse var(--dur-reveal) var(--ease-out) 1;
@@ -173,15 +189,15 @@ td[data-numeric],
 
 @keyframes nav-cascade-pulse {
   0% {
-    background-color: transparent;
+    background-color: var(--surface-2);
     box-shadow: inset 2px 0 0 transparent;
   }
   30% {
-    background-color: color-mix(in srgb, var(--brand-orange) 26%, transparent);
+    background-color: var(--orange-50);
     box-shadow: inset 2px 0 0 var(--brand-orange);
   }
   100% {
-    background-color: transparent;
+    background-color: var(--surface-1);
     box-shadow: inset 2px 0 0 transparent;
   }
 }

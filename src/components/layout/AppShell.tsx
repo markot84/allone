@@ -126,12 +126,12 @@ function SidebarNav({
                   listStyle: 'none',
                   margin: isFirstGroup ? '2px 12px 4px' : '10px 12px 4px',
                   paddingTop: isFirstGroup ? 0 : 8,
-                  borderTop: isFirstGroup ? 'none' : '1px solid rgba(255,255,255,0.08)'
+                  borderTop: isFirstGroup ? 'none' : '1px solid var(--chrome-border)'
                 }}
               >
                 <span
                   className="text-[10px] font-semibold uppercase tracking-[0.16em]"
-                  style={{ color: 'rgba(255,255,255,0.34)' }}
+                  style={{ color: 'var(--chrome-fg-subtle)' }}
                 >
                   {NAV_GROUP_LABELS[item.group]}
                 </span>
@@ -224,13 +224,13 @@ function BrandMenu({
           alignItems: 'center',
           gap: 6,
           padding: '6px 10px',
-          border: '1px solid rgba(255,255,255,0.12)',
+          border: '1px solid var(--chrome-control-border)',
           borderRadius: 8,
-          background: 'rgba(255,255,255,0.06)',
+          background: 'var(--chrome-control-bg)',
           cursor: brands.length > 1 ? 'pointer' : 'default',
           fontSize: 14,
           fontWeight: 600,
-          color: 'rgba(255,255,255,0.8)',
+          color: 'var(--chrome-fg)',
           minWidth: 0,
           maxWidth: 'min(100%, 12rem)',
         }}
@@ -240,7 +240,7 @@ function BrandMenu({
           size="small"
           weight="semibold"
           className="hidden min-w-0 max-w-[4.5rem] truncate min-[420px]:inline sm:max-w-[8rem] md:max-w-[10rem] lg:max-w-[12rem]"
-          style={{ color: 'rgba(255,255,255,0.9)' }}
+          style={{ color: 'var(--chrome-fg)' }}
         >
           {currentBrand.name}
         </Text>
@@ -345,9 +345,9 @@ function AccountMenu({
           alignItems: 'center',
           gap: 8,
           padding: '6px 12px',
-          border: '1px solid rgba(255,255,255,0.12)',
+          border: '1px solid var(--chrome-control-border)',
           borderRadius: 6,
-          background: 'rgba(255,255,255,0.06)',
+          background: 'var(--chrome-control-bg)',
           cursor: 'pointer',
           fontSize: 14
         }}
@@ -369,7 +369,7 @@ function AccountMenu({
         >
           {(user.email?.[0] || user.displayName?.[0] || '?').toUpperCase()}
         </div>
-        <Text as="span" size="small" className="hidden xl:inline" style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'rgba(255,255,255,0.75)' }}>
+        <Text as="span" size="small" className="hidden xl:inline" style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--chrome-fg)' }}>
           {user.email || user.displayName || 'Account'}
         </Text>
       </button>
@@ -594,10 +594,10 @@ function AccentMenu() {
           justifyContent: 'center',
           width: 36,
           height: 36,
-          border: '1px solid rgba(255,255,255,0.12)',
+          border: '1px solid var(--chrome-control-border)',
           borderRadius: 6,
-          background: 'rgba(255,255,255,0.06)',
-          color: 'rgba(255,255,255,0.85)',
+          background: 'var(--chrome-control-bg)',
+          color: 'var(--chrome-fg)',
           cursor: 'pointer',
         }}
       >
@@ -797,7 +797,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
   return (
     <>
-      <PrimerHeader style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', backgroundColor: 'var(--app-chrome-bg, #111111)' }} className="min-w-0">
+      <PrimerHeader style={{ borderBottom: '1px solid var(--chrome-border)', backgroundColor: 'var(--app-chrome-bg, #111111)' }} className="min-w-0">
         <PrimerHeader.Item className="min-w-0 shrink-0">
           <Button
             variant="ghost"
@@ -808,9 +808,9 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               else setSidebarOpen((o) => !o);
             }}
             style={{
-              color: 'rgba(255,255,255,0.95)',
-              border: '1px solid rgba(255,255,255,0.16)',
-              background: 'rgba(255,255,255,0.08)',
+              color: 'var(--chrome-fg)',
+              border: '1px solid var(--chrome-control-border)',
+              background: 'var(--chrome-control-bg)',
               borderRadius: 8
             }}
             aria-label="Menu"
@@ -833,7 +833,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               cursor: 'pointer',
             }}
           >
-            <PerformancePlusLogo height={30} className="max-w-[6.5rem] min-[420px]:max-w-[9rem] sm:max-w-none" variant="onDark" />
+            <PerformancePlusLogo height={30} className="max-w-[6.5rem] min-[420px]:max-w-[9rem] sm:max-w-none" variant="onLight" />
           </PrimerHeader.Link>
         </PrimerHeader.Item>
 
@@ -887,7 +887,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               width: 260,
               minWidth: 260,
               maxWidth: 260,
-              borderRight: '1px solid rgba(255,255,255,0.08)',
+              borderRight: '1px solid var(--chrome-border)',
               overflowY: 'auto',
               overflowX: 'hidden',
               backgroundColor: 'var(--app-chrome-bg, #111111)',
@@ -897,7 +897,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
           >
             <div style={{ 
               padding: '8px 16px', 
-              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              borderBottom: '1px solid var(--chrome-border)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
@@ -909,13 +909,13 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                 style={{
                   padding: 4,
                   border: 'none',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: 'var(--chrome-control-hover)',
                   cursor: 'pointer',
                   borderRadius: 4,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: 'rgba(255,255,255,0.5)'
+                  color: 'var(--chrome-fg-subtle)'
                 }}
               >
                 <PinIcon size={14} />
@@ -970,7 +970,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               width: 280,
               maxWidth: '80vw',
               backgroundColor: 'var(--app-chrome-bg, #111111)',
-              borderRight: '1px solid rgba(255,255,255,0.08)',
+              borderRight: '1px solid var(--chrome-border)',
               zIndex: 1000,
               display: 'flex',
               flexDirection: 'column',
@@ -983,7 +983,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             {/* Drawer Header */}
             <div style={{ 
               padding: 16, 
-              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              borderBottom: '1px solid var(--chrome-border)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -995,7 +995,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                 style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                 title="Dashboard"
               >
-                <PerformancePlusLogo height={40} variant="onDark" />
+                <PerformancePlusLogo height={40} variant="onLight" />
               </button>
               <div style={{ display: 'flex', gap: 4 }}>
                 <button
@@ -1010,9 +1010,9 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'rgba(255,255,255,0.5)'
+                    color: 'var(--chrome-fg-subtle)'
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--chrome-control-hover)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                 >
                   <PinIcon size={16} />
@@ -1029,9 +1029,9 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'rgba(255,255,255,0.5)'
+                    color: 'var(--chrome-fg-subtle)'
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--chrome-control-hover)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                 >
                   <XIcon size={16} />
