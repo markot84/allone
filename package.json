@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@nivo/radar": "^0.99.0",
     "@primer/octicons-react": "^19.21.2",
     "@primer/react": "^38.7.1",
     "@tailwindcss/vite": "^4.1.18",

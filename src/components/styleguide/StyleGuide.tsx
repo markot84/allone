@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { WeightsRadar } from '../strategy/WeightsRadar';
 
 /**
  * /styleguide — the consistency checkpoint every redesign phase is measured against.
@@ -251,6 +252,44 @@ function MotionTable() {
   );
 }
 
+/** Presets that make the silhouette obviously different, so the radar can be judged at a glance. */
+const RADAR_PRESETS: { label: string; weights: Record<string, number> }[] = [
+  { label: 'Ισορροπημένη', weights: { profit: 20, stock: 20, strategic: 20, revenue: 20, fit: 20 } },
+  { label: 'Κερδοφορία', weights: { profit: 60, stock: 10, strategic: 10, revenue: 15, fit: 5 } },
+  { label: 'Απόθεμα', weights: { profit: 10, stock: 55, strategic: 10, revenue: 10, fit: 15 } },
+  { label: 'Συνάφεια', weights: { profit: 10, stock: 10, strategic: 15, revenue: 15, fit: 50 } },
+];
+
+function RadarDemo() {
+  const [preset, setPreset] = useState(0);
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--surface-1)', padding: 16 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+        {RADAR_PRESETS.map((option, index) => (
+          <button
+            key={option.label}
+            type="button"
+            onClick={() => setPreset(index)}
+            style={{
+              font: '500 12px Inter, sans-serif',
+              color: index === preset ? 'var(--surface-0)' : 'var(--text-secondary)',
+              background: index === preset ? 'var(--orange-700)' : 'var(--surface-0)',
+              border: '1px solid var(--border)',
+              borderRadius: 999,
+              padding: '6px 12px',
+              cursor: 'pointer',
+              transition: 'background var(--dur-state) var(--ease-out)',
+            }}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <WeightsRadar weights={RADAR_PRESETS[preset].weights} />
+    </div>
+  );
+}
+
 export function StyleGuide() {
   return (
     <div style={{ background: 'var(--surface-0)', minHeight: '100vh' }}>
@@ -354,6 +393,24 @@ export function StyleGuide() {
             >
               A link
             </a>
+          </div>
+        </Section>
+
+        <Section
+          title="Strategy silhouette"
+          description="One orange outline rather than five coloured series: the point is to recognise a single shape at a glance. The factor colours below it live on the sliders, where telling the five apart is what matters. Switch preset to see the transition."
+        >
+          <RadarDemo />
+          <div style={{ marginTop: 16 }}>
+            <SwatchGrid
+              items={[
+                { token: '--factor-profit', note: 'Κερδοφορία' },
+                { token: '--factor-stock', note: 'Βελτιστοποίηση αποθέματος' },
+                { token: '--factor-strategic', note: 'Στρατηγική προτεραιότητα' },
+                { token: '--factor-revenue', note: 'Στόχος εσόδων' },
+                { token: '--factor-fit', note: 'Συνάφεια πελάτη' },
+              ]}
+            />
           </div>
         </Section>
 

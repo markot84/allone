@@ -13,6 +13,7 @@ import type { AppSectionId, Brand } from '../../types';
 import { getModuleIdForSection, isSectionHidden } from '../../config/modules';
 import { validatePassword, PASSWORD_REQUIREMENTS_HINT } from '../../utils/passwordPolicy';
 import { ACCENT_PICKER_ENABLED, ACCENT_PRESETS, readStoredAccent, setStoredAccent, type AccentId } from '../../theme/accentTheme';
+import { CASCADE_HOLD_MS, CASCADE_STEP_MS, STRATEGY_CASCADE_EVENT, cascadeChain } from '../../utils/strategyCascade';
 import {
   GearIcon,
   GraphIcon,
@@ -60,6 +61,47 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error || '');
 }
 
+/**
+ * Lights the affected modules in sequence when a strategy weight settles.
+ *
+ * Each module keeps its own hold window, so the pulses overlap the way the brief describes rather
+ * than one cutting the previous one short.
+ */
+function useCascadeHighlight(): Set<string> {
+  const [lit, setLit] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    const timers: number[] = [];
+
+    const handleCascade = () => {
+      cascadeChain().forEach((section, step) => {
+        timers.push(
+          window.setTimeout(() => {
+            setLit((prev) => new Set(prev).add(section));
+          }, step * CASCADE_STEP_MS)
+        );
+        timers.push(
+          window.setTimeout(() => {
+            setLit((prev) => {
+              const next = new Set(prev);
+              next.delete(section);
+              return next;
+            });
+          }, step * CASCADE_STEP_MS + CASCADE_HOLD_MS)
+        );
+      });
+    };
+
+    window.addEventListener(STRATEGY_CASCADE_EVENT, handleCascade);
+    return () => {
+      window.removeEventListener(STRATEGY_CASCADE_EVENT, handleCascade);
+      timers.forEach((id) => window.clearTimeout(id));
+    };
+  }, []);
+
+  return lit;
+}
+
 function SidebarNav({
   navItems,
   activeSection,
@@ -69,6 +111,7 @@ function SidebarNav({
   activeSection: string;
   onSelect: (id: AppSectionId) => void;
 }) {
+  const cascadeLit = useCascadeHighlight();
   return (
     <NavList aria-label="Primary">
       {navItems.map((item, index) => {
@@ -103,6 +146,7 @@ function SidebarNav({
                 onSelect(item.id); 
               }}
               aria-current={(activeSection === item.id || (item.id === 'data' && activeSection.startsWith('data-'))) ? 'page' : undefined}
+              className={cascadeLit.has(item.id) ? 'nav-cascade-pulse' : undefined}
               style={{ width: '100%', textAlign: 'left' }}
             >
               <NavList.LeadingVisual>

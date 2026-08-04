@@ -74,6 +74,16 @@
   --seg-at-risk:   var(--gold-700);
   --seg-lost:      var(--text-muted);
 
+  /* ============ STRATEGY FACTORS — the five weights in the Configurator ============ */
+  /* Categorical, so they need to stay distinguishable from each other; drawn from the palette
+     rather than invented. The radar itself is a single orange shape (colors.md §5) — these colour
+     the sliders and legend, where telling the five apart is the whole point. */
+  --factor-profit:    var(--success);
+  --factor-stock:     var(--sky-500);
+  --factor-strategic: var(--seg-potential);
+  --factor-revenue:   var(--gold-700);
+  --factor-fit:       var(--orange-600);
+
   /* ============ MOTION — three durations, nothing else ============ */
   --dur-state:   150ms;  /* hover, toggle, focus, tab switch */
   --dur-reorder: 300ms;  /* list and table reordering */
@@ -147,6 +157,53 @@ td[data-numeric],
 [data-numeric] {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
+}
+
+/**
+ * Cascade pulse: a module lighting up as a weight change reaches it.
+ *
+ * colors.md §5 specifies surface-2 → orange-50 → surface-1, which assumes the light canvas. The
+ * sidebar is still the neutral dark chrome, so the same idea is carried by an orange wash and an
+ * edge marker, which read on dark. Switch to the §5 sequence if the chrome goes light.
+ */
+.nav-cascade-pulse {
+  animation: nav-cascade-pulse var(--dur-reveal) var(--ease-out) 1;
+  border-radius: 6px;
+}
+
+@keyframes nav-cascade-pulse {
+  0% {
+    background-color: transparent;
+    box-shadow: inset 2px 0 0 transparent;
+  }
+  30% {
+    background-color: color-mix(in srgb, var(--brand-orange) 26%, transparent);
+    box-shadow: inset 2px 0 0 var(--brand-orange);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: inset 2px 0 0 transparent;
+  }
+}
+
+/**
+ * Ghost state: the imprint of a product's previous rank, left behind as the row travels. Fades on
+ * its own so nothing has to schedule a timer to clean it up.
+ */
+.strategy-rank-ghost {
+  position: absolute;
+  left: 0;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+  opacity: 0;
+  animation: strategy-rank-ghost-fade var(--dur-reveal) var(--ease-out) 1;
+}
+
+@keyframes strategy-rank-ghost-fade {
+  from { opacity: 0.25; transform: translateY(0); }
+  to   { opacity: 0;    transform: translateY(-6px); }
 }
 
 /**

@@ -85,35 +85,35 @@ export const weightFactors: Omit<WeightFactor, 'value'>[] = [
     name: 'Κερδοφορία', 
     icon: '',
     tooltip: 'Περιθώριο κέρδους ανά προϊόν',
-    color: '#22C55E'
+    color: 'var(--factor-profit)'
   },
   { 
     id: 'stock', 
     name: 'Βελτιστοποίηση αποθέματος', 
     icon: '',
     tooltip: 'Επίπεδο αποθέματος, παλαιότητα και πλεονάζουσα ποσότητα',
-    color: '#3B82F6'
+    color: 'var(--factor-stock)'
   },
   { 
     id: 'strategic', 
     name: 'Στρατηγική προτεραιότητα', 
     icon: '',
     tooltip: 'Νέα λανσαρίσματα, στρατηγικές συμφωνίες και εμπορικές προτεραιότητες',
-    color: '#8B5CF6'
+    color: 'var(--factor-strategic)'
   },
   { 
     id: 'revenue', 
     name: 'Στόχος εσόδων', 
     icon: '',
     tooltip: 'Στόχοι όγκου και εσόδων ανά κατηγορία',
-    color: '#F59E0B'
+    color: 'var(--factor-revenue)'
   },
   { 
     id: 'fit', 
     name: 'Συνάφεια πελάτη', 
     icon: '',
     tooltip: 'Συνάφεια με το segment και ιστορικό αγορών',
-    color: '#F97316'
+    color: 'var(--factor-fit)'
   }
 ];
 

@@ -29,6 +29,8 @@ import { PriceBenchmarkSetupModal } from './PriceBenchmarkSetupModal';
 import { SeasonalDiscountPanel, type SeasonalDiscountConfig } from './SeasonalDiscountPanel';
 import { CustomToolsCard } from './CustomToolsCard';
 import { MixedStrategyPanel, type MixConfig, computeBlendedWeights } from './MixedStrategyPanel';
+import { WeightsRadar } from './WeightsRadar';
+import { emitStrategyCascade } from '../../utils/strategyCascade';
 import { SeasonalBanner } from './SeasonalBanner';
 import { SeasonalPeriodsModal } from './SeasonalPeriodsModal';
 import { useProductSource } from '../../hooks/useProductSource';
@@ -52,7 +54,7 @@ import { formatBrandProfileForPrompt } from '../../services/brandProfile';
 import { FirestoreService } from '../../services/firestore';
 import { BriefingDrawer } from '../coordination/BriefingDrawer';
 import { getPreviewConfig, type PreviewColumnId } from '../../data/strategyPreviewConfig';
-import { calculateCompositeScore, type CompositeScoreContext } from '../../utils/compositeScore';
+import { blendFactorScores, calculateCompositeScore, calculateFactorScores, type CompositeScoreContext } from '../../utils/compositeScore';
 import {
   filterProductsBySalesBaseScope,
   productParticipatesInSalesBase,
@@ -80,14 +82,51 @@ import { logger } from '../../utils/logger';
 import { sanitizeSpreadsheetCell, sanitizeRow } from '../../utils/spreadsheetSafe';
 
 
+/**
+ * How far a product travelled in the ranking, and the imprint of where it was.
+ *
+ * The arrow persists so the change stays readable after the motion settles; the ghost is the
+ * transient half — it carries the previous position and fades out on its own. Keying the ghost on
+ * the rank it represents restarts the CSS animation on every reorder without a timer.
+ */
+const RankDelta = memo(function RankDelta({ delta, previousRank }: { delta: number | null; previousRank: number | null }) {
+  if (delta === null) return null;
+
+  const moved = delta !== 0;
+  const tone = delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--text-muted)';
+
+  return (
+    <span className="relative inline-flex items-center">
+      <span data-numeric style={{ color: tone, fontSize: 10, fontWeight: 600, lineHeight: 1 }}>
+        {delta > 0 ? `↑${delta}` : delta < 0 ? `↓${Math.abs(delta)}` : '–'}
+      </span>
+      {moved && previousRank !== null && (
+        <span
+          key={`${previousRank}`}
+          data-numeric
+          className="strategy-rank-ghost"
+          aria-hidden="true"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          {previousRank}
+        </span>
+      )}
+    </span>
+  );
+});
+
 const PreviewCell = memo(function PreviewCell({
   columnId,
   product,
   rank,
+  rankDelta,
+  previousRank,
 }: {
   columnId: PreviewColumnId;
   product: Product & { composite_score?: number };
   rank: number;
+  rankDelta?: number | null;
+  previousRank?: number | null;
 }) {
   const effectiveStock = getEffectiveStockLevel(product);
   const stockCapacity = Math.max(product.stock_capacity || 0, 1);
@@ -99,9 +138,16 @@ const PreviewCell = memo(function PreviewCell({
     case 'rank':
       return (
         <td className="py-2 pr-1 w-8">
-          <span className="w-5 h-5 rounded-full bg-[#F5F5F5] flex items-center justify-center text-[10px] font-medium">
-            {rank}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span
+              data-numeric
+              className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium"
+              style={{ background: 'var(--surface-2)', color: 'var(--text-primary)' }}
+            >
+              {rank}
+            </span>
+            <RankDelta delta={rankDelta ?? null} previousRank={previousRank ?? null} />
+          </div>
         </td>
       );
     case 'product':
@@ -1080,7 +1126,9 @@ export function WeightConfigurator({
       }
       debounceTimerRef.current = window.setTimeout(() => {
         setDebouncedWeights(newWeights);
-      }, 150);
+        // The change has settled — send it down the chain of modules it affects.
+        emitStrategyCascade();
+      }, 60);
     },
     [weights]
   );
@@ -1103,7 +1151,13 @@ export function WeightConfigurator({
 
   // Calculate prioritized products (strategy-specific score logic)
   // Use debounced weights for expensive calculations, limit to top 100 for preview
-  const prioritizedProducts = useMemo(() => {
+  /**
+   * The weight-independent half of the ranking: which products are in scope, and their five
+   * sub-scores. Recomputed only when the catalogue or the strategy changes — never while a slider
+   * moves. Keeping the object spread and `calculateFactorScores` out of the slider path is what
+   * makes a 60ms debounce viable over a 4.500-SKU catalogue.
+   */
+  const scoredCandidates = useMemo(() => {
     const previewingSalesPending = pendingScenarioChange === 'sales_base';
     const previewingPriceBenchPending = pendingScenarioChange === 'price_benchmark';
     if (!selectedScenario && !previewingSalesPending && !previewingPriceBenchPending) return [];
@@ -1113,12 +1167,6 @@ export function WeightConfigurator({
       : previewingPriceBenchPending
         ? 'price_benchmark'
         : (selectedScenario ?? undefined);
-
-    const weightsForScore = previewingSalesPending
-      ? getWeightsForScenario('sales_base')
-      : previewingPriceBenchPending
-        ? getWeightsForScenario('price_benchmark')
-        : debouncedWeights;
 
     let source = products;
     if (strategyId === 'sales_base') {
@@ -1132,29 +1180,14 @@ export function WeightConfigurator({
     const scoreCtx: CompositeScoreContext | undefined =
       strategyId === 'price_benchmark' ? benchmarkScoreContext : undefined;
 
-    const scored = source
-      .map((p) => {
-        const bm = strategyId === 'price_benchmark' ? benchmarkLookup(p) : undefined;
-        return {
-          ...p,
-          ...(bm ? { __priceBenchmark: bm } : {}),
-          composite_score: calculateCompositeScore(
-            p,
-            weightsForScore,
-            undefined,
-            strategyId,
-            undefined,
-            scoreCtx,
-          ),
-        };
-      })
-      .sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0));
-
-    return scored.slice(0, 100);
+    return source.map((p) => ({
+      product: p,
+      priceBenchmark: strategyId === 'price_benchmark' ? benchmarkLookup(p) : undefined,
+      parts: calculateFactorScores(p, undefined, strategyId, undefined, scoreCtx),
+    }));
   }, [
     products,
     salesBaseProducts,
-    debouncedWeights,
     selectedScenario,
     pendingScenarioChange,
     salesBaseScopeForPreview,
@@ -1163,8 +1196,70 @@ export function WeightConfigurator({
     filterProductsByTriageScope,
     benchmarkLookup,
     benchmarkScoreContext,
-    getWeightsForScenario,
   ]);
+
+  /**
+   * The weight-dependent half: a weighted sum per product, a sort over primitives, and object
+   * spreads only for the 100 rows that survive it. This is everything a slider frame pays for.
+   */
+  const prioritizedProducts = useMemo(() => {
+    if (scoredCandidates.length === 0) return [];
+
+    const weightsForScore = pendingScenarioChange === 'sales_base'
+      ? getWeightsForScenario('sales_base')
+      : pendingScenarioChange === 'price_benchmark'
+        ? getWeightsForScenario('price_benchmark')
+        : debouncedWeights;
+
+    const ranked = scoredCandidates.map((candidate, index) => ({
+      index,
+      score: blendFactorScores(candidate.parts, weightsForScore),
+    }));
+    ranked.sort((a, b) => b.score - a.score);
+
+    return ranked.slice(0, 100).map(({ index, score }) => {
+      const { product, priceBenchmark } = scoredCandidates[index];
+      return {
+        ...product,
+        ...(priceBenchmark ? { __priceBenchmark: priceBenchmark } : {}),
+        composite_score: score,
+      };
+    });
+  }, [scoredCandidates, debouncedWeights, pendingScenarioChange, getWeightsForScenario]);
+
+  /**
+   * Where each product sat in the previous ranking, so a reorder can say how far things moved.
+   *
+   * Kept in a ref keyed on the list identity rather than in state: the comparison is against the
+   * last render's output, and routing that through state would mean re-rendering the table twice
+   * for every slider frame. Keying on identity also makes the update idempotent, so StrictMode's
+   * double render does not collapse the previous ranking into the current one.
+   */
+  const rankTrackerRef = useRef<{
+    source: unknown;
+    current: Map<string, number>;
+    previous: Map<string, number>;
+  }>({ source: null, current: new Map(), previous: new Map() });
+
+  if (rankTrackerRef.current.source !== prioritizedProducts) {
+    const next = new Map<string, number>();
+    prioritizedProducts.forEach((product, index) => next.set(product.id, index + 1));
+    rankTrackerRef.current = {
+      source: prioritizedProducts,
+      current: next,
+      previous: rankTrackerRef.current.current,
+    };
+  }
+
+  /** Positive means the product climbed. `null` for products that were not previously ranked. */
+  const rankMovement = useCallback(
+    (productId: string, rank: number): { delta: number | null; previousRank: number | null } => {
+      const before = rankTrackerRef.current.previous.get(productId);
+      if (before === undefined) return { delta: null, previousRank: null };
+      return { delta: before - rank, previousRank: before };
+    },
+    []
+  );
 
   const previewTotalPages = Math.max(1, Math.ceil(prioritizedProducts.length / PREVIEW_PAGE_SIZE));
   const paginatedPreviewProducts = prioritizedProducts.slice(
@@ -1683,6 +1778,10 @@ export function WeightConfigurator({
             </div>
           )}
 
+          {/* The silhouette of the current strategy — bound to live weights, so it moves with the
+              thumb rather than after the debounce. */}
+          <WeightsRadar weights={weights} />
+
           <div className="space-y-6">
             {weightFactors.map((factor) => (
               <Slider
@@ -1794,26 +1893,35 @@ export function WeightConfigurator({
               </thead>
               <tbody>
                 <AnimatePresence mode="popLayout">
-                  {paginatedPreviewProducts.map((product, index) => (
-                    <motion.tr
-                      key={product.id}
-                      layout
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="border-b border-[#E5E5E5] last:border-0"
-                    >
-                      {previewConfig.columns.map((col) => (
-                        <PreviewCell
-                          key={col.id}
-                          columnId={col.id}
-                          product={product}
-                          rank={(currentPreviewPage - 1) * PREVIEW_PAGE_SIZE + index + 1}
-                        />
-                      ))}
-                    </motion.tr>
-                  ))}
+                  {paginatedPreviewProducts.map((product, index) => {
+                    const rank = (currentPreviewPage - 1) * PREVIEW_PAGE_SIZE + index + 1;
+                    const movement = rankMovement(product.id, rank);
+                    return (
+                      <motion.tr
+                        key={product.id}
+                        layout
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        // Reorder duration, from the token set: rows travel to their new position
+                        // rather than blinking out and back in.
+                        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                        className="border-b last:border-0"
+                        style={{ borderColor: 'var(--border)' }}
+                      >
+                        {previewConfig.columns.map((col) => (
+                          <PreviewCell
+                            key={col.id}
+                            columnId={col.id}
+                            product={product}
+                            rank={rank}
+                            rankDelta={movement.delta}
+                            previousRank={movement.previousRank}
+                          />
+                        ))}
+                      </motion.tr>
+                    );
+                  })}
                 </AnimatePresence>
               </tbody>
             </table>

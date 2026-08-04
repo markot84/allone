@@ -8,16 +8,45 @@ export type CompositeScoreContext = {
   benchmarkLookup?: (p: Product) => BenchmarkPriceFields | undefined;
 };
 
-/** Calculate composite score for a product based on weights and strategy. segmentAffinities are on
- *  the app-wide 0–1 scale; their average is scaled to 0–100 below (no-affinities default 50 = neutral). */
-export function calculateCompositeScore(
+/** The five 0–100 sub-scores a composite score is blended from. */
+export type FactorScores = {
+  profit: number;
+  stock: number;
+  strategic: number;
+  revenue: number;
+  fit: number;
+};
+
+/**
+ * A score the weights cannot influence: `sales_base` and `price_benchmark` blend their own fixed
+ * coefficients, so moving a slider must not recompute them.
+ */
+export type FixedScore = { fixed: number };
+
+export type ScoreParts = FactorScores | FixedScore;
+
+export function isFixedScore(parts: ScoreParts): parts is FixedScore {
+  return 'fixed' in parts;
+}
+
+/**
+ * The weight-independent half of the composite score.
+ *
+ * Split out so the Weights Configurator can compute it once per catalogue and then re-rank on every
+ * slider frame with nothing but a weighted sum — the difference between a 150ms debounce that still
+ * stutters over 4.500 SKUs and a 60ms one that does not. `calculateCompositeScore` is unchanged in
+ * behaviour and is now a thin wrapper over this.
+ *
+ * segmentAffinities are on the app-wide 0–1 scale; their average is scaled to 0–100 here
+ * (no affinities → 50, neutral).
+ */
+export function calculateFactorScores(
   product: Product,
-  weights: Record<string, number>,
   segmentAffinities?: Record<string, number>,
   strategyId?: string,
   supplierTodMap?: Map<string, number>,
   scoreContext?: CompositeScoreContext,
-): number {
+): ScoreParts {
   const profitScore = Math.min(100, Math.max(0, (product.margin_percentage || 0) / 60 * 100));
 
   const tod = getProductTod(product, supplierTodMap);
@@ -54,7 +83,7 @@ export function calculateCompositeScore(
       strategicScore * 0.06 +
       revenueScore * 0.09 +
       fitScore * 0.07;
-    return Math.round(total);
+    return { fixed: Math.round(total) };
   }
 
   if (strategyId === 'price_benchmark') {
@@ -67,16 +96,44 @@ export function calculateCompositeScore(
       strategicScore * 0.08 +
       revenueScore * 0.11 +
       fitScore * 0.05;
-    return Math.round(total);
+    return { fixed: Math.round(total) };
   }
 
+  return {
+    profit: profitScore,
+    stock: inventoryScore,
+    strategic: strategicScore,
+    revenue: revenueScore,
+    fit: fitScore,
+  };
+}
+
+/** Blend pre-computed sub-scores with the current weights. This is all a slider frame has to do. */
+export function blendFactorScores(parts: ScoreParts, weights: Record<string, number>): number {
+  if (isFixedScore(parts)) return parts.fixed;
+
   // Weights are percentages (0-100), so divide by 100 to get multipliers (0-1)
-  const total = 
-    (profitScore * (weights.profit || 0) / 100) +
-    (inventoryScore * (weights.stock || 0) / 100) +
-    (strategicScore * (weights.strategic || 0) / 100) +
-    (revenueScore * (weights.revenue || 0) / 100) +
-    (fitScore * (weights.fit || 0) / 100);
+  const total =
+    (parts.profit * (weights.profit || 0) / 100) +
+    (parts.stock * (weights.stock || 0) / 100) +
+    (parts.strategic * (weights.strategic || 0) / 100) +
+    (parts.revenue * (weights.revenue || 0) / 100) +
+    (parts.fit * (weights.fit || 0) / 100);
 
   return Math.round(total);
+}
+
+/** Calculate composite score for a product based on weights and strategy. */
+export function calculateCompositeScore(
+  product: Product,
+  weights: Record<string, number>,
+  segmentAffinities?: Record<string, number>,
+  strategyId?: string,
+  supplierTodMap?: Map<string, number>,
+  scoreContext?: CompositeScoreContext,
+): number {
+  return blendFactorScores(
+    calculateFactorScores(product, segmentAffinities, strategyId, supplierTodMap, scoreContext),
+    weights,
+  );
 }
