@@ -24,7 +24,7 @@ export function CommercialInfoBanner({
     <div className="rounded-xl border border-[var(--nts-accent)]/30 bg-[var(--nts-accent)]/5 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2 min-w-0">
-          <Lightbulb size={18} className="mt-0.5 shrink-0 text-[var(--nts-accent)]" />
+          <Lightbulb size={18} className="mt-0.5 shrink-0 text-[var(--nts-accent-text)]" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-[var(--nts-charcoal)]">
               {active.length} ενεργές εμπορικές πληροφορίες
@@ -46,7 +46,7 @@ export function CommercialInfoBanner({
         {onOpen && (
           <button
             onClick={onOpen}
-            className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-[var(--nts-accent)] hover:underline"
+            className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-[var(--nts-accent-text)] hover:underline"
           >
             {ctaLabel}
             <ArrowRight size={13} />

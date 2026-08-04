@@ -99,7 +99,7 @@ export function InterestForm() {
         <div className="relative overflow-hidden bg-[#111827] p-6 text-white md:p-8">
           <div className="pointer-events-none absolute right-[-100px] top-[-100px] h-64 w-64 rounded-full bg-[var(--nts-accent)]/25 blur-3xl" />
           <div className="relative">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)]">Demo request</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent-text)]">Demo request</p>
             <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-white">Δείτε πώς μπορεί να δουλέψει στο δικό σας e-shop</h3>
             <p className="mt-4 text-sm leading-7 text-white/70">
               Συμπληρώστε τη φόρμα και η ομάδα μας θα επικοινωνήσει μαζί σας για μια στρατηγική παρουσίαση της πλατφόρμας.

@@ -1,0 +1,164 @@
+/**
+ * Design tokens — v2 UI, light theme.
+ *
+ * Source of truth: colors.md (which replaces §4 of performance-plus-redesign-ui-brief.md).
+ * The four brand colours are sampled from the logo and are FIXED — do not soften or re-mix them.
+ *
+ * Rules that are not obvious from the values alone:
+ *   - Orange is the ONLY primary-action colour. On white it measures 3.00:1, so it is never used
+ *     for body text — use `--orange-700` (5.61:1) for orange text, or white on `--orange-700`
+ *     for buttons.
+ *   - Gold is 1.60:1 on white: badge/highlight BACKGROUND only, never text. Put navy on top of it.
+ *   - Navy is for text, headings and branding — never a large-surface background in this version.
+ *
+ * Adding a colour: check for an existing tint/shade below first. A new hex needs a reason.
+ */
+
+:root {
+  /* ============ BRAND — fixed, sampled from the logo ============ */
+  --brand-navy:    #003087;
+  --brand-orange:  #FE630C;
+  --brand-gold:    #FEC405;
+  --brand-sky:     #005ECD;
+
+  /* ============ NAVY scale ============ */
+  --navy-900: #00225E;   /* shade 30% — hover on navy elements */
+  --navy-700: #002973;   /* shade 15% */
+  --navy-500: #003087;   /* base */
+  --navy-100: #BFCBE1;   /* tint 75% — borders, dividers, ghost states */
+  --navy-50:  #E6EAF3;   /* tint 90% — subtle section backgrounds */
+
+  /* ============ ORANGE scale ============ */
+  --orange-700: #B24508; /* shade 30% — AA-safe orange text on white (5.61:1) */
+  --orange-600: #D8540A; /* shade 15% — button hover */
+  --orange-500: #FE630C; /* base — button background, icons, large headings */
+  --orange-100: #FFD8C2; /* tint 75% — badge background */
+  --orange-50:  #FFEFE7; /* tint 90% — subtle highlight background */
+
+  /* ============ GOLD scale ============ */
+  --gold-700: #B28904;   /* shade 30% */
+  --gold-500: #FEC405;   /* base — badge/highlight background, NEVER text */
+  --gold-100: #FFF0C0;   /* tint 75% */
+  --gold-50:  #FFF9E6;   /* tint 90% — warm section background */
+
+  /* ============ SKY scale ============ */
+  --sky-700: #0050AE;    /* shade — link hover */
+  --sky-500: #005ECD;    /* base — links, secondary CTA */
+  --sky-100: #BFD7F2;    /* tint 75% */
+  --sky-50:  #E6EFFA;    /* tint 90% — info banner background */
+
+  /* ============ NEUTRALS — independent of brand hue ============ */
+  /* Neutral grey, deliberately not navy-tinted: large bodies of text and dense data tables
+     would tire the eye if every neutral carried the brand hue. */
+  --surface-0:  #FFFFFF; /* app background */
+  --surface-1:  #FAFBFC; /* cards */
+  --surface-2:  #F2F4F7; /* hover / slightly deeper layer */
+  --border:     #E4E7EC;
+
+  --text-primary:   #101828; /* not navy — clean dark grey for long-form text */
+  --text-secondary: #475467;
+  --text-muted:     #98A2B3;
+  --text-heading:   var(--navy-500); /* headings and branding DO use navy */
+
+  /* ============ SEMANTIC — deliberately distinct from the brand accents ============ */
+  /* Kept away from orange/gold so a red error is never mistaken for an active CTA. */
+  --success: #12B76A;
+  --warning: #F79009;
+  --danger:  #F04438;
+  --info:    var(--sky-500);
+
+  /* ============ RFM SEGMENTS ============ */
+  --seg-champions: #12B76A;       /* success green — unambiguously positive */
+  --seg-loyal:     var(--sky-500);
+  --seg-potential: #7A5AF8;       /* unique purple — separates it from the 4 brand colours */
+  --seg-at-risk:   var(--gold-700);
+  --seg-lost:      var(--text-muted);
+
+  /* ============ MOTION — three durations, nothing else ============ */
+  --dur-state:   150ms;  /* hover, toggle, focus, tab switch */
+  --dur-reorder: 300ms;  /* list and table reordering */
+  --dur-reveal:  450ms;  /* scroll reveal — once only */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/**
+ * Legacy bridge.
+ *
+ * ~4.000 hardcoded colours and 732 `var(--nts-*)` references predate these tokens. Rather than
+ * rewrite every component at once, the old names are re-pointed at the new palette so the whole
+ * app picks up the brand colours immediately. Components get migrated to the tokens above as each
+ * redesign phase touches them; this block shrinks as that happens and should eventually be empty.
+ */
+:root {
+  --nts-white:       var(--surface-0);
+  --nts-charcoal:    var(--text-primary);
+  --nts-dark-gray:   var(--text-primary);
+  --nts-medium-gray: var(--text-secondary);
+  --nts-light-gray:  var(--surface-2);
+  --nts-border-gray: var(--border);
+
+  --nts-bg-pure:   var(--surface-0);
+  --nts-bg-subtle: var(--surface-1);
+  --nts-bg-muted:  var(--surface-2);
+  --nts-bg-strong: var(--navy-100);
+  --nts-bg-dark:   var(--navy-900);
+
+  /* Backgrounds and icons get the vivid brand orange; text gets the AA-safe shade.
+     `--nts-accent-text` exists because one variable cannot be both a 3.00:1 background
+     and an accessible text colour. */
+  --nts-accent:       var(--orange-500);
+  --nts-accent-hover: var(--orange-600);
+  --nts-accent-light: var(--orange-100);
+  --nts-accent-text:  var(--orange-700);
+
+  /* Links were blue under the old `--nts-orange` name (a misnomer kept for compatibility). */
+  --nts-orange:       var(--sky-500);
+  --nts-orange-hover: var(--sky-700);
+  --nts-orange-light: var(--sky-50);
+
+  /* Header and sidebar stay a neutral dark, NOT navy: colors.md §6 rules navy out as a
+     large-surface background in this version. Turning the chrome light is a separate decision —
+     it needs AppShell's white-on-dark text restyled with it. */
+  --app-chrome-bg: #111111;
+  --app-canvas-bg: var(--surface-0);
+
+  --success-light: #D3F8E6;
+  --warning-light: #FEF0C7;
+  --danger-light:  #FEE4E2;
+  --info-light:    var(--sky-50);
+
+  --nts-chart-secondary:       var(--sky-500);
+  --nts-chart-secondary-light: var(--sky-100);
+
+  --champions: var(--seg-champions);
+  --loyal:     var(--seg-loyal);
+  --potential: var(--seg-potential);
+  --at-risk:   var(--seg-at-risk);
+  --lost:      var(--seg-lost);
+}
+
+/**
+ * Numeric fields must not shift width as values update — the single cheapest change with the
+ * largest effect on perceived quality in a data tool.
+ */
+.metric,
+.kpi-value,
+td[data-numeric],
+[data-numeric] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/**
+ * Motion discipline: three durations, and none of them apply when the user has asked for less.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -163,7 +163,7 @@ export function StrategyPackage(props: StrategyPackageProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
                 <div className="p-3 rounded-lg bg-[#FAFAFA]">
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <Target size={12} className="text-[var(--nts-accent)]" />
+                    <Target size={12} className="text-[var(--nts-accent-text)]" />
                     <span className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">Στρατηγική</span>
                   </div>
                   <p className="text-sm font-medium text-[#1A1A1A]">{strategyName}</p>

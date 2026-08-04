@@ -615,7 +615,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               <button
                 type="button"
                 onClick={() => onSectionChange?.('data-campaigns')}
-                className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
+                className="font-semibold text-[var(--nts-accent-text)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
               >
                 ρυθμίσεις καμπανιών
               </button>
@@ -629,7 +629,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               <button
                 type="button"
                 onClick={() => onSectionChange?.('data-campaigns')}
-                className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
+                className="font-semibold text-[var(--nts-accent-text)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
               >
                 ρυθμίσεις καμπανιών
               </button>
@@ -730,7 +730,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 </p>
               </div>
               <div className="w-10 h-10 shrink-0 bg-[var(--nts-light-gray)] rounded-lg flex items-center justify-center">
-                <DollarSign size={20} className="text-[var(--nts-accent)]" />
+                <DollarSign size={20} className="text-[var(--nts-accent-text)]" />
               </div>
             </div>
           </Card>
@@ -946,7 +946,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                       <div className="px-3 py-1.5 border-b border-[#F0F0F0] flex items-center justify-between">
                         <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">Conversion actions</span>
                         {convActionFilter.length > 0 && (
-                          <button onClick={clearConvFilter} className="text-[10px] text-[var(--nts-accent)] hover:underline">Καθαρισμός</button>
+                          <button onClick={clearConvFilter} className="text-[10px] text-[var(--nts-accent-text)] hover:underline">Καθαρισμός</button>
                         )}
                       </div>
                       {allConversionActions.map(action => (
@@ -958,7 +958,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                             type="checkbox"
                             checked={convActionFilter.includes(action)}
                             onChange={() => toggleConvAction(action)}
-                            className="w-3.5 h-3.5 rounded border-[#D1D5DB] text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]"
+                            className="w-3.5 h-3.5 rounded border-[#D1D5DB] text-[var(--nts-accent-text)] focus:ring-[var(--nts-accent)]"
                           />
                           <span className="text-xs text-[#1A1A1A]">{action}</span>
                         </label>
@@ -987,7 +987,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           {sortedCampaigns.length > COLLAPSED_LIMIT && (
             <button
               onClick={() => setTableExpanded(!tableExpanded)}
-              className="text-xs font-medium text-[var(--nts-accent)] hover:underline px-3 py-1.5 rounded-md hover:bg-[var(--nts-accent)]/5 transition-colors"
+              className="text-xs font-medium text-[var(--nts-accent-text)] hover:underline px-3 py-1.5 rounded-md hover:bg-[var(--nts-accent)]/5 transition-colors"
             >
               {tableExpanded ? 'Σύμπτυξη' : `Εμφάνιση όλων (${sortedCampaigns.length})`}
             </button>
@@ -1257,13 +1257,13 @@ function SortableHeader({ col, label, title: thTitle, current, dir, onSort, alig
       <span className="inline-flex items-center gap-1">
         {align === 'right' && (
           active
-            ? (dir === 'asc' ? <ArrowUp size={12} className="text-[var(--nts-accent)]" /> : <ArrowDown size={12} className="text-[var(--nts-accent)]" />)
+            ? (dir === 'asc' ? <ArrowUp size={12} className="text-[var(--nts-accent-text)]" /> : <ArrowDown size={12} className="text-[var(--nts-accent-text)]" />)
             : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-40" />
         )}
         <span className={active ? 'text-[var(--nts-charcoal)] font-semibold' : ''}>{label}</span>
         {align !== 'right' && (
           active
-            ? (dir === 'asc' ? <ArrowUp size={12} className="text-[var(--nts-accent)]" /> : <ArrowDown size={12} className="text-[var(--nts-accent)]" />)
+            ? (dir === 'asc' ? <ArrowUp size={12} className="text-[var(--nts-accent-text)]" /> : <ArrowDown size={12} className="text-[var(--nts-accent-text)]" />)
             : <ArrowUpDown size={12} className="opacity-30" />
         )}
       </span>

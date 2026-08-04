@@ -108,7 +108,7 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
         <div className="space-y-1.5">
           {data.primaryChannels.map((ch, i) => (
             <div key={ch} className="flex justify-between items-center p-2.5 rounded-lg bg-[#FAFAFA]">
-              <span className="text-sm text-[#1A1A1A]"><strong className="text-[var(--nts-accent)]">{i + 1}.</strong> {ch}</span>
+              <span className="text-sm text-[#1A1A1A]"><strong className="text-[var(--nts-accent-text)]">{i + 1}.</strong> {ch}</span>
             </div>
           ))}
           {data.secondaryChannels.map((ch, i) => (
@@ -135,7 +135,7 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
       {/* Footer */}
       <div className="pt-4 mt-6 border-t border-[#E5E5E5] flex justify-between items-center">
         <p className="text-[11px] text-[#9CA3AF]">Δημιουργήθηκε από Performance+ | notthesame.ai</p>
-        <span className="text-lg font-bold text-[var(--nts-accent)]">≠</span>
+        <span className="text-lg font-bold text-[var(--nts-accent-text)]">≠</span>
       </div>
     </div>
   );

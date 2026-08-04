@@ -222,7 +222,7 @@ export function StrategyImpactSummary({
           <div id="strategy-impact-summary-title" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-1 min-w-0">
           <div className="flex items-center gap-2 text-sm min-w-0">
             <span className="font-medium text-[#1A1A1A] truncate">{fromName}</span>
-            <ArrowRight size={14} className="text-[var(--nts-accent)] flex-shrink-0" />
+            <ArrowRight size={14} className="text-[var(--nts-accent-text)] flex-shrink-0" />
             <span className="font-medium text-[#1A1A1A] truncate">{toName}</span>
           </div>
 
@@ -305,7 +305,7 @@ export function StrategyImpactSummary({
           <button
             type="button"
             onClick={onDetails}
-            className="px-3 py-1.5 text-xs font-medium text-[#4A4A4A] hover:text-[var(--nts-accent)] transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-[#4A4A4A] hover:text-[var(--nts-accent-text)] transition-colors"
           >
             <ChevronDown size={12} className="inline mr-1" />
             Λεπτομέρειες
@@ -450,7 +450,7 @@ export function StrategyImpactModal({
             {currentDuration !== undefined && (
               <span className="text-[10px] text-[#9CA3AF]">{formatDuration(currentDuration)}</span>
             )}
-            <ArrowRight size={16} className="text-[var(--nts-accent)] flex-shrink-0" />
+            <ArrowRight size={16} className="text-[var(--nts-accent-text)] flex-shrink-0" />
             <span className="font-medium text-[#1A1A1A]">{toName}</span>
             <span className="text-[10px] text-[#9CA3AF]">{formatDuration(confirmDuration)}</span>
           </div>

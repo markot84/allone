@@ -137,7 +137,7 @@ export function LoginPage({
                 <button
                   type="button"
                   onClick={() => { setMode('login'); setResetSent(false); setError(''); }}
-                  className="text-xs text-[var(--nts-accent)] hover:underline"
+                  className="text-xs text-[var(--nts-accent-text)] hover:underline"
                 >
                   ← Επιστροφή στη σύνδεση
                 </button>
@@ -221,7 +221,7 @@ export function LoginPage({
                     <button
                       type="button"
                       onClick={() => { setMode('forgot'); setError(''); setResetSent(false); }}
-                      className="mt-1.5 text-[10px] text-[var(--nts-accent)] hover:underline float-right"
+                      className="mt-1.5 text-[10px] text-[var(--nts-accent-text)] hover:underline float-right"
                     >
                       Ξεχάσατε τον κωδικό;
                     </button>

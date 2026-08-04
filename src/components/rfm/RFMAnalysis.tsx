@@ -580,7 +580,7 @@ export function RFMAnalysis() {
         <Card padding="sm" hover>
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--nts-light-gray)]">
-              <Users size={18} className="text-[var(--nts-accent)]" />
+              <Users size={18} className="text-[var(--nts-accent-text)]" />
             </div>
             <div className="min-w-0">
               <p className="truncate text-[11px] text-[#4A4A4A]">
@@ -809,11 +809,11 @@ export function RFMAnalysis() {
           <div className="flex items-start gap-2">
             <ChevronRight
               size={16}
-              className="mt-0.5 shrink-0 text-[var(--nts-accent)] transition-transform duration-200 group-open:rotate-90"
+              className="mt-0.5 shrink-0 text-[var(--nts-accent-text)] transition-transform duration-200 group-open:rotate-90"
               aria-hidden
             />
             <div className="min-w-0 flex-1">
-              <span className="text-[13px] font-semibold text-[var(--nts-accent)] hover:underline">
+              <span className="text-[13px] font-semibold text-[var(--nts-accent-text)] hover:underline">
                 Κάρτες ανά segment (προαιρετικά)
               </span>
               <span className="mt-1 block text-[11px] font-normal leading-snug text-[#6B7280]">
@@ -843,7 +843,7 @@ export function RFMAnalysis() {
         <CardHeader
           title="Segment Migration"
           subtitle={hasImportedSegments ? `Σύγκριση περιόδων ${segmentPeriodComparison?.periodDays ?? segmentMigration?.periodDays ?? 30} ημερών` : ''}
-          icon={<ArrowRight size={20} className="text-[var(--nts-accent)]" />}
+          icon={<ArrowRight size={20} className="text-[var(--nts-accent-text)]" />}
         />
         <div className="space-y-3">
           {hasImportedSegments && rfmSegments.length > 0 ? (
@@ -1119,7 +1119,7 @@ function SegmentCard({ segment, index, isSelected, onSelect, onExport }: Segment
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onExport('csv'); }}
-              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/5 transition-colors"
+              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[var(--nts-accent-text)] hover:bg-[var(--nts-accent)]/5 transition-colors"
               title="Export .csv"
             >
               <Download size={14} />

@@ -594,7 +594,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         <CardHeader
           title="Revenue Breakdown"
           subtitle="Σύγκριση των βασικών πηγών εσόδων για την επιλεγμένη περίοδο."
-          icon={<ShoppingBag size={20} className="text-[var(--nts-accent)]" />}
+          icon={<ShoppingBag size={20} className="text-[var(--nts-accent-text)]" />}
         />
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {ecomm.hasData && (
@@ -672,7 +672,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         <CardHeader
           title="Expenses Breakdown"
           subtitle="Κατανομή εξόδων marketing: διαφημιστικό spend, λοιπά έξοδα και σύνολο για την επιλεγμένη περίοδο."
-          icon={<Wallet size={20} className="text-[var(--nts-accent)]" />}
+          icon={<Wallet size={20} className="text-[var(--nts-accent-text)]" />}
         />
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {EXPENSES_ORDER.map((id) => (
@@ -685,7 +685,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         <CardHeader
           title="Ρυθμός μετατροπής (CVR)"
           subtitle="Σύνοψη conversion rate για online αγορές, διαφημιστικές καμπάνιες και οργανικά κανάλια (GA4)."
-          icon={<Percent size={20} className="text-[var(--nts-accent)]" />}
+          icon={<Percent size={20} className="text-[var(--nts-accent-text)]" />}
         />
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <MetricCard
@@ -746,7 +746,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 ({performanceSummary.periodDayCount} ημέρες). Τα σταθερά μηνιαία έξοδα μετρούν ανά ημερολογιακό μήνα· λοιπά γραμμές marketing ανά ημέρα εντός περιόδου.
               </>
             }
-            icon={<BarChart3 size={20} className="text-[var(--nts-accent)]" />}
+            icon={<BarChart3 size={20} className="text-[var(--nts-accent-text)]" />}
           />
           {(() => {
             const ownerRows: RoasAnalysisMetricRow[] = [
@@ -838,7 +838,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                     </p>
                   )}
                   <p className="text-[11px] text-[#9CA3AF] leading-relaxed">
-                    Τα επιπλέον κόστη marketing ορίζονται στη σελίδα <span className="font-medium text-[var(--nts-accent)]">Finances</span>. Τα σταθερά μηνιαία (π.χ. agency) μετρούν πλήρες ποσό για κάθε ημερολογιακό μήνα που περιλαμβάνεται· άλλες γραμμές αναλογικά στις {performanceSummary.periodDayCount} ημέρες.
+                    Τα επιπλέον κόστη marketing ορίζονται στη σελίδα <span className="font-medium text-[var(--nts-accent-text)]">Finances</span>. Τα σταθερά μηνιαία (π.χ. agency) μετρούν πλήρες ποσό για κάθε ημερολογιακό μήνα που περιλαμβάνεται· άλλες γραμμές αναλογικά στις {performanceSummary.periodDayCount} ημέρες.
                   </p>
                 </div>
               </div>
@@ -864,7 +864,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 )}
               </>
             }
-            icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
+            icon={<TrendingUp size={20} className="text-[var(--nts-accent-text)]" />}
           />
           <div ref={chartRef} className="w-full" style={{ minHeight: 320, position: 'relative' }}>
             <AreaChart width={chartWidth} height={300} data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 24 }}>
@@ -975,7 +975,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           <CardHeader
             title="Ads Budget"
             subtitle="Μηνιαίο budget σε σύγκριση με το πραγματικό spend"
-            icon={<Wallet size={20} className="text-[var(--nts-accent)]" />}
+            icon={<Wallet size={20} className="text-[var(--nts-accent-text)]" />}
           />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
             <div className="text-center">

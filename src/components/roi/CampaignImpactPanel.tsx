@@ -239,7 +239,7 @@ export function CampaignImpactPanel({
       <CardHeader
         title="Απόδοση καμπανιών × πωλήσεις"
         subtitle="Hybrid: platform reported (Google/Meta) + e-shop revenue στην ίδια περίοδο (correlated, όχι incrementality)."
-        icon={<Megaphone size={20} className="text-[var(--nts-accent)]" />}
+        icon={<Megaphone size={20} className="text-[var(--nts-accent-text)]" />}
       />
 
       <div
@@ -414,7 +414,7 @@ export function CampaignImpactPanel({
       {hasEcommerce && timelineData.some((d) => d.spend > 0 || d.storeRevenue > 0) && (
         <div className="mt-6">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
-            <TrendingUp size={16} className="text-[var(--nts-accent)]" />
+            <TrendingUp size={16} className="text-[var(--nts-accent-text)]" />
             Timeline: ad spend vs e-shop revenue
           </div>
           <div className="h-[280px] w-full">

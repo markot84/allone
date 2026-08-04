@@ -380,7 +380,7 @@ export function SalesChannelRulesEditor() {
               <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg border border-orange-100 bg-orange-50/50 px-3 py-2 text-[12px] leading-relaxed text-[#374151]">
                 <input
                   type="checkbox"
-                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-orange-200 text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]"
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-orange-200 text-[var(--nts-accent-text)] focus:ring-[var(--nts-accent)]"
                   checked={rule.excludeFromDataAnalysis === true}
                   onChange={(e) => updateRule(idx, 'excludeFromDataAnalysis', e.target.checked)}
                 />

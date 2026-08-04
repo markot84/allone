@@ -210,7 +210,7 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
                     <button
                       type="button"
                       aria-label={`Επεξεργασία ${brand.name}`}
-                      className="rounded-lg p-2 text-[#6B7280] transition-colors hover:bg-white hover:text-[var(--nts-accent)]"
+                      className="rounded-lg p-2 text-[#6B7280] transition-colors hover:bg-white hover:text-[var(--nts-accent-text)]"
                       onClick={(e) => {
                         e.stopPropagation();
                         startEditing(brand);
@@ -222,7 +222,7 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
                   <ChevronRight
                     size={20}
                     className={`flex-shrink-0 ${
-                      currentBrand?.id === brand.id ? 'text-[var(--nts-accent)]' : 'text-[#9CA3AF]'
+                      currentBrand?.id === brand.id ? 'text-[var(--nts-accent-text)]' : 'text-[#9CA3AF]'
                     }`}
                   />
                 </div>
@@ -294,7 +294,7 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
                 </form>
               )}
               {currentBrand?.id === brand.id && (
-                <p className="text-xs text-[var(--nts-accent)] font-medium mt-2">Ενεργό brand</p>
+                <p className="text-xs text-[var(--nts-accent-text)] font-medium mt-2">Ενεργό brand</p>
               )}
             </Card>
           </motion.div>

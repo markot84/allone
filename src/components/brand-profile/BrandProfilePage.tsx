@@ -57,7 +57,7 @@ function IcpEditor({
     <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <UserRound size={16} className="text-[var(--nts-accent)]" />
+          <UserRound size={16} className="text-[var(--nts-accent-text)]" />
           <input
             value={icp.name}
             onChange={(e) => onChange({ name: e.target.value })}
@@ -110,7 +110,7 @@ function IcpEditor({
               onClick={() => onChange({ priceSensitivity: level })}
               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 icp.priceSensitivity === level
-                  ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
+                  ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]'
                   : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
               }`}
             >
@@ -205,7 +205,7 @@ export function BrandProfilePage() {
       />
 
       <Card padding="lg">
-        <CardHeader title="Προφίλ brand" icon={<Palette size={18} className="text-[var(--nts-accent)]" />} />
+        <CardHeader title="Προφίλ brand" icon={<Palette size={18} className="text-[var(--nts-accent-text)]" />} />
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
@@ -259,7 +259,7 @@ export function BrandProfilePage() {
                       disabled={profile.archetype === item.id}
                       className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                         profile.secondaryArchetype === item.id
-                          ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
+                          ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]'
                           : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
                       }`}
                     >
@@ -273,7 +273,7 @@ export function BrandProfilePage() {
           <div className="space-y-3">
             {(primaryArchetype || secondaryArchetype) && (
               <div className="rounded-xl border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/5 p-3">
-                <p className="text-xs font-semibold uppercase text-[var(--nts-accent)]">Tone starter</p>
+                <p className="text-xs font-semibold uppercase text-[var(--nts-accent-text)]">Tone starter</p>
                 <p className="mt-1 text-sm text-[#4A4A4A]">
                   {[
                     primaryArchetype ? `Βασικό (${primaryArchetype.label}): ${primaryArchetype.toneHint}` : '',

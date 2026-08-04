@@ -1109,7 +1109,7 @@ export function CompetitorInsights() {
       <PageHeader
         title={
           <h2 className="flex flex-wrap items-center gap-2 text-xl font-bold text-[#1A1A1A] sm:text-2xl">
-            <Search size={22} className="shrink-0 text-[var(--nts-accent)] sm:h-6 sm:w-6" />
+            <Search size={22} className="shrink-0 text-[var(--nts-accent-text)] sm:h-6 sm:w-6" />
             <span>Competitive Intelligence</span>
             <Tooltip content={TOOLTIP_CI_REFRESH} size={18} />
           </h2>
@@ -1224,7 +1224,7 @@ export function CompetitorInsights() {
                     <button
                       type="button"
                       onClick={() => setBenchmarkQuickFilter('all')}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--nts-accent)] bg-[var(--nts-accent)]/5 hover:bg-[var(--nts-accent)]/10 border border-[var(--nts-accent)]/30 rounded-lg transition-colors"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--nts-accent-text)] bg-[var(--nts-accent)]/5 hover:bg-[var(--nts-accent)]/10 border border-[var(--nts-accent)]/30 rounded-lg transition-colors"
                       title="Καθαρισμός quick filter benchmark"
                     >
                       <XIcon size={12} />
@@ -1235,7 +1235,7 @@ export function CompetitorInsights() {
                     <button
                       type="button"
                       onClick={clearColumnFilters}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--nts-accent)] bg-[var(--nts-accent)]/5 hover:bg-[var(--nts-accent)]/10 border border-[var(--nts-accent)]/30 rounded-lg transition-colors"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--nts-accent-text)] bg-[var(--nts-accent)]/5 hover:bg-[var(--nts-accent)]/10 border border-[var(--nts-accent)]/30 rounded-lg transition-colors"
                       title="Καθαρισμός όλων των φίλτρων στηλών"
                     >
                       <XIcon size={12} />
@@ -1435,7 +1435,7 @@ export function CompetitorInsights() {
                     <button
                       type="button"
                       onClick={clearInsightColumnFilters}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--nts-accent)] bg-[var(--nts-accent)]/5 hover:bg-[var(--nts-accent)]/10 border border-[var(--nts-accent)]/30 rounded-lg transition-colors"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--nts-accent-text)] bg-[var(--nts-accent)]/5 hover:bg-[var(--nts-accent)]/10 border border-[var(--nts-accent)]/30 rounded-lg transition-colors"
                       title="Καθαρισμός όλων των φίλτρων στηλών"
                     >
                       <XIcon size={12} />
@@ -2263,8 +2263,8 @@ function HeaderFilter(props: HeaderFilterProps) {
       <span>{label}</span>
       {sortedHere && (
         sortDir === 'asc'
-          ? <ArrowUp size={10} className="text-[var(--nts-accent)]" />
-          : <ArrowDown size={10} className="text-[var(--nts-accent)]" />
+          ? <ArrowUp size={10} className="text-[var(--nts-accent-text)]" />
+          : <ArrowDown size={10} className="text-[var(--nts-accent-text)]" />
       )}
       <button
         ref={btnRef}
@@ -2272,7 +2272,7 @@ function HeaderFilter(props: HeaderFilterProps) {
         onClick={() => setOpen((o) => !o)}
         className={`inline-flex items-center justify-center p-0.5 rounded transition-colors ${
           isActive
-            ? 'text-[var(--nts-accent)] bg-[var(--nts-accent)]/10'
+            ? 'text-[var(--nts-accent-text)] bg-[var(--nts-accent)]/10'
             : 'text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#E5E7EB]'
         }`}
         aria-label={`Φίλτρο ${label}`}
@@ -2321,7 +2321,7 @@ function HeaderFilter(props: HeaderFilterProps) {
                 />
               </div>
               <div className="flex items-center justify-between mb-1">
-                <button type="button" onClick={onSelectAll} className="text-[10px] text-[var(--nts-accent)] hover:underline">Επιλογή όλων</button>
+                <button type="button" onClick={onSelectAll} className="text-[10px] text-[var(--nts-accent-text)] hover:underline">Επιλογή όλων</button>
                 <button type="button" onClick={onClearSelection} className="text-[10px] text-[#9CA3AF] hover:underline">Αποεπιλογή</button>
               </div>
               <div className="max-h-44 overflow-y-auto border border-[#F3F4F6] rounded p-1.5 space-y-0.5">
@@ -2437,7 +2437,7 @@ function HeaderFilter(props: HeaderFilterProps) {
                 <button
                   type="button"
                   onClick={() => onTextChange?.('')}
-                  className="mt-2 text-[10px] text-[var(--nts-accent)] hover:underline"
+                  className="mt-2 text-[10px] text-[var(--nts-accent-text)] hover:underline"
                 >
                   Καθαρισμός φίλτρου
                 </button>

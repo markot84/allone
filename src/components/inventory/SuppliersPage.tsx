@@ -378,7 +378,7 @@ export function SuppliersPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {[
-          { icon: <Truck size={16} />, color: 'text-[var(--nts-accent)]', bg: 'bg-[var(--nts-accent)]/10', value: suppliers.length, label: 'Προμηθευτές' },
+          { icon: <Truck size={16} />, color: 'text-[var(--nts-accent-text)]', bg: 'bg-[var(--nts-accent)]/10', value: suppliers.length, label: 'Προμηθευτές' },
           { icon: <Clock size={16} />, color: 'text-blue-500', bg: 'bg-blue-50', value: suppliers.length > 0 ? Math.round(suppliers.reduce((s, x) => s + x.tod, 0) / suppliers.length) : DEFAULT_TOD, label: 'Μέσο TOD' },
           { icon: <Clock size={16} />, color: 'text-amber-500', bg: 'bg-amber-50', value: suppliers.length > 0 ? Math.round(suppliers.filter(s => (s.lead_time || 0) > 0).reduce((s, x) => s + (x.lead_time || 0), 0) / Math.max(suppliers.filter(s => (s.lead_time || 0) > 0).length, 1)) : 0, label: 'Μέσο Lead Time' },
         ].map((stat, i) => (
@@ -452,7 +452,7 @@ export function SuppliersPage() {
             <button
               type="button"
               onClick={resetColumnFilters}
-              className="h-[34px] rounded-md border border-[var(--nts-accent)]/30 px-3 text-xs font-medium text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/5 sm:col-span-2 lg:col-span-1"
+              className="h-[34px] rounded-md border border-[var(--nts-accent)]/30 px-3 text-xs font-medium text-[var(--nts-accent-text)] hover:bg-[var(--nts-accent)]/5 sm:col-span-2 lg:col-span-1"
             >
               Καθαρισμός
             </button>
@@ -513,7 +513,7 @@ export function SuppliersPage() {
                             autoFocus
                           />
                         ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]">
                             {s.tod}d
                           </span>
                         )}
@@ -546,7 +546,7 @@ export function SuppliersPage() {
                           </div>
                         ) : (
                           <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => handleStartEdit(s)} className="p-1 text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] hover:bg-gray-50 rounded" title="Επεξεργασία TOD">
+                            <button onClick={() => handleStartEdit(s)} className="p-1 text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent-text)] hover:bg-gray-50 rounded" title="Επεξεργασία TOD">
                               <Pencil size={14} />
                             </button>
                             <button onClick={() => handleDelete(s.id)} className="p-1 text-[var(--nts-medium-gray)] hover:text-red-500 hover:bg-red-50 rounded" title="Διαγραφή">

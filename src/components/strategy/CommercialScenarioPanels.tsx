@@ -75,7 +75,7 @@ export function CommercialScenarioPanels({
       <CardHeader
         title="Σύνοψη επίδρασης"
         subtitle={periodLabel ?? undefined}
-        icon={<Tag size={18} className="text-[var(--nts-accent)]" />}
+        icon={<Tag size={18} className="text-[var(--nts-accent-text)]" />}
         action={
           <div className="flex items-center gap-2">
             {cachedAtLabel && !data.isRefreshing && (
@@ -203,7 +203,7 @@ function ProgressBar({ progress }: { progress?: { loaded: number; total: number 
     <div>
       <div className="mb-1 flex items-center justify-between text-xs text-[#6B7280]">
         <span>{pct == null ? 'Προετοιμασία…' : 'Φόρτωση παραγγελιών…'}</span>
-        <span className="font-mono font-semibold text-[var(--nts-accent)]">{pct == null ? '' : `${pct}%`}</span>
+        <span className="font-mono font-semibold text-[var(--nts-accent-text)]">{pct == null ? '' : `${pct}%`}</span>
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-[#F3F4F6]">
         <div
@@ -270,7 +270,7 @@ function FilterChips({ filter, onChange, tab }: { filter: ImpactFilter; onChange
           type="button"
           onClick={() => onChange(key)}
           className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
-            filter === key ? 'bg-[var(--nts-accent)]/15 text-[var(--nts-accent)]' : 'bg-[#F3F4F6] text-[#6B7280]'
+            filter === key ? 'bg-[var(--nts-accent)]/15 text-[var(--nts-accent-text)]' : 'bg-[#F3F4F6] text-[#6B7280]'
           }`}
         >
           {label}

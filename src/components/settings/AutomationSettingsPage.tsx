@@ -113,7 +113,7 @@ export function AutomationSettingsPage() {
         toolbarAriaLabel="Αποθήκευση ρυθμίσεων"
         title={
           <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold text-[#111827] sm:text-2xl">
-            <Zap size={20} className="shrink-0 text-[var(--nts-accent)] sm:h-[22px] sm:w-[22px]" />
+            <Zap size={20} className="shrink-0 text-[var(--nts-accent-text)] sm:h-[22px] sm:w-[22px]" />
             Αυτοματισμοί Εμπορικών Αποφάσεων
           </h1>
         }
@@ -141,7 +141,7 @@ export function AutomationSettingsPage() {
       {/* Appearance — per-user accent (localStorage) */}
       <Card padding="none">
         <div className="flex items-center gap-2 border-b border-[#F3F4F6] px-5 py-3.5">
-          <Palette size={16} className="shrink-0 text-[var(--nts-accent)]" />
+          <Palette size={16} className="shrink-0 text-[var(--nts-accent-text)]" />
           <h2 className="text-sm font-semibold text-[#111827]">Εμφάνιση</h2>
         </div>
         <div className="px-5 py-4">
@@ -319,7 +319,7 @@ export function AutomationSettingsPage() {
                             onClick={() => updateTrigger(triggerDef.id, { autoBriefing: !config.autoBriefing })}
                             className={`flex items-center gap-1 px-2 py-1 text-xs rounded-lg border transition-all ${
                               config.autoBriefing
-                                ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/8 text-[var(--nts-accent)] font-medium'
+                                ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/8 text-[var(--nts-accent-text)] font-medium'
                                 : 'border-[#E5E7EB] text-[#9CA3AF] hover:border-[#D1D5DB]'
                             }`}
                             title="Αυτόματη δημιουργία εμπορικής πολιτικής στο Συντονισμό Τμημάτων"

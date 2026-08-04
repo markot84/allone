@@ -212,7 +212,7 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
           <CardHeader
             title="Προτιμώμενα Κανάλια"
             subtitle="Βαθμολογία ανά κανάλι"
-            icon={<Mail size={18} className="text-[var(--nts-accent)]" />}
+            icon={<Mail size={18} className="text-[var(--nts-accent-text)]" />}
           />
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -235,7 +235,7 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
           <CardHeader
             title="Scores & Opportunities"
             subtitle="Upsell, Cross-sell, Engagement"
-            icon={<TrendingUp size={18} className="text-[var(--nts-accent)]" />}
+            icon={<TrendingUp size={18} className="text-[var(--nts-accent-text)]" />}
           />
           <div className="space-y-4 mt-2">
             <ScoreBar label="Engagement Score" value={profile.engagement_score} color="#3B82F6" tooltip="Βαθμός αλληλεπίδρασης πελάτη (email opens, clicks, visits)" />
@@ -275,7 +275,7 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
         <CardHeader
           title="Συστάσεις Επικοινωνίας"
           subtitle="Βέλτιστο κανάλι, συχνότητα και ώρα ανά persona"
-          icon={<ArrowUpRight size={18} className="text-[var(--nts-accent)]" />}
+          icon={<ArrowUpRight size={18} className="text-[var(--nts-accent-text)]" />}
         />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
           {profile.communication_preferences.map((pref, i) => (

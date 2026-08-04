@@ -284,7 +284,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             <button
               type="button"
               onClick={() => onSectionChange?.('data-organic')}
-              className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
+              className="font-semibold text-[var(--nts-accent-text)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
             >
               καρτέλα οργανικών εσόδων
             </button>
@@ -332,7 +332,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
               onClick={() => setDashPeriod(opt.key)}
               className={`min-h-[32px] flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-all sm:flex-none sm:px-3 ${
                 dashPeriod === opt.key
-                  ? 'bg-white font-semibold text-[var(--nts-accent)] shadow-sm'
+                  ? 'bg-white font-semibold text-[var(--nts-accent-text)] shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -362,7 +362,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         {/* Main KPI row */}
         <div className="flex flex-col gap-4 bg-gradient-to-br from-[var(--nts-accent)]/5 to-white p-5 sm:flex-row sm:items-center sm:gap-6">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[var(--nts-accent)]/10">
-            <TrendingUp size={26} className="text-[var(--nts-accent)]" />
+            <TrendingUp size={26} className="text-[var(--nts-accent-text)]" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium uppercase tracking-wide text-[#9CA3AF]">
@@ -420,7 +420,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
               {/* E-shop total */}
               <div className="flex items-center gap-3 px-5 py-4">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 ring-1 ring-orange-100">
-                  <Euro size={18} className="text-[var(--nts-accent)]" />
+                  <Euro size={18} className="text-[var(--nts-accent-text)]" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs text-[#6B7280]">Σύνολο e-shop</p>
@@ -525,7 +525,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
       {records.length > 0 && (
         <Card padding="lg">
           <h3 className="font-semibold text-[#1A1A1A] mb-4 flex items-center gap-2">
-            <TrendingUp size={18} className="text-[var(--nts-accent)]" />
+            <TrendingUp size={18} className="text-[var(--nts-accent-text)]" />
             Λεπτομέρειες organic ανά περίοδο (import)
           </h3>
           <div className="overflow-x-auto">

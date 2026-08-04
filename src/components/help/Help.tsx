@@ -137,7 +137,7 @@ export function Help() {
             {currentArticle.tips && currentArticle.tips.length > 0 && (
               <div className="mt-6 p-4 bg-[var(--nts-light-gray)] rounded-xl border border-[var(--nts-accent)]/20">
                 <h4 className="font-semibold text-[#1A1A1A] mb-3 flex items-center gap-2">
-                  <Lightbulb size={18} className="text-[var(--nts-accent)]" />
+                  <Lightbulb size={18} className="text-[var(--nts-accent-text)]" />
                   Συμβουλές:
                 </h4>
                 <ul className="list-disc list-inside space-y-2 text-[#4A4A4A]">
@@ -365,7 +365,7 @@ export function Help() {
             <CardHeader
               title="Δημοφιλή Άρθρα"
               subtitle="Τα πιο χρήσιμα άρθρα"
-              icon={<Book size={20} className="text-[var(--nts-accent)]" />}
+              icon={<Book size={20} className="text-[var(--nts-accent-text)]" />}
             />
             <div className="space-y-3 mt-4">
               {knowledgeArticles
@@ -376,10 +376,10 @@ export function Help() {
                     onClick={() => handleArticleClick(article.id)}
                     className="w-full flex items-center justify-between p-3 bg-[#F5F5F5] rounded-lg hover:bg-[var(--nts-light-gray)] transition-colors group text-left"
                   >
-                    <span className="text-sm text-[#1A1A1A] group-hover:text-[var(--nts-accent)]">
+                    <span className="text-sm text-[#1A1A1A] group-hover:text-[var(--nts-accent-text)]">
                       {article.title}
                     </span>
-                    <ChevronRight size={16} className="text-[#9CA3AF] group-hover:text-[var(--nts-accent)]" />
+                    <ChevronRight size={16} className="text-[#9CA3AF] group-hover:text-[var(--nts-accent-text)]" />
                   </motion.button>
                 ))}
             </div>
@@ -390,7 +390,7 @@ export function Help() {
             <CardHeader
               title="Επικοινωνία με Support"
               subtitle="Είμαστε εδώ για να βοηθήσουμε"
-              icon={<MessageCircle size={20} className="text-[var(--nts-accent)]" />}
+              icon={<MessageCircle size={20} className="text-[var(--nts-accent-text)]" />}
             />
             <div className="space-y-4 mt-4">
               <div className="p-4 bg-[#F5F5F5] rounded-xl">
@@ -444,7 +444,7 @@ export function Help() {
       <div className="text-center py-8 border-t border-[#E5E5E5]">
         <p className="text-[#4A4A4A]">
           Δεν βρίσκετε αυτό που ψάχνετε;{' '}
-          <a href={`mailto:${SUPPORT_MAIL}`} className="text-[var(--nts-accent)] hover:underline">
+          <a href={`mailto:${SUPPORT_MAIL}`} className="text-[var(--nts-accent-text)] hover:underline">
             Επικοινωνήστε με την ομάδα μας
           </a>
         </p>

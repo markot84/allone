@@ -708,7 +708,7 @@ export function EcommerceDashboard() {
         <PageHeader
           title={
             <h2 className="flex items-center gap-2 text-xl font-bold text-[#1A1A1A]">
-              <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent)]" />
+              <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent-text)]" />
               E-commerce
             </h2>
           }
@@ -731,7 +731,7 @@ export function EcommerceDashboard() {
         <PageHeader
           title={
             <h2 className="flex items-center gap-2 text-xl font-bold text-[#1A1A1A]">
-              <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent)]" />
+              <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent-text)]" />
               E-commerce
             </h2>
           }
@@ -765,7 +765,7 @@ export function EcommerceDashboard() {
       <PageHeader
         title={
           <h2 className="flex items-center gap-2 text-xl font-bold text-[#1A1A1A]">
-            <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent)]" />
+            <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent-text)]" />
             E-commerce
           </h2>
         }
@@ -1369,7 +1369,7 @@ export function EcommerceDashboard() {
       <div className="flex justify-center">
         <button
           onClick={() => { window.location.hash = '#data'; }}
-          className="inline-flex items-center gap-1.5 text-xs text-[#6B7280] hover:text-[var(--nts-accent)] transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-[#6B7280] hover:text-[var(--nts-accent-text)] transition-colors"
         >
           Διαχείριση Connectors <ArrowRight size={12} />
         </button>

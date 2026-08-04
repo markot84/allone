@@ -190,7 +190,7 @@ function ActionWrapper({ children }: { children: React.ReactNode }) {
           {children}
           <div className="mt-6 pt-4 border-t border-[var(--nts-border-gray)] text-center">
             <p className="text-xs text-[var(--nts-medium-gray)]">
-              Υποστήριξη: <a href={`mailto:${SUPPORT_EMAIL}`} className="text-[var(--nts-accent)] hover:underline">{SUPPORT_EMAIL}</a>
+              Υποστήριξη: <a href={`mailto:${SUPPORT_EMAIL}`} className="text-[var(--nts-accent-text)] hover:underline">{SUPPORT_EMAIL}</a>
             </p>
           </div>
         </div>
@@ -213,7 +213,7 @@ function StatusMessage({ type, title, message, onDone }: { type: 'success' | 'er
       </div>
       <button
         onClick={onDone}
-        className="inline-flex items-center gap-2 text-sm font-medium text-[var(--nts-accent)] hover:underline"
+        className="inline-flex items-center gap-2 text-sm font-medium text-[var(--nts-accent-text)] hover:underline"
       >
         <ArrowLeft size={14} />
         Μετάβαση στην εφαρμογή

@@ -236,7 +236,7 @@ const MarkMessageItem = memo(function MarkMessageItem({
                   href={toHttpUrl(source.url)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block text-xs p-2 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] transition-colors"
+                  className="block text-xs p-2 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[var(--nts-accent-text)] transition-colors"
                 >
                   <div className="font-medium mb-1 flex items-center gap-1">
                     {source.title}
@@ -270,7 +270,7 @@ const MarkMessageItem = memo(function MarkMessageItem({
                       window.dispatchEvent(new CustomEvent('navigate-to-help'));
                       onClose();
                     }}
-                    className="text-xs px-2 py-1 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] transition-colors flex items-center gap-1"
+                    className="text-xs px-2 py-1 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[var(--nts-accent-text)] transition-colors flex items-center gap-1"
                   >
                     {article.title}
                     <ExternalLink size={10} />
@@ -1142,7 +1142,7 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
                       aria-pressed={voiceRepliesEnabled}
                       className={`p-2 rounded-md transition-colors ${
                         voiceRepliesEnabled
-                          ? 'bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
+                          ? 'bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]'
                           : 'hover:bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)]'
                       }`}
                     >
@@ -1225,7 +1225,7 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
                   onClick={() => { if (input.trim()) { handleSaveInfo(input); } else { inputRef.current?.focus(); } }}
                   disabled={savingInfo || !brandId}
                   title="Καταχώριση εμπορικής πληροφορίας (γράψε στο πεδίο και πάτησε εδώ)"
-                  className="text-[11px] px-2.5 py-1 rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/20 transition-colors disabled:opacity-50 flex items-center gap-1"
+                  className="text-[11px] px-2.5 py-1 rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] hover:bg-[var(--nts-accent)]/20 transition-colors disabled:opacity-50 flex items-center gap-1"
                 >
                   <Plus size={12} /> Νέα εμπορική πληροφορία
                 </button>
@@ -1268,7 +1268,7 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
                   className={`p-2 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                     stt.listening
                       ? 'bg-red-500 text-white border-red-500 animate-pulse'
-                      : 'bg-white text-[var(--nts-medium-gray)] border-[var(--nts-border-gray)] hover:text-[var(--nts-accent)]'
+                      : 'bg-white text-[var(--nts-medium-gray)] border-[var(--nts-border-gray)] hover:text-[var(--nts-accent-text)]'
                   }`}
                 >
                   <Mic size={18} />
@@ -1285,7 +1285,7 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
                 <p className="mt-2 text-center text-xs font-medium text-red-500">Μίλα τώρα…</p>
               )}
               {voiceAutoSubmitArmed && !stt.listening && !isTyping && (
-                <p className="mt-2 text-center text-xs font-medium text-[var(--nts-accent)]">
+                <p className="mt-2 text-center text-xs font-medium text-[var(--nts-accent-text)]">
                   Θα το στείλω αυτόματα σε {VOICE_AUTO_SUBMIT_DELAY_MS / 1000}″. Πάτησε μικρόφωνο για διόρθωση.
                 </p>
               )}

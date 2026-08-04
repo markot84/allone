@@ -274,7 +274,7 @@ export function Reports() {
         <CardHeader
           title="Scheduled Reports"
           subtitle="Αυτοματοποιημένη παράδοση reports"
-          icon={<Clock size={20} className="text-[var(--nts-accent)]" />}
+          icon={<Clock size={20} className="text-[var(--nts-accent-text)]" />}
           action={
             <Button
               variant="secondary"
@@ -301,7 +301,7 @@ export function Reports() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-                    <FileText size={20} className="text-[var(--nts-accent)]" />
+                    <FileText size={20} className="text-[var(--nts-accent-text)]" />
                   </div>
                   <div>
                     <h4 className="font-medium text-[#1A1A1A]">{report.name}</h4>

@@ -110,10 +110,10 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
           <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
             <div className="flex items-start gap-4">
               <div className="w-14 h-14 rounded-2xl bg-[var(--nts-accent)]/10 border border-[var(--nts-accent)]/20 flex items-center justify-center shrink-0 shadow-sm">
-                <Sparkles size={28} className="text-[var(--nts-accent)]" />
+                <Sparkles size={28} className="text-[var(--nts-accent-text)]" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--nts-accent)]">Σύνοψη</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--nts-accent-text)]">Σύνοψη</p>
                 <h2 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-[#1A1A1A]">
                   Έξυπνες προτάσεις για την ομάδα σας
                 </h2>

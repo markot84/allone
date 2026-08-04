@@ -132,7 +132,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
                   onClick={() => handlePeriodSelect(p)}
                   className={`text-[10px] px-2 py-1 rounded-md border transition-colors ${
                     selectedPeriodId === p.id
-                      ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] font-medium'
+                      ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] font-medium'
                       : 'border-[#E5E5E5] text-[#9CA3AF] hover:border-[var(--nts-accent)]/40'
                   }`}
                 >
@@ -243,7 +243,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
                   onClick={() => toggleProduct(p.id)}
                   className={`flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-xs text-left transition-all ${
                     selectedProductIds.has(p.id)
-                      ? 'bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] border border-[var(--nts-accent)]/30'
+                      ? 'bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] border border-[var(--nts-accent)]/30'
                       : 'bg-[#F5F5F5] text-[#4A4A4A] hover:bg-[#E5E5E5] border border-transparent'
                   }`}
                 >

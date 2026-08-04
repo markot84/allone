@@ -147,7 +147,7 @@ export function NotificationBell({
                 onClick={handleMarkAllRead}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4,
-                  fontSize: 12, color: 'var(--nts-accent)',
+                  fontSize: 12, color: 'var(--nts-accent-text)',
                   background: 'none', border: 'none', cursor: 'pointer',
                 }}
               >

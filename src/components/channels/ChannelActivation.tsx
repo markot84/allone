@@ -109,7 +109,7 @@ const FALLBACK_SEGMENT = {
   count: 0,
   percentage: 100,
   revenue_share: 100,
-  color: 'var(--nts-accent)',
+  color: 'var(--nts-accent-text)',
   description: 'Σύνολο διαθέσιμου κοινού μέχρι να ολοκληρωθεί η RFM ανάλυση.',
   icon: '',
 };
@@ -1117,12 +1117,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 ? `${recommendedSegments.length} segments επιλεγμένα από AI για τη στρατηγική «${strategyName}»`
                 : `Top segments βάσει εσόδων (περιμένουμε AI σύσταση για segment-specific brief)`
             }
-            icon={<Users size={18} className="text-[var(--nts-accent)]" />}
+            icon={<Users size={18} className="text-[var(--nts-accent-text)]" />}
             action={
               <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
                 {isSilentUpgrading && (
                   <span
-                    className="inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]"
+                    className="inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]"
                     title="Το AI ανανεώνει τις συστάσεις στο background — δε χρειάζεται να περιμένεις"
                   >
                     <Spinner size="sm" />
@@ -1217,7 +1217,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   ? `Κατανομή για «${selectedSegmentName}»`
                   : 'Κατανομή προτεινόμενη από AI'
             }
-            icon={<PieChartIcon size={20} className="text-[var(--nts-accent)]" />}
+            icon={<PieChartIcon size={20} className="text-[var(--nts-accent-text)]" />}
           />
           {(aiLoading || campaignsLoading) ? (
             <>
@@ -1584,7 +1584,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             {/* CAMPAIGN BRIEF — fully expanded, for management */}
             <Card padding="none">
               <div className="px-5 py-3.5 flex items-center gap-2 border-b border-[#F0F0F0]">
-                <Sparkles size={13} className="text-[var(--nts-accent)]" />
+                <Sparkles size={13} className="text-[var(--nts-accent-text)]" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">Campaign Brief</span>
                 <span className="text-[10px] text-[#9CA3AF] font-normal">· σύντομο για τη διοίκηση</span>
               </div>
@@ -1698,7 +1698,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <CardHeader
           title="Campaign Feeds"
           subtitle={hasInventoryPlay ? 'Scoped στο dead-stock action: active stock only, χωρίς zero-stock ιστορικά SKUs.' : 'Προεπισκόπηση και εξαγωγή product feeds με active-stock default.'}
-          icon={<Settings size={20} className="text-[var(--nts-accent)]" />}
+          icon={<Settings size={20} className="text-[var(--nts-accent-text)]" />}
         />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {['Ads Feed', 'Email Feed'].map((feed, index) => (
@@ -1724,7 +1724,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                       </span>
                     </div>
                     <div className="text-[11px] text-[#9CA3AF] leading-snug pt-1">
-                      Google-compatible columns + <span className="font-semibold text-[var(--nts-accent)]">custom_label_0..4</span> από την ενεργή στρατηγική.
+                      Google-compatible columns + <span className="font-semibold text-[var(--nts-accent-text)]">custom_label_0..4</span> από την ενεργή στρατηγική.
                       {magentoConnector.connected
                         ? ' image_link / link / gtin / mpn / color / size / item_group_id έρχονται απευθείας από Magento.'
                         : ' Συνδέστε Magento για image_link / link / gtin / mpn / color / size / item_group_id.'}
@@ -1969,7 +1969,7 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
       <CardHeader
         title="Downloads Hub"
         subtitle="Έτοιμα action plans & templates για άμεση εκτέλεση"
-        icon={<FileDown size={20} className="text-[var(--nts-accent)]" />}
+        icon={<FileDown size={20} className="text-[var(--nts-accent-text)]" />}
       />
 
       {/* Quick exports row */}
@@ -1977,7 +1977,7 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
         <div className="p-4 border-2 border-[#E5E5E5] rounded-xl">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-[var(--nts-accent)]/10 rounded-lg">
-              <Users size={22} className="text-[var(--nts-accent)]" />
+              <Users size={22} className="text-[var(--nts-accent-text)]" />
             </div>
             <div className="flex-1">
               <h3 className="font-semibold text-[#1A1A1A] text-sm">All Segments Action Pack</h3>

@@ -29,7 +29,7 @@ export function CampaignsChannelInsights({ campaigns }: { campaigns: Campaign[] 
         className="!mb-3 !gap-2"
         title="Απόδοση ανά Κανάλι"
         subtitle="Σύγκριση ROAS, spend και conversions"
-        icon={<BarChart3 size={18} className="text-[var(--nts-accent)]" />}
+        icon={<BarChart3 size={18} className="text-[var(--nts-accent-text)]" />}
       />
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mt-2">
         {channelPerf.map((ch, i) => (

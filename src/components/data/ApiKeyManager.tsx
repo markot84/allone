@@ -127,7 +127,7 @@ export function ApiKeyManager() {
           toolbarAriaLabel="API keys"
           title={
             <div className="flex flex-wrap items-center gap-2">
-              <Key size={20} className="shrink-0 text-[var(--nts-accent)]" />
+              <Key size={20} className="shrink-0 text-[var(--nts-accent-text)]" />
               <h3 className="text-base font-semibold text-[#1A1A1A] sm:text-lg">API Keys</h3>
               <Badge variant="info" size="sm">
                 Automated Import
@@ -144,7 +144,7 @@ export function ApiKeyManager() {
               <button
                 type="button"
                 onClick={() => setShowDocs(!showDocs)}
-                className="inline-flex min-h-[36px] w-full items-center justify-center gap-1 rounded-lg px-2 text-xs text-[var(--nts-accent)] hover:underline sm:w-auto sm:justify-start"
+                className="inline-flex min-h-[36px] w-full items-center justify-center gap-1 rounded-lg px-2 text-xs text-[var(--nts-accent-text)] hover:underline sm:w-auto sm:justify-start"
               >
                 <Code size={12} className="shrink-0" />
                 {showDocs ? 'Κλείσιμο docs' : 'API Documentation'}
@@ -254,7 +254,7 @@ export function ApiKeyManager() {
                   </button>
                   <button
                     onClick={() => handleCopy(k.key, k.id)}
-                    className="p-1.5 text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] hover:bg-gray-50 rounded"
+                    className="p-1.5 text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent-text)] hover:bg-gray-50 rounded"
                     title="Αντιγραφή"
                   >
                     {copiedId === k.id ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}

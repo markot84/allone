@@ -156,7 +156,7 @@ export function AlertsBanner({ filterGroup, maxAlerts = 3, compact = false, onNa
                           {merged}
                         </p>
                       </div>
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/70 text-[var(--nts-accent)] opacity-90 ring-1 ring-black/[0.06] group-hover:bg-[var(--nts-accent)]/10 transition-colors">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/70 text-[var(--nts-accent-text)] opacity-90 ring-1 ring-black/[0.06] group-hover:bg-[var(--nts-accent)]/10 transition-colors">
                         <ExternalLink size={15} aria-hidden />
                       </span>
                     </button>
@@ -198,7 +198,7 @@ export function AlertsBanner({ filterGroup, maxAlerts = 3, compact = false, onNa
                                 compact ? 'text-[9px] px-2 py-1 min-h-[26px]' : 'text-[11px] px-2.5 py-1.5 min-h-[30px]'
                               } ${
                                 isActive
-                                  ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/15 text-[var(--nts-accent)] shadow-inner ring-1 ring-[var(--nts-accent)]/30'
+                                  ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/15 text-[var(--nts-accent-text)] shadow-inner ring-1 ring-[var(--nts-accent)]/30'
                                   : 'border-[#E5E7EB] bg-white text-[#4B5563] hover:border-[var(--nts-accent)]/45 hover:bg-orange-50/50 hover:text-[#C2410C]'
                               } disabled:opacity-60`}
                             >
@@ -223,7 +223,7 @@ export function AlertsBanner({ filterGroup, maxAlerts = 3, compact = false, onNa
         <button
           type="button"
           onClick={() => onNavigate?.('automation')}
-          className="inline-flex items-center gap-1 text-xs font-medium text-[var(--nts-accent)] hover:text-[var(--nts-accent-hover)] hover:underline underline-offset-2 pl-0.5"
+          className="inline-flex items-center gap-1 text-xs font-medium text-[var(--nts-accent-text)] hover:text-[var(--nts-accent-hover)] hover:underline underline-offset-2 pl-0.5"
         >
           <Zap size={12} className="opacity-80" />
           +{remaining} ακόμα ειδοποιήσεις →

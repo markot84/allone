@@ -205,7 +205,7 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
               </div>
               <div className="flex justify-between border-t border-[#eef0f3] pt-2 font-bold text-[var(--nts-charcoal)]">
                 <span>Σύνολο</span>
-                <span className="font-mono text-lg text-[var(--nts-accent)]">€{grandTotal.toFixed(2)}</span>
+                <span className="font-mono text-lg text-[var(--nts-accent-text)]">€{grandTotal.toFixed(2)}</span>
               </div>
             </div>
             <div className="mt-5 space-y-2">
@@ -256,7 +256,7 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
           <div className="p-10 text-center">
             <FileText size={36} className="mx-auto mb-3 text-[var(--nts-medium-gray)]/40" />
             <p className="text-sm text-[var(--nts-medium-gray)]">Δεν υπάρχουν προσφορές.</p>
-            <button onClick={openNew} className="mt-3 text-sm font-semibold text-[var(--nts-accent)] hover:underline">Δημιουργία πρώτης προσφοράς →</button>
+            <button onClick={openNew} className="mt-3 text-sm font-semibold text-[var(--nts-accent-text)] hover:underline">Δημιουργία πρώτης προσφοράς →</button>
           </div>
         ) : (
           <div className="overflow-x-auto">

@@ -65,7 +65,7 @@ export function SeasonalBanner({
               <h4 className="text-sm font-semibold text-[#1A1A1A]">{season.name}</h4>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium border ${
                 isActive
-                  ? 'bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] border-[var(--nts-accent)]/20'
+                  ? 'bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] border-[var(--nts-accent)]/20'
                   : 'bg-[#F0FDF4] text-[#15803D] border-[#BBF7D0]'
               }`}>
                 {isActive ? 'Ενεργή εποχιακή πρόταση' : 'Εποχιακή πρόταση'}

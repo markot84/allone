@@ -96,7 +96,7 @@ export function SalesPipelinePage({ onSectionChange }: SalesPipelinePageProps = 
       <Card>
         <div className="p-6">
           <div className="mb-4 flex items-start gap-3">
-            <div className="rounded-xl bg-[var(--nts-accent)]/10 p-2.5 text-[var(--nts-accent)]">
+            <div className="rounded-xl bg-[var(--nts-accent)]/10 p-2.5 text-[var(--nts-accent-text)]">
               <KanbanSquare size={18} />
             </div>
             <div>
@@ -124,7 +124,7 @@ export function SalesPipelinePage({ onSectionChange }: SalesPipelinePageProps = 
         <Card>
           <div className="p-5">
             <div className="mb-3 flex items-center gap-2 text-[#1A1A1A]">
-              <Users size={18} className="text-[var(--nts-accent)]" />
+              <Users size={18} className="text-[var(--nts-accent-text)]" />
               <h3 className="font-semibold">Team cadence</h3>
             </div>
             <p className="text-sm leading-relaxed text-[#6B7280]">
@@ -140,7 +140,7 @@ export function SalesPipelinePage({ onSectionChange }: SalesPipelinePageProps = 
         <Card>
           <div className="p-5">
             <div className="mb-3 flex items-center gap-2 text-[#1A1A1A]">
-              <Megaphone size={18} className="text-[var(--nts-accent)]" />
+              <Megaphone size={18} className="text-[var(--nts-accent-text)]" />
               <h3 className="font-semibold">Sales activation</h3>
             </div>
             <p className="text-sm leading-relaxed text-[#6B7280]">
@@ -156,7 +156,7 @@ export function SalesPipelinePage({ onSectionChange }: SalesPipelinePageProps = 
         <Card>
           <div className="p-5">
             <div className="mb-3 flex items-center gap-2 text-[#1A1A1A]">
-              <Target size={18} className="text-[var(--nts-accent)]" />
+              <Target size={18} className="text-[var(--nts-accent-text)]" />
               <h3 className="font-semibold">Demand generation</h3>
             </div>
             <p className="text-sm leading-relaxed text-[#6B7280]">
@@ -173,7 +173,7 @@ export function SalesPipelinePage({ onSectionChange }: SalesPipelinePageProps = 
       <Card>
         <div className="p-5">
           <div className="mb-3 flex items-center gap-2 text-[#1A1A1A]">
-            <Handshake size={18} className="text-[var(--nts-accent)]" />
+            <Handshake size={18} className="text-[var(--nts-accent-text)]" />
             <h3 className="font-semibold">Recommended operating model</h3>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">

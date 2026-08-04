@@ -151,7 +151,7 @@ export function FormattedProse({ content, variant = 'default', className = '' }:
           className="rounded-lg bg-white border border-[#EEF0F2] px-3 py-2.5 shadow-sm"
         >
           <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--nts-accent)] shrink-0 min-w-[7rem]">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--nts-accent-text)] shrink-0 min-w-[7rem]">
               <Inline segments={kind.label} />:
             </span>
             <p className="text-sm text-[#4A4A4A] leading-relaxed flex-1 m-0">

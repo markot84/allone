@@ -613,7 +613,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         <CardHeader
           title="Εμπορικό context"
           subtitle="Ενεργές πληροφορίες από τη σελίδα Εμπορικές Πληροφορίες και από διαλόγους με τον Mark που τροφοδοτούν αυτό το Marketing Plan."
-          icon={<MessageSquareText size={18} className="text-[var(--nts-accent)]" />}
+          icon={<MessageSquareText size={18} className="text-[var(--nts-accent-text)]" />}
         />
         {activeInfo.length === 0 ? (
           <div className="mt-4 rounded-xl border border-dashed border-[var(--nts-accent)]/25 bg-white/70 p-3">
@@ -672,7 +672,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
 
       {/* Period selector */}
       <Card padding="lg">
-        <CardHeader title="Περίοδος & δεδομένα βάσης" icon={<Calendar size={18} className="text-[var(--nts-accent)]" />} />
+        <CardHeader title="Περίοδος & δεδομένα βάσης" icon={<Calendar size={18} className="text-[var(--nts-accent-text)]" />} />
         <div className="mt-3 flex flex-wrap gap-2">
           {PRESETS.map((p) => (
             <button
@@ -681,7 +681,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
               onClick={() => setPreset(p.id)}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${
                 preset === p.id
-                  ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
+                  ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]'
                   : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
               }`}
             >
@@ -727,7 +727,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           <PlanSection
             id="analysis"
             title="Ανάλυση βάσης"
-            icon={<BarChart3 size={18} className="text-[var(--nts-accent)]" />}
+            icon={<BarChart3 size={18} className="text-[var(--nts-accent-text)]" />}
             open={openSections.has('analysis')}
             onToggle={() => toggleSection('analysis')}
             badge={draft.evidence ? `${formatCurrency(draft.evidence.revenue, 0)} τζίρος περσινής περιόδου` : undefined}
@@ -759,7 +759,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           <PlanSection
             id="inventory"
             title="Απόθεμα & Παραγγελίες"
-            icon={<PackagePlus size={18} className="text-[var(--nts-accent)]" />}
+            icon={<PackagePlus size={18} className="text-[var(--nts-accent-text)]" />}
             open={openSections.has('inventory')}
             onToggle={() => toggleSection('inventory')}
             badge={
@@ -807,7 +807,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           <PlanSection
             id="paid"
             title="Paid Media"
-            icon={<Megaphone size={18} className="text-[var(--nts-accent)]" />}
+            icon={<Megaphone size={18} className="text-[var(--nts-accent-text)]" />}
             open={openSections.has('paid')}
             onToggle={() => toggleSection('paid')}
             badge={draft.budgetSplitSource === 'data' ? 'Budget split βάσει πραγματικών δεδομένων' : 'Budget split (default)'}
@@ -849,7 +849,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           <PlanSection
             id="organic"
             title="Οργανικές Ενέργειες"
-            icon={<TrendingUp size={18} className="text-[var(--nts-accent)]" />}
+            icon={<TrendingUp size={18} className="text-[var(--nts-accent-text)]" />}
             open={openSections.has('organic')}
             onToggle={() => toggleSection('organic')}
             badge={ga4.hasData ? 'GA4 connected' : 'GA4 not connected'}
@@ -890,13 +890,13 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           <PlanSection
             id="audience"
             title="Κοινό & CRM"
-            icon={<Users size={18} className="text-[var(--nts-accent)]" />}
+            icon={<Users size={18} className="text-[var(--nts-accent-text)]" />}
             open={openSections.has('audience')}
             onToggle={() => toggleSection('audience')}
             badge={draft.rfmTactics.length > 0 ? `${draft.rfmTactics.reduce((s, t) => s + t.size, 0).toLocaleString('el-GR')} πελάτες στα segments` : 'RFM data'}
           >
             {draft.rfmTactics.length === 0 ? (
-              <p className="text-sm text-[#6B7280]">Δεν υπάρχουν RFM δεδομένα. Πήγαινε στο <span className="text-[var(--nts-accent)]">RFM Segmentation</span> για να δεις τα segments σου.</p>
+              <p className="text-sm text-[#6B7280]">Δεν υπάρχουν RFM δεδομένα. Πήγαινε στο <span className="text-[var(--nts-accent-text)]">RFM Segmentation</span> για να δεις τα segments σου.</p>
             ) : (
               <div className="grid gap-3 lg:grid-cols-2">
                 {draft.rfmTactics.map((tactic) => <RfmTacticCard key={tactic.segmentName} tactic={tactic} />)}
@@ -908,7 +908,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           <PlanSection
             id="pricing"
             title="Τιμολόγηση & Ανταγωνισμός"
-            icon={<Tag size={18} className="text-[var(--nts-accent)]" />}
+            icon={<Tag size={18} className="text-[var(--nts-accent-text)]" />}
             open={openSections.has('pricing')}
             onToggle={() => toggleSection('pricing')}
             badge={draft.priceBenchmarkAlerts.length > 0 ? `${draft.priceBenchmarkAlerts.length} SKU με σημαντική απόκλιση` : 'Price benchmarks'}
@@ -945,7 +945,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           <PlanSection
             id="message"
             title="AI Core Message"
-            icon={<Sparkles size={18} className="text-[var(--nts-accent)]" />}
+            icon={<Sparkles size={18} className="text-[var(--nts-accent-text)]" />}
             open={openSections.has('message')}
             onToggle={() => toggleSection('message')}
             badge={draft.coreMessage.source === 'ai' ? 'Gemini AI' : 'Fallback'}
@@ -1067,12 +1067,12 @@ function PlanProgress({ stages, pct, generating }: { stages: PlanStage[]; pct: n
     <Card padding="lg">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Sparkles size={18} className="text-[var(--nts-accent)]" />
+          <Sparkles size={18} className="text-[var(--nts-accent-text)]" />
           <span className="font-semibold text-[#1A1A1A]">
             {generating ? 'Σύνθεση enriched plan…' : 'Φόρτωση & ανάλυση δεδομένων…'}
           </span>
         </div>
-        <span className="font-mono text-sm font-bold text-[var(--nts-accent)]">{pct}%</span>
+        <span className="font-mono text-sm font-bold text-[var(--nts-accent-text)]">{pct}%</span>
       </div>
 
       {/* Progress bar */}
@@ -1087,7 +1087,7 @@ function PlanProgress({ stages, pct, generating }: { stages: PlanStage[]; pct: n
       {/* Stage checklist */}
       <ul className="mt-4 space-y-2.5">
         {stages.map((s) => {
-          const stateClass = s.done ? 'text-emerald-600' : s.active ? 'text-[var(--nts-accent)]' : 'text-[#9CA3AF]';
+          const stateClass = s.done ? 'text-emerald-600' : s.active ? 'text-[var(--nts-accent-text)]' : 'text-[#9CA3AF]';
           return (
             <li key={s.id} className="flex items-start gap-3">
               <span className="mt-0.5 shrink-0">
@@ -1155,7 +1155,7 @@ function LearningsCard({
     <Card padding="lg" className="overflow-hidden">
       <button type="button" onClick={onToggle} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={open}>
         <div className="flex items-center gap-2">
-          <TrendingUp size={18} className="text-[var(--nts-accent)]" />
+          <TrendingUp size={18} className="text-[var(--nts-accent-text)]" />
           <span className="font-semibold text-[#1A1A1A]">Μαθήματα από προηγούμενες αποφάσεις</span>
           <span className="rounded-full bg-[#F3F4F6] px-2 py-0.5 text-[10px] font-medium text-[#6B7280]">{windowLabel}</span>
         </div>
@@ -1272,7 +1272,7 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
         </div>
         <div className="rounded-lg bg-[#F9FAFB] px-2 py-1.5 text-center">
           <p className="text-[10px] text-[#9CA3AF]">Πρόταση{row.reorderQtySource === 'erp' ? ' · ERP' : ''}</p>
-          <p className="font-mono text-sm font-bold text-[var(--nts-accent)]">{formatNumber(row.estimatedReorderQty)}</p>
+          <p className="font-mono text-sm font-bold text-[var(--nts-accent-text)]">{formatNumber(row.estimatedReorderQty)}</p>
         </div>
       </div>
       <p className="mt-2 text-xs leading-relaxed text-[#6B7280]">{row.rationale}</p>
@@ -1280,7 +1280,7 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="mt-2 text-[11px] font-medium text-[var(--nts-accent)] hover:underline"
+          className="mt-2 text-[11px] font-medium text-[var(--nts-accent-text)] hover:underline"
         >
           {expanded ? 'Απόκρυψη SKU' : `Ανάλυση ${formatNumber(skus.length)} SKU →`}
         </button>
@@ -1310,7 +1310,7 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
                   <td className={`px-2 py-1.5 text-right font-mono ${
                     s.marginPct == null ? 'text-[#9CA3AF]' : s.marginPct >= 30 ? 'text-emerald-600' : s.marginPct >= 15 ? 'text-amber-600' : 'text-rose-600'
                   }`}>{s.marginPct == null ? '—' : `${s.marginPct}%`}</td>
-                  <td className="px-2 py-1.5 text-right font-mono font-semibold text-[var(--nts-accent)]">
+                  <td className="px-2 py-1.5 text-right font-mono font-semibold text-[var(--nts-accent-text)]">
                     {formatNumber(s.estimatedReorderQty)}
                     {s.reorderQtySource === 'erp' && <span className="ml-1 text-[9px] font-normal text-[#9CA3AF]">ERP</span>}
                   </td>
@@ -1337,7 +1337,7 @@ function SkuRow({ row }: { row: MarketingPlanSkuSuggestion }) {
       <td className={`px-3 py-2 text-right font-mono ${
         row.marginPct == null ? 'text-[#9CA3AF]' : row.marginPct >= 30 ? 'text-emerald-600' : row.marginPct >= 15 ? 'text-amber-600' : 'text-rose-600'
       }`}>{row.marginPct == null ? '—' : `${row.marginPct}%`}</td>
-      <td className="px-3 py-2 text-right font-mono font-semibold text-[var(--nts-accent)]">
+      <td className="px-3 py-2 text-right font-mono font-semibold text-[var(--nts-accent-text)]">
         {formatNumber(row.estimatedReorderQty)}
         {row.reorderQtySource === 'erp' && <span className="ml-1 text-[9px] font-normal text-[#9CA3AF]">ERP</span>}
       </td>

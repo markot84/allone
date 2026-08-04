@@ -271,7 +271,7 @@ function BrandsTab() {
                     width: 36, height: 36, borderRadius: 8,
                     background: 'var(--bgColor-accent-muted, #ddf4ff)',
                     display: 'grid', placeItems: 'center',
-                    fontWeight: 700, fontSize: 14, color: 'var(--nts-accent)'
+                    fontWeight: 700, fontSize: 14, color: 'var(--nts-accent-text)'
                   }}>
                     {brand.name[0]?.toUpperCase()}
                   </div>
@@ -749,7 +749,7 @@ function UsersTab() {
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: 4,
                           padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
-                          background: 'rgba(212,133,74,0.12)', color: 'var(--nts-accent)',
+                          background: 'rgba(212,133,74,0.12)', color: 'var(--nts-accent-text)',
                         }}>
                           <ShieldIcon size={11} /> Super Admin
                         </span>
@@ -1251,14 +1251,14 @@ function ApiStatusTab() {
           <div>
             <span style={{ color: 'var(--fgColor-muted)' }}>Console: </span>
             <a href={`https://console.firebase.google.com/project/${projectId}`} target="_blank" rel="noreferrer"
-              style={{ color: 'var(--nts-accent)' }}>
+              style={{ color: 'var(--nts-accent-text)' }}>
               Firebase Console
             </a>
           </div>
           <div>
             <span style={{ color: 'var(--fgColor-muted)' }}>Hosting: </span>
             <a href={`https://${projectId}.web.app`} target="_blank" rel="noreferrer"
-              style={{ color: 'var(--nts-accent)' }}>
+              style={{ color: 'var(--nts-accent-text)' }}>
               {projectId}.web.app
             </a>
           </div>
@@ -1301,7 +1301,7 @@ function BuildInfoPanel() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Text as="span" size="small" weight="semibold" style={{ color: 'var(--fgColor-default)' }}>Τρέχον build</Text>
-          <span style={{ padding: '1px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700, background: 'rgba(212,133,74,0.12)', color: 'var(--nts-accent)' }}>
+          <span style={{ padding: '1px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700, background: 'rgba(212,133,74,0.12)', color: 'var(--nts-accent-text)' }}>
             v{buildInfo.version}
           </span>
           <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)' }}>
@@ -1363,7 +1363,7 @@ function BuildInfoPanel() {
             <div style={{ marginTop: 6, fontSize: 12 }}>
               {buildInfo.commits.map((c) => (
                 <div key={c.hash} style={{ display: 'flex', gap: 8, padding: '3px 0', color: 'var(--fgColor-muted)' }}>
-                  <code style={{ fontSize: 11, color: 'var(--nts-accent)', flexShrink: 0 }}>{c.hash}</code>
+                  <code style={{ fontSize: 11, color: 'var(--nts-accent-text)', flexShrink: 0 }}>{c.hash}</code>
                   <span>{c.message}</span>
                 </div>
               ))}
@@ -1615,7 +1615,7 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                   <span style={{
                     padding: '1px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700,
-                    background: 'rgba(212,133,74,0.12)', color: 'var(--nts-accent)'
+                    background: 'rgba(212,133,74,0.12)', color: 'var(--nts-accent-text)'
                   }}>
                     v{entry.version}
                   </span>
@@ -1807,7 +1807,7 @@ function SystemInfoTab() {
               style={{
                 padding: '6px 12px', borderRadius: 6, fontSize: 13,
                 border: '1px solid var(--borderColor-default)',
-                background: 'var(--bgColor-default)', color: 'var(--nts-accent)',
+                background: 'var(--bgColor-default)', color: 'var(--nts-accent-text)',
                 textDecoration: 'none', fontWeight: 500
               }}
             >

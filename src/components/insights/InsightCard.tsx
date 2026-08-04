@@ -74,7 +74,7 @@ export function InsightCard({ insight, index, onAction, canNavigate }: InsightCa
               disabled={!canNavigate}
               className={`mt-4 inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
                 canNavigate
-                  ? 'text-[var(--nts-accent)] hover:underline cursor-pointer'
+                  ? 'text-[var(--nts-accent-text)] hover:underline cursor-pointer'
                   : 'text-[#9CA3AF] cursor-not-allowed opacity-60'
               }`}
             >

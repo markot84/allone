@@ -316,7 +316,7 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
             ${open ? 'border-[var(--nts-accent)] shadow-md' : 'border-[#E5E7EB] hover:border-[var(--nts-accent)]/60'}
           `}
         >
-          <Calendar size={15} className="text-[var(--nts-accent)] shrink-0" />
+          <Calendar size={15} className="text-[var(--nts-accent-text)] shrink-0" />
           <span className="text-[#374151]">{triggerLabel}</span>
           <ChevronDown size={13} className={`text-[#9CA3AF] transition-transform shrink-0 ${open ? 'rotate-180' : ''}`} />
         </button>

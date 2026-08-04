@@ -175,7 +175,7 @@ export function ApprovalWorkflow({ status, onStatusChange }: ApprovalWorkflowPro
                   }}
                   className={`
                     w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-[#F5F5F5]
-                    ${key === status ? 'bg-[var(--nts-light-gray)] text-[var(--nts-accent)]' : 'text-[#1A1A1A]'}
+                    ${key === status ? 'bg-[var(--nts-light-gray)] text-[var(--nts-accent-text)]' : 'text-[#1A1A1A]'}
                   `}
                 >
                   <span className="inline-flex shrink-0">{cfg.icon}</span>

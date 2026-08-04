@@ -642,7 +642,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex flex-col items-start ${
                       selectedType === type.value
                         ? 'bg-[var(--nts-accent)] text-white shadow-sm'
-                        : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent)]'
+                        : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent-text)]'
                     }`}
                   >
                     <span className="flex items-center gap-2">
@@ -669,7 +669,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                 <button
                   type="button"
                   onClick={downloadGoogleAdsCsvTemplate}
-                  className="text-sm text-[var(--nts-accent)] hover:underline"
+                  className="text-sm text-[var(--nts-accent-text)] hover:underline"
                 >
                   Λήψη CSV template
                 </button>
@@ -709,7 +709,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
               <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${
                 isDragging ? 'bg-[var(--nts-accent)]' : 'bg-white border-2 border-[#E5E5E5]'
               }`}>
-                <FileUp size={32} className={isDragging ? 'text-white' : 'text-[var(--nts-accent)]'} />
+                <FileUp size={32} className={isDragging ? 'text-white' : 'text-[var(--nts-accent-text)]'} />
               </div>
               <div>
                 <p className="text-base font-semibold text-[#1A1A1A]">
@@ -912,7 +912,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           <div className="border-t border-[#E5E5E5] pt-4">
             <button
               onClick={() => setShowUrlImport(!showUrlImport)}
-              className="flex items-center gap-2 text-sm font-medium text-[#4A4A4A] hover:text-[var(--nts-accent)] transition-colors"
+              className="flex items-center gap-2 text-sm font-medium text-[#4A4A4A] hover:text-[var(--nts-accent-text)] transition-colors"
             >
               <LinkIcon size={16} />
               Εισαγωγή από URL

@@ -52,7 +52,7 @@ export function StockSourceInfoCard() {
       </div>
 
       <div className="flex items-center gap-2 p-3 rounded-lg border border-[var(--nts-border-gray)] bg-white">
-        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-semibold text-[var(--nts-accent)] bg-[var(--nts-accent)]/10">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-semibold text-[var(--nts-accent-text)] bg-[var(--nts-accent)]/10">
           {SOURCE_LABELS[resolved]}
         </span>
         {!isLive && (

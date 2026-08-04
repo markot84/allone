@@ -273,7 +273,7 @@ export function BrandMembersNotificationTable({ members, loadingMembers }: Props
                             disabled={!canEditMemberNotifications || savingPrefKey === `${member.userId}:${g.label}:inApp`}
                             onClick={() => handleToggleGroupChannel(member, prefs, g, 'inApp', inApp)}
                             className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                              inApp ? 'bg-[var(--nts-accent)]/15 text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/25' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                              inApp ? 'bg-[var(--nts-accent)]/15 text-[var(--nts-accent-text)] hover:bg-[var(--nts-accent)]/25' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
                             }`}
                             aria-pressed={inApp}
                             aria-label={`${inApp ? 'Απενεργοποίηση' : 'Ενεργοποίηση'} ειδοποιήσεων εφαρμογής για ${member.email || member.userId} στην κατηγορία ${g.label}`}
@@ -286,7 +286,7 @@ export function BrandMembersNotificationTable({ members, loadingMembers }: Props
                             disabled={!canEditMemberNotifications || savingPrefKey === `${member.userId}:${g.label}:email`}
                             onClick={() => handleToggleGroupChannel(member, prefs, g, 'email', email)}
                             className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                              email ? 'bg-[var(--nts-accent)]/15 text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/25' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                              email ? 'bg-[var(--nts-accent)]/15 text-[var(--nts-accent-text)] hover:bg-[var(--nts-accent)]/25' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
                             }`}
                             aria-pressed={email}
                             aria-label={`${email ? 'Απενεργοποίηση' : 'Ενεργοποίηση'} email ειδοποιήσεων για ${member.email || member.userId} στην κατηγορία ${g.label}`}

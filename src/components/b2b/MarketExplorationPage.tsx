@@ -118,7 +118,7 @@ export function MarketExplorationPage({ onSectionChange }: MarketExplorationPage
           <Card key={lane.title}>
             <div className="p-5">
               <div className="mb-3 flex items-center gap-2">
-                <lane.icon size={18} className="text-[var(--nts-accent)]" />
+                <lane.icon size={18} className="text-[var(--nts-accent-text)]" />
                 <h3 className="font-semibold text-[#1A1A1A]">{lane.title}</h3>
               </div>
               <div className="space-y-2">
@@ -137,7 +137,7 @@ export function MarketExplorationPage({ onSectionChange }: MarketExplorationPage
         <Card>
           <div className="p-6">
             <div className="mb-4 flex items-center gap-2">
-              <Globe2 size={18} className="text-[var(--nts-accent)]" />
+              <Globe2 size={18} className="text-[var(--nts-accent-text)]" />
               <h3 className="text-lg font-semibold text-[#1A1A1A]">Go-to-market blueprint</h3>
             </div>
             <div className="space-y-3">
@@ -160,7 +160,7 @@ export function MarketExplorationPage({ onSectionChange }: MarketExplorationPage
         <Card>
           <div className="p-6">
             <div className="mb-4 flex items-center gap-2">
-              <MapPinned size={18} className="text-[var(--nts-accent)]" />
+              <MapPinned size={18} className="text-[var(--nts-accent-text)]" />
               <h3 className="text-lg font-semibold text-[#1A1A1A]">Suggested next steps</h3>
             </div>
             <div className="grid grid-cols-1 gap-3">

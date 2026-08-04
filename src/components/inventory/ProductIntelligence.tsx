@@ -88,7 +88,7 @@ function ProductIntelligenceSkeleton() {
         role="status"
         aria-live="polite"
       >
-        <Loader2 className="h-5 w-5 animate-spin text-[var(--nts-accent)] flex-shrink-0" aria-hidden />
+        <Loader2 className="h-5 w-5 animate-spin text-[var(--nts-accent-text)] flex-shrink-0" aria-hidden />
         <span className="font-semibold text-[#9A3412]">Φόρτωση δεδομένων προϊόντων…</span>
         <span className="text-[#78716C] text-xs sm:text-sm">
           Εμφανίζεται το layout· τα νούμερα ενημερώνονται όταν ολοκληρωθεί το sync.
@@ -499,7 +499,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             <button
               type="button"
               onClick={() => onSectionChange?.('data-products')}
-              className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
+              className="font-semibold text-[var(--nts-accent-text)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
             >
               καρτέλα εισαγωγής προϊόντων
             </button>
@@ -547,13 +547,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 ) : null;
               })()}
               {isRecomputing ? (
-                <span className="flex items-center gap-1 text-[var(--nts-accent)]">
+                <span className="flex items-center gap-1 text-[var(--nts-accent-text)]">
                   <Loader2 className="h-3 w-3 animate-spin flex-shrink-0" aria-hidden /> ανανέωση…
                 </span>
               ) : null}
             </div>
           ) : effectiveSourceLoading || piRebuilding ? (
-            <p className="text-xs font-medium text-[var(--nts-accent)] sm:text-sm flex items-center gap-2">
+            <p className="text-xs font-medium text-[var(--nts-accent-text)] sm:text-sm flex items-center gap-2">
               <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" aria-hidden />
               {piRebuilding ? 'Ανανέωση καταλόγου…' : 'Φόρτωση inventory…'}
             </p>
@@ -614,7 +614,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         <>
       {/* Non-blocking refresh banner: keep the last-good data on screen while the catalog recomputes. */}
       {isRecomputing ? (
-        <div className="flex items-center gap-2 rounded-lg border border-[var(--nts-accent)]/30 bg-[var(--nts-accent)]/5 px-4 py-2.5 text-xs font-medium text-[var(--nts-accent)] sm:text-sm">
+        <div className="flex items-center gap-2 rounded-lg border border-[var(--nts-accent)]/30 bg-[var(--nts-accent)]/5 px-4 py-2.5 text-xs font-medium text-[var(--nts-accent-text)] sm:text-sm">
           <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" aria-hidden />
           <span>Ο κατάλογος ανανεώνεται — εμφανίζονται τα τελευταία γνωστά στοιχεία, θα ενημερωθούν αυτόματα.</span>
         </div>
@@ -740,7 +740,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 <div className="flex-1">
                   <p className="text-sm font-medium text-[#1A1A1A]">{alert.message}</p>
                   <button 
-                    className="text-xs font-medium text-[var(--nts-accent)] mt-1 hover:underline cursor-pointer"
+                    className="text-xs font-medium text-[var(--nts-accent-text)] mt-1 hover:underline cursor-pointer"
                     onClick={() => {
                       // Set filter based on alert type
                       if (alert.type === 'critical') {
@@ -840,7 +840,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 type="checkbox"
                 checked={includeNoStock}
                 onChange={(e) => handleIncludeNoStockChange(e.target.checked)}
-                className="rounded border-[#D1D5DB] text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]/30"
+                className="rounded border-[#D1D5DB] text-[var(--nts-accent-text)] focus:ring-[var(--nts-accent)]/30"
               />
               <span className="whitespace-nowrap">Εμφάνιση no stock</span>
             </label>
@@ -1266,7 +1266,7 @@ function DropdownFilter({ value, onChange, options }: DropdownFilterProps) {
               type="button"
               onClick={() => { onChange(o.value); setOpen(false); }}
               className={`w-full text-left px-4 py-2 text-sm hover:bg-[#F5F5F5] transition-colors ${
-                o.value === value ? 'text-[var(--nts-accent)] font-medium bg-[#FFF7ED]' : 'text-[#1A1A1A]'
+                o.value === value ? 'text-[var(--nts-accent-text)] font-medium bg-[#FFF7ED]' : 'text-[#1A1A1A]'
               }`}
             >
               {o.label}

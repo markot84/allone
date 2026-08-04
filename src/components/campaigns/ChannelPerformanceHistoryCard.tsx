@@ -162,7 +162,7 @@ export function ChannelPerformanceHistoryCard({
       <CardHeader
         title="Channel Performance History"
         subtitle={subtitle}
-        icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
+        icon={<TrendingUp size={20} className="text-[var(--nts-accent-text)]" />}
       />
       <div ref={historyChartRef} className="relative w-full min-w-0 max-w-full" style={{ height: 288, minHeight: 288 }}>
         {realPerformanceHistory && realPerformanceHistory.rows.length > 0 ? (

@@ -152,7 +152,7 @@ export function AccountHealthTab({ onSectionChange: _onSectionChange }: AccountH
           <div className="py-8 text-center">
             <ShieldCheck size={40} className="mx-auto mb-3 text-[var(--nts-medium-gray)]/30" />
             <p className="text-sm text-[var(--nts-medium-gray)] max-w-sm mx-auto">Προσθέστε τους B2B πελάτες σας για να δείτε το Account Health Score ανά account.</p>
-            <button onClick={openAdd} className="mt-3 text-sm font-semibold text-[var(--nts-accent)] hover:underline">Προσθήκη πρώτου account →</button>
+            <button onClick={openAdd} className="mt-3 text-sm font-semibold text-[var(--nts-accent-text)] hover:underline">Προσθήκη πρώτου account →</button>
           </div>
         </Card>
       ) : (

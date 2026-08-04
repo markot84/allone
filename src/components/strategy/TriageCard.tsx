@@ -1137,7 +1137,7 @@ function ExpandedPanel({
             <button
               type="button"
               onClick={onViewAll}
-              className="text-[11px] font-semibold text-[var(--nts-accent)] hover:underline"
+              className="text-[11px] font-semibold text-[var(--nts-accent-text)] hover:underline"
             >
               Προβολή όλων
             </button>

@@ -420,7 +420,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
                     </span>
                   )}
                   {loading && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]">
                       <span className="w-1.5 h-1.5 rounded-full bg-[var(--nts-accent)] animate-pulse" /> Σύνταξη briefing...
                     </span>
                   )}
@@ -433,7 +433,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
                 {timeLabel && !awaitingEcommMetrics && (
                   <p className="text-[11px] text-[var(--nts-medium-gray)] flex items-center gap-1 mt-0.5">
                     <Clock size={10} /> {timeLabel}
-                    <span className="ml-1 px-1.5 py-0 rounded bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] text-[10px] font-medium">{periodLabel}</span>
+                    <span className="ml-1 px-1.5 py-0 rounded bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] text-[10px] font-medium">{periodLabel}</span>
                     {briefing?.updateReason && !collapsed && (
                       <span className="ml-1 text-amber-600">· {briefing.updateReason}</span>
                     )}
@@ -560,13 +560,13 @@ export function MorningBriefing(props: MorningBriefingProps) {
                               target.hashQuery ? { hashQuery: target.hashQuery } : undefined
                             )
                           }
-                          className="group flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-[var(--nts-charcoal)] bg-white border border-[var(--nts-border-gray)] rounded-lg hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent)] transition-all shadow-sm"
+                          className="group flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-[var(--nts-charcoal)] bg-white border border-[var(--nts-border-gray)] rounded-lg hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent-text)] transition-all shadow-sm"
                         >
-                          <span className="w-4 h-4 rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                          <span className="w-4 h-4 rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
                             {i + 1}
                           </span>
                           <span className="line-clamp-1">{action}</span>
-                          <ArrowRight size={12} className="text-[var(--nts-medium-gray)] group-hover:text-[var(--nts-accent)] transition-colors flex-shrink-0" />
+                          <ArrowRight size={12} className="text-[var(--nts-medium-gray)] group-hover:text-[var(--nts-accent-text)] transition-colors flex-shrink-0" />
                         </button>
                       );
                     })}

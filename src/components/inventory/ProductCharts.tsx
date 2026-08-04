@@ -191,7 +191,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
           toolbarAriaLabel="Κλείσιμο"
           title={
             <div className="flex min-w-0 items-start gap-3">
-              <BarChart3 size={24} className="shrink-0 text-[var(--nts-accent)]" />
+              <BarChart3 size={24} className="shrink-0 text-[var(--nts-accent-text)]" />
               <div className="min-w-0">
                 <h2 className="text-xl font-bold text-[#1A1A1A]">Οπτικοποίηση δεδομένων προϊόντων</h2>
                 <p className="text-sm text-[#4A4A4A]">{aggregateCharts ? `${totalProducts ?? products.length} προϊόντα σε full-inventory ανάλυση` : `${products.length} προϊόντα σε ανάλυση`}</p>
@@ -361,7 +361,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
           {/* Stock Age vs Level */}
           <Card padding="lg" className="lg:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <BarChart3 size={18} className="text-[var(--nts-accent)]" />
+              <BarChart3 size={18} className="text-[var(--nts-accent-text)]" />
               <h3 className="font-semibold text-[#1A1A1A]">Ηλικία vs επίπεδο αποθέματος (δείγμα)</h3>
             </div>
             {stockAgeVsLevel.length > 0 ? (

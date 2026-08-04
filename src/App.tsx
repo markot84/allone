@@ -96,6 +96,7 @@ const GA4Analytics = lazyNamedWithRetry(() => import('./components/analytics/GA4
 const HRPage = lazyNamedWithRetry(() => import('./components/hr/HRPage'), 'HRPage');
 const OfferBuilderPage = lazyNamedWithRetry(() => import('./components/offers/OfferBuilderPage'), 'OfferBuilderPage');
 const TerritoryPage = lazyNamedWithRetry(() => import('./components/territories/TerritoryPage'), 'TerritoryPage');
+const StyleGuide = lazyNamedWithRetry(() => import('./components/styleguide/StyleGuide'), 'StyleGuide');
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -139,7 +140,7 @@ function MobileQuickActions({
               aria-current={selected ? 'page' : undefined}
               className={`flex min-h-12 min-w-16 flex-col items-center justify-center rounded-xl px-2 text-[11px] font-semibold transition-colors ${
                 selected
-                  ? 'bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
+                  ? 'bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]'
                   : 'text-[#4B5563] hover:bg-[#F3F4F6]'
               }`}
             >
@@ -547,6 +548,15 @@ function App() {
           <PrivacyPolicy />
         </ToastProvider>
       </QueryProvider>
+    );
+  }
+
+  // Design-system checkpoint. Public and hook-free like the legal pages: it renders tokens, not data.
+  if (typeof window !== 'undefined' && window.location.pathname === '/styleguide') {
+    return (
+      <Suspense fallback={null}>
+        <StyleGuide />
+      </Suspense>
     );
   }
 

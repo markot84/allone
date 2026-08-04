@@ -21,7 +21,7 @@ function SeasonalIcon({ name }: { name: string }) {
   const Icon = ICON_MAP[name] ?? Calendar;
   return (
     <div className="w-8 h-8 rounded-lg bg-[#F5F5F5] flex items-center justify-center flex-shrink-0">
-      <Icon size={16} className="text-[var(--nts-accent)]" />
+      <Icon size={16} className="text-[var(--nts-accent-text)]" />
     </div>
   );
 }
@@ -117,7 +117,7 @@ export function SeasonalPeriodsModal({
           toolbarAriaLabel="Κλείσιμο"
           title={
             <div className="flex min-w-0 items-center gap-2">
-              <Calendar size={20} className="shrink-0 text-[var(--nts-accent)]" />
+              <Calendar size={20} className="shrink-0 text-[var(--nts-accent-text)]" />
               <h2 className="text-lg font-bold text-[#1A1A1A]">Εποχιακές περίοδοι</h2>
             </div>
           }
@@ -150,7 +150,7 @@ export function SeasonalPeriodsModal({
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-semibold text-[#1A1A1A]">{period.name}</h4>
                         {isActive && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] font-medium">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] font-medium">
                             Ενεργή
                           </span>
                         )}
@@ -276,7 +276,7 @@ export function SeasonalPeriodsModal({
               ) : (
                 <button
                   onClick={() => setShowNewForm(true)}
-                  className="w-full p-3 border-2 border-dashed border-[#E5E5E5] rounded-xl text-xs font-medium text-[#9CA3AF] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent)] transition-all flex items-center justify-center gap-2"
+                  className="w-full p-3 border-2 border-dashed border-[#E5E5E5] rounded-xl text-xs font-medium text-[#9CA3AF] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent-text)] transition-all flex items-center justify-center gap-2"
                 >
                   <Plus size={14} />
                   Προσθήκη custom περιόδου

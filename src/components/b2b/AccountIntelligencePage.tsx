@@ -111,7 +111,7 @@ export function AccountIntelligencePage({ onSectionChange }: AccountIntelligence
         <Card>
           <div className="p-6">
             <div className="mb-4 flex items-center gap-2">
-              <Building2 size={18} className="text-[var(--nts-accent)]" />
+              <Building2 size={18} className="text-[var(--nts-accent-text)]" />
               <h3 className="text-lg font-semibold text-[#1A1A1A]">Account scoring model</h3>
             </div>
             <div className="space-y-3">
@@ -134,7 +134,7 @@ export function AccountIntelligencePage({ onSectionChange }: AccountIntelligence
         <Card>
           <div className="p-6">
             <div className="mb-4 flex items-center gap-2">
-              <Wallet size={18} className="text-[var(--nts-accent)]" />
+              <Wallet size={18} className="text-[var(--nts-accent-text)]" />
               <h3 className="text-lg font-semibold text-[#1A1A1A]">Signals to import next</h3>
             </div>
             <div className="space-y-3 text-sm text-[#6B7280]">
@@ -158,7 +158,7 @@ export function AccountIntelligencePage({ onSectionChange }: AccountIntelligence
       <Card>
         <div className="p-6">
           <div className="mb-4 flex items-center gap-2">
-            <BarChart3 size={18} className="text-[var(--nts-accent)]" />
+            <BarChart3 size={18} className="text-[var(--nts-accent-text)]" />
             <h3 className="text-lg font-semibold text-[#1A1A1A]">Activation path</h3>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -190,7 +190,7 @@ export function AccountIntelligencePage({ onSectionChange }: AccountIntelligence
       <Card>
         <div className="p-5">
           <div className="mb-3 flex items-center gap-2 text-[#1A1A1A]">
-            <FileSpreadsheet size={18} className="text-[var(--nts-accent)]" />
+            <FileSpreadsheet size={18} className="text-[var(--nts-accent-text)]" />
             <h3 className="font-semibold">B2B account dataset</h3>
           </div>
           <p className="text-sm leading-relaxed text-[#6B7280]">

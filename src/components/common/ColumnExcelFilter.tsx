@@ -167,7 +167,7 @@ export function ColumnExcelFilter({
               type="checkbox"
               checked={draftSelected.has(o.id)}
               onChange={() => toggle(o.id)}
-              className="rounded border-[#D1D5DB] text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]/30"
+              className="rounded border-[#D1D5DB] text-[var(--nts-accent-text)] focus:ring-[var(--nts-accent)]/30"
             />
             <span className="truncate">{o.label}</span>
           </label>
@@ -204,7 +204,7 @@ export function ColumnExcelFilter({
           onClick={() => setOpen((o) => !o)}
           className={`relative inline-flex h-7 min-w-[28px] items-center justify-center rounded-md border px-1.5 transition-colors ${
             filterActive
-              ? 'border-[var(--nts-accent)]/40 bg-orange-50/80 text-[var(--nts-accent)]'
+              ? 'border-[var(--nts-accent)]/40 bg-orange-50/80 text-[var(--nts-accent-text)]'
               : 'border-transparent text-[#6B7280] hover:border-[#E5E7EB] hover:bg-white'
           }`}
           aria-expanded={open}

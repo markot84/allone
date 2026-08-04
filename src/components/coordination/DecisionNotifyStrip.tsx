@@ -92,7 +92,7 @@ export function DecisionNotifyStrip({ decision: d, variant = 'default' }: Decisi
     <div className={shell}>
       {variant === 'default' && (
         <div className="flex items-start gap-2">
-          <div className="mt-0.5 p-1.5 rounded-lg bg-[var(--nts-accent)]/15 text-[var(--nts-accent)]">
+          <div className="mt-0.5 p-1.5 rounded-lg bg-[var(--nts-accent)]/15 text-[var(--nts-accent-text)]">
             <Bell size={18} />
           </div>
           <div className="flex-1 min-w-0">

@@ -113,7 +113,7 @@ export function ProcurementStrategyBridge({
             <button
               type="button"
               onClick={onOpenProductIntelligence}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--nts-accent)] hover:underline shrink-0"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--nts-accent-text)] hover:underline shrink-0"
             >
               <ExternalLink size={12} aria-hidden />
               Λεπτομέρειες στο Product Intelligence

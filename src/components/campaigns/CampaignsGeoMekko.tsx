@@ -208,7 +208,7 @@ export function CampaignsGeoMekko({ columns, level, metric, onMetricChange }: Pr
                 onClick={() => onMetricChange(option)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   metric === option
-                    ? 'bg-white text-[var(--nts-accent)] shadow-sm font-semibold'
+                    ? 'bg-white text-[var(--nts-accent-text)] shadow-sm font-semibold'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >

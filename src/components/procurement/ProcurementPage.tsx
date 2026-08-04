@@ -969,7 +969,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
       {showBack ? (
         <button
           onClick={() => setViewMode('overview')}
-          className="flex items-center gap-1.5 text-sm text-[var(--nts-accent)] hover:underline font-medium"
+          className="flex items-center gap-1.5 text-sm text-[var(--nts-accent-text)] hover:underline font-medium"
         >
           <ArrowLeft size={16} />
           Επισκόπηση
@@ -1100,7 +1100,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                   )}
 
                   {/* CTA */}
-                  <div className="mt-auto pt-4 flex items-center gap-1 text-xs font-semibold text-[var(--nts-medium-gray)] group-hover:text-[var(--nts-accent)] transition-colors">
+                  <div className="mt-auto pt-4 flex items-center gap-1 text-xs font-semibold text-[var(--nts-medium-gray)] group-hover:text-[var(--nts-accent-text)] transition-colors">
                     Δείτε αναλυτικά <ChevronRight size={13} />
                   </div>
                 </div>
@@ -1126,7 +1126,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                     onClick={() => setActiveTab(tab.id)}
                     className={`group relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 whitespace-nowrap focus:outline-none ${
                       isActive
-                        ? 'text-[var(--nts-accent)]'
+                        ? 'text-[var(--nts-accent-text)]'
                         : 'text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)]'
                     }`}
                   >
@@ -1191,7 +1191,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                 {hasFilters && (
                   <button
                     onClick={() => setColFilters({})}
-                    className="flex items-center gap-1 text-[11px] text-[var(--nts-accent)] hover:underline"
+                    className="flex items-center gap-1 text-[11px] text-[var(--nts-accent-text)] hover:underline"
                   >
                     <X size={11} /> Καθαρισμός φίλτρων
                   </button>
@@ -1236,7 +1236,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                               </span>
                               <ChevronDown
                                 size={11}
-                                className={`flex-shrink-0 mt-0.5 transition-colors ${isFiltered ? 'text-[var(--nts-accent)]' : 'text-[var(--nts-medium-gray)] opacity-40 group-hover:opacity-100'}`}
+                                className={`flex-shrink-0 mt-0.5 transition-colors ${isFiltered ? 'text-[var(--nts-accent-text)]' : 'text-[var(--nts-medium-gray)] opacity-40 group-hover:opacity-100'}`}
                               />
                             </button>
                             {isFiltered && <div className="h-0.5 bg-[var(--nts-accent)] rounded -mt-px" />}

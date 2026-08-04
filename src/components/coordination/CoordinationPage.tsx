@@ -314,7 +314,7 @@ export function CoordinationPage() {
           </h2>
           <button
             onClick={() => { setShowTaskForm(true); setTaskFromDecision(null); }}
-            className="flex items-center gap-1 text-xs text-[var(--nts-accent)] hover:underline"
+            className="flex items-center gap-1 text-xs text-[var(--nts-accent-text)] hover:underline"
           >
             <Plus size={12} /> Νέα εργασία
           </button>
@@ -617,7 +617,7 @@ function DecisionDetail({ decision: d, onUpdate, onCreateTask }: { decision: Dec
       </div>
 
       <details className="rounded-lg border border-[#E5E7EB] bg-white">
-        <summary className="cursor-pointer px-3 py-2.5 text-xs font-medium text-[var(--nts-accent)] list-none [&::-webkit-details-marker]:hidden flex items-center gap-2">
+        <summary className="cursor-pointer px-3 py-2.5 text-xs font-medium text-[var(--nts-accent-text)] list-none [&::-webkit-details-marker]:hidden flex items-center gap-2">
           <span className="text-[#9CA3AF] select-none">▸</span>
           Νέα ειδοποίηση στα τμήματα
         </summary>
@@ -628,7 +628,7 @@ function DecisionDetail({ decision: d, onUpdate, onCreateTask }: { decision: Dec
 
       <details className="rounded-lg border border-[#E5E7EB] bg-[#FAFAFA]">
         <summary className="cursor-pointer px-3 py-2.5 text-xs text-[#6B7280] list-none [&::-webkit-details-marker]:hidden flex items-center gap-2">
-          <Plus size={14} className="text-[var(--nts-accent)] shrink-0" />
+          <Plus size={14} className="text-[var(--nts-accent-text)] shrink-0" />
           {d.status === 'proposal'
             ? 'Εργασία από αυτή την πρόταση τμήματος'
             : 'Εργασία από αυτή την εμπορική πολιτική'}
@@ -637,7 +637,7 @@ function DecisionDetail({ decision: d, onUpdate, onCreateTask }: { decision: Dec
           <button
             type="button"
             onClick={onCreateTask}
-            className="text-sm font-medium text-[var(--nts-accent)] hover:underline"
+            className="text-sm font-medium text-[var(--nts-accent-text)] hover:underline"
           >
             Άνοιγμα φόρμας εργασίας
           </button>
@@ -715,7 +715,7 @@ function TaskDetail({ task: t, onUpdate }: { task: CoordinationTask; onUpdate: (
             disabled={t.status === s}
             className={`text-xs px-2.5 py-1 rounded-md border transition-all ${
               t.status === s
-                ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] font-medium'
+                ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] font-medium'
                 : 'border-[#E5E7EB] text-[#6B7280] hover:border-[#D1D5DB]'
             }`}
           >
@@ -946,7 +946,7 @@ function DecisionFormModal({ onClose, isProposal = false }: { onClose: () => voi
                   onClick={() => toggleDept(k)}
                   className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all ${
                     targetDepts.includes(k)
-                      ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] font-medium'
+                      ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] font-medium'
                       : 'border-[#E5E7EB] text-[#6B7280] hover:border-[#D1D5DB]'
                   }`}
                 >

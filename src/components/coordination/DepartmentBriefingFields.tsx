@@ -59,7 +59,7 @@ export function DepartmentBriefingFields({
                 onClick={() => onToggleDept(k)}
                 className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
                   selectedDepts.includes(k)
-                    ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/8 text-[var(--nts-accent)] font-medium'
+                    ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/8 text-[var(--nts-accent-text)] font-medium'
                     : 'border-[#E5E7EB] text-[#9CA3AF] hover:border-[#D1D5DB] hover:text-[#6B7280]'
                 }`}
               >

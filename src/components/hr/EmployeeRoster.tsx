@@ -74,7 +74,7 @@ export function EmployeeRoster() {
         <div className="p-10 text-center">
           <UserX size={36} className="mx-auto mb-3 text-[var(--nts-medium-gray)]/40" />
           <p className="text-sm text-[var(--nts-medium-gray)]">Δεν υπάρχουν εγγεγραμμένοι εργαζόμενοι.</p>
-          <button onClick={openAdd} className="mt-3 text-sm font-semibold text-[var(--nts-accent)] hover:underline">
+          <button onClick={openAdd} className="mt-3 text-sm font-semibold text-[var(--nts-accent-text)] hover:underline">
             Προσθήκη πρώτου εργαζόμενου →
           </button>
         </div>

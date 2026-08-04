@@ -298,7 +298,7 @@ export function PriceBenchmarkSetupModal({
 
             <div className="rounded-lg border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/5 px-3 py-2">
               <p className="text-xs font-medium text-[#1A1A1A]">
-                Σύνολο <span className="text-[var(--nts-accent)]">{totalMatched.toLocaleString('el-GR')}</span> SKU
+                Σύνολο <span className="text-[var(--nts-accent-text)]">{totalMatched.toLocaleString('el-GR')}</span> SKU
                 ταιριάζουν με τα κριτήρια.
               </p>
               <p className="text-[10px] text-[#6B7280] mt-1">

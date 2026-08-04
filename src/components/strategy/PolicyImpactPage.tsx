@@ -363,7 +363,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
               <CardHeader
                 title="Λίστα αποφάσεων"
                 subtitle="Φιλτράρετε ανά τύπο ή outcome και ανοίξτε την απόφαση που θέλετε να ελέγξετε αναλυτικά."
-                icon={<BookOpenCheck size={18} className="text-[var(--nts-accent)]" />}
+                icon={<BookOpenCheck size={18} className="text-[var(--nts-accent-text)]" />}
               />
               <div className="space-y-3">
                 <div className="relative">
@@ -456,7 +456,7 @@ function SectionIntro({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="rounded-xl bg-[var(--nts-accent)]/10 p-2 text-[var(--nts-accent)]">{icon}</span>
+      <span className="rounded-xl bg-[var(--nts-accent)]/10 p-2 text-[var(--nts-accent-text)]">{icon}</span>
       <h3 className="text-lg font-bold text-[#1A1A1A]">
         {tooltip ? (
           <Tooltip content={tooltip}>{title}</Tooltip>
@@ -617,7 +617,7 @@ function DecisionDetail({
           </div>
         }
         subtitle={`${TYPE_LABELS[event.eventType]} · Ανάλυση ${scoredRange}`}
-        icon={<BarChart3 size={18} className="text-[var(--nts-accent)]" />}
+        icon={<BarChart3 size={18} className="text-[var(--nts-accent-text)]" />}
         action={
           <div className="flex items-center gap-2">
             <Badge variant={VERDICT_BADGE[impact.verdict]}>{VERDICT_LABELS[impact.verdict]}</Badge>

@@ -2997,7 +2997,7 @@ export function ConnectorsPanel() {
             toolbarAriaLabel="Platform connectors"
             title={
               <h3 className="flex items-center gap-2 text-base font-semibold text-[#1A1A1A] sm:text-lg">
-                <Link2 size={20} className="shrink-0 text-[var(--nts-accent)]" />
+                <Link2 size={20} className="shrink-0 text-[var(--nts-accent-text)]" />
                 Platform Connectors
               </h3>
             }
@@ -3502,14 +3502,14 @@ export function ConnectorsPanel() {
                     href="https://developer.skroutz.gr/products/xml_feed/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[var(--nts-accent)] hover:underline inline-flex items-center gap-1"
+                    className="text-[var(--nts-accent-text)] hover:underline inline-flex items-center gap-1"
                   >
                     Τεκμηρίωση XML feed
                     <ExternalLink size={12} />
                   </a>
                   <button
                     type="button"
-                    className="text-[var(--nts-accent)] hover:underline"
+                    className="text-[var(--nts-accent-text)] hover:underline"
                     onClick={() => document.getElementById('feed-sources-section')?.scrollIntoView({ behavior: 'smooth' })}
                   >
                     Μετάβαση στα Feed Sources

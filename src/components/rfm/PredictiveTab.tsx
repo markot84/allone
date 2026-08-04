@@ -179,7 +179,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
               <CardHeader
                 title="Estimated LTV ανά Segment"
                 subtitle="Εκτιμώμενη αξία ζωής πελάτη"
-                icon={<DollarSign size={18} className="text-[var(--nts-accent)]" />}
+                icon={<DollarSign size={18} className="text-[var(--nts-accent-text)]" />}
               />
               <div style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -206,7 +206,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
               <CardHeader
                 title="Churn Risk vs LTV"
                 subtitle="Μέγεθος = αριθμός πελατών"
-                icon={<AlertTriangle size={18} className="text-[var(--nts-accent)]" />}
+                icon={<AlertTriangle size={18} className="text-[var(--nts-accent-text)]" />}
               />
               <div style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -344,7 +344,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
         <CardHeader
           title="Σενάρια & Ειδοποιήσεις"
           subtitle="Αυτόματες ειδοποιήσεις βάσει predictive signals"
-          icon={<AlertTriangle size={18} className="text-[var(--nts-accent)]" />}
+          icon={<AlertTriangle size={18} className="text-[var(--nts-accent-text)]" />}
         />
         <div className="space-y-3 mt-3">
           {enriched

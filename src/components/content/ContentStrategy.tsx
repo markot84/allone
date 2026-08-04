@@ -206,7 +206,7 @@ export function ContentStrategy() {
             title={
               <div className="space-y-3">
                 <span className="inline-flex items-center gap-2 rounded-full bg-white/90 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-900/85 shadow-sm ring-1 ring-orange-200/80">
-                  <PenLine size={14} className="text-[var(--nts-accent)]" aria-hidden />
+                  <PenLine size={14} className="text-[var(--nts-accent-text)]" aria-hidden />
                   Content &amp; storytelling
                 </span>
                 <h2 className="text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
@@ -251,7 +251,7 @@ export function ContentStrategy() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-100 to-amber-50 ring-2 ring-orange-200/50">
-                <Send size={22} className="text-[var(--nts-accent)]" />
+                <Send size={22} className="text-[var(--nts-accent-text)]" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-stone-900">Brief για ομάδα marketing</h3>
@@ -288,7 +288,7 @@ export function ContentStrategy() {
         <Card padding="lg" className="border border-dashed border-orange-200 bg-gradient-to-br from-amber-50/50 to-orange-50/30">
           <div className="flex flex-col items-center justify-center py-14 text-center">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-md shadow-orange-500/10 ring-2 ring-orange-100">
-              <Sparkles size={30} className="text-[var(--nts-accent)]" />
+              <Sparkles size={30} className="text-[var(--nts-accent-text)]" />
             </div>
             <p className="text-base font-semibold text-stone-800">Δεν υπάρχουν ακόμα προτάσεις περιεχομένου</p>
             <p className="mt-2 max-w-md text-sm leading-relaxed text-stone-600">
@@ -409,7 +409,7 @@ export function ContentStrategy() {
                       </div>
                       <h4 className="mb-1 text-sm font-semibold text-stone-900">{action.title}</h4>
                       <p className="mb-2 text-xs leading-relaxed text-stone-600">{action.description}</p>
-                      <p className="mb-2 text-xs font-medium text-[var(--nts-accent)]">Κανάλι: {action.channel}</p>
+                      <p className="mb-2 text-xs font-medium text-[var(--nts-accent-text)]">Κανάλι: {action.channel}</p>
                       {action.headline_suggestion && (
                         <div className="rounded-lg border border-orange-100 bg-amber-50/80 px-3 py-2 text-xs italic leading-snug text-stone-700">
                           &ldquo;{action.headline_suggestion}&rdquo;
@@ -429,7 +429,7 @@ export function ContentStrategy() {
         <Card padding="lg" className="border border-orange-100 bg-gradient-to-br from-amber-50/40 to-white">
           <div className="py-12 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg shadow-orange-500/10 ring-2 ring-orange-100">
-              <Sparkles size={30} className="text-[var(--nts-accent)]" />
+              <Sparkles size={30} className="text-[var(--nts-accent-text)]" />
             </div>
             <p className="text-lg font-semibold text-stone-800">Χρειάζεσαι πρώτα εμπορική στρατηγική</p>
             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-stone-600">

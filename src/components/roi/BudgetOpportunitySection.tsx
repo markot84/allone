@@ -105,7 +105,7 @@ export function BudgetOpportunitySection({ campaigns }: { campaigns: Campaign[] 
     return (
       <Card padding="lg">
         <div className="flex items-start gap-3">
-          <Lightbulb size={22} className="text-[var(--nts-accent)] shrink-0 mt-0.5" />
+          <Lightbulb size={22} className="text-[var(--nts-accent-text)] shrink-0 mt-0.5" />
           <div>
             <h3 className="text-sm font-semibold text-[#111827]">Προτάσεις budget</h3>
             <p className="text-xs text-[#6B7280] mt-1">
@@ -123,7 +123,7 @@ export function BudgetOpportunitySection({ campaigns }: { campaigns: Campaign[] 
       <div className="flex items-start justify-between gap-4 mb-4">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-xl bg-[var(--nts-accent)]/10 flex items-center justify-center shrink-0">
-            <Lightbulb size={20} className="text-[var(--nts-accent)]" />
+            <Lightbulb size={20} className="text-[var(--nts-accent-text)]" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-[#111827]">Προτάσεις budget (v1)</h3>

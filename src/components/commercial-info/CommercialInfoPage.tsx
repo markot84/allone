@@ -133,7 +133,7 @@ function InfoCard({
             <button
               onClick={onActivate}
               disabled={busy}
-              className="text-xs flex items-center gap-1 text-[var(--nts-accent)] hover:underline disabled:opacity-50"
+              className="text-xs flex items-center gap-1 text-[var(--nts-accent-text)] hover:underline disabled:opacity-50"
             >
               <RotateCcw size={13} /> Επαναφορά
             </button>
@@ -228,7 +228,7 @@ export function CommercialInfoPage() {
       <PageHeader
         title={
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-[var(--nts-charcoal)] sm:text-2xl">
-            <Lightbulb size={24} className="shrink-0 text-[var(--nts-accent)]" />
+            <Lightbulb size={24} className="shrink-0 text-[var(--nts-accent-text)]" />
             Εμπορικές Πληροφορίες
           </h2>
         }

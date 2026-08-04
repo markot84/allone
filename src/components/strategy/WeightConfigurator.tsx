@@ -241,7 +241,7 @@ const PreviewCell = memo(function PreviewCell({
             key={product.composite_score}
             initial={{ scale: 1.2 }}
             animate={{ scale: 1 }}
-            className="text-sm font-bold text-[var(--nts-accent)] font-mono"
+            className="text-sm font-bold text-[var(--nts-accent-text)] font-mono"
           >
             {product.composite_score?.toFixed(1)}
           </motion.span>
@@ -1533,7 +1533,7 @@ export function WeightConfigurator({
             {pendingScenarioChange && (
               <div className="flex flex-col gap-3 rounded-xl border border-[var(--nts-accent)]/20 bg-[var(--nts-light-gray)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--nts-accent)]">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--nts-accent-text)]">
                     {getScenarioPendingLabel(pendingScenarioChange)}
                   </div>
                   <div className="mt-1 text-sm font-semibold text-[var(--nts-charcoal)]">

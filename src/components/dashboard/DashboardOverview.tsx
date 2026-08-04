@@ -1453,7 +1453,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <button
                   type="button"
                   onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}
-                  className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
+                  className="font-semibold text-[var(--nts-accent-text)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
                 >
                   {isB2B ? 'Finances' : 'ROI & Απόδοση'}
                 </button>
@@ -1473,7 +1473,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-[var(--nts-accent)]/10 flex items-center justify-center">
-                  <ShoppingBag size={16} className="text-[var(--nts-accent)]" />
+                  <ShoppingBag size={16} className="text-[var(--nts-accent-text)]" />
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
@@ -1491,7 +1491,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   </span>
                 </div>
               </div>
-              <ArrowRight size={16} className="text-[#D1D5DB] group-hover:text-[var(--nts-accent)] transition-colors" />
+              <ArrowRight size={16} className="text-[#D1D5DB] group-hover:text-[var(--nts-accent-text)] transition-colors" />
             </div>
 
             <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 2xl:grid-cols-4 2xl:items-end">
@@ -1685,7 +1685,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 </p>
               )
             }
-            icon={<TrendingUp size={18} className="text-[var(--nts-accent)]" />}
+            icon={<TrendingUp size={18} className="text-[var(--nts-accent-text)]" />}
           />
           {revenueChartData.length > 0 ? (
             <>
@@ -1789,7 +1789,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4 text-left transition-colors hover:border-[var(--nts-accent)]"
               >
                 <div className="flex items-center gap-2 text-[#1A1A1A]">
-                  <Building2 size={16} className="text-[var(--nts-accent)]" />
+                  <Building2 size={16} className="text-[var(--nts-accent-text)]" />
                   <span className="font-semibold">Account Intelligence</span>
                 </div>
                 <p className="mt-2 text-sm text-[#6B7280]">Πλαίσιο αξιολόγησης για βασικούς λογαριασμούς, κίνδυνο ανανέωσης και δυνατότητες cross-sell.</p>
@@ -1800,7 +1800,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4 text-left transition-colors hover:border-[var(--nts-accent)]"
               >
                 <div className="flex items-center gap-2 text-[#1A1A1A]">
-                  <Handshake size={16} className="text-[var(--nts-accent)]" />
+                  <Handshake size={16} className="text-[var(--nts-accent-text)]" />
                   <span className="font-semibold">Sales Pipeline</span>
                 </div>
                 <p className="mt-2 text-sm text-[#6B7280]">Λειτουργική παρακολούθηση για opportunities, pricing blockers και πειθαρχία στα επόμενα βήματα.</p>
@@ -1811,7 +1811,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4 text-left transition-colors hover:border-[var(--nts-accent)]"
               >
                 <div className="flex items-center gap-2 text-[#1A1A1A]">
-                  <Globe2 size={16} className="text-[var(--nts-accent)]" />
+                  <Globe2 size={16} className="text-[var(--nts-accent-text)]" />
                   <span className="font-semibold">Market Exploration</span>
                 </div>
                 <p className="mt-2 text-sm text-[#6B7280]">Σχεδιασμός go-to-market για νέες αγορές, verticals και συνεργασίες διανομής.</p>
@@ -1919,7 +1919,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           <CardHeader
             title="Campaigns"
             subtitle="Συνολική διαφημιστική απόδοση Google Ads + Meta Ads — conversion value, δαπάνη και Platform ROAS για την επιλεγμένη περίοδο."
-            icon={<Megaphone size={18} className="text-[var(--nts-accent)]" />}
+            icon={<Megaphone size={18} className="text-[var(--nts-accent-text)]" />}
           />
 
           <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-[#6B7280]">

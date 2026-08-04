@@ -231,7 +231,7 @@ export function SalesBaseSetupModal({
                   {g.label}
                 </td>
                 <td className="px-3 py-1.5 text-right font-mono text-[#4B5563]">{g.count}</td>
-                <td className="px-3 py-1.5 text-right font-mono font-medium text-[var(--nts-accent)]">
+                <td className="px-3 py-1.5 text-right font-mono font-medium text-[var(--nts-accent-text)]">
                   {g.avgMomentum.toFixed(0)}
                 </td>
               </tr>
@@ -468,7 +468,7 @@ export function SalesBaseSetupModal({
                     <button
                       type="button"
                       onClick={() => setExcludedCategories([])}
-                      className="text-[10px] text-[var(--nts-accent)] hover:underline"
+                      className="text-[10px] text-[var(--nts-accent-text)] hover:underline"
                     >
                       Καθαρισμός
                     </button>
@@ -503,7 +503,7 @@ export function SalesBaseSetupModal({
 
             <div className="rounded-lg border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/5 px-3 py-2">
               <p className="text-xs font-medium text-[#1A1A1A]">
-                Σύνολο <span className="text-[var(--nts-accent)]">{totalMatched.toLocaleString('el-GR')}</span> SKU
+                Σύνολο <span className="text-[var(--nts-accent-text)]">{totalMatched.toLocaleString('el-GR')}</span> SKU
                 ταιριάζουν με τα κριτήρια.
                 {excludedCategories.length > 0 && (
                   <span className="text-[10px] text-[#6B7280] font-normal ml-1">
