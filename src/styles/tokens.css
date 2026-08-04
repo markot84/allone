@@ -57,7 +57,11 @@
 
   --text-primary:   #101828; /* not navy — clean dark grey for long-form text */
   --text-secondary: #475467;
-  --text-muted:     #98A2B3;
+  /* Darkened from #98A2B3, which measured 2.58:1 on white — under the 4.5:1 the brief calls
+     non-negotiable, and under the 3:1 non-text UI needs. This is the next step down the same
+     neutral ramp the rest of the scale comes from (900 #101828 / 600 #475467 / 400 #98A2B3), so
+     it reads as the family's own 500 rather than a new colour. Measures 4.97:1. */
+  --text-muted:     #667085;
   --text-heading:   var(--navy-500); /* headings and branding DO use navy */
 
   /* ============ SEMANTIC — deliberately distinct from the brand accents ============ */
@@ -83,12 +87,10 @@
   --chrome-border:         var(--border);
   --chrome-fg:             var(--text-primary);
   --chrome-fg-muted:       var(--text-secondary);
-  /* NOT `--text-muted`. On the old dark bar these labels were white at 0.34 opacity; the same
-     faintness on white is `--text-muted`, which measures 2.58:1 — under the 4.5:1 the brief calls
-     non-negotiable, and under the 3:1 that non-text UI needs too. Group labels and the chrome's
-     icon buttons are text and controls, so they take the secondary weight (7.69:1) instead.
-     `/styleguide` measures all three. */
-  --chrome-fg-subtle:      var(--text-secondary);
+  /* Back on `--text-muted` now that it clears 4.5:1: group labels and the chrome's icon buttons
+     keep the faintness they had as white-at-0.34 on the old dark bar, without failing contrast.
+     `/styleguide` measures it. */
+  --chrome-fg-subtle:      var(--text-muted);
   --chrome-control-bg:     var(--surface-1);
   --chrome-control-border: var(--border);
   --chrome-control-hover:  var(--surface-2);

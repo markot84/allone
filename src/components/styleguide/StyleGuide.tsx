@@ -60,10 +60,10 @@ const TEXT_ON_WHITE = [
   '--orange-600',
   '--orange-500',
   '--gold-500',
-  // The chrome is white now, so its text colours are measured on the same ground as everything else.
-  '--chrome-fg',
-  '--chrome-fg-muted',
-  '--chrome-fg-subtle',
+  // The neutrals were never measured in colors.md; they are text just as much as the brand colours.
+  '--text-primary',
+  '--text-secondary',
+  '--text-muted',
 ];
 
 function toRgb(value: string): [number, number, number] | null {

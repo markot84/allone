@@ -39,7 +39,7 @@ export function WeightsRadar({ weights }: { weights: Record<string, number> }) {
       shape: readTokenColor('--brand-orange', '#FE630C'),
       grid: readTokenColor('--border', '#E4E7EC'),
       label: readTokenColor('--text-secondary', '#475467'),
-      muted: readTokenColor('--text-muted', '#98A2B3'),
+      muted: readTokenColor('--text-muted', '#667085'),
     }),
     []
   );
