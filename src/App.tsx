@@ -19,7 +19,7 @@ import { captureOAuthParamsFromLocation } from './utils/oauthSession';
 import { logger } from './utils/logger';
 import { CLIENT_ALERT } from './utils/alertKeys';
 import { AttributionProvider } from './contexts/AttributionContext';
-import { APP_SECTIONS } from './config/modules';
+import { APP_SECTIONS, isSectionHidden } from './config/modules';
 import { BarChart3, ClipboardList, MessageCircle } from 'lucide-react';
 
 const MARK_START_VOICE_EVENT = 'performance-plus:start-mark-voice';
@@ -115,7 +115,7 @@ function MobileQuickActions({
   const nav = [
     { id: 'dashboard', label: 'Σήμερα', icon: BarChart3 },
     { id: 'marketing-plan', label: 'Plan', icon: ClipboardList },
-  ];
+  ].filter((item) => !isSectionHidden(item.id));
 
   return (
     <div className="mobile-quick-actions fixed inset-x-3 bottom-3 z-40 md:hidden">

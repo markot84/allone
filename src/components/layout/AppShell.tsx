@@ -10,7 +10,7 @@ import { useAuth, useBrand, useBrandMembers } from '../../hooks';
 import { useModules } from '../../hooks/useModules';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { AppSectionId, Brand } from '../../types';
-import { getModuleIdForSection } from '../../config/modules';
+import { getModuleIdForSection, isSectionHidden } from '../../config/modules';
 import { validatePassword, PASSWORD_REQUIREMENTS_HINT } from '../../utils/passwordPolicy';
 import { ACCENT_PRESETS, readStoredAccent, setStoredAccent, type AccentId } from '../../theme/accentTheme';
 import {
@@ -734,6 +734,8 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       const items = ordered
         .map((id) => itemMap.get(id as AppSectionId))
         .filter((item): item is NavItem => Boolean(item))
+        // Sections switched off for this build, including the ones with no module behind them.
+        .filter((item) => !isSectionHidden(item.id))
         .filter((item) => {
           const moduleId = getModuleIdForSection(item.id);
           return moduleId ? enabledModules[moduleId] : true;

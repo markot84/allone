@@ -12,6 +12,7 @@ import {
   computeBriefingDataHash,
 } from '../../services/morningBriefing';
 import type { Product, Campaign, RFMSegment, AutomationAlert } from '../../types';
+import { isSectionHidden } from '../../config/modules';
 
 interface MorningBriefingProps {
   brandId: string;
@@ -88,7 +89,9 @@ function guessRoute(action: string): GuessResult {
     ['roi', { section: 'roi' }],
   ];
   for (const [keyword, route] of pairs) {
-    if (lower.includes(keyword)) return route;
+    // A keyword pointing at a section switched off for this build falls through to the next
+    // match (and ultimately to the dashboard) instead of producing a dead action.
+    if (lower.includes(keyword) && !isSectionHidden(route.section)) return route;
   }
   return { section: 'dashboard' };
 }

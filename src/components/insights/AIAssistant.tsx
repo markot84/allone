@@ -37,6 +37,7 @@ import {
 } from '../../services/mark';
 import { formatCommercialInfoForPrompt, structureCommercialInfo } from '../../services/commercialInfo';
 import { formatBrandProfileForPrompt } from '../../services/brandProfile';
+import { isSectionHidden } from '../../config/modules';
 import { useCommercialInfo } from '../../hooks/useCommercialInfo';
 import { useSpeechToText } from '../../hooks/useSpeechToText';
 import { useSpeechSynthesis } from '../../hooks/useSpeechSynthesis';
@@ -966,7 +967,8 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
           ),
           { id: `mark-info-${Date.now()}`, type: 'assistant', content: confirm, timestamp: new Date(), savedInfoId: id },
         ]);
-        if (options.openMarketingPlan) {
+        // The info is saved either way; only the jump to the plan is skipped when that page is hidden.
+        if (options.openMarketingPlan && !isSectionHidden('marketing-plan')) {
           window.location.hash = 'marketing-plan';
           window.dispatchEvent(new HashChangeEvent('hashchange'));
           handleClose();

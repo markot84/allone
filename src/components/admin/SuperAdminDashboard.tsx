@@ -22,7 +22,7 @@ import { db, auth, storage, PROJECT_ID } from '../../config/firebase';
 import { collection, getDocs, doc, getDoc, limit, orderBy, query } from 'firebase/firestore';
 import { SUPPORT_EMAIL, APP_NAME } from '../../config/superAdmins';
 import { loadSuperAdmins, type SuperAdminsConfig } from '../../services/appConfig';
-import { getDefaultModuleEnabled, getEditionStatus, getModuleLabel } from '../../config/modules';
+import { getDefaultModuleEnabled, getEditionStatus, getModuleLabel, isSectionHidden } from '../../config/modules';
 import type { Brand, ChangelogEntry, ModuleId, BrandMemberRole, BrandDepartment } from '../../types';
 import { ROLE_LABELS, DEPARTMENT_LABELS, normalizeBrandMemberRole } from '../../types';
 import { useAuth } from '../../hooks';
@@ -128,7 +128,10 @@ function BrandsTab() {
   const [updatingModule, setUpdatingModule] = useState<string | null>(null);
   const [updatingHistory, setUpdatingHistory] = useState<string | null>(null);
   const [historyDrafts, setHistoryDrafts] = useState<Record<string, string>>({});
-  const moduleToggleIds: ModuleId[] = ['ecommerce', 'analytics', 'competitive', 'roi', 'sales', 'accounts', 'markets', 'procurement'];
+  const moduleToggleIds: ModuleId[] = (
+    ['ecommerce', 'analytics', 'competitive', 'roi', 'sales', 'accounts', 'markets', 'procurement'] as ModuleId[]
+    // Modules switched off for the build can't be re-enabled per brand, so don't offer a dead toggle.
+  ).filter((id) => !isSectionHidden(id));
 
   useEffect(() => {
     async function load() {

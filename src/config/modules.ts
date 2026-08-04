@@ -1,7 +1,9 @@
 import type { AppSectionId, Brand, ModuleId } from '../types';
 
-/** When false, all brands are treated as B2C. B2B/B2C type is set only by Super Admin; new brands stay B2C. */
-export const B2B_EDITION_ENABLED = true;
+/** When false, all brands are treated as B2C. B2B/B2C type is set only by Super Admin; new brands stay B2C.
+ * Off for the Marketing & Data Analysis build: every B2B-only section is in `HIDDEN_SECTIONS`, so leaving
+ * the edition on would only surface B2B labels and dashboard tiles pointing at hidden pages. */
+export const B2B_EDITION_ENABLED = false;
 
 export type ModuleEditionStatus = 'core' | 'optional' | 'hidden';
 
@@ -59,6 +61,48 @@ export const APP_SECTIONS: AppSectionId[] = [
   'offers',
   'territories',
 ];
+
+/**
+ * Sections switched off for the current build. NOTHING IS DELETED: every page, route, module
+ * definition and nav entry below still exists and still compiles — they are only filtered out of
+ * the nav, refused by `isSectionEnabled`, and redirected away from on deep links.
+ *
+ * To bring a section back, delete its id from this list. Nothing else needs changing: the nav item,
+ * the dashboard tiles and the cross-links that point at it are all guarded by `isSectionHidden`,
+ * so they reappear on their own.
+ *
+ * Kept visible: dashboard, rfm, competitive, strategy, campaigns, ecommerce, analytics,
+ * brand-profile, calendar (Content Strategy), products, the whole data/* import flow,
+ * plus brands, invite, help and admin.
+ */
+export const HIDDEN_SECTIONS: readonly AppSectionId[] = [
+  'policy-impact',
+  'marketing-plan',
+  'commercial-info',
+  'suppliers',
+  'procurement',
+  'channels',
+  'finances',
+  'reports',
+  'roi',
+  'insights',
+  'concept',
+  'coordination',
+  'automation',
+  'sales',
+  'accounts',
+  'markets',
+  'hr',
+  'offers',
+  'territories',
+];
+
+const HIDDEN_SECTION_SET = new Set<string>(HIDDEN_SECTIONS);
+
+/** True when the section is switched off for this build (see `HIDDEN_SECTIONS`). */
+export function isSectionHidden(section: string): boolean {
+  return HIDDEN_SECTION_SET.has(section);
+}
 
 export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'dashboard', label: 'Dashboard', b2bLabel: 'Owner Dashboard', b2bStatus: 'core', b2cStatus: 'core' },
@@ -166,6 +210,11 @@ export function resolveEnabledModules(
   const overrides = brand?.enabledModules ?? {};
 
   return MODULE_DEFINITIONS.reduce((acc, def) => {
+    // Switched off for this build — outranks brand overrides and plan features alike.
+    if (isSectionHidden(def.id)) {
+      acc[def.id] = false;
+      return acc;
+    }
     const editionStatus = getEditionStatus(def.id, brandType);
     // Modules hidden for the edition (e.g. B2B-only on B2C) are never enabled, even if an old override exists in Firestore
     if (editionStatus === 'hidden') {
@@ -173,7 +222,13 @@ export function resolveEnabledModules(
       return acc;
     }
     // Hide when a specific plan feature is available (e.g. Product Intelligence hidden on Enterprise).
-    if (def.hideWhenFeature && (options?.canAccess?.(def.hideWhenFeature) ?? false)) {
+    // Skipped when the module that feature unlocks is itself hidden (procurement is), otherwise the
+    // swap would leave the brand with neither page.
+    if (
+      def.hideWhenFeature &&
+      !isSectionHidden(def.hideWhenFeature) &&
+      (options?.canAccess?.(def.hideWhenFeature) ?? false)
+    ) {
       acc[def.id] = false;
       return acc;
     }

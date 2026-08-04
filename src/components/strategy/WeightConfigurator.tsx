@@ -38,6 +38,7 @@ import { buildTriagePromptContext, buildProvenancePromptContext } from '../../ut
 import { useSegments } from '../../hooks/useSegments';
 import { useBrand } from '../../hooks/useBrand';
 import { CommercialInfoBanner } from '../commercial-info/CommercialInfoBanner';
+import { isSectionHidden } from '../../config/modules';
 import { useActiveStrategy, type SeasonalProposal, type TriageOrigin } from '../../hooks/useActiveStrategy';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -1404,20 +1405,26 @@ export function WeightConfigurator({
               </div>
             }
             actions={
-              onSectionChange ? (
+              onSectionChange && !(isSectionHidden('policy-impact') && isSectionHidden('marketing-plan')) ? (
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => onSectionChange('policy-impact')}>
-                    Policy impact
-                  </Button>
-                  <Button variant="secondary" size="sm" onClick={() => onSectionChange('marketing-plan')}>
-                    Marketing plan
-                  </Button>
+                  {!isSectionHidden('policy-impact') && (
+                    <Button variant="secondary" size="sm" onClick={() => onSectionChange('policy-impact')}>
+                      Policy impact
+                    </Button>
+                  )}
+                  {!isSectionHidden('marketing-plan') && (
+                    <Button variant="secondary" size="sm" onClick={() => onSectionChange('marketing-plan')}>
+                      Marketing plan
+                    </Button>
+                  )}
                 </div>
               ) : undefined
             }
           />
 
-          <CommercialInfoBanner context="policy" onOpen={onSectionChange ? () => onSectionChange('commercial-info') : undefined} />
+          {!isSectionHidden('commercial-info') && (
+            <CommercialInfoBanner context="policy" onOpen={onSectionChange ? () => onSectionChange('commercial-info') : undefined} />
+          )}
 
           {/* Strategy Package — share/copy active strategy */}
           {selectedScenario && (

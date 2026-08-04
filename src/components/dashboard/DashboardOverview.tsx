@@ -82,6 +82,7 @@ import { eachDateInclusiveLocal, computeMarketingOverheadForPeriod } from '../..
 import { getCostingReal12mTurnover } from '../../utils/procurement12mTurnover';
 import { coerceToDate } from '../../utils/coerceDate';
 import { INSIGHT_NAV } from '../insights/aiInsightsConfig';
+import { isSectionHidden } from '../../config/modules';
 import { logger } from '../../utils/logger';
 import type { AIInsight } from '../../types';
 
@@ -863,26 +864,38 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   }, [totalOrganicRevenue, hasOrganic]);
   const { aiInsights } = useAiInsightsData({ skipOrderHydration: true, useServerAggregate: true });
 
+  /** Navigate, unless the target is switched off for this build — then the action stays inert
+   * rather than bouncing the user back to the dashboard. */
+  const goToSection = (section: string, opts?: { hashQuery?: string }) => {
+    if (isSectionHidden(section)) return;
+    onSectionChange?.(section, opts);
+  };
+
+  /** `onClick` for tiles that link to another section: `undefined` when that section is hidden,
+   * so the card renders as plain content instead of a dead link. */
+  const sectionClick = (section: string) =>
+    onSectionChange && !isSectionHidden(section) ? () => onSectionChange(section) : undefined;
+
   // Handle insight action clicks
   const handleInsightAction = (insight: AIInsight) => {
     const nav = insight.insightKey ? INSIGHT_NAV[insight.insightKey] : null;
     if (nav) {
-      onSectionChange?.(nav.section, nav.hashQuery ? { hashQuery: nav.hashQuery } : undefined);
+      goToSection(nav.section, nav.hashQuery ? { hashQuery: nav.hashQuery } : undefined);
       return;
     }
 
     const action = insight.action.toLowerCase();
-    
+
     // Map actions to navigation
     if (action.includes('campaign') || action.includes('win-back') || action.includes('στόχευση')) {
-      onSectionChange?.('channels');
+      goToSection('channels');
     } else if (action.includes('inventory') || action.includes('αναπλήρωση') || action.includes('ελέγξτε')) {
-      onSectionChange?.('products');
+      goToSection('products');
     } else if (action.includes('sequence') || action.includes('setup')) {
-      onSectionChange?.('strategy');
+      goToSection('strategy');
     } else {
       // Default: open AI Insights panel or navigate to relevant section
-      onSectionChange?.('insights');
+      goToSection('insights');
     }
   };
   const revenueContainerRef = useRef<HTMLDivElement>(null);
@@ -1377,7 +1390,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                       : revenueTotalKpiTooltip,
                 }}
                 index={0}
-                onClick={() => onSectionChange?.('finances')}
+                onClick={sectionClick('finances')}
               />
               <KPICard
                 kpi={{
@@ -1432,18 +1445,21 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 onClick={() => onSectionChange?.(isB2B ? 'sales' : 'campaigns')}
               />
             </div>
-            <p className="text-[12px] text-[#6B7280] leading-relaxed">
-              {isB2B ? 'Για αναλυτικότερη οικονομική εικόνα, baseline revenue και πρόσθετα B2B data feeds, άνοιξε ' : <>Για <strong className="text-[#4B5563] font-medium">Campaign ROI incl. costs</strong>,{' '}
-              <strong className="text-[#4B5563] font-medium">e-shop ROI</strong>, Platform ROAS και σύγκριση εσόδων με το e-shop, ανοίξτε </>}
-              <button
-                type="button"
-                onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}
-                className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
-              >
-                {isB2B ? 'Finances' : 'ROI & Απόδοση'}
-              </button>
-              {!isB2B && '.'}
-            </p>
+            {/* Pointer to a deeper revenue page — dropped entirely when that page is hidden. */}
+            {!isSectionHidden(isB2B ? 'finances' : 'roi') && (
+              <p className="text-[12px] text-[#6B7280] leading-relaxed">
+                {isB2B ? 'Για αναλυτικότερη οικονομική εικόνα, baseline revenue και πρόσθετα B2B data feeds, άνοιξε ' : <>Για <strong className="text-[#4B5563] font-medium">Campaign ROI incl. costs</strong>,{' '}
+                <strong className="text-[#4B5563] font-medium">e-shop ROI</strong>, Platform ROAS και σύγκριση εσόδων με το e-shop, ανοίξτε </>}
+                <button
+                  type="button"
+                  onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}
+                  className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
+                >
+                  {isB2B ? 'Finances' : 'ROI & Απόδοση'}
+                </button>
+                {!isB2B && '.'}
+              </p>
+            )}
           </div>
         );
       })()}
@@ -1637,8 +1653,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         <Card 
           className="min-w-0 xl:col-span-2" 
           padding="lg"
-          hover={!!onSectionChange}
-          onClick={() => onSectionChange?.('finances')}
+          hover={!!sectionClick('finances')}
+          onClick={sectionClick('finances')}
         >
           <CardHeader
             title="Revenue Performance"

@@ -5,6 +5,7 @@ import {
   getModuleIdForSection,
   getModuleLabel,
   getSectionFallbackAlias,
+  isSectionHidden,
   resolveEnabledModules,
 } from '../config/modules';
 import type { AppSectionId, ModuleId } from '../types';
@@ -45,6 +46,9 @@ export function useModules() {
 
   const isSectionEnabled = useMemo(
     () => (section: string) => {
+      // Covers the sections with no module behind them (policy-impact, marketing-plan, …);
+      // module-backed ones are already false in `enabledModules`.
+      if (isSectionHidden(section)) return false;
       const moduleId = getModuleIdForSection(section);
       if (!moduleId) return true;
       return enabledModules[moduleId];

@@ -12,6 +12,7 @@ import { FirestoreService } from '../../services/firestore';
 import { refreshProductIntelligenceOnServer } from '../../services/productIntelligenceAggregate';
 import { Card, Button, Spinner, useToast, PageHeader } from '../common';
 import type { ModuleId } from '../../types';
+import { isSectionHidden } from '../../config/modules';
 import {
   Link2,
   Unlink,
@@ -2049,7 +2050,16 @@ export function ConnectorsPanel() {
   const brandName = currentBrand?.name ?? 'Brand';
   const toast = useToast();
   const connectorGroups = useMemo(() => {
-    const visible = CONNECTORS.filter((connector) => !connector.moduleId || enabledModules[connector.moduleId]);
+    const visible = CONNECTORS.filter(
+      (connector) =>
+        !connector.moduleId ||
+        // Data Import stays complete: a connector whose module is switched off for this build is
+        // still offered, because what it imports feeds the modules that ARE visible (an ERP sync
+        // fills products/stock even with the Finances page hidden). Brand/plan-level disabling of a
+        // visible module still hides its connector.
+        isSectionHidden(connector.moduleId) ||
+        enabledModules[connector.moduleId]
+    );
     return CONNECTOR_GROUP_ORDER.map((id) => ({
       id,
       meta: CONNECTOR_GROUP_META[id],
