@@ -106,33 +106,36 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'JetBrains Mono', monospace;
 }
 
-/* Dark sidebar overrides for Primer NavList */
-.sidebar-dark nav button,
-.sidebar-dark nav a,
-.sidebar-dark li button,
-.sidebar-dark li a {
-  color: rgba(255, 255, 255, 0.55) !important;
+/* Primer NavList overrides for the app sidebar.
+   Driven by the chrome tokens, so the nav follows whatever the chrome is instead of hard-coding a
+   background it no longer sits on. `!important` is required: Primer sets these colours itself.
+   (Was `.sidebar-dark` with white text — invisible once the chrome went light.) */
+.app-sidebar nav button,
+.app-sidebar nav a,
+.app-sidebar li button,
+.app-sidebar li a {
+  color: var(--chrome-fg-muted) !important;
 }
-.sidebar-dark nav button:hover,
-.sidebar-dark nav a:hover,
-.sidebar-dark li button:hover,
-.sidebar-dark li a:hover {
-  color: rgba(255, 255, 255, 0.9) !important;
-  background-color: rgba(255, 255, 255, 0.05) !important;
+.app-sidebar nav button:hover,
+.app-sidebar nav a:hover,
+.app-sidebar li button:hover,
+.app-sidebar li a:hover {
+  color: var(--chrome-fg) !important;
+  background-color: var(--chrome-control-hover) !important;
 }
-.sidebar-dark [aria-current="page"],
-.sidebar-dark [aria-current="page"]:hover {
-  background-color: rgba(255, 255, 255, 0.07) !important;
-  color: rgba(255, 255, 255, 0.95) !important;
+.app-sidebar [aria-current="page"],
+.app-sidebar [aria-current="page"]:hover {
+  background-color: var(--chrome-control-hover) !important;
+  color: var(--chrome-fg) !important;
 }
-.sidebar-dark [aria-current="page"]::before {
+.app-sidebar [aria-current="page"]::before {
   background-color: var(--nts-accent) !important;
 }
-.sidebar-dark nav svg,
-.sidebar-dark li svg {
-  color: rgba(255, 255, 255, 0.4) !important;
+.app-sidebar nav svg,
+.app-sidebar li svg {
+  color: var(--chrome-fg-subtle) !important;
 }
-.sidebar-dark [aria-current="page"] svg {
+.app-sidebar [aria-current="page"] svg {
   color: var(--nts-accent) !important;
 }
 

@@ -882,7 +882,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         {/* Pinned Sidebar */}
         {showPinnedColumn && (
           <div 
-            className="sidebar-dark"
+            className="app-sidebar"
             style={{
               width: 260,
               minWidth: 260,
@@ -961,7 +961,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             }}
           />
           <div
-            className="sidebar-dark"
+            className="app-sidebar"
             style={{
               position: 'fixed',
               top: 0,
