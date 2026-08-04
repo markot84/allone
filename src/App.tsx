@@ -6,6 +6,7 @@ import { ToastProvider, ErrorBoundary, Spinner } from './components/common';
 import { AuthGuard, InviteAcceptPage, InviteUserSection } from './components/auth';
 import { AppShell } from './components/layout';
 import { AIInsightsTriggerWrapper } from './components/insights/AIInsightsPanel';
+import { CommandPalette } from './components/common/CommandPalette';
 import { AuthActionPage } from './components/auth/AuthActionPage';
 import { useAuth } from './hooks/useAuth';
 import { SharedPackageViewer } from './components/strategy/SharedPackageViewer';
@@ -486,6 +487,9 @@ function AppMain() {
         onAskMark={handleAskMark}
         onSectionChange={handleSectionChange}
       />
+
+      {/* ⌘K / Ctrl+K — mounted here so it is available from every section. */}
+      <CommandPalette onNavigate={handleSectionChange} />
 
       {markMounted && (
         <Suspense fallback={null}>

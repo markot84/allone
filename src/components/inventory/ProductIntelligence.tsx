@@ -204,6 +204,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         setStockAgeFilter('high-margin-low-stock');
         setCurrentPage(1);
       }
+      // `?q=` — where the command palette lands when a SKU is picked.
+      const search = params.get('q');
+      if (search) {
+        setSearchQuery(search);
+        setCurrentPage(1);
+      }
     };
     applyFromHash();
     window.addEventListener('hashchange', applyFromHash);

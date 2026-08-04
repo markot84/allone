@@ -383,6 +383,74 @@ function ChromePreview() {
   );
 }
 
+/**
+ * The command palette's surface, as a still.
+ *
+ * The real one needs a signed-in brand for its product and segment search, so it cannot run on this
+ * public page. This shows the styling it is judged on; keep the two in step.
+ */
+function PalettePreview() {
+  const rows = [
+    { icon: '⌗', label: 'Data Analysis', hint: 'Ενότητα' },
+    { icon: '⌗', label: 'Product Intelligence', hint: 'Ενότητα', selected: true },
+    { icon: '▤', label: 'Nike Air Zoom Pegasus 40', hint: 'NK-AZ-P40' },
+  ];
+  return (
+    <div
+      style={{
+        background: 'color-mix(in srgb, var(--text-primary) 45%, transparent)',
+        borderRadius: 12,
+        padding: '28px 16px',
+        display: 'flex',
+        justifyContent: 'center',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 460,
+          background: 'var(--surface-0)',
+          border: '1px solid var(--border)',
+          borderRadius: 14,
+          boxShadow: '0 24px 64px rgba(16,24,40,.24)',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+          <span style={{ color: 'var(--text-muted)' }}>⌕</span>
+          <span style={{ flex: 1, font: '400 15px Inter, sans-serif', color: 'var(--text-muted)' }}>
+            Μετάβαση σε ενότητα, SKU ή segment…
+          </span>
+          <kbd style={{ font: '500 11px "JetBrains Mono", monospace', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 5, padding: '2px 6px' }}>
+            esc
+          </kbd>
+        </div>
+        <div style={{ padding: 8 }}>
+          {rows.map((row) => (
+            <div
+              key={row.label}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '9px 10px',
+                borderRadius: 8,
+                background: row.selected ? 'var(--surface-2)' : 'transparent',
+                font: '400 14px Inter, sans-serif',
+                color: 'var(--text-primary)',
+              }}
+            >
+              <span style={{ color: 'var(--text-muted)' }}>{row.icon}</span>
+              <span style={{ flex: 1 }}>{row.label}</span>
+              <span data-numeric style={{ font: '400 12px "JetBrains Mono", monospace', color: 'var(--text-muted)' }}>{row.hint}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Presets that make the silhouette obviously different, so the radar can be judged at a glance. */
 const RADAR_PRESETS: { label: string; weights: Record<string, number> }[] = [
   { label: 'Ισορροπημένη', weights: { profit: 20, stock: 20, strategic: 20, revenue: 20, fit: 20 } },
@@ -525,6 +593,13 @@ export function StyleGuide() {
               A link
             </a>
           </div>
+        </Section>
+
+        <Section
+          title="Command palette"
+          description="⌘K / Ctrl+K, from anywhere. Navigation only: it jumps to a section, a SKU or a segment. Changing a strategy scenario is left out on purpose — it saves the active strategy and triggers AI generation, which needs the confirmation the Configurator gives it, not a keystroke."
+        >
+          <PalettePreview />
         </Section>
 
         <Section

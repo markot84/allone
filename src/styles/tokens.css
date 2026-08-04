@@ -178,6 +178,18 @@ td[data-numeric],
 }
 
 /**
+ * Command palette. cmdk drives selection through data attributes, so the highlight cannot live in
+ * the component's inline styles — keyboard and pointer selection both land here.
+ */
+[cmdk-item][data-selected='true'] {
+  background: var(--surface-2);
+}
+
+[cmdk-group-heading] {
+  padding: 10px 10px 4px;
+}
+
+/**
  * Cascade pulse: a module lighting up as a weight change reaches it.
  *
  * The surface-2 → orange-50 → surface-1 sequence of colors.md §5, now that the chrome is light and

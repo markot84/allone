@@ -97,6 +97,25 @@ export const HIDDEN_SECTIONS: readonly AppSectionId[] = [
   'territories',
 ];
 
+/** Labels for the sections that have no module behind them, so the command palette can name them. */
+const STANDALONE_SECTION_LABELS: Partial<Record<AppSectionId, string>> = {
+  brands: 'My Brands',
+  strategy: 'Commercial Strategy',
+  'policy-impact': 'Policy Impact',
+  'marketing-plan': 'Marketing Plan',
+  'brand-profile': 'Brand Profile',
+  'commercial-info': 'Εμπορικές Πληροφορίες',
+  invite: 'Invite users',
+  concept: 'Concept',
+  help: 'Help',
+  admin: 'Super Admin',
+};
+
+/** Display name for a section that `useModules().getSectionLabel` cannot resolve (no module). */
+export function getSectionLabelForPalette(section: string): string {
+  return STANDALONE_SECTION_LABELS[section as AppSectionId] ?? section;
+}
+
 const HIDDEN_SECTION_SET = new Set<string>(HIDDEN_SECTIONS);
 
 /** True when the section is switched off for this build (see `HIDDEN_SECTIONS`). */
