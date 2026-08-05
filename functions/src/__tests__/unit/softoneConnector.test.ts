@@ -9,6 +9,7 @@ import {
   planSoftOneRetry,
   parseSoftOneSalesLines,
   softOneDocKey,
+  isCompleteFetch,
 } from '../../softoneConnector';
 
 const ab = (bytes: number[]): ArrayBuffer => Uint8Array.from(bytes).buffer;
@@ -233,5 +234,18 @@ describe('softOneDocKey', () => {
   it('returns empty for rows with no ZOOMINFO (caller skips them rather than falling back to idx)', () => {
     expect(softOneDocKey({})).toBe('');
     expect(softOneDocKey({ ZOOMINFO: '' })).toBe('');
+  });
+});
+
+describe('isCompleteFetch (prune safety gate)', () => {
+  it('is complete only when every advertised row arrived', () => {
+    expect(isCompleteFetch(94476, 94476)).toBe(true);
+    expect(isCompleteFetch(94476, 94480)).toBe(true); // server sent extra — still whole
+    expect(isCompleteFetch(0, 0)).toBe(true); // empty browser
+  });
+
+  it('is incomplete on a dropped page — the case that would delete a live catalog', () => {
+    expect(isCompleteFetch(94476, 12000)).toBe(false);
+    expect(isCompleteFetch(94476, 0)).toBe(false);
   });
 });

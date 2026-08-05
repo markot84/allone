@@ -7,7 +7,7 @@ import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
-import { erpWriteBatch, erpIsoDate, erpNum, normalizeHttpBase, sanitizeFirestoreDocId } from './erpConnectorFirestore';
+import { erpWriteBatch, erpPruneStale, erpIsoDate, erpNum, normalizeHttpBase, sanitizeFirestoreDocId } from './erpConnectorFirestore';
 import { buildHistoricalOrIncrementalWindow, toYmd } from './syncPolicy';
 
 let _db: Firestore | null = null;
@@ -295,6 +295,12 @@ export function assembleBrowserRows(
   return order.map((key) => byKey.get(key)!);
 }
 
+/** Every advertised row arrived. A snapshot must NOT be pruned on a partial fetch: a dropped page
+ *  would look like "these items no longer exist" and delete live data. */
+export function isCompleteFetch(total: number, fetched: number): boolean {
+  return total === 0 || fetched >= total;
+}
+
 async function fetchBrowserAll(
   serviceUrl: string,
   clientID: string,
@@ -303,7 +309,7 @@ async function fetchBrowserAll(
   list: string,
   filters: string,
   label: string
-): Promise<{ rows: Record<string, unknown>[]; error?: string }> {
+): Promise<{ rows: Record<string, unknown>[]; error?: string; complete?: boolean }> {
   const infoCall = await softoneCall(serviceUrl, {
     service: 'getBrowserInfo',
     clientID,
@@ -357,7 +363,7 @@ async function fetchBrowserAll(
     logger.warn(`[SoftOne] ${label}: fetched ${raw.length}/${total} rows — incomplete`);
   }
 
-  return { rows: assembleBrowserRows(groups, raw, total, label) };
+  return { rows: assembleBrowserRows(groups, raw, total, label), complete: isCompleteFetch(total, raw.length) };
 }
 
 export interface SoftOneTestResult {
@@ -575,7 +581,7 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
 
   const { clientID } = session.session;
   let totalImported = 0;
-  const counts = { customers: 0, items: 0, salesDocs: 0, purchaseDocs: 0 };
+  const counts = { customers: 0, items: 0, salesDocs: 0, purchaseDocs: 0, customersPruned: 0, itemsPruned: 0 };
   const errors: string[] = [];
 
   const docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
@@ -601,7 +607,11 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
           source: 'softone_api',
         },
       }));
-      if (items.length) await erpWriteBatch(db, 'softone_customers', brandId, items);
+      if (items.length) {
+        const t0 = new Date();
+        await erpWriteBatch(db, 'softone_customers', brandId, items);
+        if (cRes.complete) counts.customersPruned = await erpPruneStale(db, 'softone_customers', brandId, t0);
+      }
       counts.customers = items.length;
       totalImported += items.length;
     }
@@ -630,7 +640,11 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
           source: 'softone_api',
         },
       }));
-      if (items.length) await erpWriteBatch(db, 'softone_items', brandId, items);
+      if (items.length) {
+        const t0 = new Date();
+        await erpWriteBatch(db, 'softone_items', brandId, items);
+        if (iRes.complete) counts.itemsPruned = await erpPruneStale(db, 'softone_items', brandId, t0);
+      }
       counts.items = items.length;
       totalImported += items.length;
     }
