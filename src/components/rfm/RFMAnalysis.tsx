@@ -16,9 +16,6 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import {
-  PieChart,
-  Pie,
-  Cell,
   ResponsiveContainer,
   BarChart,
   Bar,
@@ -38,13 +35,15 @@ import { FirestoreService } from '../../services/firestore';
 import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import { BehavioralTab } from './BehavioralTab';
 import { PredictiveTab } from './PredictiveTab';
+import { SegmentTreemap } from './SegmentTreemap';
+import { SegmentMigrationSankey } from './SegmentMigrationSankey';
+import { useRevealOnce } from '../../hooks/useRevealOnce';
 import { exportSegmentActionPack, exportAllSegmentActionPacks, exportSegmentCustomerList, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { CategoryAffinity, RFMSegment } from '../../types';
 
 import { formatNumber, formatPercent, formatCurrencyCompact } from '../../utils/format';
 const fmtPct = (n: number) => formatNumber(n, 2);
-const SELECTED_SEGMENT_STROKE = '#FDBA74';
 const REFRESH_DATA_ANALYSIS_RFM_URL = buildFunctionUrl('refreshDataAnalysisRfm');
 
 type AnalysisTab = 'rfm' | 'behavioral' | 'predictive';
@@ -155,7 +154,6 @@ export function RFMAnalysis() {
   const { activeStrategy } = useActiveStrategy();
   const channelRecommendation = activeStrategy?.channelRecommendation ?? null;
   const totalCustomersDisplay = Math.max(totalCustomers, dataCoverage.totalCustomers);
-  const rfmChartSegments = rfmSegments as unknown as Record<string, unknown>[];
   const segmentColorById = new Map(rfmSegments.map((segment) => [segment.id, segment.color]));
   const selectedSegment = useMemo(
     () => rfmSegments.find((segment) => segment.id === selectedSegmentId) ?? null,
@@ -181,6 +179,11 @@ export function RFMAnalysis() {
     }
     return map;
   }, [segmentMigration?.flows, segmentPeriodComparison?.rows]);
+
+  // Both charts draw themselves the first time they scroll into view, and only then — a revisit to
+  // the tab gets them already drawn. Keyed per brand so switching brand is a new figure, not a redraw.
+  const treemapReveal = useRevealOnce(`rfm-treemap:${currentBrand?.id ?? 'none'}`);
+  const sankeyRevealKey = `rfm-migration:${currentBrand?.id ?? 'none'}`;
 
   const lastAnalysisLabel = useMemo(() => {
     if (!analysisLastAnalyzedAt) return 'Δεν έχει αποθηκευμένη ανάλυση';
@@ -642,146 +645,55 @@ export function RFMAnalysis() {
         </Card>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
-        <Card padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
-          <CardHeader
-            title="Κατανομή πελατών (RFM)"
-            icon={<Users size={18} className="text-[var(--fgColor-muted,#57606a)] shrink-0" />}
-          />
-          <div className="min-h-[260px] w-full min-w-0 flex-1" style={{ height: 280 }}>
-            <ResponsiveContainer width="100%" height={280} minHeight={260}>
-              <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
-                <Pie
-                  data={rfmChartSegments}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={68}
-                  outerRadius={108}
-                  paddingAngle={2}
-                  dataKey="percentage"
-                  nameKey="name"
-                  animationBegin={0}
-                  animationDuration={700}
-                >
-                  {rfmSegments.map((segment) => (
-                    <Cell
-                      key={segment.id}
-                      fill={segment.color}
-                      stroke={selectedSegment?.id === segment.id ? SELECTED_SEGMENT_STROKE : '#FFFFFF'}
-                      strokeWidth={selectedSegment?.id === segment.id ? 1.5 : 1}
-                      strokeOpacity={selectedSegment?.id === segment.id ? 0.9 : 0.7}
-                      className="transition-opacity outline-none focus:outline-none"
-                      style={{ outline: 'none' }}
-                      tabIndex={-1}
-                      focusable={false}
-                      opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.5) : 1}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #E5E5E5',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    padding: '8px 12px',
-                  }}
-                  formatter={(value: number | undefined, _name: string | undefined, item: { payload?: { name?: string } }) => [
-                    `${formatPercent(value ?? 0, 1)} πελάτες`,
-                    item?.payload?.name ?? '',
-                  ]}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-1 grid max-h-40 grid-cols-2 gap-1 overflow-y-auto sm:grid-cols-3">
-            {rfmSegments.map((segment) => (
-              <button
-                key={segment.id}
-                type="button"
-                onClick={() => setSelectedSegmentId(segment.id)}
-                className={`flex min-w-0 items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FDBA74]/50 ${
-                  selectedSegment?.id === segment.id ? 'bg-[#FFF7ED] ring-1 ring-[#FED7AA]' : 'hover:bg-[#F9FAFB]'
-                }`}
-              >
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: segment.color }} />
-                  <span className="truncate text-[#374151]">{segment.name}</span>
+      {/* Treemap: area = πελάτες, ένταση χρώματος = μερίδιο τζίρου. Αντικαθιστά τα δύο donut charts
+          — τα ίδια δύο μεγέθη σε ένα σχήμα, χωρίς να χάνεται κανένας αριθμός (βλ. legend). */}
+      <div ref={treemapReveal.ref}>
+      <Card
+        padding="lg"
+        className="flex min-w-0 flex-col border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]"
+      >
+        <CardHeader
+          title="Segments: μέγεθος και αξία"
+          subtitle="Το εμβαδόν είναι το πλήθος πελατών, η ένταση του χρώματος το μερίδιο τζίρου. Μεγάλο και ξεθωριασμένο = πολλοί πελάτες με μικρή συνεισφορά."
+          icon={<Users size={18} className="text-[var(--fgColor-muted,#57606a)] shrink-0" />}
+        />
+        <div className="min-w-0">
+          {treemapReveal.mounted ? (
+            <SegmentTreemap
+              segments={rfmSegments}
+              selectedId={selectedSegment?.id ?? null}
+              onSelect={setSelectedSegmentId}
+              animate={treemapReveal.animate}
+            />
+          ) : (
+            // Same height as the chart, so nothing shifts when it arrives.
+            <div style={{ height: 320 }} aria-hidden />
+          )}
+        </div>
+        <div className="mt-3 grid max-h-40 grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
+          {rfmSegments.map((segment) => (
+            <button
+              key={segment.id}
+              type="button"
+              onClick={() => setSelectedSegmentId(segment.id)}
+              className={`flex min-w-0 items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors duration-[var(--dur-state)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FDBA74]/50 ${
+                selectedSegment?.id === segment.id ? 'bg-[#FFF7ED] ring-1 ring-[#FED7AA]' : 'hover:bg-[#F9FAFB]'
+              }`}
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: segment.color }} />
+                <span className="truncate text-[#374151]">{segment.name}</span>
+              </span>
+              <span className="shrink-0 font-mono text-[11px] font-semibold text-[#111827]" data-numeric>
+                {formatPercent(segment.percentage ?? 0, 1)} πελ.
+                <span className="ml-1.5 font-normal" style={{ color: segment.color }}>
+                  {fmtPct(segment.revenue_share ?? 0)}% τζ.
                 </span>
-                <span className="shrink-0 font-mono font-semibold text-[#111827]">
-                  {formatPercent(segment.percentage ?? 0, 1)}
-                </span>
-              </button>
-            ))}
-          </div>
-        </Card>
-
-        <Card padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
-          <CardHeader title="Μερίδιο τζίρου ανά segment" />
-          <div className="min-h-[260px] w-full min-w-0 flex-1" style={{ height: 280 }}>
-            <ResponsiveContainer width="100%" height={280} minHeight={260}>
-              <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
-                <Pie
-                  data={rfmChartSegments}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={68}
-                  outerRadius={108}
-                  paddingAngle={2}
-                  dataKey="revenue_share"
-                  nameKey="name"
-                  animationBegin={0}
-                  animationDuration={700}
-                >
-                  {rfmSegments.map((segment) => (
-                    <Cell
-                      key={segment.id}
-                      fill={segment.color}
-                      stroke={selectedSegment?.id === segment.id ? SELECTED_SEGMENT_STROKE : '#FFFFFF'}
-                      strokeWidth={selectedSegment?.id === segment.id ? 1.5 : 1}
-                      strokeOpacity={selectedSegment?.id === segment.id ? 0.9 : 0.7}
-                      className="transition-opacity outline-none focus:outline-none"
-                      style={{ outline: 'none' }}
-                      tabIndex={-1}
-                      focusable={false}
-                      opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.5) : 1}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #E5E5E5',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    padding: '8px 12px',
-                  }}
-                  formatter={(value: number | undefined) => [`${fmtPct(value ?? 0)}% τζίρου`, 'Μερίδιο']}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-1 grid max-h-40 grid-cols-2 gap-1 overflow-y-auto sm:grid-cols-3">
-            {rfmSegments.map((segment) => (
-              <button
-                key={segment.id}
-                type="button"
-                onClick={() => setSelectedSegmentId(segment.id)}
-                className={`flex min-w-0 items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FDBA74]/50 ${
-                  selectedSegment?.id === segment.id ? 'bg-[#FFF7ED] ring-1 ring-[#FED7AA]' : 'hover:bg-[#F9FAFB]'
-                }`}
-              >
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: segment.color }} />
-                  <span className="truncate text-[#374151]">{segment.name}</span>
-                </span>
-                <span className="shrink-0 font-mono font-semibold" style={{ color: segment.color }}>
-                  {fmtPct(segment.revenue_share ?? 0)}%
-                </span>
-              </button>
-            ))}
-          </div>
-        </Card>
+              </span>
+            </button>
+          ))}
+        </div>
+      </Card>
       </div>
 
       {/* Segment Detail Panel */}
@@ -886,9 +798,16 @@ export function RFMAnalysis() {
                   })}
                 </div>
                 {segmentMigration?.canCompute && segmentMigration.flows.length > 0 && (
-                  <p className="text-xs text-[#6B7280]">
-                    Επιπλέον, εντοπίστηκαν {formatNumber(segmentMigration.flows.length)} τύποι πραγματικής μετακίνησης πελατών μεταξύ segments στο ίδιο παράθυρο.
-                  </p>
+                  <>
+                    <p className="text-xs text-[#6B7280]">
+                      Πραγματικές μετακινήσεις πελατών μεταξύ segments στο ίδιο παράθυρο — {formatNumber(segmentMigration.flows.length)} διαδρομές, {formatNumber(segmentMigration.comparedCustomers)} πελάτες σε σύγκριση.
+                    </p>
+                    <SegmentMigrationSankey
+                      flows={segmentMigration.flows}
+                      colorById={segmentColorById}
+                      revealKey={sankeyRevealKey}
+                    />
+                  </>
                 )}
               </>
             ) : segmentMigration?.canCompute && segmentMigration.flows.length > 0 ? (
@@ -896,6 +815,11 @@ export function RFMAnalysis() {
                 <p className="text-xs text-[#6B7280]">
                   Δεν υπάρχει αρκετό συνεχόμενο period history για σύγκριση περιόδων. Εμφανίζονται οι πραγματικές μετακινήσεις {formatNumber(segmentMigration.comparedCustomers)} πελατών.
                 </p>
+                <SegmentMigrationSankey
+                  flows={segmentMigration.flows}
+                  colorById={segmentColorById}
+                  revealKey={sankeyRevealKey}
+                />
                 <div className="space-y-2">
                   {segmentMigration.flows.map((flow) => {
                     const fromColor = segmentColorById.get(flow.from) || '#9CA3AF';

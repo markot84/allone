@@ -1,7 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { WeightsRadar } from '../strategy/WeightsRadar';
 import { VelocitySpark } from '../common/VelocitySpark';
-import type { Product } from '../../types';
+import { SegmentTreemap } from '../rfm/SegmentTreemap';
+import { SegmentMigrationSankey } from '../rfm/SegmentMigrationSankey';
+import { contrastOnWhite } from '../../utils/color';
+import { readTokenColor } from '../../utils/cssToken';
+import type { SegmentMigrationFlow } from '../../services/rfmFromOrders';
+import type { Product, RFMSegment } from '../../types';
 
 /**
  * /styleguide — the consistency checkpoint every redesign phase is measured against.
@@ -67,32 +72,6 @@ const TEXT_ON_WHITE = [
   '--text-secondary',
   '--text-muted',
 ];
-
-function toRgb(value: string): [number, number, number] | null {
-  const hex = value.trim();
-  const m = /^#([0-9a-f]{6})$/i.exec(hex);
-  if (m) {
-    const n = parseInt(m[1], 16);
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  }
-  const rgb = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i.exec(hex);
-  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
-  return null;
-}
-
-function relativeLuminance([r, g, b]: [number, number, number]): number {
-  const lin = (c: number) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-}
-
-function contrastOnWhite(value: string): number | null {
-  const rgb = toRgb(value);
-  if (!rgb) return null;
-  return (1.05) / (relativeLuminance(rgb) + 0.05);
-}
 
 /** What a measured ratio permits, per colors.md §3. */
 function verdict(ratio: number): { label: string; token: string } {
@@ -453,6 +432,42 @@ function PalettePreview() {
   );
 }
 
+/** Five segments whose customer count and revenue share deliberately disagree, so the treemap's
+ *  two encodings can be told apart: Hibernating is the biggest tile and nearly the palest. */
+const DEMO_SEGMENTS: RFMSegment[] = [
+  { id: 'champions', name: 'Champions', rfm_score: '555', count: 420, percentage: 12, revenue_share: 41, color: 'var(--seg-champions)', description: '', icon: '' },
+  { id: 'loyal', name: 'Loyal', rfm_score: '445', count: 690, percentage: 20, revenue_share: 27, color: 'var(--seg-loyal)', description: '', icon: '' },
+  { id: 'potential', name: 'Potential', rfm_score: '345', count: 540, percentage: 16, revenue_share: 16, color: 'var(--seg-potential)', description: '', icon: '' },
+  { id: 'at_risk', name: 'At Risk', rfm_score: '234', count: 780, percentage: 22, revenue_share: 12, color: 'var(--seg-at-risk)', description: '', icon: '' },
+  { id: 'lost', name: 'Hibernating', rfm_score: '111', count: 1020, percentage: 30, revenue_share: 4, color: 'var(--seg-lost)', description: '', icon: '' },
+];
+
+const DEMO_FLOWS: SegmentMigrationFlow[] = [
+  { from: 'champions', fromName: 'Champions', to: 'loyal', toName: 'Loyal', count: 48, percentage: 3.1 },
+  { from: 'loyal', fromName: 'Loyal', to: 'at_risk', toName: 'At Risk', count: 96, percentage: 6.2 },
+  { from: 'at_risk', fromName: 'At Risk', to: 'lost', toName: 'Hibernating', count: 134, percentage: 8.7 },
+  { from: 'potential', fromName: 'Potential', to: 'champions', toName: 'Champions', count: 41, percentage: 2.6 },
+  { from: 'lost', fromName: 'Hibernating', to: 'potential', toName: 'Potential', count: 27, percentage: 1.7 },
+];
+
+function SegmentTreemapDemo() {
+  const [selected, setSelected] = useState<string | null>('champions');
+  // The demo segments carry token references, which SVG paint attributes cannot resolve.
+  const segments = useMemo(
+    () => DEMO_SEGMENTS.map((s) => ({ ...s, color: readTokenColor(s.color.slice(4, -1), '#667085') })),
+    []
+  );
+  return <SegmentTreemap segments={segments} selectedId={selected} onSelect={setSelected} animate />;
+}
+
+function SegmentMigrationSankeyDemo() {
+  const colorById = useMemo(
+    () => new Map(DEMO_SEGMENTS.map((s) => [s.id, readTokenColor(s.color.slice(4, -1), '#667085')])),
+    []
+  );
+  return <SegmentMigrationSankey flows={DEMO_FLOWS} colorById={colorById} revealKey="styleguide-sankey" />;
+}
+
 /** The four shapes a row sparkline can take, so the colour rule is checkable at a glance. */
 const VELOCITY_CASES: { label: string; hint: string; product: Product }[] = (() => {
   const base = {
@@ -704,6 +719,20 @@ export function StyleGuide() {
               ]}
             />
           </div>
+        </Section>
+
+        <Section
+          title="Segment mix"
+          description="Area is customers, fill intensity is share of revenue — the two donuts this replaces made you hold one in your head while reading the other. Each segment keeps its own hue and is diluted toward white as its revenue share falls, so the identity survives the second encoding. Click a tile to select it."
+        >
+          <SegmentTreemapDemo />
+        </Section>
+
+        <Section
+          title="Segment migration"
+          description="Real customer movement, not a model: every customer's segment is re-derived at two points in the order history and the assignments are diffed. Left is who they were, right is who they are — two node sets, because Champions → At Risk and At Risk → Champions in the same window would be a cycle on shared nodes. Draws itself once, when it first scrolls into view."
+        >
+          <SegmentMigrationSankeyDemo />
         </Section>
 
         <Section
