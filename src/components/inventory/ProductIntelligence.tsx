@@ -1,6 +1,7 @@
 ﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { motion } from 'framer-motion';
 import {
   Package,
   AlertTriangle,
@@ -32,7 +33,9 @@ import {
   DataSourcePill,
   ProductThumbnail,
   ColumnExcelFilter,
+  VelocitySpark,
 } from '../common';
+import { hasVelocityData } from '../../utils/salesVelocity';
 import type { ExcelFilterOption } from '../common';
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import { useBrand } from '../../hooks/useBrand';
@@ -387,6 +390,39 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const serverFilteredTotal = serverIntelligence.page?.totalRows ?? 0;
   const totalPages = serverIntelligence.page?.totalPages ?? 1;
   const paginatedProducts = filteredProducts;
+
+  /**
+   * Virtualized body. A page is 150 SKUs and every row carries a thumbnail, a progress bar and up
+   * to nine cells — comfortably past the brief's "tables over 200 rows are virtualized" line once
+   * you count nodes rather than rows. Only the visible window is mounted.
+   *
+   * Rows are a FIXED height and the offset is held by two spacer `<tr>`s. That keeps native table
+   * layout (and with it the responsive `hidden sm:table-cell` columns and the automatic column
+   * widths), which the absolutely-positioned variant would cost us — it needs `display: grid` on
+   * the table and hardcoded widths for every column. The price is that a row may not grow, so the
+   * stock cell puts its secondary numbers on one line instead of stacking them.
+   */
+  const ROW_HEIGHT = 52;
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: paginatedProducts.length,
+    getScrollElement: () => tableScrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+    getItemKey: (index) => paginatedProducts[index]?.id ?? index,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const paddingBottom =
+    virtualRows.length > 0 ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end : 0;
+  /** The velocity column only earns its width when the catalogue actually carries sales windows. */
+  const showVelocity = useMemo(() => hasVelocityData(paginatedProducts), [paginatedProducts]);
+  const columnCount = 7 + (showVelocity ? 1 : 0) + (benchmarkCount > 0 ? 1 : 0);
+
+  /** A new page or a new sort order is a new list — start it at the top, not mid-scroll. */
+  useEffect(() => {
+    tableScrollRef.current?.scrollTo({ top: 0 });
+  }, [currentPage, sortField, sortDirection]);
   const activeInventoryTotal = useMemo(() => {
     const s = serverIntelligence.aggregate?.summary;
     if (!s) return serverFilteredTotal || totalCatalogCount;
@@ -894,9 +930,9 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
+        <div ref={tableScrollRef} className="overflow-x-auto max-h-[60vh] overflow-y-auto">
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-[#F5F5F5]">
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A]">
                   <button
@@ -956,6 +992,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     <SortIcon field="price" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
+                {showVelocity && (
+                  <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden md:table-cell">
+                    <Tooltip content="Μέσος ρυθμός πωλήσεων ανά ημέρα σε 90 / 30 / 7 ημέρες — δείχνει επιτάχυνση ή επιβράδυνση, όχι ημερήσιο ιστορικό." size={12}>
+                      Trend
+                    </Tooltip>
+                  </th>
+                )}
                 {benchmarkCount > 0 && (
                   <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
                     <Tooltip content="Απόκλιση τιμής σε σχέση με τη μέση τιμή αγοράς (Google Merchant Center)." size={12}>
@@ -966,19 +1009,39 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               </tr>
             </thead>
             <tbody>
-              <AnimatePresence mode="popLayout">
-                {paginatedProducts.map((product, index) => (
+              {paddingTop > 0 && (
+                <tr aria-hidden style={{ height: paddingTop }}>
+                  <td colSpan={columnCount} />
+                </tr>
+              )}
+              {virtualRows.map((virtualRow) => {
+                const product = paginatedProducts[virtualRow.index];
+                if (!product) return null;
+                return (
                   <ProductRow
-                    key={product.id}
+                    key={virtualRow.key}
                     product={product}
-                    index={index}
+                    height={ROW_HEIGHT}
                     supplierTodMap={supplierTodMap}
                     benchmarkMap={benchmarkCount > 0 ? benchmarkMap : undefined}
+                    showVelocity={showVelocity}
                     useProcurementRowModel={hasServerAggregate}
                     getThumbnailUrl={getThumbnailUrl}
                   />
-                ))}
-              </AnimatePresence>
+                );
+              })}
+              {paddingBottom > 0 && (
+                <tr aria-hidden style={{ height: paddingBottom }}>
+                  <td colSpan={columnCount} />
+                </tr>
+              )}
+              {paginatedProducts.length === 0 && (
+                <tr>
+                  <td colSpan={columnCount} className="px-3 py-10 text-center text-sm text-[var(--text-muted)]">
+                    Δεν βρέθηκαν προϊόντα με τα τρέχοντα φίλτρα.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -1089,42 +1152,55 @@ interface ProductRowProps {
   product: Product;
   supplierTodMap?: Map<string, number>;
   benchmarkMap?: Map<string, { priceDiff: number; benchmarkPrice: number }>;
-  index: number;
+  /** Fixed row height — the virtualizer's offsets depend on it, so the row may not grow past it. */
+  height: number;
+  showVelocity?: boolean;
   useProcurementRowModel?: boolean;
   getThumbnailUrl: (sku: string, product?: unknown) => { url: string };
 }
 
-function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcurementRowModel, getThumbnailUrl }: ProductRowProps) {
+/**
+ * Health → colour. The scale the brief asks for (`positive → caution → negative`) reads off the
+ * semantic tokens rather than four literals, so a palette change lands here too.
+ */
+const STOCK_HEALTH_COLOR: Record<string, string> = {
+  dead: 'var(--danger)',
+  excess: 'var(--warning)',
+  low: 'var(--seg-potential)',
+  healthy: 'var(--success)',
+};
+
+function ProductRow({
+  product,
+  height,
+  supplierTodMap,
+  benchmarkMap,
+  showVelocity,
+  useProcurementRowModel,
+  getThumbnailUrl,
+}: ProductRowProps) {
   const thumbUrl = getThumbnailUrl(product.sku || '', product).url;
   const health = resolveStockHealth(product, supplierTodMap, useProcurementRowModel);
   const effectiveStock = getEffectiveStockLevel(product);
   const onHandStock = product.stock_on_hand;
   const availableStock = product.available_stock;
-  const healthColor =
-    health === 'dead' ? '#EF4444' :
-    health === 'excess' ? '#F59E0B' :
-    health === 'low' ? '#8B5CF6' :
-    '#22C55E';
+  const healthColor = STOCK_HEALTH_COLOR[health] ?? 'var(--success)';
   const stockColor = healthColor;
   const ageColor = healthColor;
 
   return (
-    <motion.tr
-      layout
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ delay: index * 0.02 }}
-      className="border-b border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
+    <tr
+      style={{ height }}
+      className="border-b border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors duration-[var(--dur-state)]"
     >
       <td className="px-3 py-2">
-        <motion.div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           <ProductThumbnail src={thumbUrl || undefined} alt={product.name} size="sm" />
           <div className="min-w-0">
             <p className="text-xs font-medium text-[#1A1A1A] truncate">{product.name}</p>
-            <p className="text-[10px] text-[#9CA3AF] truncate">{product.sku}</p>
+            <p className="text-[10px] text-[var(--text-muted)] truncate">{product.sku}</p>
           </div>
-        </motion.div>
+        </div>
       </td>
       <td className="px-3 py-2 hidden lg:table-cell">
         <span className="text-xs text-[#4A4A4A] truncate block max-w-[120px]">{product.category}</span>
@@ -1141,7 +1217,7 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
         </Badge>
       </td>
       <td className="px-3 py-2 hidden sm:table-cell">
-        <div className="min-w-[92px] space-y-1">
+        <div className="min-w-[92px]">
           <div className="flex items-center gap-2">
             <ProgressBar
               value={effectiveStock}
@@ -1150,20 +1226,27 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
               size="sm"
               className="w-10"
             />
-            <span className="text-xs font-semibold tabular-nums text-[#1A1A1A]">
+            <span className="text-xs font-semibold tabular-nums text-[#1A1A1A]" data-numeric>
               {formatNumber(effectiveStock)}
             </span>
           </div>
-          {typeof onHandStock === 'number' && onHandStock !== effectiveStock ? (
-            <div className="text-[10px] text-[#9CA3AF]">
-              On hand {formatNumber(onHandStock)}
-            </div>
-          ) : null}
-          {typeof availableStock === 'number' && typeof onHandStock === 'number' && availableStock !== onHandStock ? (
-            <div className="text-[10px] text-[#9CA3AF]">
-              Available {formatNumber(availableStock)}
-            </div>
-          ) : null}
+          {/* One line, not a stack: the row height is fixed for the virtualizer. */}
+          {(() => {
+            const detail: string[] = [];
+            if (typeof onHandStock === 'number' && onHandStock !== effectiveStock) {
+              detail.push(`On hand ${formatNumber(onHandStock)}`);
+            }
+            if (
+              typeof availableStock === 'number' &&
+              typeof onHandStock === 'number' &&
+              availableStock !== onHandStock
+            ) {
+              detail.push(`Avail. ${formatNumber(availableStock)}`);
+            }
+            return detail.length > 0 ? (
+              <div className="truncate text-[10px] text-[var(--text-muted)]">{detail.join(' · ')}</div>
+            ) : null;
+          })()}
         </div>
       </td>
       <td className="px-3 py-2 hidden md:table-cell">
@@ -1204,10 +1287,15 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
         )}
       </td>
       <td className="px-3 py-2 hidden sm:table-cell">
-        <span className="text-xs font-mono text-[#1A1A1A]">
+        <span className="text-xs font-mono text-[#1A1A1A]" data-numeric>
           €{formatCurrency(product.price ?? 0, 2)}
         </span>
       </td>
+      {showVelocity && (
+        <td className="px-3 py-2 hidden md:table-cell">
+          <VelocitySpark product={product} />
+        </td>
+      )}
       {benchmarkMap && (
         <td className="px-3 py-2 hidden lg:table-cell">
           {(() => {
@@ -1216,14 +1304,18 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
             if (!bm) return <span className="text-[10px] text-[#9CA3AF]">—</span>;
             const diff = bm.priceDiff;
             return (
-              <span className={`text-xs font-mono font-medium ${diff > 0 ? 'text-red-600' : diff < 0 ? 'text-green-600' : 'text-[#6B7280]'}`}>
+              <span
+                className="text-xs font-mono font-medium"
+                data-numeric
+                style={{ color: diff > 0 ? 'var(--danger)' : diff < 0 ? 'var(--success)' : 'var(--text-muted)' }}
+              >
                 {diff > 0 ? '+' : ''}{diff}%
               </span>
             );
           })()}
         </td>
       )}
-    </motion.tr>
+    </tr>
   );
 }
 

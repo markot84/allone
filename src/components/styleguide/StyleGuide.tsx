@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { WeightsRadar } from '../strategy/WeightsRadar';
+import { VelocitySpark } from '../common/VelocitySpark';
+import type { Product } from '../../types';
 
 /**
  * /styleguide — the consistency checkpoint every redesign phase is measured against.
@@ -451,6 +453,70 @@ function PalettePreview() {
   );
 }
 
+/** The four shapes a row sparkline can take, so the colour rule is checkable at a glance. */
+const VELOCITY_CASES: { label: string; hint: string; product: Product }[] = (() => {
+  const base = {
+    id: 'demo',
+    name: 'Demo',
+    sku: 'DEMO',
+    category: '',
+    margin_tier: 'high' as const,
+    margin_percentage: 0,
+    stock_level: 0,
+    stock_capacity: 0,
+    price: 0,
+  };
+  return [
+    {
+      label: 'Επιτάχυνση',
+      hint: '0.5 → 1.0 → 3.0 /ημ.',
+      product: { ...base, qty_sold_last_90d: 45, qty_sold_last_30d: 30, qty_sold_last_7d: 21 },
+    },
+    {
+      label: 'Επιβράδυνση',
+      hint: '3.0 → 1.0 → 0.14 /ημ.',
+      product: { ...base, qty_sold_last_90d: 270, qty_sold_last_30d: 30, qty_sold_last_7d: 1 },
+    },
+    {
+      label: 'Σταθερό',
+      hint: '2.0 σε όλα τα παράθυρα',
+      product: { ...base, qty_sold_last_90d: 180, qty_sold_last_30d: 60, qty_sold_last_7d: 14 },
+    },
+    {
+      label: 'Χωρίς δεδομένα',
+      hint: 'η στήλη κρύβεται όταν κανένα SKU δεν έχει δύο παράθυρα',
+      product: { ...base },
+    },
+  ];
+})();
+
+function VelocitySparkDemo() {
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      {VELOCITY_CASES.map((row) => (
+        <div
+          key={row.label}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            padding: '10px 12px',
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            background: 'var(--surface-1)',
+          }}
+        >
+          <span style={{ font: '500 13px Inter, sans-serif', color: 'var(--text-primary)', minWidth: 140 }}>
+            {row.label}
+          </span>
+          <VelocitySpark product={row.product} />
+          <span style={{ font: '400 12px Inter, sans-serif', color: 'var(--text-muted)' }}>{row.hint}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Presets that make the silhouette obviously different, so the radar can be judged at a glance. */
 const RADAR_PRESETS: { label: string; weights: Record<string, number> }[] = [
   { label: 'Ισορροπημένη', weights: { profit: 20, stock: 20, strategic: 20, revenue: 20, fit: 20 } },
@@ -638,6 +704,13 @@ export function StyleGuide() {
               ]}
             />
           </div>
+        </Section>
+
+        <Section
+          title="Row trend"
+          description="The Product Intelligence sparkline. Three points — average units/day over the last 90, 30 and 7 days — not daily history, because the catalogue stores no time series. Green for accelerating, red for slowing, muted grey for flat. A static SVG rather than a chart component: at 150 virtualized rows the ResizeObserver behind a Tremor spark chart is the most expensive thing on the page."
+        >
+          <VelocitySparkDemo />
         </Section>
 
         <Section title="Typography" description="Display in Plus Jakarta Sans, body in Inter, every number in JetBrains Mono with tabular figures.">
