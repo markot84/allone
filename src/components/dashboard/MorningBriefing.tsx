@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Sparkles, ArrowRight, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Tooltip, FormattedProse, toPlainProseText } from '../common';
+import { Tooltip, toPlainProseText } from '../common';
+import { BriefingNarrative } from './BriefingNarrative';
 import type { BriefingResult } from '../../services/morningBriefing';
 import {
   collectBriefingData,
@@ -125,6 +126,24 @@ function saveBriefingToStorage(brandId: string, b: BriefingResult, period = 'cur
   }
 }
 
+/**
+ * The staggered reveal is for the first read of the day, not for every return to the dashboard.
+ * The flag is written the moment it is claimed, so a second mount in the same session (tab switch,
+ * period change) already reads it as spent.
+ */
+function claimFirstReadOfDay(brandId: string): boolean {
+  if (!brandId) return false;
+  const key = `perf-plus-briefing-read:${brandId}:${getLocalDateKey()}`;
+  try {
+    if (localStorage.getItem(key) === '1') return false;
+    localStorage.setItem(key, '1');
+    return true;
+  } catch {
+    // No storage means no way to remember — treat it as already read rather than animating forever.
+    return false;
+  }
+}
+
 function loadCollapsedPref(brandId: string): boolean {
   try {
     return localStorage.getItem(`perf-plus-briefing-collapsed:${brandId}`) === '1';
@@ -175,6 +194,11 @@ export function MorningBriefing(props: MorningBriefingProps) {
         }
       : undefined,
   }), [props.products, props.campaigns, props.segments, props.totalOrganicRevenue, props.ga4, props.alerts, brandName, props.supplierTodMap, props.ecommerce]);
+
+  /** Same collection the prompt is built from — the tokenizer matches the narrative against it, so
+   *  it has to be the identical data, not a re-derivation. */
+  const briefingData = useMemo(() => (hasAnyData ? buildData() : null), [buildData, hasAnyData]);
+  const [firstReadOfDay] = useState(() => claimFirstReadOfDay(brandId));
 
   const buildDataRef = useRef(buildData);
   buildDataRef.current = buildData;
@@ -543,8 +567,16 @@ export function MorningBriefing(props: MorningBriefingProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
               >
-                <div className="mb-4 text-[14px] leading-relaxed text-[var(--nts-charcoal)]">
-                  <FormattedProse content={briefing.narrative} variant="compact" className="[&_p]:text-[14px] [&_li]:text-[14px]" />
+                <div className="mb-4">
+                  <BriefingNarrative
+                    narrative={toPlainProseText(briefing.narrative)}
+                    data={briefingData}
+                    segments={props.segments}
+                    campaigns={props.campaigns}
+                    platforms={props.ecommerce?.connectedPlatforms}
+                    onNavigate={onSectionChange}
+                    animate={firstReadOfDay}
+                  />
                 </div>
 
                 {briefing.actions.length > 0 && (

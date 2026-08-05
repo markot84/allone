@@ -3,6 +3,8 @@ import { WeightsRadar } from '../strategy/WeightsRadar';
 import { VelocitySpark } from '../common/VelocitySpark';
 import { SegmentTreemap } from '../rfm/SegmentTreemap';
 import { SegmentMigrationSankey } from '../rfm/SegmentMigrationSankey';
+import { BriefingNarrative } from '../dashboard/BriefingNarrative';
+import type { BriefingData } from '../../services/morningBriefing';
 import { contrastOnWhite } from '../../utils/color';
 import { readTokenColor } from '../../utils/cssToken';
 import type { SegmentMigrationFlow } from '../../services/rfmFromOrders';
@@ -432,6 +434,48 @@ function PalettePreview() {
   );
 }
 
+/** Enough of a briefing snapshot to show what becomes clickable and what deliberately does not. */
+const DEMO_BRIEFING_DATA: BriefingData = {
+  revenue: {
+    totalOrganic: 4200, totalCampaignRevenue: 18500, storeRevenue: 32450, ecommerceSourceActive: true,
+    trueRoas: 4.7, revenueGap: 0, orderCount: 214, aov: 151.6, totalSpend: 6900, roas: 2.68, campaignCount: 5,
+  },
+  dataQuality: {
+    ecommerceLatestPositiveRevenueDay: null, ecommerceDaysSinceLatestRevenue: null,
+    ecommerceAggregateSyncedHoursAgo: null, suspectedEcommerceSyncGap: false,
+  },
+  ga4: {
+    sessions: 12800, users: 9400, newUsers: 6100, bounceRate: 41.2, conversions: 318,
+    weeklyChange: { sessions: 12.4, users: null, conversions: -3.1 },
+  },
+  inventory: {
+    totalProducts: 4500, deadStock: 320, lowStock: 88, excessStock: 140, deadStockValue: 27300,
+    lowStockTopNames: ['Καφετιέρα Espresso Pro'],
+  },
+  segments: { total: 5, totalCustomers: 3450, atRiskPct: 22.4, championsPct: 11.8, topSegment: { name: 'Hibernating', pct: 30.2 } },
+  campaigns: {
+    topPerformer: { name: 'Black Friday Retargeting', roas: 6.2 },
+    worstPerformer: { name: 'Generic Prospecting', roas: 0.8, spend: 1450 },
+  },
+  alerts: { count: 7, critical: 2, topAlerts: [] },
+  brandName: 'Demo',
+};
+
+const DEMO_NARRATIVE =
+  'Ο μήνας κλείνει με 32.450 € έσοδα από 214 παραγγελίες, με μέση αξία 151,6 €. ' +
+  'Η διαφημιστική δαπάνη έφτασε τα 6.900 € και η συνολική απόδοση είναι 4,7×, κυρίως χάρη στην «Black Friday Retargeting». ' +
+  'Στο απόθεμα, 320 προϊόντα παραμένουν νεκρά και δεσμεύουν 27.300 €, ενώ η Καφετιέρα Espresso Pro τελειώνει. ' +
+  'Το Hibernating κρατά πλέον 30,2% του πελατολογίου και οι 12.800 επισκέψεις δεν μετατρέπονται ανάλογα. ' +
+  'Ένα νούμερο που δεν προέρχεται από τα δεδομένα, όπως 99.999 €, μένει σκέτο κείμενο.';
+
+function BriefingNarrativeDemo() {
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--surface-1)', padding: 16 }}>
+      <BriefingNarrative narrative={DEMO_NARRATIVE} data={DEMO_BRIEFING_DATA} animate={false} />
+    </div>
+  );
+}
+
 /** Five segments whose customer count and revenue share deliberately disagree, so the treemap's
  *  two encodings can be told apart: Hibernating is the biggest tile and nearly the palest. */
 const DEMO_SEGMENTS: RFMSegment[] = [
@@ -719,6 +763,13 @@ export function StyleGuide() {
               ]}
             />
           </div>
+        </Section>
+
+        <Section
+          title="Briefing as navigation"
+          description="Numbers and names in the morning briefing become interactive by being matched against the data the prompt was built from — never by asking the model to annotate itself, which would let it attribute a figure to whatever source it liked. Hover a number for its source; click a name to open its module. The last sentence contains a figure that is in no dataset, and it stays plain text. The reveal staggers by sentence, but only on the first read of the day."
+        >
+          <BriefingNarrativeDemo />
         </Section>
 
         <Section
