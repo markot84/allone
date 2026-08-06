@@ -7,4 +7,4 @@ export const SUPPORT_EMAIL = 'noreply@performanceplus.gr';
 /** Marketing landing: contact forms (mailto) — addresses are not shown on the page */
 export const MARKETING_CONTACT_MAILTO = 'makis@notthesame.gr,dimitris@notthesame.gr';
 
-export const APP_NAME = 'Performance+';
+export const APP_NAME = 'allone';

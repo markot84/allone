@@ -885,7 +885,7 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
         }
       } else {
         response = fallbackKnowledgeAnswer(userQuery, articleCandidates);
-        response += '\n\n_Συνδέσου στο Performance+ για απαντήσεις με βάση τα πραγματικά δεδομένα του brand._';
+        response += '\n\n_Συνδέσου στο allone για απαντήσεις με βάση τα πραγματικά δεδομένα του brand._';
       }
 
       // BRAND GUARD: if the brand changed while running, discard the reply (no cross-brand mix).

@@ -45,7 +45,7 @@ export function Concept({ onNavigateToStrategy }: ConceptProps) {
           animate={{ opacity: 1, y: 0 }}
           className="text-2xl md:text-3xl font-bold text-[var(--nts-charcoal)]"
         >
-          How Performance+ works
+          How allone works
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 10 }}

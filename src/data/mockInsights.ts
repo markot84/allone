@@ -93,7 +93,7 @@ export const dashboardKPIs = [
     sparklineData: [4.2, 4.5, 4.8, 5.2, 5.6, 5.8]
   },
   {
-    label: 'Performance+ ROI',
+    label: 'allone ROI',
     value: '64x',
     change: 36.9,
     changeLabel: 'campaigns_revenue_share',

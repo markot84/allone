@@ -69,7 +69,7 @@ export function buildMarketBriefUserPrompt(ctx: MarketBriefPromptContext): strin
 Στοχευμένη χώρα: ${ctx.countryName} (${ctx.countryCode})
 ${ctx.verticalFocus ? `Εστίαση κλάδου/vertical (από χρήστη): ${ctx.verticalFocus}` : 'Χωρίς επιπλέον vertical override από χρήστη.'}
 
-Δεδομένα από το Performance+ (context μόνο, όχι πλήρες catalog):
+Δεδομένα από το allone (context μόνο, όχι πλήρες catalog):
 - Πλήθος ενεργών προϊόντων/SKU στο workspace: ${ctx.productsCount}
 - Κύριες κατηγορίες (από δείγμα): ${cats}
 - Δείγμα SKU: ${skus}

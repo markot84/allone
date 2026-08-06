@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowLeft, Send } from 'lucide-react';
-import { PerformancePlusLogo } from '../common';
+import { AllOneLogo } from '../common';
 import { validatePassword } from '../../utils/passwordPolicy';
 
 interface LoginPageProps {
@@ -115,7 +115,7 @@ export function LoginPage({
       >
         {/* Logo */}
         <div className="flex justify-center mb-7">
-          <PerformancePlusLogo height={48} className="mx-auto" />
+          <AllOneLogo height={48} className="mx-auto" />
         </div>
 
         {/* Card */}

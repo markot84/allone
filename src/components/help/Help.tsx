@@ -261,7 +261,7 @@ export function Help() {
       <div className="text-center py-8">
         <h2 className="text-3xl font-bold text-[#1A1A1A]">Βιβλιοθήκη γνώσης</h2>
         <p className="text-[#4A4A4A] mt-2 max-w-md mx-auto">
-          Βρείτε απαντήσεις και οδηγούς για τη χρήση του Performance+
+          Βρείτε απαντήσεις και οδηγούς για τη χρήση του allone
         </p>
 
         {/* Search */}
@@ -407,7 +407,7 @@ export function Help() {
                   variant="primary"
                   className="w-full"
                   onClick={() => {
-                    window.location.href = `mailto:${SUPPORT_MAIL}?subject=${encodeURIComponent('Performance+ — επικοινωνία')}`;
+                    window.location.href = `mailto:${SUPPORT_MAIL}?subject=${encodeURIComponent('allone — επικοινωνία')}`;
                     toast.info('Ανοίγει το πρόγραμμα αλληλογραφίας για μήνυμα προς την ομάδα υποστήριξης.');
                   }}
                 >
@@ -449,7 +449,7 @@ export function Help() {
           </a>
         </p>
         <p className="text-xs text-[#9CA3AF] mt-2">
-          Performance+ by notthesame.ai | www.notthesame.ai
+          allone by notthesame.ai | www.notthesame.ai
         </p>
       </div>
     </div>

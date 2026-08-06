@@ -108,7 +108,7 @@ async function exportReportToPdf(
   const brand = safeBrandName(data.brandName);
 
   doc.setFontSize(18);
-  doc.text('Performance+ Report', 14, 20);
+  doc.text('allone Report', 14, 20);
 
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);

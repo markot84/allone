@@ -180,7 +180,7 @@ export function ContentStrategy() {
     }
 
     lines.push('');
-    lines.push(`— Δημιουργήθηκε από Performance+ | ${new Date().toLocaleDateString('el-GR')}`);
+    lines.push(`— Δημιουργήθηκε από allone | ${new Date().toLocaleDateString('el-GR')}`);
 
     return lines.join('\n');
   }, [directions, suggestions, brief, strategyName, currentBrand?.name]);

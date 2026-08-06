@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { ArrowLeft, ArrowRight, BarChart3, Boxes, Brain, CheckCircle2, ClipboardCheck, Database, ExternalLink, Gauge, HelpCircle, Layers3, Mail, Megaphone, PackageCheck, Phone, ShieldCheck, ShoppingBag, Store, TrendingUp, Upload } from 'lucide-react';
 import { InterestForm } from './InterestForm';
-import { PerformancePlusLogo } from '../common';
+import { AllOneLogo } from '../common';
 import { useMarketingTags } from '../../hooks/useMarketingTags';
 import { trackMarketingEvent, trackLeadCta, trackMetaContact, trackGoogleCallConversion } from '../../utils/marketingTracking';
 
@@ -27,13 +27,13 @@ const darkCtaClass =
   'inline-flex items-center justify-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-[#111827] px-5 py-3 text-sm font-semibold !text-white shadow-[0_12px_28px_rgba(17,24,39,0.18)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#0f172a] hover:!text-white hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111827] active:translate-y-0';
 
 const heroLeadParagraph =
-  'Το Performance+ συνδέει τα δεδομένα σας - καταναλωτικά κοινά, προϊόντα, αποθέματα, ERP και διαφημιστικά κανάλια - σε ένα ενιαίο σύστημα ανάλυσης και λήψης αποφάσεων με τεχνητή νοημοσύνη. Δημιουργήθηκε από ανθρώπους του marketing και αναλυτές δεδομένων, και λειτουργεί ήδη εδώ και 4 χρόνια ως μεθοδολογία ανάπτυξης στοχευμένων προωθητικών ενεργειών με ισχυρά μετρήσιμα αποτελέσματα.';
+  'Το allone συνδέει τα δεδομένα σας - καταναλωτικά κοινά, προϊόντα, αποθέματα, ERP και διαφημιστικά κανάλια - σε ένα ενιαίο σύστημα ανάλυσης και λήψης αποφάσεων με τεχνητή νοημοσύνη. Δημιουργήθηκε από ανθρώπους του marketing και αναλυτές δεδομένων, και λειτουργεί ήδη εδώ και 4 χρόνια ως μεθοδολογία ανάπτυξης στοχευμένων προωθητικών ενεργειών με ισχυρά μετρήσιμα αποτελέσματα.';
 
 const heroSupportingParagraphs = [
   'Τα περισσότερα e-shops επενδύουν καθημερινά σε διαφήμιση χωρίς να γνωρίζουν ποια προϊόντα αξίζει πραγματικά να προωθήσουν.',
   'Άλλα προϊόντα εμφανίζονται σε καμπάνιες ενώ έχουν περιορισμένο απόθεμα. Άλλα μένουν για μήνες στην αποθήκη χωρίς εμπορική αξιοποίηση. Και συχνά το marketing λειτουργεί αποκομμένα από το stock, την κερδοφορία και τη συνολική εμπορική στρατηγική της επιχείρησης.',
-  'Το Performance+ δημιουργήθηκε για να ενώσει όλα αυτά τα δεδομένα σε ένα ενιαίο σύστημα αποφάσεων.',
-  'Η ομάδα σας διατηρεί πάντα τον τελικό έλεγχο και τη στρατηγική κατεύθυνση. Το Performance+ λειτουργεί ως ένα intelligence layer που οργανώνει την πληροφορία, αναδεικνύει ευκαιρίες και βοηθά στη λήψη πιο αποδοτικών αποφάσεων.',
+  'Το allone δημιουργήθηκε για να ενώσει όλα αυτά τα δεδομένα σε ένα ενιαίο σύστημα αποφάσεων.',
+  'Η ομάδα σας διατηρεί πάντα τον τελικό έλεγχο και τη στρατηγική κατεύθυνση. Το allone λειτουργεί ως ένα intelligence layer που οργανώνει την πληροφορία, αναδεικνύει ευκαιρίες και βοηθά στη λήψη πιο αποδοτικών αποφάσεων.',
 ];
 
 const heroProofPoints = [
@@ -71,7 +71,7 @@ const commerceUseCases = [
   {
     title: 'Stock clearance χωρίς τυφλό discounting',
     before: 'Dead stock και slow movers μένουν αόρατα ή προωθούνται μόνο με οριζόντιες εκπτώσεις.',
-    action: 'Το Performance+ αναδεικνύει ποια προϊόντα χρειάζονται εμπορική ώθηση και σε ποια κοινά έχουν μεγαλύτερη πιθανότητα κίνησης.',
+    action: 'Το allone αναδεικνύει ποια προϊόντα χρειάζονται εμπορική ώθηση και σε ποια κοινά έχουν μεγαλύτερη πιθανότητα κίνησης.',
     outcome: 'Καλύτερη κυκλοφορία αποθέματος με πιο στοχευμένη προβολή και λιγότερη πίεση στο margin.',
   },
   {
@@ -97,7 +97,7 @@ const commerceUseCases = [
 const authorityProofPoints = [
   {
     title: 'Μεθοδολογία τεσσάρων ετών',
-    description: 'Η λογική του Performance+ έχει χτιστεί μέσα από πρακτική εφαρμογή σε στοχευμένες προωθητικές ενέργειες και εμπορική ανάλυση.',
+    description: 'Η λογική του allone έχει χτιστεί μέσα από πρακτική εφαρμογή σε στοχευμένες προωθητικές ενέργειες και εμπορική ανάλυση.',
   },
   {
     title: 'Marketing και data analysis μαζί',
@@ -262,12 +262,12 @@ const variantCopy: Record<LandingVariant, { finalTitle: string; finalDescription
   ceo: {
     finalTitle: 'Έτοιμο για οργανισμούς που απαιτούν καθαρή λογική αποφάσεων',
     finalDescription:
-      'Όταν η επιχείρηση χρειάζεται AI-powered εμπορική νοημοσύνη, συστηματική διακυβέρνηση του marketing και σαφή σύνδεση της απόδοσης με τα έσοδα, το Performance+ λειτουργεί ως ενιαίο λειτουργικό σύστημα εμπορικής ανάπτυξης.',
+      'Όταν η επιχείρηση χρειάζεται AI-powered εμπορική νοημοσύνη, συστηματική διακυβέρνηση του marketing και σαφή σύνδεση της απόδοσης με τα έσοδα, το allone λειτουργεί ως ενιαίο λειτουργικό σύστημα εμπορικής ανάπτυξης.',
   },
   ops: {
     finalTitle: 'Το λειτουργικό υπόβαθρο του marketing και του εμπορικού σχεδιασμού',
     finalDescription:
-      'Για τμήματα που διαχειρίζονται πολλαπλά κανάλια και αυξημένη επιχειρησιακή πολυπλοκότητα, το Performance+ προσφέρει κοινή ορατότητα, AI-powered καθοδήγηση και συνεχή βελτιστοποίηση της απόδοσης.',
+      'Για τμήματα που διαχειρίζονται πολλαπλά κανάλια και αυξημένη επιχειρησιακή πολυπλοκότητα, το allone προσφέρει κοινή ορατότητα, AI-powered καθοδήγηση και συνεχή βελτιστοποίηση της απόδοσης.',
   },
 };
 
@@ -379,7 +379,7 @@ export function MarketingIndexPage({
           <div className="rounded-[24px] border border-[#1f2328]/10 bg-white/88 px-4 py-3 shadow-[0_14px_34px_rgba(16,24,40,0.1)] backdrop-blur md:px-5">
             <div className={`flex items-center gap-3 sm:gap-4 ${onReturnToApp || onOpenAuth ? 'justify-between' : ''}`}>
               <div className="flex min-w-0 flex-row items-center gap-3 sm:gap-4">
-                <PerformancePlusLogo height={52} className="shrink-0 max-w-[60vw] sm:max-w-none sm:h-auto" />
+                <AllOneLogo height={52} className="shrink-0 max-w-[60vw] sm:max-w-none sm:h-auto" />
                 {/* Tagline: hidden on mobile (repeated in the hero) so it does not crowd the CTA */}
                 <p className="hidden min-w-0 flex-1 text-sm font-semibold leading-snug text-[var(--nts-charcoal)] sm:block sm:text-base">{MARKETING_TAGLINE_HEADER}</p>
               </div>
@@ -424,7 +424,7 @@ export function MarketingIndexPage({
                   Commerce intelligence για e-shops
                 </div>
                 <h1 className="max-w-none leading-[1.08] text-[var(--nts-charcoal)]">
-                  <span className="block text-4xl font-bold tracking-[-0.04em] md:text-5xl lg:text-6xl">Performance+:</span>
+                  <span className="block text-4xl font-bold tracking-[-0.04em] md:text-5xl lg:text-6xl">allone:</span>
                   <span className="mt-3 block text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-accent-text)] md:text-3xl lg:text-[2.85rem]">{MARKETING_TAGLINE_HEADER}</span>
                 </h1>
                 <div className="max-w-none text-[15px] leading-7 text-[var(--nts-medium-gray)] md:text-[17px] md:leading-8 lg:pr-2">
@@ -461,7 +461,7 @@ export function MarketingIndexPage({
                 </div>
                 <img
                   src="/landing-screens/commercial-strategy-hero.png"
-                  alt="Performance+ Commercial Strategy dashboard"
+                  alt="allone Commercial Strategy dashboard"
                   className="h-auto w-full rounded-[22px] object-contain"
                 />
               </div>
@@ -503,9 +503,9 @@ export function MarketingIndexPage({
           <div className="relative grid gap-7 lg:grid-cols-[0.95fr_1.25fr] lg:items-start">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent-text)]">Credibility layer</p>
-              <h2 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">4 χρόνια μεθοδολογίας Performance+</h2>
+              <h2 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">4 χρόνια μεθοδολογίας allone</h2>
               <p className="mt-4 text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
-                Το Performance+ στηρίζεται σε συγκεκριμένες μεθοδολογίες data analysis με ακαδημαϊκή τεκμηρίωση ως προς την ανάγνωση των δεδομένων. Η μεθοδολογία σχεδιασμού και εκπόνησης των προτεινόμενων προωθητικών ενεργειών στηρίζεται στην ανάδειξη προτεραιοτήτων με βάση τα αποθέματα και τις καταναλωτικές συνήθειες. Η λήψη εμπορικών αποφάσεων ακολουθεί ως μια φυσική συνέχεια και εξέλιξη.
+                Το allone στηρίζεται σε συγκεκριμένες μεθοδολογίες data analysis με ακαδημαϊκή τεκμηρίωση ως προς την ανάγνωση των δεδομένων. Η μεθοδολογία σχεδιασμού και εκπόνησης των προτεινόμενων προωθητικών ενεργειών στηρίζεται στην ανάδειξη προτεραιοτήτων με βάση τα αποθέματα και τις καταναλωτικές συνήθειες. Η λήψη εμπορικών αποφάσεων ακολουθεί ως μια φυσική συνέχεια και εξέλιξη.
               </p>
               <div className="mt-6 grid gap-2">
                 {trustPosturePoints.map((point) => (
@@ -547,7 +547,7 @@ export function MarketingIndexPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent-text)]">Data ecosystem</p>
               <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">Διάφορες ροές δεδομένων, συγκεκριμένες εμπορικές αποφάσεις</h3>
               <p className="mt-4 text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
-                Το Performance+ συγκεντρώνει πληροφορίες από τα κρίσιμα σημεία του e-commerce και τις μετατρέπει σε κοινή εικόνα για προϊόντα, stock, κανάλια, ROAS και profitability.
+                Το allone συγκεντρώνει πληροφορίες από τα κρίσιμα σημεία του e-commerce και τις μετατρέπει σε κοινή εικόνα για προϊόντα, stock, κανάλια, ROAS και profitability.
               </p>
               <div className="mt-6 rounded-2xl border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/8 p-4">
                 <div className="flex items-start gap-3">
@@ -556,7 +556,7 @@ export function MarketingIndexPage({
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Γρήγορη ενεργοποίηση connectors</p>
-                    <p className="mt-1 text-xs leading-5 text-[var(--nts-medium-gray)] md:text-sm">Read-only όπου απαιτείται, με ασφαλή σύνδεση λογαριασμών και συγχρονισμό δεδομένων στο Performance+.</p>
+                    <p className="mt-1 text-xs leading-5 text-[var(--nts-medium-gray)] md:text-sm">Read-only όπου απαιτείται, με ασφαλή σύνδεση λογαριασμών και συγχρονισμό δεδομένων στο allone.</p>
                   </div>
                 </div>
               </div>
@@ -645,7 +645,7 @@ export function MarketingIndexPage({
                 <div className="grid gap-3 p-5">
                   {[
                     ['Πριν', useCase.before],
-                    ['Τι κάνει το Performance+', useCase.action],
+                    ['Τι κάνει το allone', useCase.action],
                     ['Business outcome', useCase.outcome],
                   ].map(([label, text]) => (
                     <div key={label} className="rounded-2xl border border-[#1f2328]/10 bg-white p-4">
@@ -666,10 +666,10 @@ export function MarketingIndexPage({
           <div className="relative overflow-hidden rounded-[32px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_24px_56px_rgba(16,24,40,0.12)] md:p-8">
             <div className="pointer-events-none absolute right-[-90px] top-[-90px] h-56 w-56 rounded-full bg-[var(--nts-accent)]/10 blur-3xl" />
             <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent-text)]">Διαφορά</p>
-            <h2 className="mt-4 text-xl font-semibold leading-snug text-[var(--nts-charcoal)] md:text-2xl">Γιατί ξεχωρίζει το Performance+</h2>
+            <h2 className="mt-4 text-xl font-semibold leading-snug text-[var(--nts-charcoal)] md:text-2xl">Γιατί ξεχωρίζει το allone</h2>
             <div className="mt-5 space-y-4 text-sm leading-7 text-[var(--nts-medium-gray)] md:text-[15px]">
               <p>Οι περισσότερες πλατφόρμες marketing βλέπουν μόνο διαφημίσεις και conversions.</p>
-              <p>Το Performance+ βλέπει τη συνολική εμπορική εικόνα της επιχείρησης.</p>
+              <p>Το allone βλέπει τη συνολική εμπορική εικόνα της επιχείρησης.</p>
               <p>
                 Συνδέει marketing, stock, προϊόντα και κερδοφορία σε ένα ενιαίο περιβάλλον αποφάσεων, ώστε το budget να κατευθύνεται εκεί όπου υπάρχει πραγματική εμπορική αξία.
               </p>
@@ -700,7 +700,7 @@ export function MarketingIndexPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent-text)]">Strategy engine</p>
               <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">Τα 7 εμπορικά σενάρια</h3>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
-                Το Performance+ επιτρέπει στην επιχείρηση να συγκρίνει διαφορετικές στρατηγικές πριν δεσμεύσει budget. Οι προτάσεις προσαρμόζονται στο brand, στη ζήτηση και στα επίπεδα αποθέματος ανά SKU.
+                Το allone επιτρέπει στην επιχείρηση να συγκρίνει διαφορετικές στρατηγικές πριν δεσμεύσει budget. Οι προτάσεις προσαρμόζονται στο brand, στη ζήτηση και στα επίπεδα αποθέματος ανά SKU.
               </p>
             </div>
             <div className="rounded-2xl border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/8 px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)]">
@@ -734,7 +734,7 @@ export function MarketingIndexPage({
                     <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--nts-medium-gray)]">Πρόβλημα</p>
                     <p className="mt-2 text-sm font-semibold leading-relaxed text-[var(--nts-charcoal)]">{row.problem}</p>
                     <div className="mt-4 rounded-2xl border border-[var(--nts-accent)]/18 bg-white p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--nts-accent-text)]">Πώς βοηθά το Performance+</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--nts-accent-text)]">Πώς βοηθά το allone</p>
                       <p className="mt-2 text-sm leading-6 text-[var(--nts-charcoal)]">{row.helps}</p>
                     </div>
                   </div>
@@ -755,7 +755,7 @@ export function MarketingIndexPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent-text)]">Proof & authority</p>
               <h2 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-white md:text-3xl">Από marketing εμπειρία σε decision system</h2>
               <p className="mt-4 text-sm leading-7 text-white/72 md:text-base">
-                Το Performance+ έχει σχεδιαστεί από ανθρώπους του marketing και αναλυτές δεδομένων, με στόχο να κάνει την εμπορική λογική πιο ορατή, επαναλήψιμη και μετρήσιμη για την ομάδα του e-shop.
+                Το allone έχει σχεδιαστεί από ανθρώπους του marketing και αναλυτές δεδομένων, με στόχο να κάνει την εμπορική λογική πιο ορατή, επαναλήψιμη και μετρήσιμη για την ομάδα του e-shop.
               </p>
               <div className="mt-6 rounded-3xl border border-white/10 bg-white/8 p-5">
                 <p className="text-sm font-semibold text-white">Measurable outcomes χωρίς υπερβολές</p>
@@ -788,9 +788,9 @@ export function MarketingIndexPage({
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent-text)]">Product experience</p>
-              <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">Τα 5 βασικά περιβάλλοντα του Performance+</h3>
+              <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">Τα 5 βασικά περιβάλλοντα του allone</h3>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
-                Πώς το Performance+ μετατρέπει δεδομένα και νοημοσύνη σε στοχευμένη εμπορική δράση για e-shop owners και ομάδες marketing.
+                Πώς το allone μετατρέπει δεδομένα και νοημοσύνη σε στοχευμένη εμπορική δράση για e-shop owners και ομάδες marketing.
               </p>
             </div>
             <div className="inline-flex items-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)]">

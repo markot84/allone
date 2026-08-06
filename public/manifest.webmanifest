@@ -1,6 +1,6 @@
 {
-  "name": "Performance+",
-  "short_name": "Performance+",
+  "name": "allone",
+  "short_name": "allone",
   "description": "AI commerce intelligence για γρήγορες εμπορικές αποφάσεις από κινητό.",
   "start_url": "/#dashboard",
   "scope": "/",
@@ -33,7 +33,7 @@
     {
       "name": "Ρώτα τον Mark",
       "short_name": "Mark",
-      "description": "Άνοιγμα του Performance+ για γρήγορη φωνητική ερώτηση στον Mark.",
+      "description": "Άνοιγμα του allone για γρήγορη φωνητική ερώτηση στον Mark.",
       "url": "/#dashboard?mark=1",
       "icons": [{ "src": "/mark-orb.png", "sizes": "192x192", "type": "image/png" }]
     },

@@ -339,7 +339,7 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
   if (ecActive && data.revenue.storeRevenue === 0) {
     sections.push(
       `[ΗΛΕΚΤΡΟΝΙΚΟ ΚΑΤΑΣΤΗΜΑ]` +
-        ` Υπάρχουν δεδομένα e-shop στο Performance+ για την επωνυμία, αλλά ο τζίρος στην επιλεγμένη περίοδο είναι 0 (${formatNumber(data.revenue.orderCount)} παραγγελίες). Αυτό μπορεί να σημαίνει κενό διάστημα ή ότι πρέπει να ελεγχθεί sync/imports — μη συγχέεις τα ads figures με τα έσοδα καταστήματος.`
+        ` Υπάρχουν δεδομένα e-shop στο allone για την επωνυμία, αλλά ο τζίρος στην επιλεγμένη περίοδο είναι 0 (${formatNumber(data.revenue.orderCount)} παραγγελίες). Αυτό μπορεί να σημαίνει κενό διάστημα ή ότι πρέπει να ελεγχθεί sync/imports — μη συγχέεις τα ads figures με τα έσοδα καταστήματος.`
     );
   } else if (data.revenue.storeRevenue > 0) {
     const storePerAd =
@@ -397,7 +397,7 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
   return sections.join('\n');
 }
 
-const SYSTEM_PROMPT = buildAdvisorySystemPrompt(`Είσαι σύμβουλος ανάπτυξης για μικρομεσαίο e-commerce. Γράφεις το «πρωινό briefing» στο Performance+, όχι ως τεχνικό manual αλλά ως σύντομο ενημερωτικό σημείωμα για ιδιοκτήτη ή διοικητικό υπεύθυνο.
+const SYSTEM_PROMPT = buildAdvisorySystemPrompt(`Είσαι σύμβουλος ανάπτυξης για μικρομεσαίο e-commerce. Γράφεις το «πρωινό briefing» στο allone, όχι ως τεχνικό manual αλλά ως σύντομο ενημερωτικό σημείωμα για ιδιοκτήτη ή διοικητικό υπεύθυνο.
 
 ΜΟΡΦΗ (ΑΥΣΤΗΡΑ):
 Μόνο valid JSON:
@@ -530,7 +530,7 @@ function buildDataFlowAlertBriefing(
     narrative:
       `Ο πίνακας δείχνει τζίρο e-shop ${formatCurrency(data.revenue.storeRevenue)} και ${formatNumber(data.revenue.orderCount)} παραγγελίες για την περίοδο, αλλά η ημερήσια ροή δεδομένων φαίνεται κομμένη: ${staleText}. ` +
       `Δεν το αντιμετωπίζουμε ως μηδενική εμπορική δραστηριότητα για το brand ${data.brandName}, αλλά ως θέμα αξιοπιστίας sync/import που πρέπει να ελεγχθεί πριν βγουν εμπορικά συμπεράσματα. ` +
-      `Προτεραιότητα είναι η αποκατάσταση του connector και η επιβεβαίωση ότι οι τελευταίες παραγγελίες περνούν στο Performance+.`,
+      `Προτεραιότητα είναι η αποκατάσταση του connector και η επιβεβαίωση ότι οι τελευταίες παραγγελίες περνούν στο allone.`,
     actions: [
       'Ελέγξτε άμεσα το τελευταίο sync του e-shop connector.',
       'Επιβεβαιώστε ότι τα credentials/API token παραμένουν ενεργά.',

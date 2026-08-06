@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Lock, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import { verifyPasswordResetCode, confirmPasswordReset, applyActionCode } from 'firebase/auth';
 import { auth } from '../../config/firebase';
-import { Button, PerformancePlusLogo } from '../common';
+import { Button, AllOneLogo } from '../common';
 import { SUPPORT_EMAIL } from '../../config/superAdmins';
 import { validatePassword } from '../../utils/passwordPolicy';
 
@@ -185,7 +185,7 @@ function ActionWrapper({ children }: { children: React.ReactNode }) {
       >
         <div className="bg-white rounded-2xl shadow-lg border border-[var(--nts-border-gray)] p-8">
           <div className="flex justify-center mb-6">
-            <PerformancePlusLogo height={44} className="mx-auto" />
+            <AllOneLogo height={44} className="mx-auto" />
           </div>
           {children}
           <div className="mt-6 pt-4 border-t border-[var(--nts-border-gray)] text-center">

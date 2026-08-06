@@ -13,7 +13,7 @@ import {
   Target,
   Shield,
 } from 'lucide-react';
-import { Spinner, Button, PerformancePlusLogo } from '../common';
+import { Spinner, Button, AllOneLogo } from '../common';
 import { BrandCreateForm } from './BrandCreateForm';
 import { useAuth, useBrand } from '../../hooks';
 
@@ -82,13 +82,13 @@ export function BrandOnboarding({ children }: BrandOnboardingProps) {
             <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
               <div className="bg-gradient-to-r from-[#111] to-[#1a1a2e] p-8 text-center">
                 <div className="flex justify-center mb-4">
-                  <PerformancePlusLogo height={44} className="mx-auto" variant="onDark" />
+                  <AllOneLogo height={44} className="mx-auto" variant="onDark" />
                 </div>
                 <h1 className="text-2xl font-bold text-white">
                   {firstName ? `Καλώς ήρθες, ${firstName}!` : 'Καλώς ήρθατε!'}
                 </h1>
                 <p className="text-white/60 mt-2 text-sm">
-                  Το Performance+ είναι η AI-powered πλατφόρμα διαχείρισης e-commerce σας.
+                  Το allone είναι η AI-powered πλατφόρμα διαχείρισης e-commerce σας.
                 </p>
               </div>
 

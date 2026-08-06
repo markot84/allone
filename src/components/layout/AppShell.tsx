@@ -5,7 +5,7 @@ import {
   NavList,
   Text
 } from '@primer/react';
-import { Button, PerformancePlusLogo } from '../common';
+import { Button, AllOneLogo } from '../common';
 import { useAuth, useBrand, useBrandMembers } from '../../hooks';
 import { useModules } from '../../hooks/useModules';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
@@ -833,7 +833,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               cursor: 'pointer',
             }}
           >
-            <PerformancePlusLogo height={30} className="max-w-[6.5rem] min-[420px]:max-w-[9rem] sm:max-w-none" variant="onLight" />
+            <AllOneLogo height={30} className="max-w-[6.5rem] min-[420px]:max-w-[9rem] sm:max-w-none" variant="onLight" />
           </PrimerHeader.Link>
         </PrimerHeader.Item>
 
@@ -995,7 +995,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                 style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                 title="Dashboard"
               >
-                <PerformancePlusLogo height={40} variant="onLight" />
+                <AllOneLogo height={40} variant="onLight" />
               </button>
               <div style={{ display: 'flex', gap: 4 }}>
                 <button

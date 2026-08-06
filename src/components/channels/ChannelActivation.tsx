@@ -2171,7 +2171,7 @@ function openBriefPdf(data: BriefData) {
   </div>` : ''}
 
   <div class="footer">
-    <div class="footer-text">Channel Brief — Performance+ | notthesame.ai</div>
+    <div class="footer-text">Channel Brief — allone | notthesame.ai</div>
     <div class="footer-brand">≠</div>
   </div>
 </body>

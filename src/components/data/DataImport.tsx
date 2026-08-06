@@ -861,7 +861,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                         if (h === 'Product_Name') return 'Sample Product';
                         if (h === 'Category') return 'Electronics';
                         if (h === 'Subcategory') return 'Audio';
-                        if (h === 'Brand') return 'Performance Plus';
+                        if (h === 'Brand') return 'allone';
                         if (h === 'Barcode') return '5201234567890';
                         if (h === 'Status') return 'active';
                         if (h === 'Sell_Price') return '99.99';

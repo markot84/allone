@@ -175,7 +175,7 @@ export function generatePackageHtml(data: SharedPackageData): string {
   </div>` : ''}
 
   <div class="footer">
-    <div class="footer-text">Δημιουργήθηκε από Performance+ | notthesame.ai</div>
+    <div class="footer-text">Δημιουργήθηκε από allone | notthesame.ai</div>
     <div class="footer-brand">≠</div>
   </div>
 </body>

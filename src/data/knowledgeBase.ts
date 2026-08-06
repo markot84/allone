@@ -68,7 +68,7 @@ export const knowledgeCategories = [
     id: 'roi',
     title: 'ROI Attribution',
     icon: 'RA',
-    description: 'Μέτρηση επιπτώσης Performance+',
+    description: 'Μέτρηση επιπτώσης allone',
     color: '#6B7280'
   },
   {
@@ -120,9 +120,9 @@ export const knowledgeArticles: KnowledgeArticle[] = [
   {
     id: 'what-is-performance-plus',
     category: 'getting-started',
-    title: 'Τι είναι το Performance+',
+    title: 'Τι είναι το allone',
     description: 'Εισαγωγή στην πλατφόρμα και τις βασικές της λειτουργίες',
-    content: `Το Performance+ είναι μια ολοκληρωμένη πλατφόρμα διαχείρισης marketing performance που σας βοηθά να:
+    content: `Το allone είναι μια ολοκληρωμένη πλατφόρμα διαχείρισης marketing performance που σας βοηθά να:
 
 Βελτιστοποιήσετε την προτεραιοποίηση προϊόντων μέσω multi-factor scoring
 Κατανοήσετε τους πελάτες σας με RFM segmentation
@@ -416,7 +416,7 @@ Description: Description, Desc, Note, Notes, Behavioral_Persona, Tier
     content: `Υποχρεωτικά πεδία:
 - Date: Ημερομηνία σε format YYYY-MM-DD
 - Total Revenue: Συνολικό εισόδημα (σε units, π.χ. 50000 για €50K)
-- Campaigns Revenue: Έσοδα καμπανιών / Performance+ (σε units). (Στο CSV import υποστηρίζονται και παλιά ονόματα στηλών — δες τη λίστα «Πιθανές εκδοχές» παρακάτω.)
+- Campaigns Revenue: Έσοδα καμπανιών / allone (σε units). (Στο CSV import υποστηρίζονται και παλιά ονόματα στηλών — δες τη λίστα «Πιθανές εκδοχές» παρακάτω.)
 - Attribution Rate: Ποσοστό attribution (π.χ. 30.0 για 30%)
 
 Πιθανές Εκδοχές Ονομάτων Στηλών:
@@ -882,12 +882,12 @@ Budget Allocation:
     category: 'roi',
     title: 'ROI Attribution - Βασικές Έννοιες',
     description: 'Πώς να κατανοήσετε το ROI attribution',
-    content: `Το ROI Attribution μετράει την επιπτώση του Performance+ στο business σας.
+    content: `Το ROI Attribution μετράει την επιπτώση του allone στο business σας.
 
 Κύρια Metrics:
 - Total Revenue: Συνολικό εισόδημα
-- Campaigns Revenue: Έσοδα καμπανιών / Performance+
-- Attribution Rate: Ποσοστό του total revenue που αποδίδεται στο Performance+
+- Campaigns Revenue: Έσοδα καμπανιών / allone
+- Attribution Rate: Ποσοστό του total revenue που αποδίδεται στο allone
 - ROI Multiplier: Πόσες φορές επιστρέφει το investment (π.χ. 64x)
 
 Attribution Methodology:
@@ -923,7 +923,7 @@ E-commerce Integration:
       },
       {
         question: 'Τι σημαίνει "Attribution Rate";',
-        answer: 'Είναι το ποσοστό του total revenue που αποδίδεται στο Performance+. Αν το total είναι €100K και το campaigns revenue €30K, το rate είναι 30%.'
+        answer: 'Είναι το ποσοστό του total revenue που αποδίδεται στο allone. Αν το total είναι €100K και το campaigns revenue €30K, το rate είναι 30%.'
       }
     ]
   },
@@ -1068,7 +1068,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
     description: 'Πώς η ενεργοποίηση μιας εμπορικής στρατηγικής δημιουργεί αυτόματα briefing στα τμήματα.',
     content: `# Αποστολή Briefing από Commercial Strategy
 
-Μετά την ενεργοποίηση μιας εμπορικής στρατηγικής, το Performance+ προτείνει αυτόματη κοινοποίηση στα τμήματα μέσω του Briefing Board.
+Μετά την ενεργοποίηση μιας εμπορικής στρατηγικής, το allone προτείνει αυτόματη κοινοποίηση στα τμήματα μέσω του Briefing Board.
 
 ## Ροή
 
@@ -1176,7 +1176,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
       },
       {
         question: 'Τι σημαίνουν τα Enterprise triggers;',
-        answer: 'Τα triggers της κατηγορίας Procurement είναι διαθέσιμα μόνο στο Performance+ Enterprise. Αφορούν δεδομένα ERP, προμηθευτές και τιμολογιακή πολιτική.'
+        answer: 'Τα triggers της κατηγορίας Procurement είναι διαθέσιμα μόνο στο allone Enterprise. Αφορούν δεδομένα ERP, προμηθευτές και τιμολογιακή πολιτική.'
       }
     ]
   },
@@ -1283,9 +1283,9 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
     description: 'Τι περιλαμβάνει κάθε plan και πώς διαφοροποιείται.',
     content: `# Growth Plan vs Enterprise
 
-Το Performance+ διατίθεται σε δύο εκδόσεις:
+Το allone διατίθεται σε δύο εκδόσεις:
 
-## Performance+ (Growth Plan)
+## allone (Growth Plan)
 Η βασική έκδοση για e-commerce SMBs:
 - Dashboard — KPIs, revenue chart, AI insights, e-commerce summary
 - Commercial Strategy — εμπορικά σενάρια (συμπ. Sales Optimization, Price Benchmarking), composite scoring
@@ -1301,7 +1301,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 - Αυτοματισμοί — 10 smart triggers (Απόθεμα, Καμπάνιες, Πελατολόγιο, Εποχικότητα)
 - AI Insights — Πρακτικές συστάσεις βασισμένες στα δεδομένα
 
-## Performance+ Enterprise
+## allone Enterprise
 Όλα τα παραπάνω +:
 - Procurement module — Διαχείριση αποθέματος ERP, κοστολόγηση, αξιολόγηση ειδών, τιμολογιακή πολιτική, απολογιστικό, στατιστικά
 - Enterprise KPIs — ERP SKUs, ημέρες επάρκειας, συνολικές πωλήσεις στο Product Intelligence
@@ -1357,7 +1357,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 1. Κλικ "Σύνδεση" → ανοίγει OAuth παράθυρο
 2. Συνδεθείτε με τον λογαριασμό σας
 3. Εγκρίνετε πρόσβαση
-4. Αυτόματη επιστροφή στο Performance+
+4. Αυτόματη επιστροφή στο allone
 
 ### API Key (WooCommerce, OpenCart, Magento)
 1. Κλικ "Σύνδεση" → εμφανίζεται modal
@@ -1403,7 +1403,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 1. Κλικ "Σύνδεση" στον Shopify connector
 2. Εισάγετε το Shopify domain σας (π.χ. myshop.myshopify.com)
 3. Ανοίγει OAuth παράθυρο — εγκρίνετε πρόσβαση
-4. Αυτόματη επιστροφή στο Performance+
+4. Αυτόματη επιστροφή στο allone
 
 ## Τι συγχρονίζεται
 - **Παραγγελίες** (τελευταίες 90 ημέρες): order ID, ημερομηνία, ποσό, status, line items, νόμισμα

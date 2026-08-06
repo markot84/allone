@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle, Loader2 } from 'lucide-react';
-import { PerformancePlusLogo } from '../common';
+import { AllOneLogo } from '../common';
 import { useAuth } from '../../hooks';
 import { getInviteByToken, acceptInvite } from '../../services/invites';
 import { logger } from '../../utils/logger';
@@ -93,7 +93,7 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
       >
         {/* Logo */}
         <div className="flex justify-center mb-7">
-          <PerformancePlusLogo height={48} className="mx-auto" />
+          <AllOneLogo height={48} className="mx-auto" />
         </div>
 
         <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm p-7">

@@ -11,7 +11,7 @@ export { KPICard } from './KPICard';
 export type { KPICardData } from './KPICard';
 export { EnterpriseBadge } from './EnterpriseBadge';
 export { AlertsBanner, type AlertsBannerNavigateOptions } from './AlertsBanner';
-export { PerformancePlusLogo } from './PerformancePlusLogo';
+export { AllOneLogo } from './AllOneLogo';
 export { FormattedProse, toPlainProseText, parseInlineSegments } from './FormattedProse';
 export type { FormattedProseVariant } from './FormattedProse';
 export { PageHeader } from './PageHeader';

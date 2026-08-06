@@ -108,7 +108,7 @@ export type AssistantTenantPack = {
   };
 };
 
-const ASSISTANT_SYSTEM_PROMPT = buildAdvisorySystemPrompt(`Είσαι το ενσωματωμένο AI Assistant της εφαρμογής Performance+.
+const ASSISTANT_SYSTEM_PROMPT = buildAdvisorySystemPrompt(`Είσαι το ενσωματωμένο AI Assistant της εφαρμογής allone.
 Απαντάς πάντα στα Ελληνικά, με σαφή και επαγγελματικό τόνο εμπορικού συμβούλου.
 Κανόνες:
 - Χρησιμοποίησε ΜΟΝΟ αριθμούς και γεγονότα που εμφανίζονται ρητά στο μπλοκ «ΤΡΕΧΟΥΣΑ ΣΥΝΟΨΗ ΛΟΓΑΡΙΑΣΜΟΥ». Μην επινοείς KPIs, ημερομηνίες ή νούμερα που δεν δίνονται.
@@ -361,7 +361,7 @@ export async function generateAssistantReply(params: {
 }): Promise<string> {
   const { userQuery, tenantSnapshotText, knowledgeExcerpts, webContext } = params;
 
-  const userPrompt = `--- ΤΡΕΧΟΥΣΑ ΣΥΝΟΨΗ ΛΟΓΑΡΙΑΣΜΟΥ (μόνο για το επιλεγμένο brand στο Performance+) ---
+  const userPrompt = `--- ΤΡΕΧΟΥΣΑ ΣΥΝΟΨΗ ΛΟΓΑΡΙΑΣΜΟΥ (μόνο για το επιλεγμένο brand στο allone) ---
 ${tenantSnapshotText}
 
 --- ΑΠΟΣΠΑΣΜΑΤΑ KNOWLEDGE LIBRARY ---

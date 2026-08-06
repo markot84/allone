@@ -1,4 +1,4 @@
-import { PerformancePlusLogo } from '../common';
+import { AllOneLogo } from '../common';
 
 const privacyPolicyText = `Η παρούσα Πολιτική Προστασίας αποτελεί αναπόσπαστο μέρος της Σύμβασης
 Παροχής Υπηρεσιών που συνάπτεται για τη χρήση της Πλατφόρμας
@@ -273,7 +273,7 @@ export function PrivacyPolicy() {
       <main style={{ maxWidth: 820, margin: '0 auto', padding: '48px 24px', fontFamily: 'system-ui, sans-serif', color: '#1A1A1A', lineHeight: 1.7 }}>
       <header style={{ marginBottom: 40, borderBottom: '2px solid #111', paddingBottom: 24 }}>
         <div style={{ marginBottom: 16 }}>
-          <PerformancePlusLogo height={40} />
+          <AllOneLogo height={40} />
         </div>
         <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0 }}>PRIVACY POLICY PERFORMANCE+</h1>
         <p style={{ color: '#6B7280', fontSize: 14, marginTop: 8 }}>

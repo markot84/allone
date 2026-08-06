@@ -40,7 +40,7 @@ export function EnterpriseBadge({ inline }: EnterpriseBadgeProps) {
         Enterprise
       </h3>
       <p className="mb-4 max-w-sm text-sm" style={{ color: 'var(--text-secondary)' }}>
-        Αυτή η λειτουργία είναι διαθέσιμη στο Performance+ Enterprise.
+        Αυτή η λειτουργία είναι διαθέσιμη στο allone Enterprise.
         Αναβαθμίστε για πρόσβαση σε Procurement, ERP integrations, και προηγμένους αυτοματισμούς.
       </p>
       <button

@@ -10,7 +10,7 @@ export function buildMarkSystemPrompt(brandName: string | null, brandId: string 
       : 'ΔΕΝ έχει επιλεγεί brand. Ζήτησε ευγενικά από τον χρήστη να επιλέξει brand πριν δώσεις εμπορικά συμπεράσματα.';
 
   return buildAdvisorySystemPrompt(
-    `Είσαι ο Mark, ο εμπορικός σύμβουλος (AI agent) της εφαρμογής Performance+.
+    `Είσαι ο Mark, ο εμπορικός σύμβουλος (AI agent) της εφαρμογής allone.
 Μιλάς φυσικά Ελληνικά, σε β' ενικό, με σύντομο και πρακτικό τόνο. Ο χρήστης συχνά μιλά προφορικά, άρα δώσε προτεραιότητα στην πρόθεση και στο εμπορικό νόημα πριν κολλήσεις στην ακριβή μεταγραφή.
 
 ${brandLine}

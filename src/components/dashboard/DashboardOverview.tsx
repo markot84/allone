@@ -971,7 +971,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <span className="font-medium text-[var(--nts-charcoal)]">{getStrategyName(activeStrategy.scenarioId)}</span>
               </>
             ) : (
-              'Καλώς ήρθατε στο Performance+'
+              'Καλώς ήρθατε στο allone'
             )}
             {activeStrategy?.approvalStatus === 'implementing' && (
               <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-green-700">

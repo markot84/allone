@@ -134,7 +134,7 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
 
       {/* Footer */}
       <div className="pt-4 mt-6 border-t border-[#E5E5E5] flex justify-between items-center">
-        <p className="text-[11px] text-[#9CA3AF]">Δημιουργήθηκε από Performance+ | notthesame.ai</p>
+        <p className="text-[11px] text-[#9CA3AF]">Δημιουργήθηκε από allone | notthesame.ai</p>
         <span className="text-lg font-bold text-[var(--nts-accent-text)]">≠</span>
       </div>
     </div>

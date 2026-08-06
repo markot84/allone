@@ -1064,8 +1064,8 @@ function MagentoCredentialsModal({
             <strong style={{ color: '#6B7280' }}>Magento:</strong> αν εμφανίζεται «Integration not secure», συνήθως τα πεδία{' '}
             <strong>Callback URL</strong> / <strong>Identity Link URL</strong> είναι κενά — το Magento 2.4 το θεωρεί «μη ασφαλές».
             Συμπληρώστε και τα δύο με το <strong>HTTPS base URL του e-shop</strong> (π.χ. https://www.toshop.gr/) και Save.
-            Το Performance+ χρησιμοποιεί μόνο το <strong>Access Token</strong> (Bearer) — όχι OAuth redirect. Μετά: Activate → αντιγράψτε το Access Token από τα 4 keys.
-            Permissions: Sales, Catalog, Stores και Performance+ Search Terms αν έχει εγκατασταθεί το Magento module.
+            Το allone χρησιμοποιεί μόνο το <strong>Access Token</strong> (Bearer) — όχι OAuth redirect. Μετά: Activate → αντιγράψτε το Access Token από τα 4 keys.
+            Permissions: Sales, Catalog, Stores και allone Search Terms αν έχει εγκατασταθεί το Magento module.
           </p>
 
           {error && (
@@ -1238,7 +1238,7 @@ function MegaventoryCredentialsModal({
 
           <div>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>
-              Custom Report ID <span style={{ fontWeight: 400, color: '#9CA3AF' }}>(Performance+)</span>
+              Custom Report ID <span style={{ fontWeight: 400, color: '#9CA3AF' }}>(allone)</span>
             </label>
             <input
               type="text"
@@ -1796,7 +1796,7 @@ function MegaventoryCustomReportSettingsInline({
 
   return (
     <div className="rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] p-3 shadow-sm">
-      <p className="mb-2 text-sm font-semibold text-[#111827]">Custom report (Performance+)</p>
+      <p className="mb-2 text-sm font-semibold text-[#111827]">Custom report (allone)</p>
       <p className="mb-1 text-xs text-[#6B7280]">Τα δεδομένα του αποθηκευμένου report στο Megaventory συγχρονίζονται στο Firestore ανά brand.</p>
       <label htmlFor={`mv-cr-id-${brandId}`} className="mb-1 block text-xs font-medium text-[#374151]">
         Report ID

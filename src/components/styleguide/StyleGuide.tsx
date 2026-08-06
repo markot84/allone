@@ -285,7 +285,7 @@ function ChromePreview() {
             padding: '5px 12px',
           }}
         >
-          Performance+
+          allone
         </span>
         <span style={{ font: '400 13px Inter, sans-serif', color: 'var(--chrome-fg)' }}>Brand switcher</span>
         <span style={{ font: '400 12px Inter, sans-serif', color: 'var(--chrome-fg-subtle)', marginLeft: 'auto' }}>
@@ -621,7 +621,7 @@ export function StyleGuide() {
       <div style={{ maxWidth: 1080, margin: '0 auto', padding: '48px 24px 96px' }}>
         <header style={{ marginBottom: 40 }}>
           <h1 style={{ font: '700 32px/1.2 "Plus Jakarta Sans", sans-serif', color: 'var(--text-heading)', margin: '0 0 8px' }}>
-            Performance+ — Design System v2
+            allone — Design System v2
           </h1>
           <p style={{ font: '400 15px/1.65 Inter, sans-serif', color: 'var(--text-secondary)', margin: 0, maxWidth: '70ch' }}>
             Every value below is read from the live computed styles, and every contrast ratio is

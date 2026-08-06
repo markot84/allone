@@ -1,4 +1,4 @@
-# Performance+ — robots policy
+# allone — robots policy
 # Landing pages indexable from standard search engines.
 # AI training / content-scraping crawlers explicitly disallowed.
 
