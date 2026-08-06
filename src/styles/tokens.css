@@ -81,19 +81,24 @@
   /* ============ APP CHROME — header and sidebar ============ */
   /* The chrome used to be a dark bar with white text at a dozen different opacities. Those are
      roles, not values, so they live here: switching the chrome back to dark is changing this block,
-     not sweeping AppShell again. Navy is deliberately absent — colors.md §6 rules it out as a
-     large-surface background. */
+     not sweeping AppShell again.
+
+     Navy leads here, because colors.md §2 lists navigation among navy's roles alongside titles,
+     text and branding — and navigation was the last of the four still rendering neutral grey. The
+     BACKGROUND stays white: §6 rules navy out as a large surface in this version, so navy arrives
+     as the text and the wash behind the active item, not as a navy sidebar.
+     Every value below is an existing step of the navy scale; no new hue was introduced. */
   --chrome-bg:             var(--surface-0);
-  --chrome-border:         var(--border);
-  --chrome-fg:             var(--text-primary);
-  --chrome-fg-muted:       var(--text-secondary);
-  /* Back on `--text-muted` now that it clears 4.5:1: group labels and the chrome's icon buttons
-     keep the faintness they had as white-at-0.34 on the old dark bar, without failing contrast.
-     `/styleguide` measures it. */
+  --chrome-border:         var(--navy-100);  /* colors.md lists navy-100 as borders and dividers */
+  --chrome-fg:             var(--navy-900);  /* active item and primary chrome text — 13.6:1 */
+  --chrome-fg-muted:       var(--navy-500);  /* every other nav label — 11.85:1 */
+  /* Group labels stay NEUTRAL on purpose. They are headings over the navigation, not destinations,
+     and painting them navy too would flatten the one hierarchy the sidebar has. `/styleguide`
+     measures this at 4.97:1. */
   --chrome-fg-subtle:      var(--text-muted);
   --chrome-control-bg:     var(--surface-1);
-  --chrome-control-border: var(--border);
-  --chrome-control-hover:  var(--surface-2);
+  --chrome-control-border: var(--navy-100);
+  --chrome-control-hover:  var(--navy-50);   /* colors.md: navy-50 is the subtle section background */
 
   /* ============ STRATEGY FACTORS — the five weights in the Configurator ============ */
   /* Categorical, so they need to stay distinguishable from each other; drawn from the palette

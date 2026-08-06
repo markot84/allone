@@ -4,6 +4,7 @@ import { VelocitySpark } from '../common/VelocitySpark';
 import { SegmentTreemap } from '../rfm/SegmentTreemap';
 import { SegmentMigrationSankey } from '../rfm/SegmentMigrationSankey';
 import { BriefingNarrative } from '../dashboard/BriefingNarrative';
+import { EnterpriseBadge } from '../common/EnterpriseBadge';
 import type { BriefingData } from '../../services/morningBriefing';
 import { contrastOnWhite } from '../../utils/color';
 import { readTokenColor } from '../../utils/cssToken';
@@ -279,7 +280,7 @@ function ChromePreview() {
           style={{
             font: '600 13px Inter, sans-serif',
             color: 'var(--surface-0)',
-            background: '#111827',
+            background: 'var(--navy-500)',
             borderRadius: 999,
             padding: '5px 12px',
           }}
@@ -717,6 +718,9 @@ export function StyleGuide() {
             >
               A link
             </a>
+            {/* The real component, not a mock — this is the app's one highlight badge, and until
+                now it ran on an off-palette purple→blue gradient. */}
+            <EnterpriseBadge inline />
           </div>
         </Section>
 
@@ -729,7 +733,7 @@ export function StyleGuide() {
 
         <Section
           title="App chrome"
-          description="Header and sidebar, light. The old chrome was a dark bar carrying white text at a dozen opacities; those are roles now, so switching back is a change to one token block rather than another sweep. The second nav item shows the cascade pulse."
+          description="Header and sidebar: white surface, navy text. §2 lists navigation among navy's roles and it was the last of the four still rendering neutral grey — but §6 rules navy out as a large surface, so navy arrives as the label and the wash behind the active item, never as a navy sidebar. Group labels stay neutral: they head the navigation rather than belonging to it. The second nav item shows the cascade pulse."
         >
           <ChromePreview />
           <div style={{ marginTop: 16 }}>

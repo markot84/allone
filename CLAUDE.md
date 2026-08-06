@@ -9,7 +9,9 @@ withdraws the dark canvas in favour of a white background.
 ### Brand palette (v2 — light theme)
 
 - Base is a **white** background (`--surface-0`), not a dark canvas.
-- **Navy `#003087`** — text, headings, branding. Never a large-surface background.
+- **Navy `#003087`** — text, headings, **navigation**, branding. Never a large-surface background.
+  Navigation means the label and the active-item wash, not a navy sidebar; the chrome surface stays
+  white. All of it routes through the `--chrome-*` tokens, so it is one block to change, not a sweep.
 - **Orange `#FE630C`** — the single primary-action colour. On white it measures 3.00:1, so it is
   never body text: use `--orange-700` (5.61:1) for orange text, or white on `--orange-700` for
   buttons. `--nts-accent-text` exists for exactly this reason; do not "simplify" it back to
