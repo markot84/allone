@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ResponsiveRadar } from '@nivo/radar';
 import { weightFactors } from '../../data';
-import { readTokenColor } from '../../utils/cssToken';
+import { useTokenColors } from '../../hooks/useTokenColors';
 
 /**
  * The shape of a strategy.
@@ -33,16 +33,15 @@ export function WeightsRadar({ weights }: { weights: Record<string, number> }) {
   );
 
   // Nivo writes these straight into SVG paint attributes, so they are resolved to real values here
-  // rather than passed through as var(...) references.
-  const palette = useMemo(
-    () => ({
-      shape: readTokenColor('--brand-orange', '#FE630C'),
-      grid: readTokenColor('--border', '#E4E7EC'),
-      label: readTokenColor('--text-secondary', '#475467'),
-      muted: readTokenColor('--text-muted', '#667085'),
-    }),
-    []
-  );
+  // rather than passed through as var(...) references — and re-resolved when the theme changes,
+  // which a plain read on mount would miss.
+  const palette = useTokenColors({
+    shape: ['--brand-orange', '#FE630C'],
+    grid: ['--border', '#E4E7EC'],
+    label: ['--text-secondary', '#475467'],
+    muted: ['--text-muted', '#667085'],
+    dotBorder: ['--surface-0', '#FFFFFF'],
+  });
 
   return (
     <div style={{ height: 260 }} aria-hidden="true">
@@ -62,7 +61,7 @@ export function WeightsRadar({ weights }: { weights: Record<string, number> }) {
         dotSize={7}
         dotColor={palette.shape}
         dotBorderWidth={2}
-        dotBorderColor={readTokenColor('--surface-0', '#FFFFFF')}
+        dotBorderColor={palette.dotBorder}
         enableDotLabel={false}
         isInteractive={false}
         motionConfig="stiff"

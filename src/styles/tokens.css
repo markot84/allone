@@ -50,8 +50,14 @@
   /* ============ NEUTRALS — independent of brand hue ============ */
   /* Neutral grey, deliberately not navy-tinted: large bodies of text and dense data tables
      would tire the eye if every neutral carried the brand hue. */
-  --surface-0:  #FFFFFF; /* app background */
-  --surface-1:  #FAFBFC; /* cards */
+  /* The comments here used to read the other way round — surface-0 "app background", surface-1
+     "cards" — which is not what the app does: Card paints itself --nts-bg-pure (surface-0) and
+     index.css paints the body --nts-bg-subtle (surface-1). The card is the LIGHTER of the two and
+     the canvas recedes behind it. Corrected rather than left, because the dark theme inverts these
+     two values on exactly that relationship, and a reader checking it against a stale comment would
+     conclude the dark block had them backwards. */
+  --surface-0:  #FFFFFF; /* cards — the raised surface */
+  --surface-1:  #FAFBFC; /* app canvas, behind the cards */
   --surface-2:  #F2F4F7; /* hover / slightly deeper layer */
   --border:     #E4E7EC;
 
@@ -294,6 +300,90 @@
   --warning-light: #3A2405;
   --danger-light:  #2B0D0A;  /* deeper than the others: --danger is the darkest of the three hues */
   --info-light:    var(--sky-50);
+}
+
+/**
+ * ============ SURFACES ============
+ *
+ * A card's depth cue is theme-dependent in a way its colour is not. On white, depth is a shadow
+ * falling away from the card. On the cockpit canvas a black shadow is invisible against near-black,
+ * so depth has to come from the opposite direction: a lit hairline along the top edge, as though
+ * there were a light source above. `--edge-highlight` is transparent in the light theme, which is
+ * why one rule serves both.
+ *
+ * Hover lives in CSS rather than in mouseenter/mouseleave handlers writing inline styles, so it
+ * survives keyboard focus and costs no JavaScript.
+ */
+.surface {
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--elev-1), inset 0 1px 0 var(--edge-highlight);
+  transition:
+    background-color var(--dur-state) var(--ease-out),
+    border-color var(--dur-state) var(--ease-out),
+    box-shadow var(--dur-state) var(--ease-out),
+    transform var(--dur-state) var(--ease-out);
+}
+
+.surface[data-interactive='true']:hover,
+.surface[data-interactive='true']:focus-visible {
+  border-color: var(--border-strong);
+  box-shadow: var(--elev-3), inset 0 1px 0 var(--edge-highlight);
+  transform: translateY(-1px);
+}
+
+/**
+ * Cursor spotlight.
+ *
+ * A soft radial light that follows the pointer across a grid of surfaces, so the card under the
+ * cursor is lit rather than merely hovered. It reads as one light over the whole grid instead of
+ * per-card highlights switching on and off.
+ *
+ * The position arrives as two custom properties written by a single pointermove listener on the
+ * grid — no React state, so moving the mouse re-renders nothing. `--spotlight-color` is transparent
+ * in the light theme: a wash this subtle is invisible on white, and forcing it would only muddy the
+ * surface.
+ */
+.spotlight-grid > * {
+  position: relative;
+}
+
+.spotlight-grid .surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-reorder) var(--ease-out);
+  background: radial-gradient(
+    var(--spotlight-size) circle at var(--spotlight-x) var(--spotlight-y),
+    var(--spotlight-color),
+    transparent 60%
+  );
+}
+
+.spotlight-grid[data-pointer-inside='true'] .surface::before {
+  opacity: 1;
+}
+
+/* The card's own content has to sit above its lighting layer. */
+.surface > * {
+  position: relative;
+  z-index: 1;
+}
+
+/**
+ * Focus. Gold is the cockpit's "attention" colour and it is the one place the glow tokens earn
+ * their keep; in the light theme they resolve to a zero-radius transparent shadow and the ring
+ * alone does the work.
+ */
+:where(a, button, [role='button'], input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--brand-gold);
+  outline-offset: 2px;
+  box-shadow: var(--glow-gold);
 }
 
 /**

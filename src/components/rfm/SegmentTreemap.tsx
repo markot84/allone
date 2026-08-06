@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { ResponsiveTreeMap } from '@nivo/treemap';
 import { formatNumber, formatPercent } from '../../utils/format';
-import { mixWithWhite, readableTextOn } from '../../utils/color';
-import { readTokenColor } from '../../utils/cssToken';
+import { mixToward, readableTextOn } from '../../utils/color';
+import { useTokenColors } from '../../hooks/useTokenColors';
 import type { RFMSegment } from '../../types';
 
 /**
@@ -37,6 +37,11 @@ type TileDatum = {
 };
 
 export function SegmentTreemap({ segments, selectedId, onSelect, animate }: SegmentTreemapProps) {
+  const { surface, selectedBorder } = useTokenColors({
+    surface: ['--surface-0', '#FFFFFF'],
+    selectedBorder: ['--text-heading', '#003087'],
+  });
+
   const { data, tiles } = useMemo(() => {
     const peakShare = Math.max(...segments.map((s) => s.revenue_share ?? 0), 0);
     const children: TileDatum[] = segments
@@ -52,7 +57,10 @@ export function SegmentTreemap({ segments, selectedId, onSelect, animate }: Segm
           name: segment.name,
           value: segment.count ?? 0,
           share,
-          fill: mixWithWhite(segment.color, 0.72 * (1 - intensity)),
+          // Mixed toward the CARD, not toward white. The fade means "less of this segment, more of
+          // the surface behind it"; on the cockpit canvas, fading toward white would make the
+          // weakest segment the brightest tile on the chart.
+          fill: mixToward(segment.color, surface, 0.72 * (1 - intensity)),
           label: `${segment.name} · ${formatNumber(segment.count ?? 0)}`,
         };
       });
@@ -60,10 +68,7 @@ export function SegmentTreemap({ segments, selectedId, onSelect, animate }: Segm
       data: { id: 'segments', name: 'segments', children },
       tiles: new Map(children.map((child) => [child.id, child])),
     };
-  }, [segments]);
-
-  const border = readTokenColor('--surface-0', '#FFFFFF');
-  const selectedBorder = readTokenColor('--text-heading', '#003087');
+  }, [segments, surface]);
 
   if (data.children.length === 0) {
     return (
@@ -89,11 +94,11 @@ export function SegmentTreemap({ segments, selectedId, onSelect, animate }: Segm
         margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
         colors={(node) => tiles.get(node.id)?.fill ?? '#E4E7EC'}
         nodeOpacity={1}
-        // Selection is a navy edge on an otherwise white gutter. The width is fixed because nivo's
-        // treemap only takes a number here — the colour carries the state instead.
+        // Selection is a heading-coloured edge on an otherwise card-coloured gutter. The width is
+        // fixed because nivo's treemap only takes a number here — the colour carries the state.
         borderWidth={2}
-        borderColor={(node: { id: string | number }) => (node.id === selectedId ? selectedBorder : border)}
-        labelTextColor={(node: { id: string | number }) => readableTextOn(tiles.get(String(node.id))?.fill ?? '#FFFFFF')}
+        borderColor={(node: { id: string | number }) => (node.id === selectedId ? selectedBorder : surface)}
+        labelTextColor={(node: { id: string | number }) => readableTextOn(tiles.get(String(node.id))?.fill ?? surface)}
         enableParentLabel={false}
         animate={animate}
         motionConfig="gentle"

@@ -58,13 +58,26 @@ export function contrastRatio(foreground: string, background: string): number | 
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
+/**
+ * Mix a colour toward another. `amount` 0 = untouched, 1 = fully the target.
+ *
+ * "Toward white" was the right idea for the wrong reason: what a fade toward white actually
+ * expressed was "less of this, more of the surface behind it". On a dark canvas the surface is not
+ * white, so fading toward white makes a weak value the BRIGHTEST thing on screen — the exact
+ * opposite of what the encoding means. Passing the surface in keeps the meaning in both themes.
+ */
+export function mixToward(value: string, target: string, amount: number): string {
+  const rgb = toRgb(value);
+  const to = toRgb(target);
+  if (!rgb || !to) return value;
+  const t = Math.min(1, Math.max(0, amount));
+  const mixed = rgb.map((c, i) => Math.round(c + (to[i] - c) * t)) as Rgb;
+  return `#${mixed.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
 /** Mix a colour toward white. `amount` 0 = untouched, 1 = white. */
 export function mixWithWhite(value: string, amount: number): string {
-  const rgb = toRgb(value);
-  if (!rgb) return value;
-  const t = Math.min(1, Math.max(0, amount));
-  const mixed = rgb.map((c) => Math.round(c + (255 - c) * t)) as Rgb;
-  return `#${mixed.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+  return mixToward(value, '#FFFFFF', amount);
 }
 
 /**

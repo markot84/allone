@@ -31,30 +31,22 @@ export function Card({
       transition={{ duration: 0.3 }}
       className={className}
     >
+      {/*
+        The surface treatment — border, elevation, lit top edge, hover — lives in the `.surface`
+        rule in tokens.css, not here. It used to be inline styles put back by a mouseleave handler,
+        which meant hover existed for the mouse and for nothing else; as CSS it covers
+        :focus-visible too. It is also what lets the dark theme trade the drop shadow for a lit top
+        edge — the only depth cue that survives on a near-black canvas — without this component
+        needing to know there are two themes.
+      */}
       <div
-        className={`card-primer ${className.includes('h-full') ? 'h-full' : ''}`}
+        className={`card-primer surface ${className.includes('h-full') ? 'h-full' : ''}`}
+        data-interactive={hover || onClick ? 'true' : undefined}
         style={{
-          background: 'var(--nts-bg-pure)',
-          border: '1px solid var(--borderColor-default, var(--border))',
-          borderRadius: 8,
           padding: paddingPx[padding],
-          cursor: (hover || onClick) ? 'pointer' : 'default',
-          transition: 'background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08)'
+          cursor: hover || onClick ? 'pointer' : 'default',
         }}
         onClick={onClick}
-        onMouseEnter={(e) => {
-          if (!hover && !onClick) return;
-          (e.currentTarget as HTMLDivElement).style.background = 'var(--nts-bg-subtle)';
-          (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--borderColor-muted, #d8dee4)';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.14), 0 3px 8px rgba(0,0,0,0.10)';
-        }}
-        onMouseLeave={(e) => {
-          if (!hover && !onClick) return;
-          (e.currentTarget as HTMLDivElement).style.background = 'var(--nts-bg-pure)';
-          (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--borderColor-default, var(--border))';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 6px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08)';
-        }}
       >
         {children}
       </div>

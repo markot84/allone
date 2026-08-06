@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ResponsiveSankey } from '@nivo/sankey';
 import { formatNumber } from '../../utils/format';
-import { readTokenColor } from '../../utils/cssToken';
+import { useTokenColors } from '../../hooks/useTokenColors';
 import { useRevealOnce } from '../../hooks/useRevealOnce';
 import type { SegmentMigrationFlow } from '../../services/rfmFromOrders';
 
@@ -30,7 +30,10 @@ const PREV = 'prev:';
 const CURR = 'curr:';
 
 export function SegmentMigrationSankey({ flows, colorById, revealKey }: SegmentMigrationSankeyProps) {
-  const fallback = readTokenColor('--text-muted', '#667085');
+  const { fallback, labelColor } = useTokenColors({
+    fallback: ['--text-muted', '#667085'],
+    labelColor: ['--text-secondary', '#475467'],
+  });
   const { ref, mounted, animate } = useRevealOnce(revealKey);
 
   const data = useMemo(() => {
@@ -48,8 +51,6 @@ export function SegmentMigrationSankey({ flows, colorById, revealKey }: SegmentM
     });
     return { nodes: [...nodes.values()], links };
   }, [colorById, fallback, flows]);
-
-  const labelColor = readTokenColor('--text-secondary', '#475467');
 
   if (data.links.length === 0) return null;
 

@@ -5,6 +5,7 @@ import { SegmentTreemap } from '../rfm/SegmentTreemap';
 import { SegmentMigrationSankey } from '../rfm/SegmentMigrationSankey';
 import { BriefingNarrative } from '../dashboard/BriefingNarrative';
 import { EnterpriseBadge } from '../common/EnterpriseBadge';
+import { SpotlightGrid } from '../common/SpotlightGrid';
 import type { BriefingData } from '../../services/morningBriefing';
 import { contrastRatio } from '../../utils/color';
 import { useTheme } from '../../hooks/useTheme';
@@ -38,14 +39,15 @@ const SCALES: { name: string; tokens: string[] }[] = [
 ];
 
 const NEUTRALS: Swatch[] = [
-  { token: '--surface-0', note: 'app background' },
-  { token: '--surface-1', note: 'cards' },
+  { token: '--surface-0', note: 'cards — the raised surface' },
+  { token: '--surface-1', note: 'app canvas, behind the cards' },
   { token: '--surface-2', note: 'hover / deeper layer' },
   { token: '--border' },
+  { token: '--border-strong' },
   { token: '--text-primary' },
   { token: '--text-secondary' },
   { token: '--text-muted' },
-  { token: '--text-heading', note: 'resolves to navy' },
+  { token: '--text-heading', note: 'navy in the light theme, white in the cockpit' },
 ];
 
 const SEMANTIC: Swatch[] = [
@@ -689,6 +691,38 @@ export function StyleGuide() {
 
         <Section title="RFM segments">
           <SwatchGrid items={SEGMENTS} />
+        </Section>
+
+        <Section
+          title="Surfaces"
+          description={
+            theme === 'dark'
+              ? 'Depth on a near-black canvas cannot come from a shadow — there is nothing for it to fall on. It comes from a lit hairline along the top edge instead, as though the light were above. Move the pointer across the row: one soft light travels over all three cards rather than each card highlighting itself, which is what makes the movement read as continuous.'
+              : 'A card is a border, a small shadow and a hover. The lit top edge and the cursor spotlight are defined here too, but both resolve to transparent in this theme: a wash that soft is invisible on white, and forcing it up to where it would show only muddies the surface. Switch to the cockpit to see them.'
+          }
+        >
+          <SpotlightGrid
+            style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}
+          >
+            {[
+              { title: 'Static', note: 'No hover — most cards on a page are this.', interactive: false },
+              { title: 'Interactive', note: 'Lifts 1px and deepens on hover and on keyboard focus.', interactive: true },
+              { title: 'Interactive', note: 'Tab to this one: the hover state is not mouse-only.', interactive: true },
+            ].map((card, index) => (
+              <div
+                key={index}
+                className="surface"
+                data-interactive={card.interactive ? 'true' : undefined}
+                tabIndex={card.interactive ? 0 : undefined}
+                style={{ padding: 20, cursor: card.interactive ? 'pointer' : 'default' }}
+              >
+                <div style={{ font: '600 15px Inter, sans-serif', color: 'var(--text-heading)' }}>{card.title}</div>
+                <p style={{ font: '400 13px/1.5 Inter, sans-serif', color: 'var(--text-secondary)', margin: '6px 0 0' }}>
+                  {card.note}
+                </p>
+              </div>
+            ))}
+          </SpotlightGrid>
         </Section>
 
         <Section title="Action colours in context" description="Orange is the only primary action. Gold carries navy on top of it, never the reverse.">
