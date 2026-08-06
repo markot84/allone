@@ -64,6 +64,11 @@
   --text-muted:     #667085;
   --text-heading:   var(--navy-500); /* headings and branding DO use navy */
 
+  /* One step below `--border`, for the rare divider that has to be seen against a filled surface
+     rather than against white. Kept separate so the dark theme can widen the gap between the two;
+     at light-theme values they are only four steps apart and could pass for one token. */
+  --border-strong:  #D1D5DB;
+
   /* ============ SEMANTIC — deliberately distinct from the brand accents ============ */
   /* Kept away from orange/gold so a red error is never mistaken for an active CTA. */
   --success: #12B76A;
@@ -115,6 +120,110 @@
   --dur-reorder: 300ms;  /* list and table reordering */
   --dur-reveal:  450ms;  /* scroll reveal — once only */
   --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ============ ELEVATION ============ */
+  /* Shadows are theme-dependent in a way colour tokens are not: on a dark canvas a black shadow is
+     invisible, so depth has to come from a lit top edge instead. Both halves live here so a surface
+     asks for `--elev-2` and gets whatever reads as "raised" in the current theme. */
+  --elev-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.10);
+  --elev-2: 0 2px 6px rgba(16, 24, 40, 0.08), 0 4px 12px rgba(16, 24, 40, 0.06);
+  --elev-3: 0 8px 24px rgba(16, 24, 40, 0.12), 0 2px 6px rgba(16, 24, 40, 0.08);
+
+  /* The hairline along a surface's top edge. Light theme: none — a white card on a near-white
+     canvas has nothing to catch. It is the dark theme's primary depth cue. */
+  --edge-highlight: transparent;
+
+  /* Glow. Gold is 1.60:1 on white, so in the light theme it can only ever be a background; as a
+     diffuse shadow it is invisible and these resolve to nothing. The dark theme turns them on. */
+  --glow-gold:   0 0 0 rgba(254, 196, 5, 0);
+  --glow-orange: 0 0 0 rgba(254, 99, 12, 0);
+
+  /* Cursor spotlight over a card grid. Written by a single pointermove listener on the grid, read
+     by every tile — no React state, no re-render. */
+  --spotlight-color: transparent;
+  --spotlight-size: 420px;
+  --spotlight-x: 50%;
+  --spotlight-y: 50%;
+}
+
+/**
+ * ============ DARK THEME — the cockpit ============
+ *
+ * Selected by `data-theme="dark"` on <html>; see `src/contexts/ThemeContext.tsx`.
+ *
+ * The ramp INVERTS rather than being renamed. In the light theme `--surface-0` is the card (white)
+ * and `--surface-1` is the canvas behind it (near-white) — the card is the lighter of the two. On a
+ * dark canvas that relationship has to hold or cards sink into the background, so here `--surface-0`
+ * is the LIGHTER navy and `--surface-1` the deeper one. Every existing `--nts-bg-pure` /
+ * `--nts-bg-subtle` reference keeps meaning what it meant, which is why ~4.000 call sites did not
+ * have to be revisited to say which of them was a card.
+ *
+ * Two colours change role here, and it is worth knowing why:
+ *   - GOLD, banned as text in the light theme at 1.60:1 on white, measures 10.4:1 on this canvas.
+ *     On dark it is finally allowed to be text, and it is what carries "positive".
+ *   - NAVY, which is text and branding in the light theme, cannot survive on a navy canvas.
+ *     `--text-heading` therefore leaves the navy scale and becomes white.
+ */
+:root[data-theme='dark'] {
+  --surface-0:  #001A40;  /* cards — the LIGHTER of the two, see above */
+  --surface-1:  #00112E;  /* app canvas */
+  --surface-2:  #052E63;  /* hover / raised layer — lighter, not darker, on this base */
+  --border:     #0A2E66;
+  --border-strong: #14417F;
+
+  --text-primary:   #F2F6FC;  /* 16.1:1 on --surface-0 */
+  --text-secondary: #B6C6E0;  /*  9.6:1 */
+  --text-muted:     #8FA3C4;  /*  6.4:1 — comfortably past the 4.5:1 floor */
+  --text-heading:   #FFFFFF;
+
+  /* Navy is the canvas now, so the scale's job changes: the tints become surfaces and the shades
+     become the darkest chrome, instead of borders and text. */
+  --navy-900: #000B1F;
+  --navy-700: #001433;
+  --navy-500: #003087;   /* base stays fixed — it is a brand colour */
+  --navy-100: #0A2E66;   /* was a light border tint; on dark, borders live here */
+  --navy-50:  #052E63;
+
+  /* Sky at #005ECD is 2.1:1 on this canvas — unusable for links. This is the same hue lifted to
+     AA on the dark base; the fixed brand `--brand-sky` is untouched. */
+  --sky-500: #4D97FF;
+  --sky-700: #7FB4FF;    /* hover goes LIGHTER on dark, not darker */
+  --sky-100: #0A3A80;
+  --sky-50:  #00204D;
+
+  --orange-700: #FF8A47;  /* the AA-safe orange inverts: on dark it must get lighter, not darker */
+  --orange-100: #4A2004;
+  --orange-50:  #2B1203;
+
+  --gold-700: #FFD44D;
+  --gold-100: #3D2F02;
+  --gold-50:  #241C01;
+
+  /* The one segment colour that does not survive the move: #7A5AF8 measures 3.80:1 on the cockpit
+     canvas, under the 4.5:1 floor. Same hue, lifted until it passes (5.58:1). */
+  --seg-potential: #9B7EFF;
+  --seg-lost: var(--text-muted);
+
+  /* App chrome — deeper than the canvas so the shell reads as the frame and the content floats. */
+  --chrome-bg:             #000915;
+  --chrome-border:         #0A2E66;
+  --chrome-fg:             #FFFFFF;
+  --chrome-fg-muted:       #B6C6E0;
+  --chrome-fg-subtle:      #8FA3C4;
+  --chrome-control-bg:     #001A40;
+  --chrome-control-border: #0A2E66;
+  --chrome-control-hover:  #052E63;
+
+  /* Depth comes from a lit top edge, not from a shadow. */
+  --edge-highlight: rgba(180, 210, 255, 0.14);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --elev-2: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --elev-3: 0 12px 40px rgba(0, 0, 0, 0.55);
+
+  --glow-gold:   0 0 24px rgba(254, 196, 5, 0.18);
+  --glow-orange: 0 0 24px rgba(254, 99, 12, 0.22);
+
+  --spotlight-color: rgba(120, 170, 255, 0.07);
 }
 
 /**
@@ -168,6 +277,23 @@
   --potential: var(--seg-potential);
   --at-risk:   var(--seg-at-risk);
   --lost:      var(--seg-lost);
+}
+
+/**
+ * Legacy bridge, dark theme.
+ *
+ * Only the entries whose light values are literal hex need repeating — everything else in the
+ * bridge points at a token that the dark block has already re-pointed. The four `*-light` tints are
+ * pale washes behind coloured text; at their light values they would burn as bright blocks on the
+ * cockpit canvas, so they become deep tints of the same hue and the text on them stays legible.
+ */
+:root[data-theme='dark'] {
+  --nts-bg-dark: #000000;
+
+  --success-light: #05311D;
+  --warning-light: #3A2405;
+  --danger-light:  #2B0D0A;  /* deeper than the others: --danger is the darkest of the three hues */
+  --info-light:    var(--sky-50);
 }
 
 /**

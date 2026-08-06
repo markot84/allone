@@ -5,7 +5,8 @@ import {
   NavList,
   Text
 } from '@primer/react';
-import { Button, AllOneLogo } from '../common';
+import { Button, AllOneLogo, ThemeToggle } from '../common';
+import { useTheme } from '../../hooks/useTheme';
 import { useAuth, useBrand, useBrandMembers } from '../../hooks';
 import { useModules } from '../../hooks/useModules';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
@@ -665,6 +666,9 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
   const [isWideLayout, setIsWideLayout] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia(LAYOUT_WIDE_MQ).matches : true
   );
+  // The lockup is navy on transparent, so on the cockpit's near-black chrome it needs its plate.
+  const { theme } = useTheme();
+  const logoVariant = theme === 'dark' ? 'onDark' : 'onLight';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -833,7 +837,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               cursor: 'pointer',
             }}
           >
-            <AllOneLogo height={30} className="max-w-[6.5rem] min-[420px]:max-w-[9rem] sm:max-w-none" variant="onLight" />
+            <AllOneLogo height={30} className="max-w-[6.5rem] min-[420px]:max-w-[9rem] sm:max-w-none" variant={logoVariant} />
           </PrimerHeader.Link>
         </PrimerHeader.Item>
 
@@ -850,6 +854,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               />
             )}
             {ACCENT_PICKER_ENABLED && <AccentMenu />}
+            <ThemeToggle />
             <div style={{ position: 'relative', overflow: 'visible' }}>
               <NotificationBell onNavigate={(s) => onSectionChange(s)} />
             </div>
@@ -995,7 +1000,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                 style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                 title="Dashboard"
               >
-                <AllOneLogo height={40} variant="onLight" />
+                <AllOneLogo height={40} variant={logoVariant} />
               </button>
               <div style={{ display: 'flex', gap: 4 }}>
                 <button
