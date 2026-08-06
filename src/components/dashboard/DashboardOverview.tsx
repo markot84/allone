@@ -29,7 +29,7 @@ import {
   Cell,
   ResponsiveContainer,
 } from 'recharts';
-import { Card, CardHeader, KPICard, Tooltip, AlertsBanner, PageHeader, Spinner, Button } from '../common';
+import { Card, CardHeader, KPICard, HeroKPICard, SpotlightGrid, Tooltip, AlertsBanner, PageHeader, Spinner, Button } from '../common';
 import { useSegments } from '../../hooks/useSegments';
 import { useOrganic } from '../../hooks/useOrganic';
 import { useCampaigns } from '../../hooks/useCampaigns';
@@ -1373,23 +1373,37 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
         return (
           <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
-              <KPICard
-                kpi={{
-                  label: isB2B ? 'Revenue baseline' : 'Σύνολο Εσόδων',
-                  value: formatCurrencyCompact(dashboardTotalRevenue),
-                  change: revenueMoM !== null ? Math.round(revenueMoM) : undefined,
-                  changeLabel: revenueMoM !== null ? 'vs προηγ. μήνα' : undefined,
-                  trend: revenueMoM !== null ? (revenueMoM >= 0 ? 'up' : 'down') : 'up',
-                  sparklineData: revenueSpark,
-                  refreshing:
-                    (hasEcommerceRevenue && ecomKpisRefreshing) || (hasErpBusinessRevenue && businessRevenue.isLoading),
-                  tooltip:
-                    isB2B
-                      ? 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.'
-                      : revenueTotalKpiTooltip,
-                }}
-                index={0}
+            {/*
+              Bento rather than three equal cards. A row of identically sized KPIs asserts that all
+              three matter equally, so the eye has nothing to land on and the block gets read left
+              to right like a table. Revenue is the figure the page is actually about, so it takes
+              roughly four times the area and the other two stack beside it.
+
+              At the `lg` breakpoint and below this collapses back to a single column in source
+              order, which puts revenue first — the same priority the layout states, expressed the
+              only way a narrow screen can.
+            */}
+            <SpotlightGrid className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3 lg:grid-rows-2">
+              <HeroKPICard
+                className="lg:col-span-2 lg:row-span-2"
+                label={isB2B ? 'Revenue baseline' : 'Σύνολο Εσόδων'}
+                value={dashboardTotalRevenue}
+                format={formatCurrencyCompact}
+                // Identifies the FIGURE, not the component: the count replays when the brand or the
+                // period changes — both of which make it a different number — and not otherwise.
+                countKey={`revenue:${currentBrand?.id ?? 'none'}:${dashPeriod}`}
+                change={revenueMoM !== null ? Math.round(revenueMoM) : undefined}
+                changeLabel={revenueMoM !== null ? 'vs προηγ. μήνα' : undefined}
+                trend={revenueMoM !== null ? (revenueMoM >= 0 ? 'up' : 'down') : undefined}
+                sparklineData={revenueSpark}
+                refreshing={
+                  (hasEcommerceRevenue && ecomKpisRefreshing) || (hasErpBusinessRevenue && businessRevenue.isLoading)
+                }
+                tooltip={
+                  isB2B
+                    ? 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.'
+                    : revenueTotalKpiTooltip
+                }
                 onClick={sectionClick('finances')}
               />
               <KPICard
@@ -1444,7 +1458,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 index={2}
                 onClick={() => onSectionChange?.(isB2B ? 'sales' : 'campaigns')}
               />
-            </div>
+            </SpotlightGrid>
             {/* Pointer to a deeper revenue page — dropped entirely when that page is hidden. */}
             {!isSectionHidden(isB2B ? 'finances' : 'roi') && (
               <p className="text-[12px] text-[var(--text-muted)] leading-relaxed">

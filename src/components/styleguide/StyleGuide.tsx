@@ -6,6 +6,8 @@ import { SegmentMigrationSankey } from '../rfm/SegmentMigrationSankey';
 import { BriefingNarrative } from '../dashboard/BriefingNarrative';
 import { EnterpriseBadge } from '../common/EnterpriseBadge';
 import { SpotlightGrid } from '../common/SpotlightGrid';
+import { HeroKPICard } from '../common/HeroKPICard';
+import { KPICard } from '../common/KPICard';
 import type { BriefingData } from '../../services/morningBriefing';
 import { contrastRatio } from '../../utils/color';
 import { useTheme } from '../../hooks/useTheme';
@@ -722,6 +724,28 @@ export function StyleGuide() {
                 </p>
               </div>
             ))}
+          </SpotlightGrid>
+        </Section>
+
+        <Section
+          title="Bento — one figure, not five equal ones"
+          description="A row of identically sized KPI cards asserts that every number matters equally, so none of them does and the block is read left to right like a table. The hero takes roughly four times the area, its sparkline is the card's background rather than a strip under the number, and the figure counts up once per session — rare enough that it reads as a live measurement instead of a habit."
+        >
+          <SpotlightGrid className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:grid-rows-2">
+            <HeroKPICard
+              className="lg:col-span-2 lg:row-span-2"
+              label="Σύνολο Εσόδων"
+              value={148320}
+              format={(v) => `€${Math.round(v).toLocaleString('el-GR')}`}
+              countKey="styleguide-demo-revenue"
+              change={12}
+              changeLabel="vs προηγ. μήνα"
+              trend="up"
+              sparklineData={[38, 41, 39, 46, 52, 49, 58, 61, 57, 66, 71, 78]}
+              tooltip="Demo figure — this page renders no live data."
+            />
+            <KPICard index={1} kpi={{ label: 'Marketing Expenses', value: '€24.1k', change: -4, changeLabel: 'vs προηγ. μήνα', trend: 'down', sparklineData: [22, 25, 24, 21, 20, 19] }} />
+            <KPICard index={2} kpi={{ label: 'Μέσο Καλάθι (AOV)', value: '€68,4', change: 6, changeLabel: 'vs προηγ. μήνα', trend: 'up', sparklineData: [61, 63, 62, 65, 67, 68] }} />
           </SpotlightGrid>
         </Section>
 

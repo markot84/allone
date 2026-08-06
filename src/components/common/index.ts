@@ -14,6 +14,8 @@ export { AlertsBanner, type AlertsBannerNavigateOptions } from './AlertsBanner';
 export { AllOneLogo } from './AllOneLogo';
 export { ThemeToggle } from './ThemeToggle';
 export { SpotlightGrid } from './SpotlightGrid';
+export { HeroKPICard } from './HeroKPICard';
+export type { HeroKPICardProps } from './HeroKPICard';
 export { FormattedProse, toPlainProseText, parseInlineSegments } from './FormattedProse';
 export type { FormattedProseVariant } from './FormattedProse';
 export { PageHeader } from './PageHeader';

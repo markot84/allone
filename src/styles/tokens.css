@@ -150,6 +150,11 @@
   --spotlight-size: 420px;
   --spotlight-x: 50%;
   --spotlight-y: 50%;
+
+  /* The hero card's full-bleed sparkline. It is texture under a number, not a chart to read, so it
+     sits just at the edge of legibility — and where that edge falls depends on the canvas, which is
+     why it is a token rather than a constant in the component. */
+  --hero-spark-opacity: 0.10;
 }
 
 /**
@@ -230,6 +235,9 @@
   --glow-orange: 0 0 24px rgba(254, 99, 12, 0.22);
 
   --spotlight-color: rgba(120, 170, 255, 0.07);
+  /* Higher than the light theme: a mid-tone stroke has less to work with against navy than against
+     white, so the same figure needs more opacity to read as the same weight. */
+  --hero-spark-opacity: 0.20;
 }
 
 /**
@@ -315,6 +323,13 @@
  * survives keyboard focus and costs no JavaScript.
  */
 .surface {
+  /* `isolation` makes each surface its own stacking context, which is what lets the lighting layer
+     below sit at z-index -1: inside a stacking context a negative child paints above the element's
+     own background but beneath its content. That is the whole trick, and it is worth stating,
+     because the obvious alternative — pushing every child to `position: relative; z-index: 1` —
+     silently overrides `position: absolute` on any child that wanted to be positioned itself. */
+  position: relative;
+  isolation: isolate;
   background: var(--surface-0);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -345,15 +360,11 @@
  * in the light theme: a wash this subtle is invisible on white, and forcing it would only muddy the
  * surface.
  */
-.spotlight-grid > * {
-  position: relative;
-}
-
 .spotlight-grid .surface::before {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: -1;
   border-radius: inherit;
   pointer-events: none;
   opacity: 0;
@@ -367,12 +378,6 @@
 
 .spotlight-grid[data-pointer-inside='true'] .surface::before {
   opacity: 1;
-}
-
-/* The card's own content has to sit above its lighting layer. */
-.surface > * {
-  position: relative;
-  z-index: 1;
 }
 
 /**
