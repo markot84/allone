@@ -20,7 +20,7 @@ const ICON_MAP: Record<string, ComponentType<LucideProps>> = {
 function SeasonalIcon({ name }: { name: string }) {
   const Icon = ICON_MAP[name] ?? Calendar;
   return (
-    <div className="w-8 h-8 rounded-lg bg-[#F5F5F5] flex items-center justify-center flex-shrink-0">
+    <div className="w-8 h-8 rounded-lg bg-[var(--surface-2)] flex items-center justify-center flex-shrink-0">
       <Icon size={16} className="text-[var(--nts-accent-text)]" />
     </div>
   );
@@ -118,12 +118,12 @@ export function SeasonalPeriodsModal({
           title={
             <div className="flex min-w-0 items-center gap-2">
               <Calendar size={20} className="shrink-0 text-[var(--nts-accent-text)]" />
-              <h2 className="text-lg font-bold text-[#1A1A1A]">Εποχιακές περίοδοι</h2>
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">Εποχιακές περίοδοι</h2>
             </div>
           }
           actions={
-            <button type="button" onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
-              <X size={20} className="text-[#4A4A4A]" />
+            <button type="button" onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]">
+              <X size={20} className="text-[var(--text-secondary)]" />
             </button>
           }
         />
@@ -141,29 +141,29 @@ export function SeasonalPeriodsModal({
                   className={`p-4 rounded-xl border-2 transition-all ${
                     isActive
                       ? 'border-[var(--nts-accent)]/30 bg-[var(--nts-accent)]/5'
-                      : 'border-[#E5E5E5]'
+                      : 'border-[var(--border)]'
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <SeasonalIcon name={period.icon} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-semibold text-[#1A1A1A]">{period.name}</h4>
+                        <h4 className="text-sm font-semibold text-[var(--text-primary)]">{period.name}</h4>
                         {isActive && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] font-medium">
                             Ενεργή
                           </span>
                         )}
                         {period.isCustom && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F5F5F5] text-[#9CA3AF] font-medium">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-muted)] font-medium">
                             Custom
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-[#9CA3AF] mt-0.5">
+                      <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
                         {formatDateRange(period.dateRange)} · {nameA} {period.suggestedMix.percentA}% / {nameB} {100 - period.suggestedMix.percentA}%
                       </p>
-                      <p className="text-xs text-[#4A4A4A] mt-1">{period.description}</p>
+                      <p className="text-xs text-[var(--text-secondary)] mt-1">{period.description}</p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button
@@ -176,7 +176,7 @@ export function SeasonalPeriodsModal({
                       {period.isCustom && (
                         <button
                           onClick={() => onDeleteCustom(period.id)}
-                          className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#EF4444] hover:bg-[#FEF2F2] transition-colors"
+                          className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[#EF4444] hover:bg-[#FEF2F2] transition-colors"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -199,35 +199,35 @@ export function SeasonalPeriodsModal({
                   className="overflow-hidden"
                 >
                   <div className="p-4 border-2 border-dashed border-[var(--nts-accent)]/30 rounded-xl space-y-3">
-                    <p className="text-xs font-semibold text-[#4A4A4A]">Νέα εποχιακή περίοδος</p>
+                    <p className="text-xs font-semibold text-[var(--text-secondary)]">Νέα εποχιακή περίοδος</p>
 
                     <input
                       type="text"
                       placeholder="Όνομα (π.χ. Summer Sale)"
                       value={newName}
                       onChange={e => setNewName(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-[#E5E5E5] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
+                      className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
                     />
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div>
-                        <label className="text-[11px] text-[#9CA3AF] block mb-1">Από</label>
+                        <label className="text-[11px] text-[var(--text-muted)] block mb-1">Από</label>
                         <div className="flex gap-1">
                           <input type="number" min={1} max={31} value={newStartDay} onChange={e => setNewStartDay(+e.target.value)}
-                            className="w-14 px-2 py-1.5 text-xs border border-[#E5E5E5] rounded-md text-center" />
+                            className="w-14 px-2 py-1.5 text-xs border border-[var(--border)] rounded-md text-center" />
                           <select value={newStartMonth} onChange={e => setNewStartMonth(+e.target.value)}
-                            className="flex-1 px-2 py-1.5 text-xs border border-[#E5E5E5] rounded-md">
+                            className="flex-1 px-2 py-1.5 text-xs border border-[var(--border)] rounded-md">
                             {MONTH_NAMES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
                           </select>
                         </div>
                       </div>
                       <div>
-                        <label className="text-[11px] text-[#9CA3AF] block mb-1">Έως</label>
+                        <label className="text-[11px] text-[var(--text-muted)] block mb-1">Έως</label>
                         <div className="flex gap-1">
                           <input type="number" min={1} max={31} value={newEndDay} onChange={e => setNewEndDay(+e.target.value)}
-                            className="w-14 px-2 py-1.5 text-xs border border-[#E5E5E5] rounded-md text-center" />
+                            className="w-14 px-2 py-1.5 text-xs border border-[var(--border)] rounded-md text-center" />
                           <select value={newEndMonth} onChange={e => setNewEndMonth(+e.target.value)}
-                            className="flex-1 px-2 py-1.5 text-xs border border-[#E5E5E5] rounded-md">
+                            className="flex-1 px-2 py-1.5 text-xs border border-[var(--border)] rounded-md">
                             {MONTH_NAMES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
                           </select>
                         </div>
@@ -236,24 +236,24 @@ export function SeasonalPeriodsModal({
 
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                       <div>
-                        <label className="text-[11px] text-[#9CA3AF] block mb-1">Στρατηγική Α</label>
+                        <label className="text-[11px] text-[var(--text-muted)] block mb-1">Στρατηγική Α</label>
                         <select value={newScenarioA} onChange={e => setNewScenarioA(e.target.value)}
-                          className="w-full px-2 py-1.5 text-xs border border-[#E5E5E5] rounded-md">
+                          className="w-full px-2 py-1.5 text-xs border border-[var(--border)] rounded-md">
                           {BASE_SCENARIOS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="text-[11px] text-[#9CA3AF] block mb-1">Στρατηγική Β</label>
+                        <label className="text-[11px] text-[var(--text-muted)] block mb-1">Στρατηγική Β</label>
                         <select value={newScenarioB} onChange={e => setNewScenarioB(e.target.value)}
-                          className="w-full px-2 py-1.5 text-xs border border-[#E5E5E5] rounded-md">
+                          className="w-full px-2 py-1.5 text-xs border border-[var(--border)] rounded-md">
                           {BASE_SCENARIOS.filter(s => s.id !== newScenarioA).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="text-[11px] text-[#9CA3AF] block mb-1">% Α</label>
+                        <label className="text-[11px] text-[var(--text-muted)] block mb-1">% Α</label>
                         <input type="number" min={10} max={90} step={5} value={newPercentA}
                           onChange={e => setNewPercentA(+e.target.value)}
-                          className="w-full px-2 py-1.5 text-xs border border-[#E5E5E5] rounded-md text-center" />
+                          className="w-full px-2 py-1.5 text-xs border border-[var(--border)] rounded-md text-center" />
                       </div>
                     </div>
 
@@ -262,7 +262,7 @@ export function SeasonalPeriodsModal({
                       value={newDescription}
                       onChange={e => setNewDescription(e.target.value)}
                       rows={2}
-                      className="w-full px-3 py-2 text-xs border border-[#E5E5E5] rounded-lg resize-none focus:outline-none focus:border-[var(--nts-accent)]"
+                      className="w-full px-3 py-2 text-xs border border-[var(--border)] rounded-lg resize-none focus:outline-none focus:border-[var(--nts-accent)]"
                     />
 
                     <div className="flex justify-end gap-2">
@@ -276,7 +276,7 @@ export function SeasonalPeriodsModal({
               ) : (
                 <button
                   onClick={() => setShowNewForm(true)}
-                  className="w-full p-3 border-2 border-dashed border-[#E5E5E5] rounded-xl text-xs font-medium text-[#9CA3AF] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent-text)] transition-all flex items-center justify-center gap-2"
+                  className="w-full p-3 border-2 border-dashed border-[var(--border)] rounded-xl text-xs font-medium text-[var(--text-muted)] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent-text)] transition-all flex items-center justify-center gap-2"
                 >
                   <Plus size={14} />
                   Προσθήκη custom περιόδου
@@ -286,7 +286,7 @@ export function SeasonalPeriodsModal({
           </div>
         </div>
 
-        <div className="p-4 border-t border-[#E5E5E5] flex justify-end flex-shrink-0">
+        <div className="p-4 border-t border-[var(--border)] flex justify-end flex-shrink-0">
           <Button variant="ghost" onClick={onClose}>Κλείσιμο</Button>
         </div>
       </motion.div>

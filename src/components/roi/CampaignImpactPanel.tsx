@@ -221,13 +221,13 @@ export function CampaignImpactPanel({
           <button
             type="button"
             onClick={() => toggleSort(sortableKey)}
-            className="text-left text-[11px] font-semibold uppercase tracking-wide text-[#6B7280] hover:text-[#111827]"
+            className="text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)] hover:text-[var(--text-primary)]"
           >
             {label}
             {sortIndicator(sortableKey)}
           </button>
         ) : (
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">{label}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</span>
         )}
         {filter}
       </div>
@@ -243,12 +243,12 @@ export function CampaignImpactPanel({
       />
 
       <div
-        className="mt-4 overflow-x-auto overflow-y-auto rounded-xl border border-[#E5E7EB]"
+        className="mt-4 overflow-x-auto overflow-y-auto rounded-xl border border-[var(--border)]"
         style={tableExpanded ? undefined : { maxHeight: `calc(${VISIBLE_ROW_COUNT} * ${ROW_HEIGHT_REM}rem + 3.5rem)` }}
       >
         <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-[#FAFAFA] shadow-[0_1px_0_#E5E7EB]">
-            <tr className="border-b border-[#E5E7EB]">
+          <thead className="sticky top-0 z-10 bg-[var(--surface-1)] shadow-[0_1px_0_var(--border)]">
+            <tr className="border-b border-[var(--border)]">
               <ThLabel
                 label="Καμπάνια"
                 sortableKey="name"
@@ -292,7 +292,7 @@ export function CampaignImpactPanel({
                 <button
                   type="button"
                   onClick={() => toggleSort('platformValue')}
-                  className="text-right text-[11px] font-semibold uppercase tracking-wide text-[#6B7280] hover:text-[#111827]"
+                  className="text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 >
                   <Tooltip content="Conversion value από Google Ads / Meta για την περίοδο.">
                     Platform value
@@ -319,7 +319,7 @@ export function CampaignImpactPanel({
                     <button
                       type="button"
                       onClick={() => toggleSort('storeCorrelated')}
-                      className="text-right text-[11px] font-semibold uppercase tracking-wide text-[#6B7280] hover:text-[#111827]"
+                      className="text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                     >
                       <Tooltip content="Μερίδιο τζίρου e-shop στην περίοδο ανάλογα με platform value (εκτίμηση correlation).">
                         Store corr.
@@ -337,22 +337,22 @@ export function CampaignImpactPanel({
                 <tr>
                   <td
                     colSpan={hasEcommerce ? 7 : 5}
-                    className="px-3 py-8 text-center text-sm text-[#6B7280]"
+                    className="px-3 py-8 text-center text-sm text-[var(--text-muted)]"
                   >
                     Καμία καμπάνια με τα τρέχοντα φίλτρα.
                   </td>
                 </tr>
               ) : (
                 filteredRows.map((row) => (
-                  <tr key={row.id} className="border-b border-[#F3F4F6] last:border-0 hover:bg-[#FAFAFA]">
+                  <tr key={row.id} className="border-b border-[var(--surface-2)] last:border-0 hover:bg-[var(--surface-1)]">
                     <td
-                      className="max-w-[220px] truncate px-3 py-2 font-medium text-[#1A1A1A]"
+                      className="max-w-[220px] truncate px-3 py-2 font-medium text-[var(--text-primary)]"
                       style={{ height: `${ROW_HEIGHT_REM}rem` }}
                       title={row.name}
                     >
                       {row.name}
                     </td>
-                    <td className="px-3 py-2 text-[#4A4A4A]" style={{ height: `${ROW_HEIGHT_REM}rem` }}>
+                    <td className="px-3 py-2 text-[var(--text-secondary)]" style={{ height: `${ROW_HEIGHT_REM}rem` }}>
                       {row.channel}
                     </td>
                     <td className="px-3 py-2 text-right font-mono tabular-nums">{formatCurrency(row.spend, 0)}</td>
@@ -381,7 +381,7 @@ export function CampaignImpactPanel({
 
       {(showExpandControl || filteredRows.length > 0) && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-[#6B7280]">
+          <p className="text-xs text-[var(--text-muted)]">
             {filteredRows.length} καμπάνι{filteredRows.length === 1 ? 'α' : 'ες'}
             {!tableExpanded && showExpandControl
               ? ` · εμφανίζονται ${VISIBLE_ROW_COUNT} με scroll`
@@ -413,14 +413,14 @@ export function CampaignImpactPanel({
 
       {hasEcommerce && timelineData.some((d) => d.spend > 0 || d.storeRevenue > 0) && (
         <div className="mt-6">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
             <TrendingUp size={16} className="text-[var(--nts-accent-text)]" />
             Timeline: ad spend vs e-shop revenue
           </div>
           <div className="h-[280px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={timelineData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                 <YAxis
                   yAxisId="spend"
@@ -461,7 +461,7 @@ export function CampaignImpactPanel({
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          <p className="mt-2 text-xs text-[#6B7280]">
+          <p className="mt-2 text-xs text-[var(--text-muted)]">
             Το e-shop revenue είναι πραγματικός τζίρος ημέρας· το spend αθροίζει daily metrics καμπανιών (όπου διαθέσιμα).
           </p>
         </div>

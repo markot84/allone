@@ -104,7 +104,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
     else await addRep.mutateAsync(repForm);
   };
 
-  const inputCls = 'w-full rounded-lg border border-[#1f2328]/15 bg-white px-3 py-2 text-sm text-[var(--nts-charcoal)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30';
+  const inputCls = 'w-full rounded-lg border border-[var(--text-primary)]/15 bg-white px-3 py-2 text-sm text-[var(--nts-charcoal)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30';
 
   const totalTargets = reps.reduce((s, r) => s + (r.targetAccounts ?? 0), 0);
   const alertCount = SAMPLE_REORDER.filter((a) => a.isAlert).length;
@@ -113,7 +113,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
     <div className="space-y-6">
       <PageHeader
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Sales Territory</h2>}
-        description={<p className="text-sm text-[#4A4A4A]">Διαχείριση γεωγραφικών περιοχών, εκχώρηση accounts σε sales reps και Reorder Intelligence.</p>}
+        description={<p className="text-sm text-[var(--text-secondary)]">Διαχείριση γεωγραφικών περιοχών, εκχώρηση accounts σε sales reps και Reorder Intelligence.</p>}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -123,7 +123,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-xl border border-[#eef0f3] bg-[#f9fafb] p-1 w-fit">
+      <div className="flex gap-1 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-1 w-fit">
         {([
           { id: 'reps' as TerritoryTab, label: 'Reps', icon: Users },
           { id: 'assignments' as TerritoryTab, label: 'Ανάθεση', icon: MapPin },
@@ -146,7 +146,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
       {/* ── Reps tab ─────────────────────────────────────── */}
       {activeTab === 'reps' && (
         <Card padding="none">
-          <div className="flex items-center justify-between p-5 border-b border-[#eef0f3]">
+          <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
             <CardHeader title="Sales Reps" subtitle={`${reps.length} καταχωρημένοι`} icon={<Users size={18} className="text-[var(--nts-medium-gray)]" />} />
             <Button variant="primary" onClick={() => { setEditingRep(null); setRepForm({ name: '', email: '', phone: '', region: '', targetAccounts: 0 }); setShowRepModal(true); }}>
               <Plus size={14} className="mr-1" /> Νέος Rep
@@ -160,7 +160,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#eef0f3] bg-[#f9fafb]">
+                  <tr className="border-b border-[var(--border)] bg-[var(--surface-1)]">
                     {['Ονοματεπώνυμο', 'Περιοχή', 'Email', 'Τηλέφωνο', 'Target Accounts', ''].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--nts-medium-gray)]">{h}</th>
                     ))}
@@ -168,7 +168,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
                 </thead>
                 <tbody>
                   {reps.map((rep) => (
-                    <tr key={rep.id} className="border-b border-[#eef0f3] hover:bg-[#f9fafb]/60">
+                    <tr key={rep.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-1)]/60">
                       <td className="px-4 py-3 font-medium text-[var(--nts-charcoal)]">{rep.name}</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{rep.region}</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{rep.email ?? '—'}</td>
@@ -176,7 +176,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
                       <td className="px-4 py-3 font-mono">{rep.targetAccounts}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <button onClick={() => openEditRep(rep)} className="p-1 rounded text-[var(--nts-medium-gray)] hover:bg-[#f0f0f0]"><Pencil size={14} /></button>
+                          <button onClick={() => openEditRep(rep)} className="p-1 rounded text-[var(--nts-medium-gray)] hover:bg-[var(--border)]"><Pencil size={14} /></button>
                           <button onClick={() => { if (window.confirm('Διαγραφή;')) deleteRep.mutate(rep.id); }} className="p-1 rounded text-[var(--nts-medium-gray)] hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
                         </div>
                       </td>
@@ -192,7 +192,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
       {/* ── Assignments tab ─────────────────────────────── */}
       {activeTab === 'assignments' && (
         <Card padding="none">
-          <div className="flex items-center justify-between p-5 border-b border-[#eef0f3]">
+          <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
             <CardHeader title="Ανάθεση Accounts" subtitle={`${assignments.length} εκχωρήσεις`} icon={<MapPin size={18} className="text-[var(--nts-medium-gray)]" />} />
             <Button variant="primary" disabled={reps.length === 0} onClick={() => { setAssignForm({ accountName: '', repId: '', region: '' }); setShowAssignModal(true); }}>
               <Plus size={14} className="mr-1" /> Νέα Ανάθεση
@@ -206,7 +206,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#eef0f3] bg-[#f9fafb]">
+                  <tr className="border-b border-[var(--border)] bg-[var(--surface-1)]">
                     {['Account', 'Rep', 'Περιοχή', 'Ανατέθηκε'].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--nts-medium-gray)]">{h}</th>
                     ))}
@@ -214,7 +214,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
                 </thead>
                 <tbody>
                   {assignments.map((a, i) => (
-                    <tr key={i} className="border-b border-[#eef0f3] hover:bg-[#f9fafb]/60">
+                    <tr key={i} className="border-b border-[var(--border)] hover:bg-[var(--surface-1)]/60">
                       <td className="px-4 py-3 font-medium text-[var(--nts-charcoal)]">{a.accountName}</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{a.repName}</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{a.region}</td>
@@ -247,7 +247,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#eef0f3] bg-[#f9fafb]">
+                  <tr className="border-b border-[var(--border)] bg-[var(--surface-1)]">
                     {['Account', 'Mean interval', 'Τελευταία αγορά', 'Αναμένεται', 'Ημέρες καθυστ.', 'Κατάσταση'].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--nts-medium-gray)]">{h}</th>
                     ))}
@@ -255,7 +255,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
                 </thead>
                 <tbody>
                   {SAMPLE_REORDER.map((acc) => (
-                    <tr key={acc.name} className={`border-b border-[#eef0f3] ${acc.isAlert ? 'bg-red-50/40' : ''}`}>
+                    <tr key={acc.name} className={`border-b border-[var(--border)] ${acc.isAlert ? 'bg-red-50/40' : ''}`}>
                       <td className="px-4 py-3 font-medium text-[var(--nts-charcoal)]">{acc.name}</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{acc.meanInterval}d</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{acc.lastOrderDate}</td>

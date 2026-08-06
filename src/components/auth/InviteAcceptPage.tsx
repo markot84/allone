@@ -62,12 +62,12 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-[360px] bg-white rounded-2xl border border-[#E5E7EB] shadow-sm p-7 text-center"
+          className="w-full max-w-[360px] bg-white rounded-2xl border border-[var(--border)] shadow-sm p-7 text-center"
         >
-          <p className="text-sm text-[#1A1A1A] font-medium">
+          <p className="text-sm text-[var(--text-primary)] font-medium">
             Το invite δεν βρέθηκε, έχει ήδη χρησιμοποιηθεί ή έχει λήξει.
           </p>
-          <p className="text-xs text-[#6B7280] mt-2">
+          <p className="text-xs text-[var(--text-muted)] mt-2">
             Ζητήστε νέα πρόσκληση από τον διαχειριστή του brand.
           </p>
           <button
@@ -96,20 +96,20 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
           <AllOneLogo height={48} className="mx-auto" />
         </div>
 
-        <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm p-7">
+        <div className="bg-white rounded-2xl border border-[var(--border)] shadow-sm p-7">
           <div className="text-center mb-6">
             <div className="w-11 h-11 bg-[#DCFCE7] rounded-xl flex items-center justify-center mx-auto mb-3">
               <CheckCircle size={22} className="text-[#22C55E]" />
             </div>
-            <h2 className="text-base font-bold text-[#1A1A1A]">Πρόσκληση σε Brand</h2>
-            <p className="text-xs text-[#6B7280] mt-1">
-              Προσκαλείστε να συμμετάσχετε στο <strong className="text-[#1A1A1A]">{brandName}</strong>
+            <h2 className="text-base font-bold text-[var(--text-primary)]">Πρόσκληση σε Brand</h2>
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              Προσκαλείστε να συμμετάσχετε στο <strong className="text-[var(--text-primary)]">{brandName}</strong>
             </p>
           </div>
 
           {!user ? (
             <div className="space-y-3">
-              <p className="text-xs text-[#6B7280] text-center">
+              <p className="text-xs text-[var(--text-muted)] text-center">
                 Συνδεθείτε ή δημιουργήστε λογαριασμό για να αποδεχτείτε την πρόσκληση.
               </p>
               <button

@@ -137,15 +137,15 @@ export function MarketingCostLinesEditor({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
+    <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white">
       {/* Header */}
       <div className="flex items-start gap-3 border-b border-rose-100 bg-rose-50/40 px-4 py-3.5">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-rose-100 bg-white">
           <PiggyBank size={17} className="text-rose-500" />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-[#111827]">Επιπλέον κόστη marketing (ROI)</p>
-          <p className="mt-0.5 text-[11px] leading-snug text-[#6B7280]">
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Επιπλέον κόστη marketing (ROI)</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">
             Τα <strong>σταθερά μηνιαία</strong> μετρούν <strong>πλήρες €/μήνα</strong> ανά ημερολογιακό μήνα της περιόδου·
             ποσοστά &amp; εφάπαξ κατανέμονται ανά ημέρα. Δεν αντικαθιστούν το budget καναλιών.
           </p>
@@ -155,7 +155,7 @@ export function MarketingCostLinesEditor({
       {/* Lines */}
       <div className="space-y-2 p-4">
         {lines.length === 0 && (
-          <p className="text-xs text-[#9CA3AF]">
+          <p className="text-xs text-[var(--text-muted)]">
             Δεν έχουν οριστεί γραμμές. Προσθέστε σταθερά μηνιαία, ποσοστό επί budget ή εφάπαξ.
           </p>
         )}
@@ -167,7 +167,7 @@ export function MarketingCostLinesEditor({
               className={`relative flex flex-col gap-2 rounded-lg border p-3 transition-colors sm:flex-row sm:flex-wrap sm:items-end ${
                 synced
                   ? 'border-rose-200 bg-rose-50/40 shadow-[inset_3px_0_0_0_#fb7185]'
-                  : 'border-[#E5E7EB] bg-white'
+                  : 'border-[var(--border)] bg-white'
               }`}
             >
               {synced && (
@@ -176,23 +176,23 @@ export function MarketingCostLinesEditor({
                 </span>
               )}
               <label className="min-w-[140px] flex-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Περιγραφή</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Περιγραφή</span>
                 <input
                   type="text"
                   value={line.label}
                   onChange={(e) => patchLine(line.id, { label: e.target.value })}
                   disabled={disabled}
                   placeholder="π.χ. Agency retainer"
-                  className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
+                  className="mt-1 w-full rounded-md border border-[var(--border)] px-2.5 py-1.5 text-sm text-[var(--text-primary)] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
                 />
               </label>
               <label className="w-full sm:w-40">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Τύπος</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Τύπος</span>
                 <select
                   value={line.kind}
                   onChange={(e) => setKind(line.id, e.target.value as MarketingCostLine['kind'])}
                   disabled={disabled}
-                  className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
+                  className="mt-1 w-full rounded-md border border-[var(--border)] px-2.5 py-1.5 text-sm text-[var(--text-primary)] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
                 >
                   <option value="fixed_monthly">Σταθερό / μήνα (€)</option>
                   <option value="percent_of_budget">% του μην. budget</option>
@@ -201,7 +201,7 @@ export function MarketingCostLinesEditor({
               </label>
               {line.kind === 'fixed_monthly' && (
                 <label className="w-full sm:w-28">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">€ / μήνα</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">€ / μήνα</span>
                   <input
                     type="text"
                     inputMode="decimal"
@@ -212,13 +212,13 @@ export function MarketingCostLinesEditor({
                       patchLine(line.id, { amountEUR: v === '' || isNaN(n) ? 0 : n });
                     }}
                     disabled={disabled}
-                    className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 font-mono text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
+                    className="mt-1 w-full rounded-md border border-[var(--border)] px-2.5 py-1.5 font-mono text-sm text-[var(--text-primary)] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
                   />
                 </label>
               )}
               {line.kind === 'percent_of_budget' && (
                 <label className="w-full sm:w-28">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">%</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">%</span>
                   <input
                     type="text"
                     inputMode="decimal"
@@ -229,24 +229,24 @@ export function MarketingCostLinesEditor({
                       patchLine(line.id, { percent: v === '' || isNaN(n) ? 0 : n });
                     }}
                     disabled={disabled}
-                    className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 font-mono text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
+                    className="mt-1 w-full rounded-md border border-[var(--border)] px-2.5 py-1.5 font-mono text-sm text-[var(--text-primary)] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
                   />
                 </label>
               )}
               {line.kind === 'one_off_month' && (
                 <>
                   <label className="w-full sm:w-36">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Μήνας</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Μήνας</span>
                     <input
                       type="month"
                       value={line.month}
                       onChange={(e) => patchLine(line.id, { month: e.target.value })}
                       disabled={disabled}
-                      className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
+                      className="mt-1 w-full rounded-md border border-[var(--border)] px-2.5 py-1.5 text-sm text-[var(--text-primary)] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
                     />
                   </label>
                   <label className="w-full sm:w-28">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">€ (σύνολο)</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">€ (σύνολο)</span>
                     <input
                       type="text"
                       inputMode="decimal"
@@ -257,7 +257,7 @@ export function MarketingCostLinesEditor({
                         patchLine(line.id, { amountEUR: v === '' || isNaN(n) ? 0 : n });
                       }}
                       disabled={disabled}
-                      className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 font-mono text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
+                      className="mt-1 w-full rounded-md border border-[var(--border)] px-2.5 py-1.5 font-mono text-sm text-[var(--text-primary)] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
                     />
                   </label>
                 </>
@@ -266,7 +266,7 @@ export function MarketingCostLinesEditor({
                 type="button"
                 onClick={() => removeLine(line.id)}
                 disabled={disabled}
-                className="flex h-[34px] w-[34px] shrink-0 items-center justify-center self-end rounded-md border border-transparent text-[#9CA3AF] hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+                className="flex h-[34px] w-[34px] shrink-0 items-center justify-center self-end rounded-md border border-transparent text-[var(--text-muted)] hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
                 title="Διαγραφή"
               >
                 <Trash2 size={15} />
@@ -285,15 +285,15 @@ export function MarketingCostLinesEditor({
       {/* Footer */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rose-100 bg-rose-50/30 px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span className="text-xs text-[#6B7280]">
+          <span className="text-xs text-[var(--text-muted)]">
             Σύνολο:{' '}
-            <span className="font-mono font-semibold text-[#111827]">{formatCurrencyCompact(monthlyTotal)}</span>
-            <span className="ml-0.5 text-[11px] text-[#9CA3AF]">/μήνα</span>
+            <span className="font-mono font-semibold text-[var(--text-primary)]">{formatCurrencyCompact(monthlyTotal)}</span>
+            <span className="ml-0.5 text-[11px] text-[var(--text-muted)]">/μήνα</span>
           </span>
           {oneOffTotal > 0 && (
-            <span className="text-xs text-[#6B7280]">
+            <span className="text-xs text-[var(--text-muted)]">
               Εφάπαξ:{' '}
-              <span className="font-mono font-semibold text-[#111827]">{formatCurrencyCompact(oneOffTotal)}</span>
+              <span className="font-mono font-semibold text-[var(--text-primary)]">{formatCurrencyCompact(oneOffTotal)}</span>
             </span>
           )}
           {hasPercentWithoutBudget && (
@@ -305,7 +305,7 @@ export function MarketingCostLinesEditor({
             type="button"
             onClick={addLine}
             disabled={disabled}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-[#4B5563] hover:border-rose-400 hover:text-rose-600 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:border-rose-400 hover:text-rose-600 disabled:opacity-40"
           >
             <Plus size={13} />
             Γραμμή
@@ -317,13 +317,13 @@ export function MarketingCostLinesEditor({
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
               !isDirty || disabled || isSaving
                 ? 'cursor-not-allowed bg-slate-100 text-slate-400'
-                : 'bg-[#111827] text-white shadow-sm hover:bg-[#1f2937]'
+                : 'bg-[var(--text-primary)] text-white shadow-sm hover:bg-[#1f2937]'
             }`}
           >
             {isSaving ? 'Αποθήκευση…' : 'Αποθήκευση'}
           </button>
           {!isDirty && !disabled && !isSaving && (
-            <span className="text-[11px] text-[#9CA3AF]">Καμία αλλαγή</span>
+            <span className="text-[11px] text-[var(--text-muted)]">Καμία αλλαγή</span>
           )}
         </div>
       </div>

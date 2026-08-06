@@ -85,7 +85,7 @@ export function GrowthPlayPanel({
           <div>
             <div className={`text-sm font-semibold ${config.color}`}>{config.label}</div>
             {strategyName && (
-              <div className="text-[11px] text-[#6B7280] mt-0.5">
+              <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
                 Στρατηγική: <span className="font-medium">{strategyName}</span>
               </div>
             )}
@@ -101,7 +101,7 @@ export function GrowthPlayPanel({
           />
           <button
             onClick={onDismiss}
-            className="p-1 rounded-lg hover:bg-white/60 transition-colors text-[#9CA3AF] hover:text-[#6B7280]"
+            className="p-1 rounded-lg hover:bg-white/60 transition-colors text-[var(--text-muted)] hover:text-[var(--text-muted)]"
             title="Κλείσιμο"
           >
             <X size={14} />
@@ -146,7 +146,7 @@ function PlayDescription({
 
   if (play === 'cross_sell') {
     return (
-      <p className="text-xs text-[#4A4A4A] leading-relaxed">
+      <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
         Ανάλυση cross-sell ευκαιριών για{' '}
         <strong>{segments.length} segments</strong> ({segNames}). Κάθε πρόταση
         περιλαμβάνει τις κατηγορίες προϊόντων που αξίζουν ενεργοποίηση, campaign
@@ -156,7 +156,7 @@ function PlayDescription({
   }
   if (play === 'upsell') {
     return (
-      <p className="text-xs text-[#4A4A4A] leading-relaxed">
+      <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
         Upsell πρόταση για{' '}
         <strong>{topSeg?.name ?? 'κορυφαίο'} segment</strong>
         {topSeg?.revenueShare > 0
@@ -167,7 +167,7 @@ function PlayDescription({
     );
   }
   return (
-    <p className="text-xs text-[#4A4A4A] leading-relaxed">
+    <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
       Win-back καμπάνια για <strong>{segNames}</strong>. Στόχος η επανενεργοποίηση
       πελατών με στοχευμένες προσφορές και εξατομικευμένη επικοινωνία.
     </p>
@@ -218,11 +218,11 @@ function SegmentProposalCard({
   const primaryPlaybook = playbookEntries.find((e) => e.priority === 'primary') ?? playbookEntries[0];
 
   return (
-    <div className="rounded-xl bg-white border border-[#E5E7EB] shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-white border border-[var(--border)] shadow-sm overflow-hidden">
       {/* Card header */}
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[#F9FAFB] transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[var(--surface-1)] transition-colors"
       >
         <div className="flex items-center gap-3 min-w-0">
           <div
@@ -230,8 +230,8 @@ function SegmentProposalCard({
             style={{ backgroundColor: segment.color }}
           />
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-[#1A1A1A] truncate">{segment.name}</div>
-            <div className="text-[11px] text-[#6B7280] mt-0.5">
+            <div className="text-sm font-semibold text-[var(--text-primary)] truncate">{segment.name}</div>
+            <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
               {segment.count > 0 && `${segment.count.toLocaleString('el-GR')} πελάτες`}
               {segment.revenueShare > 0 && ` · ${segment.revenueShare.toFixed(1)}% εσόδων`}
               {segment.rationale && ` · ${segment.rationale}`}
@@ -245,16 +245,16 @@ function SegmentProposalCard({
             </span>
           )}
           {isExpanded ? (
-            <ChevronUp size={14} className="text-[#9CA3AF]" />
+            <ChevronUp size={14} className="text-[var(--text-muted)]" />
           ) : (
-            <ChevronDown size={14} className="text-[#9CA3AF]" />
+            <ChevronDown size={14} className="text-[var(--text-muted)]" />
           )}
         </div>
       </button>
 
       {/* Expanded content */}
       {isExpanded && (
-        <div className="border-t border-[#F3F4F6] px-4 pb-4 pt-3 space-y-4">
+        <div className="border-t border-[var(--surface-2)] px-4 pb-4 pt-3 space-y-4">
           {/* Category opportunities */}
           {topCategories.length > 0 && (
             <CategoryOpportunitiesSection
@@ -266,7 +266,7 @@ function SegmentProposalCard({
           {/* Channel campaign briefs */}
           {playbookEntries.length > 0 ? (
             <div className="space-y-3">
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#374151] uppercase tracking-wider">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
                 <Megaphone size={11} />
                 Campaign Briefs
               </div>
@@ -275,7 +275,7 @@ function SegmentProposalCard({
               ))}
             </div>
           ) : primaryPlaybook ? null : (
-            <div className="text-xs text-[#9CA3AF] italic">
+            <div className="text-xs text-[var(--text-muted)] italic">
               Δεν υπάρχει AI campaign brief για αυτό το segment. Ενεργοποιήστε AI
               σύσταση στο Channel Activation.
             </div>
@@ -309,7 +309,7 @@ function CategoryOpportunitiesSection({
 
   return (
     <div>
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#374151] uppercase tracking-wider mb-2">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
         <ShoppingBag size={11} />
         {label}
       </div>
@@ -317,14 +317,14 @@ function CategoryOpportunitiesSection({
         {categories.map((cat) => (
           <div
             key={cat.name}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] text-xs"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--surface-1)] border border-[var(--border)] text-xs"
           >
-            <span className="font-medium text-[#1A1A1A] truncate max-w-[120px]">{cat.name}</span>
+            <span className="font-medium text-[var(--text-primary)] truncate max-w-[120px]">{cat.name}</span>
             {cat.revenue_share_pct != null && cat.revenue_share_pct > 0 && (
-              <span className="text-[#6B7280] text-[10px]">{cat.revenue_share_pct.toFixed(1)}%</span>
+              <span className="text-[var(--text-muted)] text-[10px]">{cat.revenue_share_pct.toFixed(1)}%</span>
             )}
             {cat.avg_order != null && cat.avg_order > 0 && (
-              <span className="text-[#6B7280] text-[10px]">
+              <span className="text-[var(--text-muted)] text-[10px]">
                 AOV €{cat.avg_order.toFixed(0)}
               </span>
             )}
@@ -346,21 +346,21 @@ function CampaignBriefCard({
   const isPrimary = entry.priority === 'primary';
 
   return (
-    <div className="rounded-xl border border-[#E5E7EB] bg-[#FAFAFA] overflow-hidden">
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] overflow-hidden">
       <div className="flex items-start justify-between px-3 py-2.5">
         <div className="flex items-center gap-2 min-w-0">
           <span
             className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border flex-shrink-0 ${
               isPrimary
                 ? 'bg-[var(--nts-accent,#F97316)] text-white border-transparent'
-                : 'bg-white text-[#6B7280] border-[#E5E7EB]'
+                : 'bg-white text-[var(--text-muted)] border-[var(--border)]'
             }`}
           >
             {isPrimary ? 'Primary' : 'Secondary'}
           </span>
-          <span className="text-xs font-semibold text-[#1A1A1A] truncate">{entry.channel}</span>
+          <span className="text-xs font-semibold text-[var(--text-primary)] truncate">{entry.channel}</span>
           {entry.budgetSharePct != null && entry.budgetSharePct > 0 && (
-            <span className="text-[10px] text-[#6B7280] flex-shrink-0">Budget: {entry.budgetSharePct}%</span>
+            <span className="text-[10px] text-[var(--text-muted)] flex-shrink-0">Budget: {entry.budgetSharePct}%</span>
           )}
         </div>
         {entry.marketingBrief && (
@@ -377,7 +377,7 @@ function CampaignBriefCard({
       {entry.message && (
         <div className="mx-3 mb-2.5 flex items-start gap-2 p-2.5 rounded-lg bg-[#F5F3FF] border border-[#E9D5FF]">
           <Megaphone size={12} className="text-[#7C3AED] flex-shrink-0 mt-0.5" />
-          <p className="text-[11px] text-[#4A4A4A] leading-snug italic">"{entry.message}"</p>
+          <p className="text-[11px] text-[var(--text-secondary)] leading-snug italic">"{entry.message}"</p>
         </div>
       )}
 
@@ -389,7 +389,7 @@ function CampaignBriefCard({
             <div className="text-[10px] font-semibold text-blue-700 uppercase tracking-wider mb-1">
               Marketing Brief (Agency)
             </div>
-            <p className="text-[11px] text-[#374151] leading-relaxed">{entry.marketingBrief}</p>
+            <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">{entry.marketingBrief}</p>
           </div>
         </div>
       )}
@@ -409,17 +409,17 @@ function BudgetSummaryRow({
 
   return (
     <div className="flex items-center gap-3 flex-wrap">
-      <div className="flex items-center gap-1 text-[11px] font-semibold text-[#374151] uppercase tracking-wider">
+      <div className="flex items-center gap-1 text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
         <BarChart3 size={11} />
         Budget split
       </div>
       {withBudget.map((e) => (
         <div
           key={e.channel}
-          className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-[#F3F4F6] border border-[#E5E7EB]"
+          className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--border)]"
         >
-          <span className="font-medium text-[#1A1A1A]">{e.channel}</span>
-          <span className="text-[#6B7280]">{e.budgetSharePct}%</span>
+          <span className="font-medium text-[var(--text-primary)]">{e.channel}</span>
+          <span className="text-[var(--text-muted)]">{e.budgetSharePct}%</span>
         </div>
       ))}
     </div>
@@ -514,7 +514,7 @@ function ExportButton({
     <button
       onClick={handleExport}
       disabled={exporting}
-      className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB] transition-all disabled:opacity-50"
+      className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-white text-[var(--text-secondary)] hover:bg-[var(--surface-1)] transition-all disabled:opacity-50"
     >
       <Download size={12} />
       {exporting ? 'Εξαγωγή...' : 'Export XLSX'}

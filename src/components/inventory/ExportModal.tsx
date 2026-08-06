@@ -125,90 +125,90 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#1A1A1A]">Επιλογές εξαγωγής</h2>
+            <div className="p-6 border-b border-[var(--border)] flex items-center justify-between">
+              <h2 className="text-xl font-bold text-[var(--text-primary)]">Επιλογές εξαγωγής</h2>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"
+                className="p-2 hover:bg-[var(--surface-2)] rounded-lg transition-colors"
               >
-                <X size={20} className="text-[#4A4A4A]" />
+                <X size={20} className="text-[var(--text-secondary)]" />
               </button>
             </div>
 
             {/* Content */}
             <div className="p-6 space-y-3">
-              <p className="text-sm text-[#4A4A4A] mb-4">
+              <p className="text-sm text-[var(--text-secondary)] mb-4">
                 Εξαγωγή <strong>{scopeLabel ?? 'τρέχουσας φιλτραρισμένης προβολής'}</strong>: <strong>{filteredProducts.length}</strong> προϊόντα
               </p>
 
               <button
                 onClick={exportToExcel}
-                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
+                className="w-full p-4 border-2 border-[var(--border)] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
               >
                 <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors">
                   <FileSpreadsheet size={24} className="text-[#22C55E]" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-[#1A1A1A]">Εξαγωγή σε Excel (.xlsx)</h3>
-                  <p className="text-xs text-[#4A4A4A]">Λήψη αρχείου .xlsx</p>
+                  <h3 className="font-semibold text-[var(--text-primary)]">Εξαγωγή σε Excel (.xlsx)</h3>
+                  <p className="text-xs text-[var(--text-secondary)]">Λήψη αρχείου .xlsx</p>
                 </div>
               </button>
 
               <button
                 onClick={exportToCSV}
-                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
+                className="w-full p-4 border-2 border-[var(--border)] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
               >
-                <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors">
-                  <FileText size={24} className="text-[#4A4A4A]" />
+                <div className="p-3 bg-[var(--surface-2)] rounded-lg group-hover:bg-[var(--border)] transition-colors">
+                  <FileText size={24} className="text-[var(--text-secondary)]" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-[#1A1A1A]">Εξαγωγή σε CSV</h3>
-                  <p className="text-xs text-[#4A4A4A]">Λήψη αρχείου .csv</p>
+                  <h3 className="font-semibold text-[var(--text-primary)]">Εξαγωγή σε CSV</h3>
+                  <p className="text-xs text-[var(--text-secondary)]">Λήψη αρχείου .csv</p>
                 </div>
               </button>
 
               <button
                 onClick={exportToGoogleAdsXml}
-                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
+                className="w-full p-4 border-2 border-[var(--border)] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
               >
                 <div className="p-3 bg-[#EA4335]/10 rounded-lg group-hover:bg-[#EA4335]/20 transition-colors">
                   <FileCode size={24} className="text-[#EA4335]" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-[#1A1A1A]">Εξαγωγή XML Google Ads</h3>
-                  <p className="text-xs text-[#4A4A4A]">Product feed για Google Merchant Center</p>
+                  <h3 className="font-semibold text-[var(--text-primary)]">Εξαγωγή XML Google Ads</h3>
+                  <p className="text-xs text-[var(--text-secondary)]">Product feed για Google Merchant Center</p>
                 </div>
               </button>
 
               <button
                 onClick={exportToGoogleSheets}
-                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
+                className="w-full p-4 border-2 border-[var(--border)] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
               >
                 <div className="p-3 bg-[#34A853]/10 rounded-lg group-hover:bg-[#34A853]/20 transition-colors">
                   <ExternalLink size={24} className="text-[#34A853]" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-[#1A1A1A]">Άνοιγμα στο Google Sheets</h3>
-                  <p className="text-xs text-[#4A4A4A]">Εισαγωγή δεδομένων σε νέο spreadsheet</p>
+                  <h3 className="font-semibold text-[var(--text-primary)]">Άνοιγμα στο Google Sheets</h3>
+                  <p className="text-xs text-[var(--text-secondary)]">Εισαγωγή δεδομένων σε νέο spreadsheet</p>
                 </div>
               </button>
 
               <button
                 onClick={showCharts}
-                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
+                className="w-full p-4 border-2 border-[var(--border)] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
               >
                 <div className="p-3 bg-[#8B5CF6]/10 rounded-lg group-hover:bg-[#8B5CF6]/20 transition-colors">
                   <BarChart3 size={24} className="text-[#8B5CF6]" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-[#1A1A1A]">Προβολή διαγραμμάτων</h3>
-                  <p className="text-xs text-[#4A4A4A]">Οπτικοποίηση δεδομένων με γραφήματα</p>
+                  <h3 className="font-semibold text-[var(--text-primary)]">Προβολή διαγραμμάτων</h3>
+                  <p className="text-xs text-[var(--text-secondary)]">Οπτικοποίηση δεδομένων με γραφήματα</p>
                 </div>
               </button>
             </div>
 
             {/* Footer */}
-            <div className="p-6 border-t border-[#E5E5E5] flex justify-end">
+            <div className="p-6 border-t border-[var(--border)] flex justify-end">
               <Button variant="ghost" onClick={onClose}>
                 Ακύρωση
               </Button>
@@ -248,33 +248,33 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
                       setShowGoogleSheetsModal(false);
                       onClose();
                     }}
-                    className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
+                    className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]"
                   >
-                    <X size={20} className="text-[#4A4A4A]" />
+                    <X size={20} className="text-[var(--text-secondary)]" />
                   </button>
                 }
               />
 
               {/* Content */}
               <div className="p-6 space-y-4">
-                <p className="text-sm text-[#4A4A4A]">
+                <p className="text-sm text-[var(--text-secondary)]">
                   Το CSV αρχείο κατέβηκε επιτυχώς!
                 </p>
-                <div className="bg-[#F5F5F5] rounded-lg p-4 space-y-2">
-                  <p className="text-sm font-semibold text-[#1A1A1A]">Για να το εισάγεις στο Google Sheets:</p>
-                  <ol className="text-sm text-[#4A4A4A] space-y-1 list-decimal list-inside">
+                <div className="bg-[var(--surface-2)] rounded-lg p-4 space-y-2">
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">Για να το εισάγεις στο Google Sheets:</p>
+                  <ol className="text-sm text-[var(--text-secondary)] space-y-1 list-decimal list-inside">
                     <li>Κάνε "File" → "Import"</li>
                     <li>Επέλεξε "Upload" και ανέβασε το αρχείο</li>
                     <li>Επέλεξε "Replace spreadsheet" ή "Insert new sheet(s)"</li>
                   </ol>
                 </div>
-                <p className="text-sm text-[#4A4A4A]">
+                <p className="text-sm text-[var(--text-secondary)]">
                   Θέλεις να ανοίξεις το Google Sheets τώρα;
                 </p>
               </div>
 
               {/* Footer */}
-              <div className="p-6 border-t border-[#E5E5E5] flex justify-end gap-3">
+              <div className="p-6 border-t border-[var(--border)] flex justify-end gap-3">
                 <Button 
                   variant="ghost" 
                   onClick={() => {

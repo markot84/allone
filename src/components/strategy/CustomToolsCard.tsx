@@ -71,7 +71,7 @@ export function CustomToolsCard({
               value={saveName}
               onChange={(e) => setSaveName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-              className="px-3 py-2 w-40 bg-white border border-[#E5E5E5] rounded-lg text-sm"
+              className="px-3 py-2 w-40 bg-white border border-[var(--border)] rounded-lg text-sm"
               autoFocus
             />
             <Button
@@ -105,7 +105,7 @@ export function CustomToolsCard({
             <select
               value={loadPresetId}
               onChange={(e) => setLoadPresetId(e.target.value)}
-              className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm"
+              className="px-3 py-2 bg-[var(--surface-2)] border border-transparent rounded-lg text-sm"
             >
               <option value="">— Φόρτωση preset —</option>
               {presets.map((p) => (

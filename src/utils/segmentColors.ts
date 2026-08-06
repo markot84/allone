@@ -18,7 +18,7 @@ export const SEGMENT_COLORS: Record<string, string> = {
 };
 
 export function getSegmentColor(segment: RFMSegment | null | undefined): string {
-  if (!segment) return '#6B7280';
+  if (!segment) return 'var(--text-muted)';
   const idKey = segment.id.toLowerCase().replace(/\s+/g, '_');
   const idKeyNoApostrophe = idKey.replace(/'/g, '');
   const nameKey = (segment.name ?? '').toLowerCase().replace(/\s+/g, '_');
@@ -30,6 +30,6 @@ export function getSegmentColor(segment: RFMSegment | null | undefined): string 
     SEGMENT_COLORS[nameKey] ??
     SEGMENT_COLORS[nameKeyNoApostrophe] ??
     segment.color ??
-    '#6B7280'
+    'var(--text-muted)'
   );
 }

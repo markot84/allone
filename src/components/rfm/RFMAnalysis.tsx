@@ -317,7 +317,7 @@ export function RFMAnalysis() {
             </Button>
           }
           description={
-            <p className="text-sm text-[#4A4A4A] sm:text-base leading-snug">
+            <p className="text-sm text-[var(--text-secondary)] sm:text-base leading-snug">
               Ανάλυση τμημάτων πελατών (RFM, behavioral, firmographic) από e-shop orders ή ERP/other data
             </p>
           }
@@ -326,12 +326,12 @@ export function RFMAnalysis() {
           {stillLoadingOrders ? (
             <div className="flex flex-col items-center gap-3 py-8 text-center">
               <Spinner size="lg" />
-              <p className="text-sm font-semibold text-[#1A1A1A]">Φόρτωση παραγγελιών e-shop…</p>
+              <p className="text-sm font-semibold text-[var(--text-primary)]">Φόρτωση παραγγελιών e-shop…</p>
             </div>
           ) : ordersError ? (
             <div className="text-center py-8">
               <p className="text-sm font-semibold text-[#B91C1C] mb-2">Αδυναμία ανάγνωσης παραγγελιών</p>
-              <p className="text-xs text-[#4A4A4A] mb-4 max-w-md mx-auto">
+              <p className="text-xs text-[var(--text-secondary)] mb-4 max-w-md mx-auto">
                 {ordersError.message || 'Άγνωστο σφάλμα από Firestore. Δοκιμάστε refresh ή ξανά sync τους connectors.'}
               </p>
               <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
@@ -340,13 +340,13 @@ export function RFMAnalysis() {
             </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-[#4A4A4A] mb-4">
+              <p className="text-[var(--text-secondary)] mb-4">
                 {hasEcomm && !canComputeFromOrders
                   ? 'Δεν υπάρχει ακόμη αποθηκευμένη Data Analysis για αυτό το brand.'
                   : 'Δεν υπάρχει ακόμη αποθηκευμένη Data Analysis.'}
               </p>
-              <p className="text-sm text-[#4A4A4A]">
-                Πατήστε <span className="font-semibold text-[#1A1A1A]">Ανανέωση ανάλυσης</span> για να δημιουργηθεί snapshot που θα μείνει ορατό έως την επόμενη μηνιαία ή χειροκίνητη ανάλυση.
+              <p className="text-sm text-[var(--text-secondary)]">
+                Πατήστε <span className="font-semibold text-[var(--text-primary)]">Ανανέωση ανάλυσης</span> για να δημιουργηθεί snapshot που θα μείνει ορατό έως την επόμενη μηνιαία ή χειροκίνητη ανάλυση.
               </p>
             </div>
           )}
@@ -441,17 +441,17 @@ export function RFMAnalysis() {
       />
 
       {/* One compact row: source + sizes — no duplication with coverage when it is purely e-shop */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[#E8EAED] bg-[#FAFBFC] px-3 py-2 text-[12px] text-[#374151]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[#E8EAED] bg-[#FAFBFC] px-3 py-2 text-[12px] text-[var(--text-secondary)]">
         {showDataSourceSelector ? (
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <span className="text-[#6B7280] whitespace-nowrap">Πηγή</span>
-            <div className="inline-flex rounded-lg border border-[#E5E7EB] bg-white p-0.5 shadow-sm">
+            <span className="text-[var(--text-muted)] whitespace-nowrap">Πηγή</span>
+            <div className="inline-flex rounded-lg border border-[var(--border)] bg-white p-0.5 shadow-sm">
               <button
                 type="button"
                 className={`rounded-md px-2.5 py-1 text-[12px] font-semibold transition-colors ${
                   effectiveSourceChoice === 'orders'
                     ? 'bg-[var(--nts-accent)] text-white'
-                    : 'text-[#6B7280] hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-45'
+                    : 'text-[var(--text-muted)] hover:bg-[var(--surface-1)] disabled:cursor-not-allowed disabled:opacity-45'
                 }`}
                 disabled={ordersOptionUnavailable}
                 title={
@@ -470,7 +470,7 @@ export function RFMAnalysis() {
                 className={`rounded-md px-2.5 py-1 text-[12px] font-semibold transition-colors ${
                   effectiveSourceChoice === 'external'
                     ? 'bg-[var(--nts-accent)] text-white'
-                    : 'text-[#6B7280] hover:bg-[#F9FAFB]'
+                    : 'text-[var(--text-muted)] hover:bg-[var(--surface-1)]'
                 }`}
                 onClick={() => setDataSourcePreference('external')}
               >
@@ -480,26 +480,26 @@ export function RFMAnalysis() {
           </div>
         ) : null}
         {showDataSourceSelector ? (
-          <span className="hidden sm:inline h-4 w-px shrink-0 bg-[#E5E7EB]" aria-hidden />
+          <span className="hidden sm:inline h-4 w-px shrink-0 bg-[var(--border)]" aria-hidden />
         ) : null}
         {hasImportedSegments ? (
-          <span className="font-semibold tabular-nums text-[#111827]">
+          <span className="font-semibold tabular-nums text-[var(--text-primary)]">
             {rfmSegments.length} segments · {formatNumber(totalCustomersDisplay)} πελάτες
           </span>
         ) : null}
         {rfmDataSource === 'ecommerce' ? (
-          <span className="text-[#6B7280]">
+          <span className="text-[var(--text-muted)]">
             {rfmSourcePref === 'external' ? 'Όλοι οι αγοραστές · 12-month order history' : 'Αναγνωρίσιμοι πελάτες · 12-month order history'}
           </span>
         ) : (
-          <span className="text-[#6B7280]">Εισαγωγή / ERP εκτός e-shop</span>
+          <span className="text-[var(--text-muted)]">Εισαγωγή / ERP εκτός e-shop</span>
         )}
         <DataSourcePill
           label="Source"
           value={rfmSourceLabel}
           tone={rfmDataSource === 'import' ? 'warning' : rfmDataSource === 'ecommerce' ? 'success' : 'neutral'}
         />
-        <span className={analysisSnapshotIsStale ? 'font-medium text-[#B45309]' : 'text-[#6B7280]'}>
+        <span className={analysisSnapshotIsStale ? 'font-medium text-[#B45309]' : 'text-[var(--text-muted)]'}>
           {lastAnalysisLabel}
           {analysisSnapshotIsStale ? ' · χρειάζεται χειροκίνητη ανανέωση' : ''}
         </span>
@@ -510,7 +510,7 @@ export function RFMAnalysis() {
             const guestPct = totalCustomerScoped > 0
               ? Math.round((orderRfmMeta.guestOrdersSkipped / totalCustomerScoped) * 100)
               : 0;
-            const tone = guestPct >= 50 ? 'text-[#B45309]' : 'text-[#6B7280]';
+            const tone = guestPct >= 50 ? 'text-[#B45309]' : 'text-[var(--text-muted)]';
             return (
               <span
                 className={`text-[11px] font-medium ${tone}`}
@@ -586,10 +586,10 @@ export function RFMAnalysis() {
               <Users size={18} className="text-[var(--nts-accent-text)]" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-[11px] text-[#4A4A4A]">
+              <p className="truncate text-[11px] text-[var(--text-secondary)]">
                 <InfoTooltip content="Συνολικός αριθμός πελατών στη βάση RFM.">Πελάτες</InfoTooltip>
               </p>
-              <p className="font-mono text-lg font-bold text-[#1A1A1A]">{formatNumber(totalCustomersDisplay)}</p>
+              <p className="font-mono text-lg font-bold text-[var(--text-primary)]">{formatNumber(totalCustomersDisplay)}</p>
             </div>
           </div>
         </Card>
@@ -599,23 +599,23 @@ export function RFMAnalysis() {
               <TrendingUp size={18} className="text-[#22C55E]" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-[11px] text-[#4A4A4A]">
+              <p className="truncate text-[11px] text-[var(--text-secondary)]">
                 <InfoTooltip content="Αριθμός RFM segments.">Segments</InfoTooltip>
               </p>
-              <p className="text-lg font-bold text-[#1A1A1A]">{rfmSegments.length}</p>
+              <p className="text-lg font-bold text-[var(--text-primary)]">{rfmSegments.length}</p>
             </div>
           </div>
         </Card>
         <Card padding="sm" hover>
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F5F5F5]">
-              <Zap size={18} className="text-[#4A4A4A]" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-2)]">
+              <Zap size={18} className="text-[var(--text-secondary)]" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-[11px] text-[#4A4A4A]">
+              <p className="truncate text-[11px] text-[var(--text-secondary)]">
                 <InfoTooltip content="Μέσος RFM score (1–5).">Μέσος score</InfoTooltip>
               </p>
-              <p className="font-mono text-lg font-bold text-[#1A1A1A]">
+              <p className="font-mono text-lg font-bold text-[var(--text-primary)]">
                 {(() => {
                   if (rfmSegments.length === 0) return '0';
                   const scores = rfmSegments
@@ -634,7 +634,7 @@ export function RFMAnalysis() {
               <TrendingDown size={18} className="text-[#F59E0B]" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-[11px] text-[#4A4A4A]">
+              <p className="truncate text-[11px] text-[var(--text-secondary)]">
                 <InfoTooltip content="Ποσοστό πελατών At Risk.">At Risk</InfoTooltip>
               </p>
               <p className="font-mono text-lg font-bold text-[#F59E0B]">
@@ -655,7 +655,7 @@ export function RFMAnalysis() {
         <CardHeader
           title="Segments: μέγεθος και αξία"
           subtitle="Το εμβαδόν είναι το πλήθος πελατών, η ένταση του χρώματος το μερίδιο τζίρου. Μεγάλο και ξεθωριασμένο = πολλοί πελάτες με μικρή συνεισφορά."
-          icon={<Users size={18} className="text-[var(--fgColor-muted,#57606a)] shrink-0" />}
+          icon={<Users size={18} className="text-[var(--fgColor-muted,var(--text-muted))] shrink-0" />}
         />
         <div className="min-w-0">
           {treemapReveal.mounted ? (
@@ -677,14 +677,14 @@ export function RFMAnalysis() {
               type="button"
               onClick={() => setSelectedSegmentId(segment.id)}
               className={`flex min-w-0 items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors duration-[var(--dur-state)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FDBA74]/50 ${
-                selectedSegment?.id === segment.id ? 'bg-[#FFF7ED] ring-1 ring-[#FED7AA]' : 'hover:bg-[#F9FAFB]'
+                selectedSegment?.id === segment.id ? 'bg-[#FFF7ED] ring-1 ring-[#FED7AA]' : 'hover:bg-[var(--surface-1)]'
               }`}
             >
               <span className="flex min-w-0 items-center gap-1.5">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: segment.color }} />
-                <span className="truncate text-[#374151]">{segment.name}</span>
+                <span className="truncate text-[var(--text-secondary)]">{segment.name}</span>
               </span>
-              <span className="shrink-0 font-mono text-[11px] font-semibold text-[#111827]" data-numeric>
+              <span className="shrink-0 font-mono text-[11px] font-semibold text-[var(--text-primary)]" data-numeric>
                 {formatPercent(segment.percentage ?? 0, 1)} πελ.
                 <span className="ml-1.5 font-normal" style={{ color: segment.color }}>
                   {fmtPct(segment.revenue_share ?? 0)}% τζ.
@@ -728,13 +728,13 @@ export function RFMAnalysis() {
               <span className="text-[13px] font-semibold text-[var(--nts-accent-text)] hover:underline">
                 Κάρτες ανά segment (προαιρετικά)
               </span>
-              <span className="mt-1 block text-[11px] font-normal leading-snug text-[#6B7280]">
+              <span className="mt-1 block text-[11px] font-normal leading-snug text-[var(--text-muted)]">
                 Πάτησε για άνοιγμα — οι κάρτες επαναλαμβάνουν τα ίδια segments για γρήγορο export χωρίς να ανοίξει το πάνελ λεπτομερειών.
               </span>
             </div>
           </div>
         </summary>
-        <div className="border-t border-[#E5E7EB] px-4 pb-4 pt-3">
+        <div className="border-t border-[var(--border)] px-4 pb-4 pt-3">
           <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {rfmSegments.map((segment, index) => (
               <SegmentCard
@@ -761,7 +761,7 @@ export function RFMAnalysis() {
           {hasImportedSegments && rfmSegments.length > 0 ? (
             segmentPeriodComparison?.canCompute && segmentPeriodComparison.rows.length > 0 ? (
               <>
-                <p className="text-xs text-[#6B7280]">
+                <p className="text-xs text-[var(--text-muted)]">
                   Τρέχουσα περίοδος {new Date(segmentPeriodComparison.currentFrom).toLocaleDateString('el-GR')} – {new Date(segmentPeriodComparison.currentTo).toLocaleDateString('el-GR')}
                   {' '}vs προηγούμενη {new Date(segmentPeriodComparison.previousFrom).toLocaleDateString('el-GR')} – {new Date(segmentPeriodComparison.previousTo).toLocaleDateString('el-GR')}.
                   {' '}Σύγκριση {formatNumber(segmentPeriodComparison.currentCustomers)} vs {formatNumber(segmentPeriodComparison.previousCustomers)} αναγνωρίσιμων πελατών
@@ -769,15 +769,15 @@ export function RFMAnalysis() {
                 </p>
                 <div className="space-y-2">
                   {segmentPeriodComparison.rows.map((row) => {
-                    const color = segmentColorById.get(row.id) || '#1A1A1A';
+                    const color = segmentColorById.get(row.id) || 'var(--text-primary)';
                     const deltaTone = row.countDelta > 0 ? 'up' : row.countDelta < 0 ? 'down' : 'flat';
-                    const deltaColor = deltaTone === 'up' ? '#16A34A' : deltaTone === 'down' ? '#DC2626' : '#6B7280';
+                    const deltaColor = deltaTone === 'up' ? '#16A34A' : deltaTone === 'down' ? '#DC2626' : 'var(--text-muted)';
                     return (
-                      <div key={row.id} className="rounded-xl border border-[#E5E5E5] bg-white p-3">
+                      <div key={row.id} className="rounded-xl border border-[var(--border)] bg-white p-3">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex min-w-0 items-center gap-2 text-sm">
                             <span className="min-w-0 truncate font-semibold" style={{ color }}>{row.name}</span>
-                            <span className="rounded-full bg-[#F5F5F5] px-2 py-0.5 font-mono text-xs text-[#4A4A4A]">
+                            <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 font-mono text-xs text-[var(--text-secondary)]">
                               {formatNumber(row.previousCount)} → {formatNumber(row.currentCount)} πελάτες
                             </span>
                           </div>
@@ -785,10 +785,10 @@ export function RFMAnalysis() {
                             <span className="font-bold" style={{ color: deltaColor }}>
                               {row.countDelta > 0 ? '+' : ''}{formatNumber(row.countDelta, 0)} πελάτες
                             </span>
-                            <span className="rounded-full bg-[#F5F5F5] px-2 py-0.5 text-[#4A4A4A]">
+                            <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[var(--text-secondary)]">
                               {row.shareDelta > 0 ? '+' : ''}{formatNumber(row.shareDelta, 1)}pp
                             </span>
-                            <span className="text-[#6B7280]">
+                            <span className="text-[var(--text-muted)]">
                               {formatCurrencyCompact(row.previousRevenue)} → {formatCurrencyCompact(row.currentRevenue)}
                             </span>
                           </div>
@@ -799,7 +799,7 @@ export function RFMAnalysis() {
                 </div>
                 {segmentMigration?.canCompute && segmentMigration.flows.length > 0 && (
                   <>
-                    <p className="text-xs text-[#6B7280]">
+                    <p className="text-xs text-[var(--text-muted)]">
                       Πραγματικές μετακινήσεις πελατών μεταξύ segments στο ίδιο παράθυρο — {formatNumber(segmentMigration.flows.length)} διαδρομές, {formatNumber(segmentMigration.comparedCustomers)} πελάτες σε σύγκριση.
                     </p>
                     <SegmentMigrationSankey
@@ -812,7 +812,7 @@ export function RFMAnalysis() {
               </>
             ) : segmentMigration?.canCompute && segmentMigration.flows.length > 0 ? (
               <>
-                <p className="text-xs text-[#6B7280]">
+                <p className="text-xs text-[var(--text-muted)]">
                   Δεν υπάρχει αρκετό συνεχόμενο period history για σύγκριση περιόδων. Εμφανίζονται οι πραγματικές μετακινήσεις {formatNumber(segmentMigration.comparedCustomers)} πελατών.
                 </p>
                 <SegmentMigrationSankey
@@ -822,19 +822,19 @@ export function RFMAnalysis() {
                 />
                 <div className="space-y-2">
                   {segmentMigration.flows.map((flow) => {
-                    const fromColor = segmentColorById.get(flow.from) || '#9CA3AF';
-                    const toColor = segmentColorById.get(flow.to) || '#1A1A1A';
+                    const fromColor = segmentColorById.get(flow.from) || 'var(--text-muted)';
+                    const toColor = segmentColorById.get(flow.to) || 'var(--text-primary)';
                     return (
-                      <div key={`${flow.from}-${flow.to}`} className="rounded-xl border border-[#E5E5E5] bg-white p-3">
+                      <div key={`${flow.from}-${flow.to}`} className="rounded-xl border border-[var(--border)] bg-white p-3">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex min-w-0 items-center gap-2 text-sm">
                             <span className="min-w-0 truncate font-medium" style={{ color: fromColor }}>{flow.fromName}</span>
-                            <ArrowRight size={14} className="shrink-0 text-[#9CA3AF]" />
+                            <ArrowRight size={14} className="shrink-0 text-[var(--text-muted)]" />
                             <span className="min-w-0 truncate font-semibold" style={{ color: toColor }}>{flow.toName}</span>
                           </div>
                           <div className="flex shrink-0 items-center gap-3 font-mono text-xs">
-                            <span className="font-bold text-[#1A1A1A]">{formatNumber(flow.count)} πελάτες</span>
-                            <span className="rounded-full bg-[#F5F5F5] px-2 py-0.5 text-[#4A4A4A]">{formatNumber(flow.percentage, 1)}%</span>
+                            <span className="font-bold text-[var(--text-primary)]">{formatNumber(flow.count)} πελάτες</span>
+                            <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[var(--text-secondary)]">{formatNumber(flow.percentage, 1)}%</span>
                           </div>
                         </div>
                       </div>
@@ -843,13 +843,13 @@ export function RFMAnalysis() {
                 </div>
               </>
             ) : (
-              <p className="text-sm text-[#4A4A4A] py-4 text-center">
+              <p className="text-sm text-[var(--text-secondary)] py-4 text-center">
                 Δεν υπάρχει ακόμα αρκετό συγκρίσιμο ιστορικό για τρέχουσα vs προηγούμενη περίοδο {segmentPeriodComparison?.periodDays ?? segmentMigration?.periodDays ?? 90} ημερών.
                 Η ένδειξη ανανεώνεται με τη μηνιαία Data Analysis ή χειροκίνητα από την ανανέωση ανάλυσης.
               </p>
             )
           ) : (
-            <p className="text-sm text-[#4A4A4A] py-4">
+            <p className="text-sm text-[var(--text-secondary)] py-4">
               Φόρτωσε RFM δεδομένα για να δεις την μετακίνηση μεταξύ segments.
             </p>
           )}
@@ -887,26 +887,26 @@ function DataAnalysisSkeleton() {
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl leading-tight">Data Analysis</h2>}
         actions={
           <>
-            <div className="h-9 w-28 animate-pulse rounded-lg bg-[#F3F4F6]" />
-            <div className="h-9 w-28 animate-pulse rounded-lg bg-[#F3F4F6]" />
-            <div className="h-9 w-32 animate-pulse rounded-lg bg-[#F3F4F6]" />
+            <div className="h-9 w-28 animate-pulse rounded-lg bg-[var(--surface-2)]" />
+            <div className="h-9 w-28 animate-pulse rounded-lg bg-[var(--surface-2)]" />
+            <div className="h-9 w-32 animate-pulse rounded-lg bg-[var(--surface-2)]" />
           </>
         }
       />
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#E8EAED] bg-[#FAFBFC] px-3 py-2">
-        <div className="h-6 w-48 animate-pulse rounded-lg bg-[#E5E7EB]" />
-        <div className="h-4 w-24 animate-pulse rounded bg-[#E5E7EB]" />
-        <div className="h-6 w-28 animate-pulse rounded-full bg-[#E5E7EB]" />
+        <div className="h-6 w-48 animate-pulse rounded-lg bg-[var(--border)]" />
+        <div className="h-4 w-24 animate-pulse rounded bg-[var(--border)]" />
+        <div className="h-6 w-28 animate-pulse rounded-full bg-[var(--border)]" />
       </div>
 
-      <div className="rounded-2xl border border-[#E5E7EB] bg-white p-3 shadow-sm">
-        <div className="mb-3 h-4 w-40 animate-pulse rounded bg-[#E5E7EB]" />
+      <div className="rounded-2xl border border-[var(--border)] bg-white p-3 shadow-sm">
+        <div className="mb-3 h-4 w-40 animate-pulse rounded bg-[var(--border)]" />
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="rounded-xl border border-[#E5E7EB] bg-white p-4">
-              <div className="mb-3 h-3 w-20 animate-pulse rounded bg-[#E5E7EB]" />
-              <div className="h-5 w-14 animate-pulse rounded bg-[#E5E7EB]" />
+            <div key={i} className="rounded-xl border border-[var(--border)] bg-white p-4">
+              <div className="mb-3 h-3 w-20 animate-pulse rounded bg-[var(--border)]" />
+              <div className="h-5 w-14 animate-pulse rounded bg-[var(--border)]" />
             </div>
           ))}
         </div>
@@ -921,8 +921,8 @@ function DataAnalysisSkeleton() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
           <Card key={i} padding="md">
-            <div className="h-4 w-24 animate-pulse rounded bg-[#E5E7EB]" />
-            <div className="mt-4 h-7 w-16 animate-pulse rounded bg-[#E5E7EB]" />
+            <div className="h-4 w-24 animate-pulse rounded bg-[var(--border)]" />
+            <div className="mt-4 h-7 w-16 animate-pulse rounded bg-[var(--border)]" />
           </Card>
         ))}
       </div>
@@ -930,8 +930,8 @@ function DataAnalysisSkeleton() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {[0, 1].map((i) => (
           <Card key={i} padding="lg">
-            <div className="mb-6 h-5 w-44 animate-pulse rounded bg-[#E5E7EB]" />
-            <div className="mx-auto h-64 max-w-sm animate-pulse rounded-full bg-[#F3F4F6]" />
+            <div className="mb-6 h-5 w-44 animate-pulse rounded bg-[var(--border)]" />
+            <div className="mx-auto h-64 max-w-sm animate-pulse rounded-full bg-[var(--surface-2)]" />
           </Card>
         ))}
       </div>
@@ -950,8 +950,8 @@ function TabButton({ active, onClick, icon, label, tooltipTitle, tooltipBody, to
         aria-label={tooltipTitle ?? label}
         className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
           active
-            ? 'bg-white text-[#1A1A1A] shadow-sm'
-            : 'text-[#4A4A4A] hover:text-[#1A1A1A]'
+            ? 'bg-white text-[var(--text-primary)] shadow-sm'
+            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
         }`}
       >
         {icon}
@@ -962,23 +962,23 @@ function TabButton({ active, onClick, icon, label, tooltipTitle, tooltipBody, to
           role="tooltip"
           className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 opacity-0 transition-all duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100"
         >
-          <div className="relative w-[280px] rounded-xl border border-[#E5E5E5] bg-white p-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
+          <div className="relative w-[280px] rounded-xl border border-[var(--border)] bg-white p-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
             <div
               aria-hidden="true"
-              className="absolute -top-1.5 left-1/2 -translate-x-1/2 rotate-45 h-3 w-3 border-l border-t border-[#E5E5E5] bg-white"
+              className="absolute -top-1.5 left-1/2 -translate-x-1/2 rotate-45 h-3 w-3 border-l border-t border-[var(--border)] bg-white"
             />
             {tooltipTitle && (
-              <p className="text-[13px] font-semibold text-[#1A1A1A]">{tooltipTitle}</p>
+              <p className="text-[13px] font-semibold text-[var(--text-primary)]">{tooltipTitle}</p>
             )}
             {tooltipBody && (
-              <p className="mt-1 text-xs leading-snug text-[#4A4A4A]">{tooltipBody}</p>
+              <p className="mt-1 text-xs leading-snug text-[var(--text-secondary)]">{tooltipBody}</p>
             )}
             {tooltipBullets && tooltipBullets.length > 0 && (
               <ul className="mt-2 space-y-1">
                 {tooltipBullets.map((b) => (
                   <li
                     key={b}
-                    className="flex items-start gap-1.5 text-[11.5px] leading-snug text-[#4A4A4A]"
+                    className="flex items-start gap-1.5 text-[11.5px] leading-snug text-[var(--text-secondary)]"
                   >
                     <span
                       aria-hidden="true"
@@ -1029,50 +1029,50 @@ function SegmentCard({ segment, index, isSelected, onSelect, onExport }: Segment
               {/* segment color indicator */}
             </div>
             <div>
-              <h3 className="font-semibold text-[#1A1A1A]">{segment.name}</h3>
-              <p className="text-xs text-[#4A4A4A]">{segment.rfm_score}</p>
+              <h3 className="font-semibold text-[var(--text-primary)]">{segment.name}</h3>
+              <p className="text-xs text-[var(--text-secondary)]">{segment.rfm_score}</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
             <button
               onClick={(e) => { e.stopPropagation(); onExport('xlsx'); }}
-              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#22C55E] hover:bg-[#22C55E]/5 transition-colors"
+              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[#22C55E] hover:bg-[#22C55E]/5 transition-colors"
               title="Export .xlsx"
             >
               <FileSpreadsheet size={14} />
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onExport('csv'); }}
-              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[var(--nts-accent-text)] hover:bg-[var(--nts-accent)]/5 transition-colors"
+              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--nts-accent-text)] hover:bg-[var(--nts-accent)]/5 transition-colors"
               title="Export .csv"
             >
               <Download size={14} />
             </button>
             <ChevronRight
               size={18}
-              className={`text-[#9CA3AF] transition-transform ${isSelected ? 'rotate-90' : ''}`}
+              className={`text-[var(--text-muted)] transition-transform ${isSelected ? 'rotate-90' : ''}`}
             />
           </div>
         </div>
 
-        <p className="text-sm text-[#4A4A4A] mt-3">{segment.description}</p>
+        <p className="text-sm text-[var(--text-secondary)] mt-3">{segment.description}</p>
 
-        <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-[#E5E5E5]">
+        <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-[var(--border)]">
           <div>
-            <p className="text-xs text-[#4A4A4A]">Πελάτες</p>
-            <p className="font-bold text-[#1A1A1A] font-mono">
+            <p className="text-xs text-[var(--text-secondary)]">Πελάτες</p>
+            <p className="font-bold text-[var(--text-primary)] font-mono">
               {formatNumber(segment.count)}
             </p>
           </div>
           <div>
-            <p className="text-xs text-[#4A4A4A]">% πελατών</p>
+            <p className="text-xs text-[var(--text-secondary)]">% πελατών</p>
             <p className="font-bold font-mono" style={{ color: segment.color }}>
               {fmtPct(segment.percentage ?? 0)}%
             </p>
           </div>
           <div>
-            <p className="text-xs text-[#4A4A4A]">% τζίρου</p>
-            <p className="font-bold text-[#1A1A1A] font-mono">
+            <p className="text-xs text-[var(--text-secondary)]">% τζίρου</p>
+            <p className="font-bold text-[var(--text-primary)] font-mono">
               {fmtPct(segment.revenue_share ?? 0)}%
             </p>
           </div>
@@ -1119,30 +1119,30 @@ function SegmentConsumptionTooltip({
   if (!row) return null;
 
   return (
-    <div className="max-w-[260px] rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.12)]">
-      <p className="text-[12px] font-semibold leading-snug text-[#111827]">
+    <div className="max-w-[260px] rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.12)]">
+      <p className="text-[12px] font-semibold leading-snug text-[var(--text-primary)]">
         {row.fullLabel || 'Γραμμή προϊόντος'}
       </p>
-      <div className="mt-2 space-y-1 border-t border-[#F3F4F6] pt-2">
+      <div className="mt-2 space-y-1 border-t border-[var(--surface-2)] pt-2">
         {row.categoryPath?.length ? (
-          <p className="text-[10.5px] leading-snug text-[#6B7280]">
+          <p className="text-[10.5px] leading-snug text-[var(--text-muted)]">
             {row.categoryPath.join(' / ')}
           </p>
         ) : null}
         {row.stockOnHand != null ? (
           <div className="flex items-center justify-between gap-4 text-[11px]">
-            <span className="text-[#6B7280]">Stock</span>
-            <span className="font-mono font-semibold text-[#111827]">{formatNumber(row.stockOnHand, 0)}</span>
+            <span className="text-[var(--text-muted)]">Stock</span>
+            <span className="font-mono font-semibold text-[var(--text-primary)]">{formatNumber(row.stockOnHand, 0)}</span>
           </div>
         ) : null}
         {row.qtySold != null ? (
           <div className="flex items-center justify-between gap-4 text-[11px]">
-            <span className="text-[#6B7280]">Sold</span>
-            <span className="font-mono font-semibold text-[#111827]">{formatNumber(row.qtySold, 0)}</span>
+            <span className="text-[var(--text-muted)]">Sold</span>
+            <span className="font-mono font-semibold text-[var(--text-primary)]">{formatNumber(row.qtySold, 0)}</span>
           </div>
         ) : null}
         {row.stockOnHand == null && row.qtySold == null ? (
-          <p className="text-[11px] text-[#6B7280]">No ERP stock/sales data for this item yet.</p>
+          <p className="text-[11px] text-[var(--text-muted)]">No ERP stock/sales data for this item yet.</p>
         ) : null}
       </div>
     </div>
@@ -1228,7 +1228,7 @@ function SegmentDetail({
         ? 'positive'
         : 'negative'
       : null;
-  const movementColor = movementTone === 'positive' ? '#16A34A' : movementTone === 'negative' ? '#DC2626' : '#6B7280';
+  const movementColor = movementTone === 'positive' ? '#16A34A' : movementTone === 'negative' ? '#DC2626' : 'var(--text-muted)';
   const movementIcon =
     movementTone === 'positive' ? (
       <TrendingUp size={12} aria-hidden />
@@ -1247,11 +1247,11 @@ function SegmentDetail({
             {/* no emoji icons */}
           </div>
           <div>
-            <h3 className="text-xl font-bold text-[#1A1A1A]">{segment.name}</h3>
-            <p className="text-[#4A4A4A]">{segment.description}</p>
+            <h3 className="text-xl font-bold text-[var(--text-primary)]">{segment.name}</h3>
+            <p className="text-[var(--text-secondary)]">{segment.description}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-[#E5E7EB] bg-white px-2.5 py-1 text-xs font-medium text-[#374151]">
-                Πελάτες: <span className="font-mono font-bold text-[#111827]">{formatNumber(segment.count ?? 0)}</span>
+              <span className="rounded-full border border-[var(--border)] bg-white px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)]">
+                Πελάτες: <span className="font-mono font-bold text-[var(--text-primary)]">{formatNumber(segment.count ?? 0)}</span>
                 {movementTone && movement ? (
                   <span className="ml-1 inline-flex items-center gap-0.5 font-mono font-bold" style={{ color: movementColor }}>
                     {movementIcon}
@@ -1260,7 +1260,7 @@ function SegmentDetail({
                   </span>
                 ) : null}
               </span>
-              <span className="rounded-full border border-[#E5E7EB] bg-white px-2.5 py-1 text-xs font-medium text-[#374151]">
+              <span className="rounded-full border border-[var(--border)] bg-white px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)]">
                 % πελατών: <span className="font-mono font-bold" style={{ color: segment.color }}>{fmtPct(segment.percentage ?? 0)}%</span>
                 {movementTone && movement ? (
                   <span className="ml-1 inline-flex items-center gap-0.5 font-mono font-bold" style={{ color: movementColor }}>
@@ -1277,14 +1277,14 @@ function SegmentDetail({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div>
-          <h4 className="font-medium text-[#1A1A1A] mb-2">{leftChartTitle}</h4>
+          <h4 className="font-medium text-[var(--text-primary)] mb-2">{leftChartTitle}</h4>
           {catalogEnriching && !cm && (
             <p className="text-[11px] text-[#92400E] bg-[#FFFBEB] border border-[#FDE68A] rounded px-2 py-1 mb-2">
               Φόρτωση catalog… προσωρινά εμφανίζονται heuristic κατηγορίες· τα Brand/SKU tabs συμπληρώνονται μετά.
             </p>
           )}
           {cm && (
-            <p className="text-[11px] text-[#6B7280] mb-2">
+            <p className="text-[11px] text-[var(--text-muted)] mb-2">
               Catalog match: {formatNumber(cm.revenue_matched_pct, 1)}% τζίρου γραμμών ·{' '}
               {formatNumber(cm.lines_matched_pct, 1)}% γραμμών ({cm.lines_matched}/{cm.lines_total})
             </p>
@@ -1299,7 +1299,7 @@ function SegmentDetail({
                   className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
                     catalogDim === d
                       ? 'bg-[var(--nts-accent)] text-white'
-                      : 'bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]'
+                      : 'bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
                   }`}
                 >
                   {dimLabel[d]}
@@ -1308,14 +1308,14 @@ function SegmentDetail({
             </div>
           )}
           {chartRows.length > 0 ? (
-            <div className="w-full min-h-[220px] rounded-xl border border-[#F3F4F6] bg-gradient-to-b from-white to-[#FAFAFA] px-2 py-3" style={{ height: chartHeight }}>
+            <div className="w-full min-h-[220px] rounded-xl border border-[var(--surface-2)] bg-gradient-to-b from-white to-[var(--surface-1)] px-2 py-3" style={{ height: chartHeight }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartRows} layout="vertical" margin={{ left: 8, right: 18, top: 6, bottom: 6 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6" />
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--surface-2)" />
                   <XAxis
                     type="number"
                     domain={[0, 'dataMax']}
-                    tick={{ fontSize: 11, fill: '#4A4A4A' }}
+                    tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
                     tickFormatter={(v) => `${formatNumber(Number(v), Number(v) >= 10 ? 0 : 1)}%`}
                     axisLine={false}
                     tickLine={false}
@@ -1324,7 +1324,7 @@ function SegmentDetail({
                     type="category"
                     dataKey="label"
                     width={136}
-                    tick={{ fontSize: 11, fill: '#374151' }}
+                    tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
                     tickLine={false}
                     axisLine={false}
                     interval={0}
@@ -1345,14 +1345,14 @@ function SegmentDetail({
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="flex min-h-[16rem] flex-col items-center justify-center rounded-lg bg-[#F5F5F5] px-4 py-8 text-center">
-              <p className="text-sm font-medium text-[#374151]">
+            <div className="flex min-h-[16rem] flex-col items-center justify-center rounded-lg bg-[var(--surface-2)] px-4 py-8 text-center">
+              <p className="text-sm font-medium text-[var(--text-secondary)]">
                 {segmentsDataSource === 'ecommerce'
                   ? 'Δεν υπάρχουν δεδομένα γραμμών προϊόντων για αυτό το segment'
                   : 'Δεν υπάρχουν δεδομένα για αυτή τη διάσταση'}
               </p>
               {segmentsDataSource === 'ecommerce' && (
-                <p className="mt-2 max-w-md text-xs leading-relaxed text-[#6B7280]">
+                <p className="mt-2 max-w-md text-xs leading-relaxed text-[var(--text-muted)]">
                   Το RFM από e-shop χρειάζεται γραμμές παραγγελίας (SKU/title/product id). Μετά από πλήρες sync των connectors,
                   εδώ εμφανίζονται πραγματικές κατηγορίες και — όταν φορτώνει ο catalog — μάρκες/υποκατηγορίες από το κατάστημα και το ERP.
                 </p>
@@ -1362,8 +1362,8 @@ function SegmentDetail({
         </div>
 
         <div className="space-y-4">
-          <div className="p-4 bg-[#F5F5F5] rounded-lg">
-            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Preferred Brands</h5>
+          <div className="p-4 bg-[var(--surface-2)] rounded-lg">
+            <h5 className="text-sm font-medium text-[var(--text-primary)] mb-2">Preferred Brands</h5>
             {brandAff.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {brandAff.slice(0, 12).map((row) => (
@@ -1373,16 +1373,16 @@ function SegmentDetail({
                 ))}
               </div>
             ) : fromComputedOrders && hasCatalogRollups ? (
-              <p className="text-xs text-[#6B7280] leading-relaxed">
+              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
                 Δεν εντοπίστηκε brand στο catalog για τις γραμμές του segment (ή όλα ως «Λοιπά»).
               </p>
             ) : (
-              <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
+              <p className="text-xs text-[var(--text-secondary)]">Δεν υπάρχουν δεδομένα</p>
             )}
           </div>
 
-          <div className="p-4 bg-[#F5F5F5] rounded-lg">
-            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Subcategories</h5>
+          <div className="p-4 bg-[var(--surface-2)] rounded-lg">
+            <h5 className="text-sm font-medium text-[var(--text-primary)] mb-2">Subcategories</h5>
             {subAff.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {subAff.slice(0, 12).map((row) => (
@@ -1390,16 +1390,16 @@ function SegmentDetail({
                 ))}
               </div>
             ) : fromComputedOrders && hasCatalogRollups ? (
-              <p className="text-xs text-[#6B7280] leading-relaxed">
+              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
                 Δεν υπάρχουν υποκατηγορίες στο catalog (π.χ. δεύτερο επίπεδο Woo ή ERP subcategory).
               </p>
             ) : (
-              <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
+              <p className="text-xs text-[var(--text-secondary)]">Δεν υπάρχουν δεδομένα</p>
             )}
           </div>
 
-          <div className="p-4 bg-[#F5F5F5] rounded-lg">
-            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Ευαισθησία τιμής</h5>
+          <div className="p-4 bg-[var(--surface-2)] rounded-lg">
+            <h5 className="text-sm font-medium text-[var(--text-primary)] mb-2">Ευαισθησία τιμής</h5>
             {priceSens ? (
               <Badge
                 variant={
@@ -1411,19 +1411,19 @@ function SegmentDetail({
                 {priceSens.toUpperCase()}
               </Badge>
             ) : (
-              <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
+              <p className="text-xs text-[var(--text-secondary)]">Δεν υπάρχουν δεδομένα</p>
             )}
           </div>
 
-          <div className="p-4 bg-[#F5F5F5] rounded-lg">
-            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Προτιμώμενα κανάλια</h5>
+          <div className="p-4 bg-[var(--surface-2)] rounded-lg">
+            <h5 className="text-sm font-medium text-[var(--text-primary)] mb-2">Προτιμώμενα κανάλια</h5>
             <div className="flex flex-wrap gap-2">
               {channelPills.length > 0 ? (
                 channelPills.map((channel) => (
                   <Badge key={channel} variant="info">{channel}</Badge>
                 ))
               ) : (
-                <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
+                <p className="text-xs text-[var(--text-secondary)]">Δεν υπάρχουν δεδομένα</p>
               )}
             </div>
           </div>

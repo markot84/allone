@@ -167,16 +167,16 @@ export function ChannelPerformanceHistoryCard({
       <div ref={historyChartRef} className="relative w-full min-w-0 max-w-full" style={{ height: 288, minHeight: 288 }}>
         {realPerformanceHistory && realPerformanceHistory.rows.length > 0 ? (
           <LineChart width={historyChartSize.width} height={historyChartSize.height} data={realPerformanceHistory.rows} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
-            <XAxis dataKey="label" tick={{ fill: '#4A4A4A', fontSize: 12 }} axisLine={{ stroke: '#E5E5E5' }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="label" tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} axisLine={{ stroke: 'var(--border)' }} />
             <YAxis
-              tick={{ fill: '#4A4A4A', fontSize: 12 }}
-              axisLine={{ stroke: '#E5E5E5' }}
+              tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
+              axisLine={{ stroke: 'var(--border)' }}
               tickFormatter={(v) => `${v.toFixed(1)}x`}
               domain={[0, 'auto']}
             />
             <Tooltip
-              contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: '8px', padding: '10px 14px' }}
+              contentStyle={{ backgroundColor: '#fff', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px 14px' }}
               formatter={(v, name) => [`${((v as number) || 0).toFixed(2)}x`, name as string]}
               labelFormatter={(label) => label}
             />
@@ -184,7 +184,7 @@ export function ChannelPerformanceHistoryCard({
             {realPerformanceHistory.channels.map((ch) => {
               const hasData = realPerformanceHistory.rows.some((d) => (d[ch] as number) > 0);
               if (!hasData) return null;
-              const color = CHANNEL_COLORS[ch] || '#6B7280';
+              const color = CHANNEL_COLORS[ch] || 'var(--text-muted)';
               return (
                 <Line key={ch} type="monotone" dataKey={ch} stroke={color} strokeWidth={2.5} name={ch} dot={{ r: 4, fill: color }} connectNulls />
               );
@@ -192,7 +192,7 @@ export function ChannelPerformanceHistoryCard({
           </LineChart>
         ) : (
           <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν δεδομένα performance history για αυτό το εύρος</p>
+            <p className="text-sm text-[var(--text-secondary)]">Δεν υπάρχουν δεδομένα performance history για αυτό το εύρος</p>
           </div>
         )}
       </div>

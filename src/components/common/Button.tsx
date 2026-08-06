@@ -20,7 +20,7 @@ function mapSize(size: ButtonProps['size']): 'small' | 'medium' | 'large' {
 
 const variantStyles: Record<string, string> = {
   primary: 'bg-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/90 text-white border-[var(--nts-accent)]',
-  secondary: 'bg-white hover:bg-gray-50 text-[var(--nts-charcoal)] border-[#E5E5E5]',
+  secondary: 'bg-white hover:bg-gray-50 text-[var(--nts-charcoal)] border-[var(--border)]',
   ghost: '',
   danger: 'bg-red-600 hover:bg-red-700 text-white border-red-600',
 };

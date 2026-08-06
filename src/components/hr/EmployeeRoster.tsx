@@ -53,11 +53,11 @@ export function EmployeeRoster() {
     await deleteEmployee.mutateAsync(id);
   };
 
-  const inputCls = 'w-full rounded-lg border border-[#1f2328]/15 bg-white px-3 py-2 text-sm text-[var(--nts-charcoal)] placeholder:text-[var(--nts-medium-gray)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30';
+  const inputCls = 'w-full rounded-lg border border-[var(--text-primary)]/15 bg-white px-3 py-2 text-sm text-[var(--nts-charcoal)] placeholder:text-[var(--nts-medium-gray)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30';
 
   return (
     <Card padding="none">
-      <div className="flex items-center justify-between p-5 border-b border-[#eef0f3]">
+      <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
         <CardHeader
           title="Εργαζόμενοι"
           subtitle={`${employees.filter((e) => e.status === 'active').length} ενεργοί`}
@@ -82,7 +82,7 @@ export function EmployeeRoster() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#eef0f3] bg-[#f9fafb]">
+              <tr className="border-b border-[var(--border)] bg-[var(--surface-1)]">
                 {['Ονοματεπώνυμο', 'Ρόλος', 'Τμήμα', 'Μηνιαίο κόστος', 'Από', 'Κατάσταση', ''].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--nts-medium-gray)]">{h}</th>
                 ))}
@@ -90,7 +90,7 @@ export function EmployeeRoster() {
             </thead>
             <tbody>
               {employees.map((emp) => (
-                <tr key={emp.id} className="border-b border-[#eef0f3] hover:bg-[#f9fafb]/60 transition-colors">
+                <tr key={emp.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-1)]/60 transition-colors">
                   <td className="px-4 py-3 font-medium text-[var(--nts-charcoal)]">{emp.name}</td>
                   <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{emp.role}</td>
                   <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{emp.department}</td>
@@ -101,7 +101,7 @@ export function EmployeeRoster() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <button onClick={() => openEdit(emp)} className="rounded p-1 text-[var(--nts-medium-gray)] hover:bg-[#f0f0f0] hover:text-[var(--nts-charcoal)]"><Pencil size={14} /></button>
+                      <button onClick={() => openEdit(emp)} className="rounded p-1 text-[var(--nts-medium-gray)] hover:bg-[var(--border)] hover:text-[var(--nts-charcoal)]"><Pencil size={14} /></button>
                       <button onClick={() => handleDelete(emp.id)} className="rounded p-1 text-[var(--nts-medium-gray)] hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
                     </div>
                   </td>

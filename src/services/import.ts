@@ -1011,7 +1011,7 @@ function validateSegmentRow(row: Record<string, string>, index: number): { valid
     count: parseInt(count || '0', 10) || 0,
     percentage: parseFloat(pct || '0') || 0,
     revenue_share: parseFloat(revShare || '0') || 0,
-    color: color || '#6B7280',
+    color: color || 'var(--text-muted)',
     description: description || '',
     icon: icon || '',
   };
@@ -1553,7 +1553,7 @@ function aggregateCustomersToSegments(objects: Record<string, string>[]): { segm
       count,
       percentage,
       revenue_share,
-      color: SEGMENT_COLORS[key] || '#6B7280',
+      color: SEGMENT_COLORS[key] || 'var(--text-muted)',
       description: '',
       icon: '',
     } as RFMSegment;

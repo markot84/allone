@@ -49,10 +49,10 @@ const CHANNEL_COLORS: Record<string, string> = {
   'Referral': '#FBBF24',
   'Display': '#06B6D4',
   'Affiliates': '#A855F7',
-  'Unassigned': '#9CA3AF',
+  'Unassigned': 'var(--text-muted)',
   'Social': '#F472B6',
-  '(Other)': '#9CA3AF',
-  'Λοιπά κανάλια': '#78716C',
+  '(Other)': 'var(--text-muted)',
+  'Λοιπά κανάλια': 'var(--text-muted)',
 };
 const DEFAULT_COLOR = '#94A3B8';
 
@@ -337,7 +337,7 @@ export function GA4Analytics() {
         value: s.sessions,
         color: CHANNEL_COLORS[s.channel] || DEFAULT_COLOR,
       })),
-      { name: 'Λοιπά κανάλια', value: restSessions, color: '#78716C' },
+      { name: 'Λοιπά κανάλια', value: restSessions, color: 'var(--text-muted)' },
     ];
   }, [displayTrafficSources]);
 
@@ -495,7 +495,7 @@ export function GA4Analytics() {
 
   if (isLoading) {
     return (
-      <div className="py-16 text-center text-[#6B7280]">
+      <div className="py-16 text-center text-[var(--text-muted)]">
         <div className="animate-spin h-8 w-8 border-2 border-orange-400 border-t-transparent rounded-full mx-auto mb-3" />
         Φόρτωση GA4 δεδομένων...
       </div>
@@ -505,9 +505,9 @@ export function GA4Analytics() {
   if (!hasData) {
     return (
       <div className="py-16 text-center">
-        <Globe size={48} className="mx-auto mb-4 text-[#D1D5DB]" />
-        <h3 className="text-lg font-semibold text-[#1A1A1A] mb-2">Δεν υπάρχουν GA4 δεδομένα</h3>
-        <p className="text-sm text-[#6B7280]">
+        <Globe size={48} className="mx-auto mb-4 text-[var(--border-strong)]" />
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Δεν υπάρχουν GA4 δεδομένα</h3>
+        <p className="text-sm text-[var(--text-muted)]">
           Συνδέστε το Google Analytics 4 από τις Συνδέσεις (sidebar) και κάντε Sync.
         </p>
       </div>
@@ -641,7 +641,7 @@ export function GA4Analytics() {
             Ιδιότητα GA4:{' '}
             <span className="font-medium text-[var(--nts-charcoal)]">{propertyName}</span>
             {dateRange && (
-              <span className="ml-2 text-xs text-[#6B7280]">
+              <span className="ml-2 text-xs text-[var(--text-muted)]">
                 (τελευταίος συγχρονισμός: {formatDateTooltipEl(dateRange.start)} — {formatDateTooltipEl(dateRange.end)})
               </span>
             )}
@@ -712,11 +712,11 @@ export function GA4Analytics() {
                     <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-2)" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <RechartsTooltip
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--border)' }}
                   formatter={(value: number | undefined, name: string | undefined) => [
                     `${Number(value ?? 0).toLocaleString('el-GR')}`,
                     name === 'users' ? 'Χρήστες' : 'Συνεδρίες',
@@ -765,7 +765,7 @@ export function GA4Analytics() {
             }
           />
           <div className="p-4 pt-0">
-            <p className="mb-3 text-[11px] leading-snug text-[#6B7280]">
+            <p className="mb-3 text-[11px] leading-snug text-[var(--text-muted)]">
               Ομαδοποίηση GA4 ανά <strong>Default Channel Group</strong>. Τα paid groups εδώ περιγράφουν πώς το GA4
               αποδίδει την επισκεψιμότητα και μπορεί να διαφέρουν από Google Ads / Meta imports, spend και ROAS.
             </p>
@@ -794,7 +794,7 @@ export function GA4Analytics() {
                         `${Number(value ?? 0).toLocaleString('el-GR', { maximumFractionDigits: 1 })} συνεδρίες`,
                         String(name),
                       ]}
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--border)' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -803,13 +803,13 @@ export function GA4Analytics() {
                   aria-hidden
                 >
                   <div className="text-center px-1 min-w-0 max-w-[min(7rem,32%)]">
-                    <div className="text-lg font-bold text-[#111827] tabular-nums leading-none tracking-tight">
+                    <div className="text-lg font-bold text-[var(--text-primary)] tabular-nums leading-none tracking-tight">
                       {Math.round(pieSlicesTotal).toLocaleString('el-GR')}
                     </div>
                   </div>
                 </div>
               </div>
-              <p className="text-[11px] text-center text-[#6B7280] mt-1.5 mb-0 max-w-sm px-1 leading-snug">
+              <p className="text-[11px] text-center text-[var(--text-muted)] mt-1.5 mb-0 max-w-sm px-1 leading-snug">
                 Σύνολο συνεδριών (άθροισμα καναλιών)
               </p>
               <div
@@ -824,7 +824,7 @@ export function GA4Analytics() {
                     title={entry.name}
                   >
                     <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} />
-                    <span className="min-w-0 break-words text-left text-[11px] leading-snug text-[#374151]">
+                    <span className="min-w-0 break-words text-left text-[11px] leading-snug text-[var(--text-secondary)]">
                       {entry.name}
                     </span>
                   </div>
@@ -860,16 +860,16 @@ export function GA4Analytics() {
             spend, campaigns και ROAS που έρχονται από τους διαφημιστικούς connectors.
           </div>
           {displayTrafficSources.length === 0 ? (
-            <div className="py-6 text-center text-sm text-[#6B7280]">
-              <BarChart3 size={32} className="mx-auto mb-2 text-[#D1D5DB]" />
-              <p className="font-medium text-[#374151] mb-1">Δεν υπάρχουν δεδομένα καναλιών</p>
+            <div className="py-6 text-center text-sm text-[var(--text-muted)]">
+              <BarChart3 size={32} className="mx-auto mb-2 text-[var(--border-strong)]" />
+              <p className="font-medium text-[var(--text-secondary)] mb-1">Δεν υπάρχουν δεδομένα καναλιών</p>
               <p>Το report των channel groups δεν ήταν διαθέσιμο κατά το τελευταίο sync.<br />
                 Δοκιμάστε <strong>Sync τώρα</strong> από τη σελίδα Συνδέσεις.</p>
             </div>
           ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-[#6B7280] border-b border-[#F3F4F6]">
+              <tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--surface-2)]">
                 <th className="pb-2 font-medium">GA4 attribution group</th>
                 <th className="pb-2 font-medium text-right">Sessions</th>
                 <th className="pb-2 font-medium text-right">Χρήστες</th>
@@ -888,7 +888,7 @@ export function GA4Analytics() {
                 const share = totalSessions > 0 ? (s.sessions / totalSessions) * 100 : 0;
                 const convRate = s.sessions > 0 ? (s.conversions / s.sessions) * 100 : 0;
                 return (
-                  <tr key={s.channel} className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA]">
+                  <tr key={s.channel} className="border-b border-[var(--surface-1)] hover:bg-[var(--surface-1)]">
                     <td className="py-2 flex items-center gap-2">
                       <span
                         className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -900,10 +900,10 @@ export function GA4Analytics() {
                     <td className="py-2 text-right">{s.users.toLocaleString()}</td>
                     <td className="py-2 text-right">{(s.newUsers || 0).toLocaleString()}</td>
                     <td className="py-2 text-right">{s.conversions.toLocaleString()}</td>
-                    <td className="py-2 text-right font-mono text-[#1A1A1A]">
+                    <td className="py-2 text-right font-mono text-[var(--text-primary)]">
                       €{formatCurrency(s.totalRevenue ?? 0, 0)}
                     </td>
-                    <td className="py-2 text-right font-mono text-[#374151] text-xs">
+                    <td className="py-2 text-right font-mono text-[var(--text-secondary)] text-xs">
                       {s.conversions > 0
                         ? `€${formatCurrency((s.totalRevenue ?? 0) / s.conversions, 2)}`
                         : '—'}
@@ -911,7 +911,7 @@ export function GA4Analytics() {
                     <td className="py-2 text-right">{convRate.toFixed(1)}%</td>
                     <td className="py-2 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <div className="w-16 h-1.5 bg-[#F3F4F6] rounded-full overflow-hidden">
+                        <div className="w-16 h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden">
                           <div
                             className="h-full rounded-full"
                             style={{
@@ -942,7 +942,7 @@ export function GA4Analytics() {
                 {activeOrganicMeta.label}
               </span>
               {(organicSearchSource === 'gsc' ? searchConsoleDateRange : dateRange) && (
-                <span className="text-xs text-[#6B7280]">
+                <span className="text-xs text-[var(--text-muted)]">
                   Συγχρ.:{' '}
                   {formatDateTooltipEl(
                     (organicSearchSource === 'gsc' ? searchConsoleDateRange : dateRange)!.start
@@ -957,9 +957,9 @@ export function GA4Analytics() {
           </div>
 
           {organicSearchSource === 'none' ? (
-            <div className="py-6 text-center text-sm text-[#6B7280]">
-              <Search size={30} className="mx-auto mb-2 text-[#D1D5DB]" />
-              <p className="font-medium text-[#374151] mb-1">Δεν υπάρχουν διαθέσιμα organic search terms</p>
+            <div className="py-6 text-center text-sm text-[var(--text-muted)]">
+              <Search size={30} className="mx-auto mb-2 text-[var(--border-strong)]" />
+              <p className="font-medium text-[var(--text-secondary)] mb-1">Δεν υπάρχουν διαθέσιμα organic search terms</p>
               <p>
                 {isSearchConsoleConnected
                   ? 'Το Search Console connector είναι συνδεδεμένο, αλλά δεν επέστρεψε query rows στο τελευταίο sync για αυτό το brand.'
@@ -969,20 +969,20 @@ export function GA4Analytics() {
           ) : (
             <>
               <div className="relative mb-3">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
                   type="text"
                   placeholder={organicSearchSource === 'gsc' ? 'Αναζήτηση query...' : 'Αναζήτηση landing page...'}
                   value={organicSearchText}
                   onChange={(e) => setOrganicSearchText(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none"
                 />
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left text-xs text-[#6B7280] border-b border-[#F3F4F6]">
+                    <tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--surface-2)]">
                       <th className="pb-2 font-medium">{organicSearchSource === 'gsc' ? 'Query' : 'Landing page'}</th>
                       {organicSearchSource === 'gsc' ? (
                         <>
@@ -1035,8 +1035,8 @@ export function GA4Analytics() {
                   </thead>
                   <tbody>
                     {filteredOrganicRows.map((row) => (
-                      <tr key={row.label} className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA]">
-                        <td className={`py-2 ${organicSearchSource === 'ga4_fallback' ? 'font-mono text-xs text-[#374151]' : 'text-[#111827]'}`} title={row.label}>
+                      <tr key={row.label} className="border-b border-[var(--surface-1)] hover:bg-[var(--surface-1)]">
+                        <td className={`py-2 ${organicSearchSource === 'ga4_fallback' ? 'font-mono text-xs text-[var(--text-secondary)]' : 'text-[var(--text-primary)]'}`} title={row.label}>
                           <div className="max-w-[460px] truncate">{row.label}</div>
                         </td>
                         {organicSearchSource === 'gsc' ? (
@@ -1045,13 +1045,13 @@ export function GA4Analytics() {
                             <td className="py-2 text-right">{(row.impressions || 0).toLocaleString('el-GR')}</td>
                             <td className="py-2 text-right">{fmtPct(row.ctr || 0)}</td>
                             <td className="py-2 text-right">{(row.position || 0).toFixed(1)}</td>
-                            <td className="py-2 text-right text-[#374151]">
+                            <td className="py-2 text-right text-[var(--text-secondary)]">
                               {(row.estConversions ?? 0).toLocaleString('el-GR', {
                                 maximumFractionDigits: 1,
                                 minimumFractionDigits: 0,
                               })}
                             </td>
-                            <td className="py-2 text-right text-[#374151] whitespace-nowrap">
+                            <td className="py-2 text-right text-[var(--text-secondary)] whitespace-nowrap">
                               €{formatCurrency(row.estRevenue ?? 0, 0)}
                             </td>
                           </>
@@ -1074,13 +1074,13 @@ export function GA4Analytics() {
               </div>
 
               {organicSearchSource === 'gsc' && (
-                <p className="mt-2 text-[11px] leading-relaxed text-[#6B7280]">
+                <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-muted)]">
                   Το άθροισμα των στηλών «Μετ. (εκτ.)» και «Έσοδα (εκτ.)» στον πίνακα προσεγγίζει την αντίστοιχη γραμμή Organic Search στον πίνακα καναλιών πάνω (ίδια περίοδος), εκτός από στρογγυλοποίηση.
                 </p>
               )}
 
               {filteredOrganicRows.length === 0 && (
-                <div className="py-6 text-center text-sm text-[#6B7280]">
+                <div className="py-6 text-center text-sm text-[var(--text-muted)]">
                   Δεν βρέθηκαν organic rows για το επιλεγμένο διάστημα.
                 </div>
               )}
@@ -1107,20 +1107,20 @@ export function GA4Analytics() {
         <div className="p-4 pt-0">
           {/* Search */}
           <div className="relative mb-3">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
               type="text"
               placeholder="Αναζήτηση σελίδας..."
               value={pageSearch}
               onChange={(e) => setPageSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none"
+              className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none"
             />
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-[#6B7280] border-b border-[#F3F4F6]">
+                <tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--surface-2)]">
                   <th className="pb-2 font-medium">Διαδρομή σελίδας</th>
                   <th
                     className="pb-2 font-medium text-right cursor-pointer select-none"
@@ -1145,8 +1145,8 @@ export function GA4Analytics() {
               </thead>
               <tbody>
                 {filteredPages.map((p) => (
-                  <tr key={p.path} className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA]">
-                    <td className="py-2 font-mono text-xs text-[#374151] max-w-[400px] truncate" title={p.path}>
+                  <tr key={p.path} className="border-b border-[var(--surface-1)] hover:bg-[var(--surface-1)]">
+                    <td className="py-2 font-mono text-xs text-[var(--text-secondary)] max-w-[400px] truncate" title={p.path}>
                       {p.path}
                     </td>
                     <td className="py-2 text-right font-medium">{p.pageViews.toLocaleString()}</td>

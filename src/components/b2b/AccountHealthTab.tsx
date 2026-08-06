@@ -116,14 +116,14 @@ export function AccountHealthTab({ onSectionChange: _onSectionChange }: AccountH
     setShowModal(false);
   };
 
-  const inputCls = 'w-full rounded-lg border border-[#1f2328]/15 bg-white px-3 py-2 text-sm text-[var(--nts-charcoal)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30';
+  const inputCls = 'w-full rounded-lg border border-[var(--text-primary)]/15 bg-white px-3 py-2 text-sm text-[var(--nts-charcoal)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30';
 
   return (
     <div className="space-y-5">
       {/* Segment summary pills */}
       <div className="flex flex-wrap gap-2">
         {(['all', 'champion', 'growing', 'at_risk', 'dormant', 'new'] as const).map((seg) => {
-          const meta = seg === 'all' ? { label: 'Όλοι', color: '#374151', bg: '#f3f4f6' } : SEGMENT_META[seg];
+          const meta = seg === 'all' ? { label: 'Όλοι', color: 'var(--text-secondary)', bg: 'var(--surface-2)' } : SEGMENT_META[seg];
           const count = segmentCounts[seg] ?? 0;
           return (
             <button
@@ -168,7 +168,7 @@ export function AccountHealthTab({ onSectionChange: _onSectionChange }: AccountH
                       {acc.industry && <p className="text-xs text-[var(--nts-medium-gray)]">{acc.industry}</p>}
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => openEdit(acc)} className="p-1 rounded text-[var(--nts-medium-gray)] hover:bg-[#f0f0f0]"><Pencil size={13} /></button>
+                      <button onClick={() => openEdit(acc)} className="p-1 rounded text-[var(--nts-medium-gray)] hover:bg-[var(--border)]"><Pencil size={13} /></button>
                       <button onClick={() => deleteAccount.mutate(acc.id)} className="p-1 rounded text-[var(--nts-medium-gray)] hover:bg-red-50 hover:text-red-600"><Trash2 size={13} /></button>
                     </div>
                   </div>
@@ -182,7 +182,7 @@ export function AccountHealthTab({ onSectionChange: _onSectionChange }: AccountH
                       </div>
                       <span className="text-lg font-bold font-mono text-[var(--nts-charcoal)]">{acc.health.total}<span className="text-xs font-normal text-[var(--nts-medium-gray)]">/100</span></span>
                     </div>
-                    <div className="h-2 w-full rounded-full bg-[#eef0f3] overflow-hidden">
+                    <div className="h-2 w-full rounded-full bg-[var(--border)] overflow-hidden">
                       <div className="h-full rounded-full transition-all" style={{ width: `${acc.health.total}%`, background: meta.color }} />
                     </div>
                   </div>
@@ -195,7 +195,7 @@ export function AccountHealthTab({ onSectionChange: _onSectionChange }: AccountH
                       { label: 'M', value: acc.health.monetary, tooltip: 'Monetary' },
                       { label: 'E', value: acc.health.engagement, tooltip: 'Engagement' },
                     ].map((dim) => (
-                      <div key={dim.label} title={`${dim.tooltip}: ${dim.value}/25`} className="rounded-lg bg-[#f9fafb] p-1.5">
+                      <div key={dim.label} title={`${dim.tooltip}: ${dim.value}/25`} className="rounded-lg bg-[var(--surface-1)] p-1.5">
                         <p className="text-[10px] font-bold text-[var(--nts-medium-gray)]">{dim.label}</p>
                         <p className="text-sm font-bold font-mono text-[var(--nts-charcoal)]">{dim.value}</p>
                       </div>
@@ -209,7 +209,7 @@ export function AccountHealthTab({ onSectionChange: _onSectionChange }: AccountH
                     </p>
                   ) : null}
                 </div>
-                <div className="px-4 py-2 border-t border-[#eef0f3] bg-[#fafafa]">
+                <div className="px-4 py-2 border-t border-[var(--border)] bg-[var(--surface-1)]">
                   <p className="text-[11px] text-[var(--nts-medium-gray)]">{meta.description}</p>
                 </div>
               </Card>

@@ -9,13 +9,13 @@ interface PayrollOverviewProps {
 }
 
 const DEPT_COLORS: Record<string, string> = {
-  Διοίκηση: '#111827',
+  Διοίκηση: 'var(--text-primary)',
   Εμπορική: '#f97316',
   Marketing: '#3b82f6',
   Logistics: '#10b981',
   Τεχνικό: '#8b5cf6',
   Λογιστήριο: '#f59e0b',
-  Άλλο: '#9ca3af',
+  Άλλο: 'var(--text-muted)',
 };
 
 export function PayrollOverview({ totalRevenue }: PayrollOverviewProps) {
@@ -90,7 +90,7 @@ export function PayrollOverview({ totalRevenue }: PayrollOverviewProps) {
           <div className="mt-4 h-48">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={byDepartment} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eef0f3" />
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
                 <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
                 <YAxis type="category" dataKey="dept" tick={{ fontSize: 12 }} width={80} />
                 <ReTooltip formatter={(v) => [`€${Number(v).toLocaleString('el-GR')}`, 'Κόστος']} />
@@ -99,11 +99,11 @@ export function PayrollOverview({ totalRevenue }: PayrollOverviewProps) {
             </ResponsiveContainer>
           </div>
 
-          <div className="mt-4 divide-y divide-[#eef0f3]">
+          <div className="mt-4 divide-y divide-[var(--border)]">
             {byDepartment.map((row) => (
               <div key={row.dept} className="flex items-center justify-between py-2.5">
                 <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: DEPT_COLORS[row.dept] ?? '#9ca3af' }} />
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: DEPT_COLORS[row.dept] ?? 'var(--text-muted)' }} />
                   <span className="text-sm text-[var(--nts-charcoal)]">{row.dept}</span>
                 </div>
                 <div className="flex items-center gap-4">

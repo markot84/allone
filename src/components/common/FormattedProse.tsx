@@ -39,7 +39,7 @@ function Inline({ segments, className }: { segments: InlineSeg[]; className?: st
     <span className={className}>
       {segments.map((s, i) =>
         s.bold ? (
-          <strong key={i} className="font-semibold text-[#1A1A1A]">
+          <strong key={i} className="font-semibold text-[var(--text-primary)]">
             {s.text}
           </strong>
         ) : (
@@ -123,7 +123,7 @@ export function FormattedProse({ content, variant = 'default', className = '' }:
         blocks.push(
           <h3
             key={`b-${i}`}
-            className="font-semibold text-lg mt-8 mb-3 text-[#1A1A1A] first:mt-0 leading-snug"
+            className="font-semibold text-lg mt-8 mb-3 text-[var(--text-primary)] first:mt-0 leading-snug"
           >
             <Inline segments={kind.title} />
           </h3>
@@ -132,9 +132,9 @@ export function FormattedProse({ content, variant = 'default', className = '' }:
         blocks.push(
           <div
             key={`b-${i}`}
-            className={`rounded-xl border border-[#E5E5E5] bg-gradient-to-r from-[#FAFAFA] to-white px-4 py-3 ${sp.section}`}
+            className={`rounded-xl border border-[var(--border)] bg-gradient-to-r from-[var(--surface-1)] to-white px-4 py-3 ${sp.section}`}
           >
-            <h3 className="text-base font-semibold text-[#1A1A1A] leading-snug border-l-[3px] border-[var(--nts-accent)] pl-3">
+            <h3 className="text-base font-semibold text-[var(--text-primary)] leading-snug border-l-[3px] border-[var(--nts-accent)] pl-3">
               <Inline segments={kind.title} />
             </h3>
           </div>
@@ -154,7 +154,7 @@ export function FormattedProse({ content, variant = 'default', className = '' }:
             <span className="text-xs font-semibold uppercase tracking-wide text-[var(--nts-accent-text)] shrink-0 min-w-[7rem]">
               <Inline segments={kind.label} />:
             </span>
-            <p className="text-sm text-[#4A4A4A] leading-relaxed flex-1 m-0">
+            <p className="text-sm text-[var(--text-secondary)] leading-relaxed flex-1 m-0">
               <Inline segments={kind.value} />
             </p>
           </div>
@@ -170,7 +170,7 @@ export function FormattedProse({ content, variant = 'default', className = '' }:
           <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nts-accent)]" />
           <p
             className={`leading-relaxed ${
-              variant === 'article' ? 'text-[#4A4A4A]' : 'text-sm text-[#4A4A4A]'
+              variant === 'article' ? 'text-[var(--text-secondary)]' : 'text-sm text-[var(--text-secondary)]'
             }`}
           >
             <Inline segments={kind.segments} />
@@ -185,7 +185,7 @@ export function FormattedProse({ content, variant = 'default', className = '' }:
       <p
         key={`b-${i}`}
         className={`leading-relaxed ${
-          variant === 'article' ? 'text-[#4A4A4A] mb-0' : 'text-sm text-[#1A1A1A]'
+          variant === 'article' ? 'text-[var(--text-secondary)] mb-0' : 'text-sm text-[var(--text-primary)]'
         }`}
       >
         <Inline segments={kind.segments} />

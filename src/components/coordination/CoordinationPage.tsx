@@ -21,11 +21,11 @@ const CATEGORY_META: Record<DecisionCategory, { label: string; color: string }> 
   product: { label: 'Προϊόν', color: '#3B82F6' },
   procurement: { label: 'Procurement', color: '#10B981' },
   marketing: { label: 'Marketing', color: '#EC4899' },
-  general: { label: 'Γενική', color: '#6B7280' },
+  general: { label: 'Γενική', color: 'var(--text-muted)' },
 };
 
 const PRIORITY_META: Record<string, { label: string; color: string; icon: typeof Flag }> = {
-  low: { label: 'Χαμηλή', color: '#9CA3AF', icon: Flag },
+  low: { label: 'Χαμηλή', color: 'var(--text-muted)', icon: Flag },
   medium: { label: 'Μεσαία', color: '#F59E0B', icon: Flag },
   high: { label: 'Υψηλή', color: '#EF4444', icon: Flag },
   urgent: { label: 'Επείγον', color: '#DC2626', icon: AlertTriangle },
@@ -33,10 +33,10 @@ const PRIORITY_META: Record<string, { label: string; color: string; icon: typeof
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
   proposal: { label: 'Πρόταση τμήματος', color: '#8B5CF6' },
-  draft: { label: 'Πρόχειρη', color: '#9CA3AF' },
+  draft: { label: 'Πρόχειρη', color: 'var(--text-muted)' },
   active: { label: 'Ενεργή', color: '#3B82F6' },
   completed: { label: 'Ολοκληρωμένη', color: '#10B981' },
-  archived: { label: 'Αρχείο', color: '#6B7280' },
+  archived: { label: 'Αρχείο', color: 'var(--text-muted)' },
   pending: { label: 'Εκκρεμεί', color: '#F59E0B' },
   in_progress: { label: 'Σε εξέλιξη', color: '#3B82F6' },
   done: { label: 'Ολοκληρωμένη', color: '#10B981' },
@@ -144,7 +144,7 @@ export function CoordinationPage() {
         toolbarAriaLabel="Ενέργειες συντονισμού"
         title={<h1 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Συντονισμός Τμημάτων</h1>}
         description={
-          <p className="text-sm text-[#6B7280]">
+          <p className="text-sm text-[var(--text-muted)]">
             Ειδοποιήστε τα τμήματα από την εμπορική πολιτική σε ένα βήμα — οι λεπτομερείς εργασίες είναι προαιρετικές.
           </p>
         }
@@ -191,7 +191,7 @@ export function CoordinationPage() {
         <div className="flex justify-center py-6"><Spinner /></div>
       ) : lastBriefing ? (
         <div
-          className="flex items-center gap-4 px-5 py-4 bg-[#111827] rounded-xl cursor-pointer group"
+          className="flex items-center gap-4 px-5 py-4 bg-[var(--text-primary)] rounded-xl cursor-pointer group"
           onClick={() => setSelectedDecision(lastBriefing)}
         >
           <div className="w-2 h-2 rounded-full bg-[var(--nts-accent)] shrink-0 animate-pulse" />
@@ -212,7 +212,7 @@ export function CoordinationPage() {
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-3 px-5 py-4 bg-[#F9FAFB] border border-dashed border-[#E5E7EB] rounded-xl text-[#9CA3AF]">
+        <div className="flex items-center gap-3 px-5 py-4 bg-[var(--surface-1)] border border-dashed border-[var(--border)] rounded-xl text-[var(--text-muted)]">
           <Zap size={18} className="shrink-0" />
           <p className="text-sm">Δεν υπάρχει ενεργό briefing. Δημιουργήστε την πρώτη εμπορική πολιτική.</p>
         </div>
@@ -223,19 +223,19 @@ export function CoordinationPage() {
         {/* Left: Active Decisions */}
         <div>
           <div className="mb-3">
-            <h2 className="text-sm font-semibold text-[#111827]">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
               Νέα Εμπορική Πολιτική
-              <span className="ml-2 text-xs font-normal text-[#9CA3AF]">({activeDecisions.length})</span>
+              <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">({activeDecisions.length})</span>
             </h2>
             {activeDecisions.length > RECENT_DECISIONS_LIMIT && (
-              <p className="text-[10px] text-[#9CA3AF] mt-1">
+              <p className="text-[10px] text-[var(--text-muted)] mt-1">
                 Εμφανίζονται οι {RECENT_DECISIONS_LIMIT} πιο πρόσφατες· οι υπόλοιπες στο ιστορικό παρακάτω.
               </p>
             )}
           </div>
           <div className="space-y-2">
             {activeDecisions.length === 0 && (
-              <div className="text-center py-8 text-[#D1D5DB] text-sm bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
+              <div className="text-center py-8 text-[var(--border-strong)] text-sm bg-[var(--surface-1)] rounded-xl border border-dashed border-[var(--border)]">
                 Καμία ενεργή εμπορική πολιτική
               </div>
             )}
@@ -248,9 +248,9 @@ export function CoordinationPage() {
               />
             ))}
             {olderActiveDecisions.length > 0 && (
-              <details className="group rounded-xl border border-[#E5E7EB] bg-[#FAFAFA] overflow-hidden">
-                <summary className="cursor-pointer list-none px-3.5 py-2.5 flex items-center gap-2 text-xs font-medium text-[#6B7280] hover:bg-[#F3F4F6] transition-colors [&::-webkit-details-marker]:hidden">
-                  <History size={14} className="text-[#9CA3AF] shrink-0" />
+              <details className="group rounded-xl border border-[var(--border)] bg-[var(--surface-1)] overflow-hidden">
+                <summary className="cursor-pointer list-none px-3.5 py-2.5 flex items-center gap-2 text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--surface-2)] transition-colors [&::-webkit-details-marker]:hidden">
+                  <History size={14} className="text-[var(--text-muted)] shrink-0" />
                   <span>
                     {olderActiveDecisions.length === 1
                       ? 'Ιστορικό — 1 παλαιότερη ενεργή'
@@ -258,10 +258,10 @@ export function CoordinationPage() {
                   </span>
                   <ChevronRight
                     size={14}
-                    className="text-[#D1D5DB] shrink-0 ml-auto transition-transform group-open:rotate-90"
+                    className="text-[var(--border-strong)] shrink-0 ml-auto transition-transform group-open:rotate-90"
                   />
                 </summary>
-                <div className="space-y-2 px-1.5 pb-3 pt-2 border-t border-[#E5E7EB]">
+                <div className="space-y-2 px-1.5 pb-3 pt-2 border-t border-[var(--border)]">
                   {olderActiveDecisions.map(d => (
                     <ActiveDecisionRow
                       key={d.id}
@@ -279,7 +279,7 @@ export function CoordinationPage() {
         {/* Right: Incoming Proposals */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-[#111827]">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
               Προτάσεις Τμημάτων
               {proposals.length > 0 && (
                 <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-[#8B5CF6] text-white">{proposals.length}</span>
@@ -288,7 +288,7 @@ export function CoordinationPage() {
           </div>
           <div className="space-y-2">
             {proposals.length === 0 && (
-              <div className="text-center py-8 text-[#D1D5DB] text-sm bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
+              <div className="text-center py-8 text-[var(--border-strong)] text-sm bg-[var(--surface-1)] rounded-xl border border-dashed border-[var(--border)]">
                 Καμία πρόταση τμήματος
               </div>
             )}
@@ -308,9 +308,9 @@ export function CoordinationPage() {
       {/* Zone C — Pending Tasks */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-[#111827]">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">
             Εκκρεμείς Εργασίες
-            <span className="ml-2 text-xs font-normal text-[#9CA3AF]">({pendingTasks.length})</span>
+            <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">({pendingTasks.length})</span>
           </h2>
           <button
             onClick={() => { setShowTaskForm(true); setTaskFromDecision(null); }}
@@ -323,11 +323,11 @@ export function CoordinationPage() {
         {tasksLoading ? (
           <div className="flex justify-center py-6"><Spinner /></div>
         ) : pendingTasks.length === 0 ? (
-          <div className="text-center py-8 text-[#D1D5DB] text-sm bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
+          <div className="text-center py-8 text-[var(--border-strong)] text-sm bg-[var(--surface-1)] rounded-xl border border-dashed border-[var(--border)]">
             Όλες οι εργασίες έχουν ολοκληρωθεί 🎉
           </div>
         ) : (
-          <div className="bg-[#F9FAFB] rounded-xl border border-[#E5E7EB] overflow-hidden">
+          <div className="bg-[var(--surface-1)] rounded-xl border border-[var(--border)] overflow-hidden">
             {pendingTasks.map((t, idx) => (
               <TaskRow
                 key={t.id}
@@ -396,10 +396,10 @@ export function CoordinationPage() {
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/20" onClick={() => setShowActivityDrawer(false)} />
           <div className="relative w-full max-w-sm bg-white shadow-2xl flex flex-col h-full animate-in slide-in-from-right">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#F3F4F6]">
-              <h2 className="font-semibold text-[#111827] text-sm">Ροή Ενεργειών</h2>
-              <button onClick={() => setShowActivityDrawer(false)} className="p-1 hover:bg-[#F3F4F6] rounded-lg transition-colors">
-                <X size={18} className="text-[#6B7280]" />
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--surface-2)]">
+              <h2 className="font-semibold text-[var(--text-primary)] text-sm">Ροή Ενεργειών</h2>
+              <button onClick={() => setShowActivityDrawer(false)} className="p-1 hover:bg-[var(--surface-2)] rounded-lg transition-colors">
+                <X size={18} className="text-[var(--text-muted)]" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
@@ -420,23 +420,23 @@ function ActiveDecisionRow({ decision: d, isSelected, onSelect }: { decision: De
     <button
       onClick={onSelect}
       className={`w-full text-left flex items-center gap-3 px-3.5 py-3 bg-white rounded-xl border transition-all hover:shadow-sm ${
-        isSelected ? 'ring-2 ring-[var(--nts-accent)] border-transparent' : 'border-[#E5E7EB] hover:border-[#D1D5DB]'
+        isSelected ? 'ring-2 ring-[var(--nts-accent)] border-transparent' : 'border-[var(--border)] hover:border-[var(--border-strong)]'
       }`}
     >
       <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-[#111827] truncate">{d.title}</p>
+        <p className="text-sm font-medium text-[var(--text-primary)] truncate">{d.title}</p>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-[10px] font-medium" style={{ color: cat.color }}>{cat.label}</span>
           {d.targetDepartments && d.targetDepartments.length > 0 && (
-            <span className="text-[10px] text-[#9CA3AF]">· {d.targetDepartments.map(dep => DEPT_LABELS[dep]).join(', ')}</span>
+            <span className="text-[10px] text-[var(--text-muted)]">· {d.targetDepartments.map(dep => DEPT_LABELS[dep]).join(', ')}</span>
           )}
         </div>
       </div>
-      <div className="shrink-0 text-[10px] text-[#9CA3AF]">
+      <div className="shrink-0 text-[10px] text-[var(--text-muted)]">
         {new Date(d.createdAt).toLocaleDateString('el-GR', { day: 'numeric', month: 'short' })}
       </div>
-      <ChevronRight size={14} className="text-[#D1D5DB] shrink-0" />
+      <ChevronRight size={14} className="text-[var(--border-strong)] shrink-0" />
     </button>
   );
 }
@@ -450,11 +450,11 @@ function ProposalRow({ decision: d, onApprove, onReject, onSelect }: {
   onSelect: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 px-3.5 py-3 bg-white rounded-xl border border-[#E5E7EB] hover:border-[#D1D5DB] transition-all">
+    <div className="flex items-center gap-3 px-3.5 py-3 bg-white rounded-xl border border-[var(--border)] hover:border-[var(--border-strong)] transition-all">
       <div className="w-1 self-stretch rounded-full shrink-0 bg-[#8B5CF6]" />
       <button className="flex-1 min-w-0 text-left" onClick={onSelect}>
-        <p className="text-sm font-medium text-[#111827] truncate">{d.title}</p>
-        <p className="text-[10px] text-[#9CA3AF] mt-0.5">
+        <p className="text-sm font-medium text-[var(--text-primary)] truncate">{d.title}</p>
+        <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
           {d.createdByName && `${d.createdByName} · `}
           {new Date(d.createdAt).toLocaleDateString('el-GR', { day: 'numeric', month: 'short' })}
         </p>
@@ -493,27 +493,27 @@ function TaskRow({ task: t, isLast, isSelected, onSelect, onComplete }: {
   return (
     <div
       className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/70 transition-colors ${
-        !isLast ? 'border-b border-[#E5E7EB]' : ''
+        !isLast ? 'border-b border-[var(--border)]' : ''
       } ${isSelected ? 'bg-white ring-1 ring-inset ring-[var(--nts-accent)]' : ''}`}
       onClick={onSelect}
     >
       {/* Complete button */}
       <button
         onClick={(e) => { e.stopPropagation(); onComplete(); }}
-        className="w-5 h-5 rounded-full border-2 border-[#D1D5DB] hover:border-[#10B981] hover:bg-[#10B981]/10 transition-colors flex items-center justify-center shrink-0 group"
+        className="w-5 h-5 rounded-full border-2 border-[var(--border-strong)] hover:border-[#10B981] hover:bg-[#10B981]/10 transition-colors flex items-center justify-center shrink-0 group"
         title="Ολοκλήρωση"
       >
         <CheckCircle2 size={11} className="text-transparent group-hover:text-[#10B981] transition-colors" />
       </button>
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-[#111827] truncate">{t.title}</p>
+        <p className="text-sm text-[var(--text-primary)] truncate">{t.title}</p>
         <div className="flex items-center gap-2 mt-0.5">
           {t.assignedDepartment && (
-            <span className="text-[10px] text-[#6B7280]">{DEPT_LABELS[t.assignedDepartment]}</span>
+            <span className="text-[10px] text-[var(--text-muted)]">{DEPT_LABELS[t.assignedDepartment]}</span>
           )}
           {t.assignedToName && (
-            <span className="text-[10px] text-[#9CA3AF]">· {t.assignedToName}</span>
+            <span className="text-[10px] text-[var(--text-muted)]">· {t.assignedToName}</span>
           )}
         </div>
       </div>
@@ -524,7 +524,7 @@ function TaskRow({ task: t, isLast, isSelected, onSelect, onComplete }: {
         </span>
         <Flag size={11} style={{ color: pri.color }} />
         {t.dueDate && (
-          <span className="text-[10px] text-[#9CA3AF] hidden sm:block">
+          <span className="text-[10px] text-[var(--text-muted)] hidden sm:block">
             {new Date(t.dueDate).toLocaleDateString('el-GR', { day: 'numeric', month: 'short' })}
           </span>
         )}
@@ -567,10 +567,10 @@ function DecisionDetail({ decision: d, onUpdate, onCreateTask }: { decision: Dec
     <div className="space-y-5 p-4">
       {d.targetDepartments && d.targetDepartments.length > 0 && (
         <div>
-          <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wide mb-2">Προς τμήματα</p>
+          <p className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-2">Προς τμήματα</p>
           <div className="flex flex-wrap gap-1.5">
             {d.targetDepartments.map((dep) => (
-              <span key={dep} className="text-xs px-2.5 py-1 rounded-md bg-[#F3F4F6] text-[#111827]">
+              <span key={dep} className="text-xs px-2.5 py-1 rounded-md bg-[var(--surface-2)] text-[var(--text-primary)]">
                 {DEPT_LABELS[dep] || dep}
               </span>
             ))}
@@ -579,10 +579,10 @@ function DecisionDetail({ decision: d, onUpdate, onCreateTask }: { decision: Dec
       )}
 
       <div>
-        <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wide mb-2">
+        <p className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-2">
           {d.status === 'proposal' ? 'Κείμενο πρότασης τμήματος' : 'Κείμενο εμπορικής πολιτικής'}
         </p>
-        <div className="text-sm text-[#111827] leading-relaxed rounded-lg bg-[#FAFAFA] border border-[#F3F4F6] px-3 py-2.5 min-h-[3rem]">
+        <div className="text-sm text-[var(--text-primary)] leading-relaxed rounded-lg bg-[var(--surface-1)] border border-[var(--surface-2)] px-3 py-2.5 min-h-[3rem]">
           {d.description?.trim() ? (
             <FormattedProse content={d.description} variant="compact" />
           ) : (
@@ -591,7 +591,7 @@ function DecisionDetail({ decision: d, onUpdate, onCreateTask }: { decision: Dec
         </div>
       </div>
 
-      <p className="text-[11px] text-[#9CA3AF]">
+      <p className="text-[11px] text-[var(--text-muted)]">
         {STATUS_META[d.status].label} · {cat.label} · {pri.label}
         {' · '}
         {new Date(d.createdAt).toLocaleDateString('el-GR', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -599,14 +599,14 @@ function DecisionDetail({ decision: d, onUpdate, onCreateTask }: { decision: Dec
       </p>
 
       <div className="flex items-center gap-2">
-        <label htmlFor={`dec-status-${d.id}`} className="text-xs text-[#6B7280] shrink-0">
+        <label htmlFor={`dec-status-${d.id}`} className="text-xs text-[var(--text-muted)] shrink-0">
           Κατάσταση
         </label>
         <select
           id={`dec-status-${d.id}`}
           value={d.status}
           onChange={(e) => handleStatusChange(e.target.value as DecisionStatus)}
-          className="flex-1 min-w-0 text-sm border border-[#E5E7EB] rounded-lg px-2.5 py-1.5 bg-white text-[#374151]"
+          className="flex-1 min-w-0 text-sm border border-[var(--border)] rounded-lg px-2.5 py-1.5 bg-white text-[var(--text-secondary)]"
         >
           {(['proposal', 'draft', 'active', 'completed', 'archived'] as DecisionStatus[]).map((s) => (
             <option key={s} value={s}>
@@ -616,18 +616,18 @@ function DecisionDetail({ decision: d, onUpdate, onCreateTask }: { decision: Dec
         </select>
       </div>
 
-      <details className="rounded-lg border border-[#E5E7EB] bg-white">
+      <details className="rounded-lg border border-[var(--border)] bg-white">
         <summary className="cursor-pointer px-3 py-2.5 text-xs font-medium text-[var(--nts-accent-text)] list-none [&::-webkit-details-marker]:hidden flex items-center gap-2">
-          <span className="text-[#9CA3AF] select-none">▸</span>
+          <span className="text-[var(--text-muted)] select-none">▸</span>
           Νέα ειδοποίηση στα τμήματα
         </summary>
-        <div className="px-3 pb-3 border-t border-[#F3F4F6] pt-3">
+        <div className="px-3 pb-3 border-t border-[var(--surface-2)] pt-3">
           <DecisionNotifyStrip decision={d} variant="embedded" />
         </div>
       </details>
 
-      <details className="rounded-lg border border-[#E5E7EB] bg-[#FAFAFA]">
-        <summary className="cursor-pointer px-3 py-2.5 text-xs text-[#6B7280] list-none [&::-webkit-details-marker]:hidden flex items-center gap-2">
+      <details className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)]">
+        <summary className="cursor-pointer px-3 py-2.5 text-xs text-[var(--text-muted)] list-none [&::-webkit-details-marker]:hidden flex items-center gap-2">
           <Plus size={14} className="text-[var(--nts-accent-text)] shrink-0" />
           {d.status === 'proposal'
             ? 'Εργασία από αυτή την πρόταση τμήματος'
@@ -668,46 +668,46 @@ function TaskDetail({ task: t, onUpdate }: { task: CoordinationTask; onUpdate: (
   return (
     <div className="space-y-4 p-4">
       {t.description && (
-        <div className="text-sm text-[#374151]">
+        <div className="text-sm text-[var(--text-secondary)]">
           <FormattedProse content={t.description} variant="compact" />
         </div>
       )}
 
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div>
-          <p className="text-xs text-[#9CA3AF] mb-0.5">Προτεραιότητα</p>
+          <p className="text-xs text-[var(--text-muted)] mb-0.5">Προτεραιότητα</p>
           <p className="flex items-center gap-1" style={{ color: pri.color }}>
             <Flag size={13} /> {pri.label}
           </p>
         </div>
         {t.assignedDepartment && (
           <div>
-            <p className="text-xs text-[#9CA3AF] mb-0.5">Τμήμα</p>
-            <p className="text-[#374151]">{DEPT_LABELS[t.assignedDepartment] || t.assignedDepartment}</p>
+            <p className="text-xs text-[var(--text-muted)] mb-0.5">Τμήμα</p>
+            <p className="text-[var(--text-secondary)]">{DEPT_LABELS[t.assignedDepartment] || t.assignedDepartment}</p>
           </div>
         )}
         {t.assignedToName && (
           <div>
-            <p className="text-xs text-[#9CA3AF] mb-0.5">Ανάθεση σε</p>
-            <p className="text-[#374151]">{t.assignedToName}</p>
+            <p className="text-xs text-[var(--text-muted)] mb-0.5">Ανάθεση σε</p>
+            <p className="text-[var(--text-secondary)]">{t.assignedToName}</p>
           </div>
         )}
         {t.dueDate && (
           <div>
-            <p className="text-xs text-[#9CA3AF] mb-0.5">Προθεσμία</p>
-            <p className="text-[#374151]">{new Date(t.dueDate).toLocaleDateString('el-GR')}</p>
+            <p className="text-xs text-[var(--text-muted)] mb-0.5">Προθεσμία</p>
+            <p className="text-[var(--text-secondary)]">{new Date(t.dueDate).toLocaleDateString('el-GR')}</p>
           </div>
         )}
       </div>
 
       {t.linkedDecisionTitle && (
-        <div className="text-xs text-[#6B7280] flex items-center gap-1">
+        <div className="text-xs text-[var(--text-muted)] flex items-center gap-1">
           <MessageSquare size={12} /> Σχετική καταχώρηση: {t.linkedDecisionTitle}
         </div>
       )}
 
       <div className="flex gap-2 flex-wrap pt-2">
-        <p className="text-xs text-[#9CA3AF] w-full mb-1">Κατάσταση:</p>
+        <p className="text-xs text-[var(--text-muted)] w-full mb-1">Κατάσταση:</p>
         {(['pending', 'in_progress', 'done', 'cancelled'] as TaskStatus[]).map(s => (
           <button
             key={s}
@@ -716,7 +716,7 @@ function TaskDetail({ task: t, onUpdate }: { task: CoordinationTask; onUpdate: (
             className={`text-xs px-2.5 py-1 rounded-md border transition-all ${
               t.status === s
                 ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] font-medium'
-                : 'border-[#E5E7EB] text-[#6B7280] hover:border-[#D1D5DB]'
+                : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-strong)]'
             }`}
           >
             {STATUS_META[s].label}
@@ -724,7 +724,7 @@ function TaskDetail({ task: t, onUpdate }: { task: CoordinationTask; onUpdate: (
         ))}
       </div>
 
-      <div className="text-[10px] text-[#9CA3AF] pt-2 border-t border-[#F3F4F6]">
+      <div className="text-[10px] text-[var(--text-muted)] pt-2 border-t border-[var(--surface-2)]">
         Δημιουργήθηκε: {new Date(t.createdAt).toLocaleDateString('el-GR')} {t.createdByName && `απo ${t.createdByName}`}
       </div>
     </div>
@@ -743,7 +743,7 @@ function ActivityFeed() {
     task_created: { icon: CheckSquare, color: '#3B82F6' },
     task_assigned: { icon: Users, color: '#8B5CF6' },
     task_completed: { icon: CheckCircle2, color: '#10B981' },
-    comment_added: { icon: MessageSquare, color: '#6B7280' },
+    comment_added: { icon: MessageSquare, color: 'var(--text-muted)' },
     member_joined: { icon: Users, color: '#EC4899' },
   };
 
@@ -752,7 +752,7 @@ function ActivityFeed() {
   if (activity.length === 0) {
     return (
       <Card padding="lg">
-        <div className="text-center py-8 text-[#9CA3AF]">
+        <div className="text-center py-8 text-[var(--text-muted)]">
           <Activity size={40} className="mx-auto mb-3 opacity-30" />
           <p className="font-medium">Δεν υπάρχει δραστηριότητα ακόμη</p>
           <p className="text-sm mt-1">Η ροή ενεργειών θα ενημερώνεται αυτόματα</p>
@@ -763,10 +763,10 @@ function ActivityFeed() {
 
   return (
     <div className="relative">
-      <div className="absolute left-5 top-0 bottom-0 w-px bg-[#E5E7EB]" />
+      <div className="absolute left-5 top-0 bottom-0 w-px bg-[var(--border)]" />
       <div className="space-y-4">
         {activity.map(a => {
-          const meta = ACTIVITY_ICONS[a.type] || { icon: Activity, color: '#9CA3AF' };
+          const meta = ACTIVITY_ICONS[a.type] || { icon: Activity, color: 'var(--text-muted)' };
           const Icon = meta.icon;
           return (
             <div key={a.id} className="flex gap-3 relative">
@@ -777,8 +777,8 @@ function ActivityFeed() {
                 <Icon size={16} style={{ color: meta.color }} />
               </div>
               <div className="pt-1.5">
-                <p className="text-sm text-[#374151]">{a.summary}</p>
-                <p className="text-[10px] text-[#9CA3AF] mt-0.5">
+                <p className="text-sm text-[var(--text-secondary)]">{a.summary}</p>
+                <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
                   {new Date(a.createdAt).toLocaleDateString('el-GR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                 </p>
               </div>
@@ -805,21 +805,21 @@ function DetailPanel({ title, onClose, children, entityType, entityId, entityTit
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
       <div className="relative w-full max-w-lg bg-white shadow-2xl flex flex-col h-full animate-in slide-in-from-right">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#F3F4F6]">
-          <h2 className="font-semibold text-[#111827] text-sm truncate">{title}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-[#F3F4F6] rounded-lg transition-colors">
-            <X size={18} className="text-[#6B7280]" />
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--surface-2)]">
+          <h2 className="font-semibold text-[var(--text-primary)] text-sm truncate">{title}</h2>
+          <button onClick={onClose} className="p-1 hover:bg-[var(--surface-2)] rounded-lg transition-colors">
+            <X size={18} className="text-[var(--text-muted)]" />
           </button>
         </div>
 
         {/* Detail content */}
-        <div className="overflow-y-auto border-b border-[#F3F4F6]">
+        <div className="overflow-y-auto border-b border-[var(--surface-2)]">
           {children}
         </div>
 
         {/* Comments */}
         <div className="flex-1 min-h-0 flex flex-col">
-          <div className="px-4 py-2 text-xs font-semibold text-[#6B7280] uppercase tracking-wider border-b border-[#F3F4F6]">
+          <div className="px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--surface-2)]">
             {entityType === 'decision' ? 'Διάλογος' : 'Σχόλια'}
           </div>
           <CommentsPanel entityType={entityType} entityId={entityId} entityTitle={entityTitle} />
@@ -887,48 +887,48 @@ function DecisionFormModal({ onClose, isProposal = false }: { onClose: () => voi
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b border-[#F3F4F6]">
-          <h2 className="font-semibold text-[#111827]">{isProposal ? 'Νέα πρόταση τμήματος' : 'Νέα εμπορική πολιτική'}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-[#F3F4F6] rounded-lg">
-            <X size={18} className="text-[#6B7280]" />
+        <div className="flex items-center justify-between p-4 border-b border-[var(--surface-2)]">
+          <h2 className="font-semibold text-[var(--text-primary)]">{isProposal ? 'Νέα πρόταση τμήματος' : 'Νέα εμπορική πολιτική'}</h2>
+          <button onClick={onClose} className="p-1 hover:bg-[var(--surface-2)] rounded-lg">
+            <X size={18} className="text-[var(--text-muted)]" />
           </button>
         </div>
 
         <div className="p-4 space-y-4">
           <div>
-            <label className="text-xs font-medium text-[#374151] mb-1 block">Τίτλος *</label>
+            <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block">Τίτλος *</label>
             <input
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="π.χ. Έκπτωση 20% στην κατηγορία X για Q2"
-              className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
+              className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
             />
           </div>
 
           <div>
-            <label className="text-xs font-medium text-[#374151] mb-1 block">Περιγραφή</label>
+            <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block">Περιγραφή</label>
             <textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
               rows={3}
               placeholder={isProposal ? 'Αναλυτική περιγραφή της πρότασης τμήματος...' : 'Αναλυτική περιγραφή της εμπορικής πολιτικής...'}
-              className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[var(--nts-accent)] resize-none"
+              className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--nts-accent)] resize-none"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-[#374151] mb-1 block">Κατηγορία</label>
-              <select value={category} onChange={e => setCategory(e.target.value as DecisionCategory)} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg">
+              <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block">Κατηγορία</label>
+              <select value={category} onChange={e => setCategory(e.target.value as DecisionCategory)} className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg">
                 {Object.entries(CATEGORY_META).map(([k, v]) => (
                   <option key={k} value={k}>{v.label}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-[#374151] mb-1 block">Προτεραιότητα</label>
-              <select value={priority} onChange={e => setPriority(e.target.value as DecisionPriority)} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg">
+              <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block">Προτεραιότητα</label>
+              <select value={priority} onChange={e => setPriority(e.target.value as DecisionPriority)} className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg">
                 {Object.entries(PRIORITY_META).map(([k, v]) => (
                   <option key={k} value={k}>{v.label}</option>
                 ))}
@@ -937,7 +937,7 @@ function DecisionFormModal({ onClose, isProposal = false }: { onClose: () => voi
           </div>
 
           <div>
-            <label className="text-xs font-medium text-[#374151] mb-1.5 block">Αφορά τμήματα</label>
+            <label className="text-xs font-medium text-[var(--text-secondary)] mb-1.5 block">Αφορά τμήματα</label>
             <div className="flex flex-wrap gap-2">
               {(Object.entries(DEPT_LABELS) as [BrandDepartment, string][]).map(([k, v]) => (
                 <button
@@ -947,7 +947,7 @@ function DecisionFormModal({ onClose, isProposal = false }: { onClose: () => voi
                   className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all ${
                     targetDepts.includes(k)
                       ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] font-medium'
-                      : 'border-[#E5E7EB] text-[#6B7280] hover:border-[#D1D5DB]'
+                      : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-strong)]'
                   }`}
                 >
                   {v}
@@ -957,7 +957,7 @@ function DecisionFormModal({ onClose, isProposal = false }: { onClose: () => voi
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 p-4 border-t border-[#F3F4F6]">
+        <div className="flex justify-end gap-2 p-4 border-t border-[var(--surface-2)]">
           <Button variant="secondary" onClick={onClose}>Ακύρωση</Button>
           <Button variant="primary" onClick={handleSubmit} disabled={!title.trim() || submitting}>
             {submitting ? 'Αποθήκευση...' : 'Δημιουργία'}
@@ -1034,16 +1034,16 @@ function TaskFormModal({ linkedDecision, onClose }: { linkedDecision: Decision |
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b border-[#F3F4F6]">
-          <h2 className="font-semibold text-[#111827]">Νέα εργασία</h2>
-          <button onClick={onClose} className="p-1 hover:bg-[#F3F4F6] rounded-lg">
-            <X size={18} className="text-[#6B7280]" />
+        <div className="flex items-center justify-between p-4 border-b border-[var(--surface-2)]">
+          <h2 className="font-semibold text-[var(--text-primary)]">Νέα εργασία</h2>
+          <button onClick={onClose} className="p-1 hover:bg-[var(--surface-2)] rounded-lg">
+            <X size={18} className="text-[var(--text-muted)]" />
           </button>
         </div>
 
         <div className="p-4 space-y-4">
           {linkedDecision && (
-            <div className="text-xs text-[#6B7280] bg-[#F9FAFB] rounded-lg px-3 py-2 flex items-center gap-1.5">
+            <div className="text-xs text-[var(--text-muted)] bg-[var(--surface-1)] rounded-lg px-3 py-2 flex items-center gap-1.5">
               <MessageSquare size={12} /> Συνδεδεμένη{' '}
               {linkedDecision.status === 'proposal' ? 'πρόταση τμήματος' : 'εμπορική πολιτική'}:{' '}
               <strong>{linkedDecision.title}</strong>
@@ -1051,30 +1051,30 @@ function TaskFormModal({ linkedDecision, onClose }: { linkedDecision: Decision |
           )}
 
           <div>
-            <label className="text-xs font-medium text-[#374151] mb-1 block">Τίτλος *</label>
+            <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block">Τίτλος *</label>
             <input
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="π.χ. Δημιουργία campaign για την έκπτωση"
-              className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
+              className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
             />
           </div>
 
           <div>
-            <label className="text-xs font-medium text-[#374151] mb-1 block">Περιγραφή</label>
+            <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block">Περιγραφή</label>
             <textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
               rows={2}
-              className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[var(--nts-accent)] resize-none"
+              className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--nts-accent)] resize-none"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-[#374151] mb-1 block">Τμήμα</label>
-              <select value={assignedDepartment} onChange={e => setAssignedDepartment(e.target.value as BrandDepartment)} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg">
+              <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block">Τμήμα</label>
+              <select value={assignedDepartment} onChange={e => setAssignedDepartment(e.target.value as BrandDepartment)} className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg">
                 <option value="">Κανένα</option>
                 {(Object.entries(DEPT_LABELS) as [BrandDepartment, string][]).map(([k, v]) => (
                   <option key={k} value={k}>{v}</option>
@@ -1082,8 +1082,8 @@ function TaskFormModal({ linkedDecision, onClose }: { linkedDecision: Decision |
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-[#374151] mb-1 block">Προτεραιότητα</label>
-              <select value={priority} onChange={e => setPriority(e.target.value as TaskPriority)} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg">
+              <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block">Προτεραιότητα</label>
+              <select value={priority} onChange={e => setPriority(e.target.value as TaskPriority)} className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg">
                 {Object.entries(PRIORITY_META).filter(([k]) => k !== 'urgent').map(([k, v]) => (
                   <option key={k} value={k}>{v.label}</option>
                 ))}
@@ -1093,8 +1093,8 @@ function TaskFormModal({ linkedDecision, onClose }: { linkedDecision: Decision |
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-[#374151] mb-1 block">Ανάθεση σε</label>
-              <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg">
+              <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block">Ανάθεση σε</label>
+              <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)} className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg">
                 <option value="">Κανένας</option>
                 {members.map(m => (
                   <option key={m.userId} value={m.userId}>{m.displayName || m.email}</option>
@@ -1102,18 +1102,18 @@ function TaskFormModal({ linkedDecision, onClose }: { linkedDecision: Decision |
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-[#374151] mb-1 block">Προθεσμία</label>
+              <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block">Προθεσμία</label>
               <input
                 type="date"
                 value={dueDate}
                 onChange={e => setDueDate(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
+                className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
               />
             </div>
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 p-4 border-t border-[#F3F4F6]">
+        <div className="flex justify-end gap-2 p-4 border-t border-[var(--surface-2)]">
           <Button variant="secondary" onClick={onClose}>Ακύρωση</Button>
           <Button variant="primary" onClick={handleSubmit} disabled={!title.trim() || submitting}>
             {submitting ? 'Αποθήκευση...' : 'Δημιουργία'}

@@ -600,17 +600,17 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <PageHeader
           title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Campaigns</h2>}
           description={
-            <p className="text-sm text-[#4A4A4A] sm:text-base">Επισκόπηση και ανάλυση των καμπανιών σας</p>
+            <p className="text-sm text-[var(--text-secondary)] sm:text-base">Επισκόπηση και ανάλυση των καμπανιών σας</p>
           }
         />
         <Card padding="lg" className="text-center py-12 space-y-3">
-          <p className="text-[#4A4A4A]">
+          <p className="text-[var(--text-secondary)]">
             Δεν υπάρχουν ακόμα imported campaigns.
           </p>
           {connectorsStatusPending ? (
-            <p className="text-sm text-[#6B7280]">Έλεγχος κατάστασης συνδέσεων…</p>
+            <p className="text-sm text-[var(--text-muted)]">Έλεγχος κατάστασης συνδέσεων…</p>
           ) : hasConnectedAdsOrMeta ? (
-            <p className="text-sm text-[#4A4A4A] max-w-xl mx-auto">
+            <p className="text-sm text-[var(--text-secondary)] max-w-xl mx-auto">
               Τα Google Ads / Meta είναι συνδεδεμένα αλλά δεν εμφανίζονται ακόμα campaigns. Ανοίξτε τις{' '}
               <button
                 type="button"
@@ -620,11 +620,11 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 ρυθμίσεις καμπανιών
               </button>
               {' '}
-              και εκτελέστε <strong className="font-semibold text-[#1A1A1A]">Sync</strong> για import ή refresh των
+              και εκτελέστε <strong className="font-semibold text-[var(--text-primary)]">Sync</strong> για import ή refresh των
               campaigns από τον τελευταίο συγχρονισμό.
             </p>
           ) : (
-            <p className="text-sm text-[#4A4A4A]">
+            <p className="text-sm text-[var(--text-secondary)]">
               Συνδέστε Google Ads ή Meta από τις{' '}
               <button
                 type="button"
@@ -648,7 +648,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         toolbarAriaLabel="Export and delete campaigns"
         title={<h2 className="text-lg font-bold text-[var(--text-heading)] sm:text-xl">Campaigns</h2>}
         description={
-          <p className="text-xs text-[#6B7280] sm:text-sm">
+          <p className="text-xs text-[var(--text-muted)] sm:text-sm">
             Imported campaigns: {summaryStats.total}
           </p>
         }
@@ -661,7 +661,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                   bySource[source] = (bySource[source] || 0) + 1;
                 });
                 return (
-                  <p className="text-xs text-[#9CA3AF]">
+                  <p className="text-xs text-[var(--text-muted)]">
                     Πηγές: {Object.entries(bySource).map(([src, count]) => `${src}: ${count}`).join(', ')}
                   </p>
                 );
@@ -704,14 +704,14 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           <Card padding="sm">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
                   Διαθέσιμο budget{' '}
                   <Tooltip
                     content="Άθροισμα (δηλωμένο budget − δαπάνη) ανά καμπάνια όπου υπάρχει budget στο import. Η δαπάνη ακολουθεί το επιλεγμένο εύρος ημερομηνιών· αν δεν εμφανίζεται τιμή, τα campaigns δεν έχουν πεδίο budget."
                     size={13}
                   />
                 </p>
-                <p className="text-xl font-bold text-[#1A1A1A] font-mono mt-0.5 tabular-nums">
+                <p className="text-xl font-bold text-[var(--text-primary)] font-mono mt-0.5 tabular-nums">
                   {summaryStats.hasBudgetData ? `${EUR}${formatCurrency(summaryStats.availableBudget, 2)}` : '—'}
                 </p>
               </div>
@@ -724,8 +724,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           <Card padding="sm">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">Total spend <Tooltip content="Συνολική διαφημιστική δαπάνη για τα τρέχοντα φίλτρα (ημερομηνίες, κανάλι, αναζήτηση κ.λπ.)." size={13} /></p>
-                <p className="text-xl font-bold text-[#1A1A1A] font-mono mt-0.5 tabular-nums">
+                <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">Total spend <Tooltip content="Συνολική διαφημιστική δαπάνη για τα τρέχοντα φίλτρα (ημερομηνίες, κανάλι, αναζήτηση κ.λπ.)." size={13} /></p>
+                <p className="text-xl font-bold text-[var(--text-primary)] font-mono mt-0.5 tabular-nums">
                   {EUR}{formatCurrency(summaryStats.totalSpent, 2)}
                 </p>
               </div>
@@ -738,7 +738,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           <Card padding="sm">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
                   {showPurchaseSalesHeadlines ? 'Sales' : 'Conversions'}{' '}
                   <Tooltip
                     content={
@@ -751,7 +751,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                     size={13}
                   />
                 </p>
-                <p className="text-xl font-bold text-[#1A1A1A] font-mono mt-0.5 tabular-nums">
+                <p className="text-xl font-bold text-[var(--text-primary)] font-mono mt-0.5 tabular-nums">
                   {formatConvCount(summaryStats.totalConversions)}
                 </p>
               </div>
@@ -764,7 +764,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           <Card padding="sm">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
                   {showPurchaseSalesHeadlines ? 'Sales value' : 'Conversion value'}{' '}
                   <Tooltip
                     content={
@@ -777,12 +777,12 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                     size={13}
                   />
                 </p>
-                <p className="text-xl font-bold text-[#1A1A1A] font-mono mt-0.5 tabular-nums">
+                <p className="text-xl font-bold text-[var(--text-primary)] font-mono mt-0.5 tabular-nums">
                   {EUR}{formatCurrency(summaryStats.totalConversionValue, 2)}
                 </p>
               </div>
-              <div className="w-10 h-10 shrink-0 bg-[#F5F5F5] rounded-lg flex items-center justify-center">
-                <TrendingUp size={20} className="text-[#4A4A4A]" />
+              <div className="w-10 h-10 shrink-0 bg-[var(--surface-2)] rounded-lg flex items-center justify-center">
+                <TrendingUp size={20} className="text-[var(--text-secondary)]" />
               </div>
             </div>
           </Card>
@@ -790,7 +790,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           <Card padding="sm">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
                   Platform ROAS{' '}
                   <Tooltip
                     content={
@@ -801,7 +801,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                     size={13}
                   />
                 </p>
-                <p className="text-xl font-bold text-[#1A1A1A] font-mono mt-0.5 tabular-nums">
+                <p className="text-xl font-bold text-[var(--text-primary)] font-mono mt-0.5 tabular-nums">
                   {formatMultiplier(summaryStats.avgROAS, 2)}
                 </p>
               </div>
@@ -816,7 +816,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       {/* Tabs + date range (same row on md+) */}
       <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-x-4 md:gap-y-2">
         <div className="-mx-1 max-w-full overflow-x-auto pb-1 sm:mx-0 sm:overflow-visible sm:pb-0">
-        <div className="flex w-max gap-0.5 rounded-lg bg-[#F5F5F5] p-0.5 sm:w-fit">
+        <div className="flex w-max gap-0.5 rounded-lg bg-[var(--surface-2)] p-0.5 sm:w-fit">
           {(['campaigns', 'search_terms', 'keywords', 'geo'] as const).map(tab => (
             <button
               key={tab}
@@ -824,8 +824,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               onClick={() => setActiveTab(tab)}
               className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 activeTab === tab
-                  ? 'bg-white text-[#111827] shadow-sm'
-                  : 'text-[#6B7280] hover:text-[#111827]'
+                  ? 'bg-white text-[var(--text-primary)] shadow-sm'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
               {tab === 'campaigns' ? `Campaigns (${summaryStats.total})` :
@@ -852,7 +852,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 ↩ Επαναφορά global
               </button>
             )}
-            <span className="text-[10px] text-[#9CA3AF] leading-snug max-w-[220px] md:max-w-none md:truncate">
+            <span className="text-[10px] text-[var(--text-muted)] leading-snug max-w-[220px] md:max-w-none md:truncate">
               Σύνολα = επιλεγμένο εύρος ημερομηνιών.
             </span>
           </div>
@@ -886,23 +886,23 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
           <div className="min-w-0 lg:min-w-[180px] lg:flex-1">
             <div className="relative">
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4A4A4A]" />
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
               <input
                 type="text"
                 placeholder="Search campaigns…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
+                className="w-full pl-10 pr-4 py-2 bg-[var(--surface-2)] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
               />
             </div>
           </div>
 
           <div className="flex min-w-0 flex-col gap-2 sm:col-span-2 sm:flex-row sm:items-center lg:col-span-1">
-            <Filter size={18} className="text-[#4A4A4A]" />
+            <Filter size={18} className="text-[var(--text-secondary)]" />
             <select
               value={channelFilter}
               onChange={(e) => setChannelFilter(e.target.value)}
-              className="w-full rounded-lg border border-transparent bg-[#F5F5F5] px-3 py-2 text-sm transition-all focus:border-[var(--nts-accent)] focus:bg-white focus:outline-none sm:w-auto"
+              className="w-full rounded-lg border border-transparent bg-[var(--surface-2)] px-3 py-2 text-sm transition-all focus:border-[var(--nts-accent)] focus:bg-white focus:outline-none sm:w-auto"
             >
               <option value="all">Όλα τα κανάλια</option>
               {channels.map(ch => (
@@ -914,7 +914,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               title="Ενεργές μόνο: Google Ads = Enabled, Meta = ACTIVE — όχι paused, ολοκληρωμένες ή removed."
-              className="w-full max-w-full rounded-lg border border-transparent bg-[#F5F5F5] px-3 py-2 text-sm transition-all focus:border-[var(--nts-accent)] focus:bg-white focus:outline-none sm:w-auto sm:max-w-[220px]"
+              className="w-full max-w-full rounded-lg border border-transparent bg-[var(--surface-2)] px-3 py-2 text-sm transition-all focus:border-[var(--nts-accent)] focus:bg-white focus:outline-none sm:w-auto sm:max-w-[220px]"
             >
               <option value="all">All statuses</option>
               <option value="active">Ενεργές μόνο</option>
@@ -931,7 +931,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-all ${
                     convActionFilter.length > 0
                       ? 'bg-[var(--nts-accent)] text-white'
-                      : 'bg-[#F5F5F5] text-[#4A4A4A] hover:bg-[#E5E5E5]'
+                      : 'bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
                   }`}
                 >
                   <Filter size={14} />
@@ -942,9 +942,9 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 {showConvDropdown && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowConvDropdown(false)} />
-                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-[#E5E5E5] rounded-xl shadow-lg py-2 min-w-[220px] max-h-[320px] overflow-y-auto">
-                      <div className="px-3 py-1.5 border-b border-[#F0F0F0] flex items-center justify-between">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">Conversion actions</span>
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-[var(--border)] rounded-xl shadow-lg py-2 min-w-[220px] max-h-[320px] overflow-y-auto">
+                      <div className="px-3 py-1.5 border-b border-[var(--border)] flex items-center justify-between">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Conversion actions</span>
                         {convActionFilter.length > 0 && (
                           <button onClick={clearConvFilter} className="text-[10px] text-[var(--nts-accent-text)] hover:underline">Καθαρισμός</button>
                         )}
@@ -952,15 +952,15 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                       {allConversionActions.map(action => (
                         <label
                           key={action}
-                          className="flex items-center gap-2.5 px-3 py-2 hover:bg-[#F5F5F5] cursor-pointer"
+                          className="flex items-center gap-2.5 px-3 py-2 hover:bg-[var(--surface-2)] cursor-pointer"
                         >
                           <input
                             type="checkbox"
                             checked={convActionFilter.includes(action)}
                             onChange={() => toggleConvAction(action)}
-                            className="w-3.5 h-3.5 rounded border-[#D1D5DB] text-[var(--nts-accent-text)] focus:ring-[var(--nts-accent)]"
+                            className="w-3.5 h-3.5 rounded border-[var(--border-strong)] text-[var(--nts-accent-text)] focus:ring-[var(--nts-accent)]"
                           />
-                          <span className="text-xs text-[#1A1A1A]">{action}</span>
+                          <span className="text-xs text-[var(--text-primary)]">{action}</span>
                         </label>
                       ))}
                     </div>
@@ -996,17 +996,17 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
         {filteredCampaigns.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-[#4A4A4A]">Δεν υπάρχουν campaigns που να ταιριάζουν με τα φίλτρα.</p>
+            <p className="text-[var(--text-secondary)]">Δεν υπάρχουν campaigns που να ταιριάζουν με τα φίλτρα.</p>
           </div>
         ) : convFilterActive && sortedCampaigns.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-[#4A4A4A]">Κανένα campaign δεν έχει τις επιλεγμένες conversions. Δοκιμάστε άλλα φίλτρα (π.χ. αφαιρέστε την ενέργεια Purchase αν δεν υπάρχουν πραγματικές αγορές).</p>
+            <p className="text-[var(--text-secondary)]">Κανένα campaign δεν έχει τις επιλεγμένες conversions. Δοκιμάστε άλλα φίλτρα (π.χ. αφαιρέστε την ενέργεια Purchase αν δεν υπάρχουν πραγματικές αγορές).</p>
           </div>
         ) : (
           <div className="overflow-x-auto mt-3">
             <table className="w-full">
               <thead>
-                <tr className="text-left text-[11px] text-[#4A4A4A] border-b border-[#E5E5E5]">
+                <tr className="text-left text-[11px] text-[var(--text-secondary)] border-b border-[var(--border)]">
                   <SortableHeader col="name" label="Campaign" current={sortColumn} dir={sortDirection} onSort={handleSort} className="" />
                   <SortableHeader col="channel" label="Channel" current={sortColumn} dir={sortDirection} onSort={handleSort} className="whitespace-nowrap" />
                   <SortableHeader col="status" label="Status" current={sortColumn} dir={sortDirection} onSort={handleSort} className="whitespace-nowrap hidden md:table-cell" />
@@ -1044,10 +1044,10 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.02 }}
-                    className="border-b border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
+                    className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors"
                   >
                     <td className="py-2 px-3 max-w-[200px] lg:max-w-[280px]">
-                      <div className="font-medium text-xs text-[#1A1A1A] truncate">{campaign.name}</div>
+                      <div className="font-medium text-xs text-[var(--text-primary)] truncate">{campaign.name}</div>
                     </td>
                     <td className="py-2 px-3 whitespace-nowrap">
                       <ChannelBadge channel={campaign.channel || 'Other'} />
@@ -1141,12 +1141,12 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
   if (!hasData) {
     return (
       <Card padding="lg" className="text-center py-12">
-        <p className="text-[#6B7280]">
+        <p className="text-[var(--text-muted)]">
           {type === 'search_terms'
             ? 'Δεν υπάρχουν ακόμη search terms μετά τον τελευταίο Google Ads sync.'
             : 'Δεν υπάρχουν ακόμη keywords μετά τον τελευταίο Google Ads sync.'}
         </p>
-        <p className="text-xs text-[#9CA3AF] mt-2">
+        <p className="text-xs text-[var(--text-muted)] mt-2">
           Εκτελέστε ξανά Sync για Google Ads από τις ρυθμίσεις συνδέσεων καμπανιών.
         </p>
       </Card>
@@ -1162,21 +1162,21 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
           subtitle={searchIntelSubtitle}
         />
         <div className="relative w-full sm:w-64 sm:shrink-0">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
           <input
             type="text"
             value={search}
             onChange={e => onSearchChange(e.target.value)}
             placeholder={type === 'search_terms' ? 'Search term…' : 'Search keyword…'}
-            className="w-full pl-9 pr-3 py-2 rounded-lg bg-[#F5F5F5] border-none text-sm focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/20"
+            className="w-full pl-9 pr-3 py-2 rounded-lg bg-[var(--surface-2)] border-none text-sm focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/20"
           />
         </div>
       </div>
 
       <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
         <table className="w-full text-left">
-          <thead className="sticky top-0 bg-[#F9FAFB] z-10">
-            <tr className="text-[11px] text-[#6B7280] uppercase tracking-wider border-b border-[#E5E7EB]">
+          <thead className="sticky top-0 bg-[var(--surface-1)] z-10">
+            <tr className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border)]">
               <th className="pb-2 px-2 font-medium">{type === 'search_terms' ? 'Search Term' : 'Keyword'}</th>
               {type === 'keywords' && <th className="pb-2 px-2 font-medium">Match</th>}
               {type === 'keywords' && <th className="pb-2 px-2 font-medium text-right">QS</th>}
@@ -1189,19 +1189,19 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
               <th className="pb-2 px-2 font-medium text-right">Conv. Value</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#F3F4F6]">
+          <tbody className="divide-y divide-[var(--surface-2)]">
             {filtered.slice(0, 200).map((item: any, i: number) => {
               const text = type === 'search_terms' ? item.term : item.keyword;
               const ctr = item.impressions > 0 ? ((item.clicks / item.impressions) * 100).toFixed(2) : '0';
-              const qsBg = item.qualityScore >= 7 ? '#DCFCE7' : item.qualityScore >= 4 ? '#FEF9C3' : item.qualityScore ? '#FEE2E2' : '#F9FAFB';
-              const qsColor = item.qualityScore >= 7 ? '#166534' : item.qualityScore >= 4 ? '#854D0E' : item.qualityScore ? '#991B1B' : '#9CA3AF';
+              const qsBg = item.qualityScore >= 7 ? '#DCFCE7' : item.qualityScore >= 4 ? '#FEF9C3' : item.qualityScore ? '#FEE2E2' : 'var(--surface-1)';
+              const qsColor = item.qualityScore >= 7 ? '#166534' : item.qualityScore >= 4 ? '#854D0E' : item.qualityScore ? '#991B1B' : 'var(--text-muted)';
 
               return (
-                <tr key={`${text}-${i}`} className="hover:bg-[#FAFAFA] transition-colors text-sm">
-                  <td className="py-2 px-2 font-medium text-[#111827] max-w-xs truncate">{text}</td>
+                <tr key={`${text}-${i}`} className="hover:bg-[var(--surface-1)] transition-colors text-sm">
+                  <td className="py-2 px-2 font-medium text-[var(--text-primary)] max-w-xs truncate">{text}</td>
                   {type === 'keywords' && (
                     <td className="py-2 px-2">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F3F4F6] text-[#374151] uppercase">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] uppercase">
                         {(item.matchType || '').replace('_', ' ').toLowerCase()}
                       </span>
                     </td>
@@ -1212,16 +1212,16 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
                         <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold" style={{ backgroundColor: qsBg, color: qsColor }}>
                           {item.qualityScore}
                         </span>
-                      ) : <span className="text-[#9CA3AF]">?</span>}
+                      ) : <span className="text-[var(--text-muted)]">?</span>}
                     </td>
                   )}
-                  <td className="py-2 px-2 text-[#6B7280] text-xs max-w-[180px] truncate">{item.campaign}</td>
-                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.impressions.toLocaleString()}</td>
-                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.clicks.toLocaleString()}</td>
-                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{ctr}%</td>
-                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.conversions > 0 ? item.conversions.toFixed(1) : '?'}</td>
-                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{EUR}{formatCurrency(item.cost, 2)}</td>
-                  <td className="py-2 px-2 text-right font-mono text-[#374151]">
+                  <td className="py-2 px-2 text-[var(--text-muted)] text-xs max-w-[180px] truncate">{item.campaign}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[var(--text-secondary)]">{item.impressions.toLocaleString()}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[var(--text-secondary)]">{item.clicks.toLocaleString()}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[var(--text-secondary)]">{ctr}%</td>
+                  <td className="py-2 px-2 text-right font-mono text-[var(--text-secondary)]">{item.conversions > 0 ? item.conversions.toFixed(1) : '?'}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[var(--text-secondary)]">{EUR}{formatCurrency(item.cost, 2)}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[var(--text-secondary)]">
                     {item.conversionValue > 0 ? `${EUR}${formatCurrency(item.conversionValue, 2)}` : '?'}
                   </td>
                 </tr>
@@ -1230,12 +1230,12 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <p className="text-sm text-[#9CA3AF] text-center py-8">
+          <p className="text-sm text-[var(--text-muted)] text-center py-8">
             {search ? 'No results match your search.' : 'No data available.'}
           </p>
         )}
         {filtered.length > 200 && (
-          <p className="text-xs text-[#9CA3AF] text-center py-3">
+          <p className="text-xs text-[var(--text-muted)] text-center py-3">
             Showing first 200 of {filtered.length} total
           </p>
         )}
@@ -1284,7 +1284,7 @@ const CHANNEL_COLORS: Record<string, { bg: string; text: string; border: string 
   'X (Twitter)':     { bg: '#ECEFF1', text: '#37474F', border: '#B0BEC5' },
   'Pinterest':       { bg: '#FCE4EC', text: '#AD1457', border: '#F48FB1' },
 };
-const DEFAULT_CHANNEL_COLOR = { bg: '#F5F5F5', text: '#616161', border: '#E0E0E0' };
+const DEFAULT_CHANNEL_COLOR = { bg: 'var(--surface-2)', text: '#616161', border: '#E0E0E0' };
 
 function ChannelBadge({ channel }: { channel: string }) {
   const c = CHANNEL_COLORS[channel] || DEFAULT_CHANNEL_COLOR;

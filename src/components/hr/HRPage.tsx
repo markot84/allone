@@ -45,7 +45,7 @@ export function HRPage({ totalRevenue }: HRPageProps = {}) {
       <PageHeader
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">People & HR</h2>}
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Διαχείριση ομάδας, μισθοδοσία, αδειοδότηση και παρακολούθηση απόδοσης.
           </p>
         }
@@ -59,18 +59,18 @@ export function HRPage({ totalRevenue }: HRPageProps = {}) {
       {/* Summary strip */}
       <div className="flex flex-wrap gap-4 text-sm text-[var(--nts-medium-gray)]">
         <span><strong className="text-[var(--nts-charcoal)]">{activeEmployees.length}</strong> ενεργοί εργαζόμενοι</span>
-        <span className="text-[#d1d5db]">|</span>
+        <span className="text-[var(--border-strong)]">|</span>
         <span>Μηνιαίο κόστος <strong className="text-[var(--nts-charcoal)]">€{totalMonthlyCost.toLocaleString('el-GR')}</strong></span>
         {totalRevenue && totalRevenue > 0 ? (
           <>
-            <span className="text-[#d1d5db]">|</span>
+            <span className="text-[var(--border-strong)]">|</span>
             <span>HR Cost % <strong className="text-[var(--nts-charcoal)]">{((totalMonthlyCost / totalRevenue) * 100).toFixed(1)}%</strong></span>
           </>
         ) : null}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-xl border border-[#eef0f3] bg-[#f9fafb] p-1">
+      <div className="flex gap-1 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-1">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}

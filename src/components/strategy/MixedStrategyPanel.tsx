@@ -107,13 +107,13 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
       exit={{ opacity: 0, height: 0 }}
       className="overflow-hidden"
     >
-      <div className="p-5 bg-white rounded-xl border-2 border-[#E5E5E5] relative"
+      <div className="p-5 bg-white rounded-xl border-2 border-[var(--border)] relative"
         style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
 
         {onClose && (
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-[#F5F5F5] text-[#9CA3AF] hover:text-[#4A4A4A] transition-colors"
+            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
             title="Κλείσιμο"
           >
             <X size={18} />
@@ -123,7 +123,7 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-start">
           {/* Strategy A */}
           <div>
-            <p className="text-xs font-semibold text-[#4A4A4A] mb-2">
+            <p className="text-xs font-semibold text-[var(--text-secondary)] mb-2">
               Στρατηγική Α
             </p>
             <div className="space-y-2">
@@ -139,14 +139,14 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
                       selected
                         ? 'border-[var(--nts-accent)] bg-[var(--nts-light-gray)]'
                         : disabled
-                          ? 'border-[#E5E5E5] bg-[#FAFAFA] opacity-40 cursor-not-allowed'
-                          : 'border-[#E5E5E5] bg-white hover:border-[var(--nts-accent)]/50'
+                          ? 'border-[var(--border)] bg-[var(--surface-1)] opacity-40 cursor-not-allowed'
+                          : 'border-[var(--border)] bg-white hover:border-[var(--nts-accent)]/50'
                     }`}
                   >
                     {scenarioIcon(s.id)}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[#1A1A1A] truncate">{s.name}</p>
-                      <p className="text-[11px] text-[#9CA3AF] truncate">{s.description}</p>
+                      <p className="text-sm font-medium text-[var(--text-primary)] truncate">{s.name}</p>
+                      <p className="text-[11px] text-[var(--text-muted)] truncate">{s.description}</p>
                     </div>
                     {selected && (
                       <div className="w-5 h-5 bg-[var(--nts-accent)] rounded-full flex items-center justify-center flex-shrink-0">
@@ -162,10 +162,10 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
           {/* Percentage Slider */}
           <div className="flex flex-col items-center justify-center py-4 md:py-0 md:px-4 md:self-center">
             <div className="text-center mb-3">
-              <p className="text-2xl font-bold text-[#1A1A1A] font-mono">
-                {percentA}<span className="text-[#9CA3AF] mx-1">/</span>{percentB}
+              <p className="text-2xl font-bold text-[var(--text-primary)] font-mono">
+                {percentA}<span className="text-[var(--text-muted)] mx-1">/</span>{percentB}
               </p>
-              <p className="text-[10px] text-[#9CA3AF] mt-0.5">%</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-0.5">%</p>
             </div>
 
             <input
@@ -179,14 +179,14 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
             />
 
             <div className="flex justify-between w-32 md:w-24 mt-1">
-              <span className="text-[10px] text-[#9CA3AF]">10%</span>
-              <span className="text-[10px] text-[#9CA3AF]">90%</span>
+              <span className="text-[10px] text-[var(--text-muted)]">10%</span>
+              <span className="text-[10px] text-[var(--text-muted)]">90%</span>
             </div>
           </div>
 
           {/* Strategy B */}
           <div>
-            <p className="text-xs font-semibold text-[#4A4A4A] mb-2">
+            <p className="text-xs font-semibold text-[var(--text-secondary)] mb-2">
               Στρατηγική Β
             </p>
             <div className="space-y-2">
@@ -202,14 +202,14 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
                       selected
                         ? 'border-[var(--nts-accent)] bg-[var(--nts-light-gray)]'
                         : disabled
-                          ? 'border-[#E5E5E5] bg-[#FAFAFA] opacity-40 cursor-not-allowed'
-                          : 'border-[#E5E5E5] bg-white hover:border-[var(--nts-accent)]/50'
+                          ? 'border-[var(--border)] bg-[var(--surface-1)] opacity-40 cursor-not-allowed'
+                          : 'border-[var(--border)] bg-white hover:border-[var(--nts-accent)]/50'
                     }`}
                   >
                     {scenarioIcon(s.id)}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[#1A1A1A] truncate">{s.name}</p>
-                      <p className="text-[11px] text-[#9CA3AF] truncate">{s.description}</p>
+                      <p className="text-sm font-medium text-[var(--text-primary)] truncate">{s.name}</p>
+                      <p className="text-[11px] text-[var(--text-muted)] truncate">{s.description}</p>
                     </div>
                     {selected && (
                       <div className="w-5 h-5 bg-[var(--nts-accent)] rounded-full flex items-center justify-center flex-shrink-0">
@@ -230,9 +230,9 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
-              className="mt-4 pt-4 border-t border-[#E5E5E5]"
+              className="mt-4 pt-4 border-t border-[var(--border)]"
             >
-              <p className="text-xs font-medium text-[#4A4A4A] mb-2">
+              <p className="text-xs font-medium text-[var(--text-secondary)] mb-2">
                 Συνδυασμένα βάρη
               </p>
               <div className="flex gap-1 mb-1 h-2 rounded-full overflow-hidden">
@@ -249,7 +249,7 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
               </div>
               <div className="flex gap-3 flex-wrap mt-1">
                 {weightKeys.map(key => (
-                  <span key={key} className="text-[10px] text-[#9CA3AF]">
+                  <span key={key} className="text-[10px] text-[var(--text-muted)]">
                     <span style={{ color: weightColors[key] }}>●</span>{' '}
                     {key.charAt(0).toUpperCase() + key.slice(1)} {blendedWeights[key]}%
                   </span>
@@ -270,15 +270,15 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
                     {diffs.map(d => (
                       <span key={d.key} className="inline-flex items-center gap-1 text-[10px]">
                         <span style={{ color: weightColors[d.key] }}>●</span>
-                        <span className="text-[#9CA3AF]">{d.key.charAt(0).toUpperCase() + d.key.slice(1)}</span>
-                        <span className="text-[#9CA3AF]">{d.from}%</span>
-                        <span className="text-[#9CA3AF]">→</span>
-                        <span className={d.diff > 0 ? 'text-[#22C55E]' : 'text-[#9CA3AF]'}>
+                        <span className="text-[var(--text-muted)]">{d.key.charAt(0).toUpperCase() + d.key.slice(1)}</span>
+                        <span className="text-[var(--text-muted)]">{d.from}%</span>
+                        <span className="text-[var(--text-muted)]">→</span>
+                        <span className={d.diff > 0 ? 'text-[#22C55E]' : 'text-[var(--text-muted)]'}>
                           {d.to}%
                         </span>
                         {d.diff > 0
                           ? <ArrowUp size={9} className="text-[#22C55E]" />
-                          : <ArrowDown size={9} className="text-[#9CA3AF]" />
+                          : <ArrowDown size={9} className="text-[var(--text-muted)]" />
                         }
                       </span>
                     ))}
@@ -299,7 +299,7 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
         </AnimatePresence>
 
         {!scenarioA && !scenarioB && (
-          <p className="text-xs text-[#9CA3AF] mt-3 text-center">
+          <p className="text-xs text-[var(--text-muted)] mt-3 text-center">
             Επιλέξτε 2 στρατηγικές και ρυθμίστε τα ποσοστά
           </p>
         )}

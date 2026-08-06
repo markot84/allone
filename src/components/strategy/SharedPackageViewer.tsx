@@ -11,11 +11,11 @@ interface SharedPackageViewerProps {
 function weightBar(label: string, value: number) {
   return (
     <div key={label} className="flex items-center gap-2 my-1">
-      <span className="w-24 text-xs text-[#4A4A4A]">{label}</span>
-      <div className="flex-1 h-1.5 bg-[#F5F5F5] rounded-full overflow-hidden">
+      <span className="w-24 text-xs text-[var(--text-secondary)]">{label}</span>
+      <div className="flex-1 h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden">
         <div className="h-full bg-[var(--nts-accent)] rounded-full" style={{ width: `${value}%` }} />
       </div>
-      <span className="text-xs font-semibold text-[#1A1A1A] w-9 text-right">{value}%</span>
+      <span className="text-xs font-semibold text-[var(--text-primary)] w-9 text-right">{value}%</span>
     </div>
   );
 }
@@ -34,7 +34,7 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 size={24} className="animate-spin text-[#9CA3AF]" />
+        <Loader2 size={24} className="animate-spin text-[var(--text-muted)]" />
       </div>
     );
   }
@@ -42,8 +42,8 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
   if (error || !data) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-        <p className="text-lg font-semibold text-[#1A1A1A]">Δεν βρέθηκε</p>
-        <p className="text-sm text-[#9CA3AF] mt-1">Το πακέτο στρατηγικής δεν είναι διαθέσιμο ή έχει λήξει.</p>
+        <p className="text-lg font-semibold text-[var(--text-primary)]">Δεν βρέθηκε</p>
+        <p className="text-sm text-[var(--text-muted)] mt-1">Το πακέτο στρατηγικής δεν είναι διαθέσιμο ή έχει λήξει.</p>
       </div>
     );
   }
@@ -55,8 +55,8 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
       {/* Header */}
       <div className="flex items-start justify-between mb-6 pb-4 border-b-2 border-[var(--nts-accent)]">
         <div>
-          <h1 className="text-2xl font-bold text-[#1A1A1A]">{data.brandName || 'Strategy Package'}</h1>
-          <p className="text-sm text-[#9CA3AF] mt-1">
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">{data.brandName || 'Strategy Package'}</h1>
+          <p className="text-sm text-[var(--text-muted)] mt-1">
             {data.createdAt?.toDate?.()
               ? data.createdAt.toDate().toLocaleDateString('el-GR', { day: 'numeric', month: 'long', year: 'numeric' })
               : ''}
@@ -64,7 +64,7 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
         </div>
         <button
           onClick={() => openPackagePdf(data)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-[#1A1A1A] text-white hover:bg-[#333] transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-[var(--text-primary)] text-white hover:bg-[#333] transition-colors"
         >
           <FileDown size={14} />
           PDF
@@ -73,46 +73,46 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
 
       {/* Meta */}
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="p-4 rounded-xl bg-[#FAFAFA]">
-          <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">Στρατηγική</p>
-          <p className="text-base font-semibold text-[#1A1A1A] mt-1">{data.strategyName}</p>
+        <div className="p-4 rounded-xl bg-[var(--surface-1)]">
+          <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Στρατηγική</p>
+          <p className="text-base font-semibold text-[var(--text-primary)] mt-1">{data.strategyName}</p>
         </div>
-        <div className="p-4 rounded-xl bg-[#FAFAFA]">
-          <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">Διάρκεια</p>
-          <p className="text-base font-semibold text-[#1A1A1A] mt-1">{data.duration}</p>
+        <div className="p-4 rounded-xl bg-[var(--surface-1)]">
+          <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Διάρκεια</p>
+          <p className="text-base font-semibold text-[var(--text-primary)] mt-1">{data.duration}</p>
         </div>
       </div>
 
       {/* Segments */}
       <div className="mb-6">
-        <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2 pb-1 border-b border-[#F5F5F5]">Τμήματα πελατών</p>
+        <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2 pb-1 border-b border-[var(--surface-2)]">Τμήματα πελατών</p>
         <div className="flex flex-wrap gap-1.5">
           {data.idealSegments.map(s => (
             <span key={s} className="px-2.5 py-1 rounded-full text-xs bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">{s}</span>
           ))}
           {data.goodSegments.map(s => (
-            <span key={s} className="px-2.5 py-1 rounded-full text-xs bg-[#F5F5F5] text-[#4A4A4A] border border-dashed border-[#D1D5DB]">{s}</span>
+            <span key={s} className="px-2.5 py-1 rounded-full text-xs bg-[var(--surface-2)] text-[var(--text-secondary)] border border-dashed border-[var(--border-strong)]">{s}</span>
           ))}
         </div>
       </div>
 
       {/* Weights */}
       <div className="mb-6">
-        <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2 pb-1 border-b border-[#F5F5F5]">Βάρη προτεραιοτήτων</p>
+        <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2 pb-1 border-b border-[var(--surface-2)]">Βάρη προτεραιοτήτων</p>
         {sortedWeights.map(([k, v]) => weightBar(k.charAt(0).toUpperCase() + k.slice(1), v))}
       </div>
 
       {/* Channels */}
       <div className="mb-6">
-        <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2 pb-1 border-b border-[#F5F5F5]">Κανάλια</p>
+        <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2 pb-1 border-b border-[var(--surface-2)]">Κανάλια</p>
         <div className="space-y-1.5">
           {data.primaryChannels.map((ch, i) => (
-            <div key={ch} className="flex justify-between items-center p-2.5 rounded-lg bg-[#FAFAFA]">
-              <span className="text-sm text-[#1A1A1A]"><strong className="text-[var(--nts-accent-text)]">{i + 1}.</strong> {ch}</span>
+            <div key={ch} className="flex justify-between items-center p-2.5 rounded-lg bg-[var(--surface-1)]">
+              <span className="text-sm text-[var(--text-primary)]"><strong className="text-[var(--nts-accent-text)]">{i + 1}.</strong> {ch}</span>
             </div>
           ))}
           {data.secondaryChannels.map((ch, i) => (
-            <div key={ch} className="flex justify-between items-center p-2 text-sm text-[#4A4A4A]">
+            <div key={ch} className="flex justify-between items-center p-2 text-sm text-[var(--text-secondary)]">
               {data.primaryChannels.length + i + 1}. {ch}
             </div>
           ))}
@@ -122,8 +122,8 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
       {/* Rationale */}
       {data.rationale && (
         <div className="mb-6">
-          <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2 pb-1 border-b border-[#F5F5F5]">AI ανάλυση</p>
-          <div className="text-sm text-[#4A4A4A] leading-relaxed">
+          <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2 pb-1 border-b border-[var(--surface-2)]">AI ανάλυση</p>
+          <div className="text-sm text-[var(--text-secondary)] leading-relaxed">
             <FormattedProse
               content={data.rationale.replace(/\|\|/g, '\n\n').replace(/—/g, ',')}
               variant="compact"
@@ -133,8 +133,8 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
       )}
 
       {/* Footer */}
-      <div className="pt-4 mt-6 border-t border-[#E5E5E5] flex justify-between items-center">
-        <p className="text-[11px] text-[#9CA3AF]">Δημιουργήθηκε από allone | notthesame.ai</p>
+      <div className="pt-4 mt-6 border-t border-[var(--border)] flex justify-between items-center">
+        <p className="text-[11px] text-[var(--text-muted)]">Δημιουργήθηκε από allone | notthesame.ai</p>
         <span className="text-lg font-bold text-[var(--nts-accent-text)]">≠</span>
       </div>
     </div>

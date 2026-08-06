@@ -63,8 +63,8 @@ export function Tooltip({ content, children, size = 14 }: TooltipProps) {
       arrow.style.top = topPos < rect.top ? '100%' : 'auto';
       arrow.style.bottom = topPos < rect.top ? 'auto' : '100%';
       arrow.className = topPos < rect.top 
-        ? 'tooltip-arrow absolute left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1A1A1A]'
-        : 'tooltip-arrow absolute left-1/2 -translate-x-1/2 border-4 border-transparent border-b-[#1A1A1A]';
+        ? 'tooltip-arrow absolute left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[var(--text-primary)]'
+        : 'tooltip-arrow absolute left-1/2 -translate-x-1/2 border-4 border-transparent border-b-[var(--text-primary)]';
     }
   }, [showTooltip]);
 
@@ -102,13 +102,13 @@ export function Tooltip({ content, children, size = 14 }: TooltipProps) {
       {children}
       <HelpCircle 
         size={size} 
-        className="text-[#9CA3AF] hover:text-[#6B7280] flex-shrink-0 cursor-help transition-colors" 
+        className="text-[var(--text-muted)] hover:text-[var(--text-muted)] flex-shrink-0 cursor-help transition-colors" 
         aria-label="More information"
       />
       {showTooltip && (
         <div
           ref={tooltipRef}
-          className="fixed z-[99999] px-3 py-2 bg-[#1A1A1A] text-white text-xs rounded-lg shadow-lg pointer-events-none"
+          className="fixed z-[99999] px-3 py-2 bg-[var(--text-primary)] text-white text-xs rounded-lg shadow-lg pointer-events-none"
           style={{
             whiteSpace: 'pre-line',
             wordWrap: 'break-word',
@@ -118,7 +118,7 @@ export function Tooltip({ content, children, size = 14 }: TooltipProps) {
           }}
         >
           {content}
-          <div className="tooltip-arrow absolute left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1A1A1A]" />
+          <div className="tooltip-arrow absolute left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[var(--text-primary)]" />
         </div>
       )}
     </span>

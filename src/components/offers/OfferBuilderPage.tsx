@@ -114,13 +114,13 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
     a.click();
   };
 
-  const inputCls = 'w-full rounded-lg border border-[#1f2328]/15 bg-white px-3 py-2 text-sm text-[var(--nts-charcoal)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30';
+  const inputCls = 'w-full rounded-lg border border-[var(--text-primary)]/15 bg-white px-3 py-2 text-sm text-[var(--nts-charcoal)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30';
 
   if (view === 'edit') return (
     <div className="space-y-6">
       <PageHeader
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">{editingOffer ? 'Επεξεργασία Προσφοράς' : 'Νέα Εμπορική Προσφορά'}</h2>}
-        description={<p className="text-sm text-[#4A4A4A]">Δημιουργία B2B εμπορικής προσφοράς με ανάλυση margin και export.</p>}
+        description={<p className="text-sm text-[var(--text-secondary)]">Δημιουργία B2B εμπορικής προσφοράς με ανάλυση margin και export.</p>}
         actions={<Button variant="secondary" onClick={() => setView('list')}>← Πίσω</Button>}
       />
 
@@ -151,11 +151,11 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
 
           {/* Line items */}
           <Card padding="none">
-            <div className="flex items-center justify-between p-4 border-b border-[#eef0f3]">
+            <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
               <h3 className="text-sm font-semibold text-[var(--nts-charcoal)]">Γραμμές Προσφοράς</h3>
               <Button variant="secondary" onClick={addLine}><Plus size={14} className="mr-1" /> Γραμμή</Button>
             </div>
-            <div className="divide-y divide-[#eef0f3]">
+            <div className="divide-y divide-[var(--border)]">
               {form.lines.map((line, i) => (
                 <div key={i} className="p-4 grid gap-3 sm:grid-cols-12 items-start">
                   <div className="sm:col-span-4">
@@ -203,7 +203,7 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
               <div className="flex justify-between text-[var(--nts-medium-gray)]">
                 <span>Γραμμές</span><span className="font-mono">{form.lines.length}</span>
               </div>
-              <div className="flex justify-between border-t border-[#eef0f3] pt-2 font-bold text-[var(--nts-charcoal)]">
+              <div className="flex justify-between border-t border-[var(--border)] pt-2 font-bold text-[var(--nts-charcoal)]">
                 <span>Σύνολο</span>
                 <span className="font-mono text-lg text-[var(--nts-accent-text)]">€{grandTotal.toFixed(2)}</span>
               </div>
@@ -226,7 +226,7 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
     <div className="space-y-6">
       <PageHeader
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Commercial Offers</h2>}
-        description={<p className="text-sm text-[#4A4A4A]">Δημιουργία και παρακολούθηση B2B εμπορικών προσφορών με ανάλυση margin ανά γραμμή.</p>}
+        description={<p className="text-sm text-[var(--text-secondary)]">Δημιουργία και παρακολούθηση B2B εμπορικών προσφορών με ανάλυση margin ανά γραμμή.</p>}
         actions={<Button variant="primary" onClick={openNew}><Plus size={15} className="mr-1" /> Νέα Προσφορά</Button>}
       />
 
@@ -246,7 +246,7 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
       </div>
 
       <Card padding="none">
-        <div className="flex items-center justify-between p-5 border-b border-[#eef0f3]">
+        <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
           <CardHeader title="Προσφορές" subtitle={`${offers.length} εγγραφές`} icon={<FileText size={18} className="text-[var(--nts-medium-gray)]" />} />
         </div>
 
@@ -262,7 +262,7 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#eef0f3] bg-[#f9fafb]">
+                <tr className="border-b border-[var(--border)] bg-[var(--surface-1)]">
                   {['Account', 'Ημ/νία', 'Ισχύς έως', 'Σύνολο', 'Γραμμές', 'Κατάσταση', ''].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--nts-medium-gray)]">{h}</th>
                   ))}
@@ -272,7 +272,7 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
                 {offers.map((offer) => {
                   const total = offer.lines.reduce((s, l) => s + l.quantity * l.unitPrice * (1 - l.discount / 100), 0);
                   return (
-                    <tr key={offer.id} className="border-b border-[#eef0f3] hover:bg-[#f9fafb]/60">
+                    <tr key={offer.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-1)]/60">
                       <td className="px-4 py-3 font-medium text-[var(--nts-charcoal)]">{offer.accountName}</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{offer.date}</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{offer.validUntil ?? '—'}</td>
@@ -282,7 +282,7 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
                         <select
                           value={offer.status}
                           onChange={(e) => updateStatus.mutate({ id: offer.id, status: e.target.value as OfferStatus })}
-                          className="rounded border border-[#eef0f3] bg-white px-2 py-1 text-xs"
+                          className="rounded border border-[var(--border)] bg-white px-2 py-1 text-xs"
                         >
                           {(['draft', 'sent', 'accepted', 'rejected'] as OfferStatus[]).map((s) => (
                             <option key={s} value={s}>{STATUS_META[s].label}</option>
@@ -291,8 +291,8 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <button onClick={() => openEdit(offer)} className="p-1 rounded text-[var(--nts-medium-gray)] hover:bg-[#f0f0f0]"><Pencil size={14} /></button>
-                          <button onClick={() => handleExportCSV(offer)} className="p-1 rounded text-[var(--nts-medium-gray)] hover:bg-[#f0f0f0]"><Download size={14} /></button>
+                          <button onClick={() => openEdit(offer)} className="p-1 rounded text-[var(--nts-medium-gray)] hover:bg-[var(--border)]"><Pencil size={14} /></button>
+                          <button onClick={() => handleExportCSV(offer)} className="p-1 rounded text-[var(--nts-medium-gray)] hover:bg-[var(--border)]"><Download size={14} /></button>
                           <button onClick={() => { if (window.confirm('Διαγραφή;')) deleteOffer.mutate(offer.id); }} className="p-1 rounded text-[var(--nts-medium-gray)] hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
                         </div>
                       </td>

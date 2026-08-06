@@ -114,21 +114,21 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-[var(--nts-accent-text)]">Σύνοψη</p>
-                <h2 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-[#1A1A1A]">
+                <h2 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text-primary)]">
                   Έξυπνες προτάσεις για την ομάδα σας
                 </h2>
-                <p className="mt-2 text-sm text-[#6B7280] max-w-xl leading-relaxed">
+                <p className="mt-2 text-sm text-[var(--text-muted)] max-w-xl leading-relaxed">
                   Κάθε κάρτα οδηγεί στη σχετική ενότητα της πλατφόρμας, ώστε η ανάλυση να μετατρέπεται άμεσα σε πρακτική ενέργεια.
                 </p>
               </div>
             </div>
             <div className="flex flex-wrap gap-3 lg:justify-end">
-              <div className="rounded-xl bg-white border border-[#E5E7EB] px-5 py-4 min-w-[120px] shadow-sm">
-                <p className="text-[11px] uppercase tracking-wide text-[#9CA3AF]">Insights</p>
-                <p className="text-2xl font-bold font-mono tabular-nums text-[#1A1A1A]">{aiInsights.length}</p>
+              <div className="rounded-xl bg-white border border-[var(--border)] px-5 py-4 min-w-[120px] shadow-sm">
+                <p className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">Insights</p>
+                <p className="text-2xl font-bold font-mono tabular-nums text-[var(--text-primary)]">{aiInsights.length}</p>
               </div>
-              <div className="rounded-xl bg-white border border-[#E5E7EB] px-5 py-4 min-w-[120px] shadow-sm">
-                <p className="text-[11px] uppercase tracking-wide text-[#9CA3AF]">Υψηλής προτεραιότητας</p>
+              <div className="rounded-xl bg-white border border-[var(--border)] px-5 py-4 min-w-[120px] shadow-sm">
+                <p className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">Υψηλής προτεραιότητας</p>
                 <p className="text-2xl font-bold font-mono tabular-nums text-amber-600">{highImpactCount}</p>
               </div>
             </div>
@@ -147,7 +147,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
                   className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all border ${
                     filter === type
                       ? 'bg-[var(--nts-accent)] text-white border-[var(--nts-accent)] shadow-sm'
-                      : 'bg-white text-[#4A5568] border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F9FAFB]'
+                      : 'bg-white text-[#4A5568] border-[var(--border)] hover:border-[#CBD5E1] hover:bg-[var(--surface-1)]'
                   }`}
                 >
                   {type === 'opportunity' && <Lightbulb size={15} className="opacity-80" />}
@@ -162,10 +162,10 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
             {/* List */}
             <div className="space-y-4">
               {filteredInsights.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-[#D1D5DB] bg-[#FAFAFA] px-8 py-16 text-center">
-                  <Sparkles className="mx-auto text-[#9CA3AF] mb-3" size={36} />
+                <div className="rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-1)] px-8 py-16 text-center">
+                  <Sparkles className="mx-auto text-[var(--text-muted)] mb-3" size={36} />
                   <p className="text-[#4A5568] font-medium">Δεν υπάρχουν insights σε αυτό το φίλτρο</p>
-                  <p className="text-sm text-[#9CA3AF] mt-1">Δοκιμάστε το φίλτρο «Όλα» ή εμπλουτίστε τα διαθέσιμα δεδομένα.</p>
+                  <p className="text-sm text-[var(--text-muted)] mt-1">Δοκιμάστε το φίλτρο «Όλα» ή εμπλουτίστε τα διαθέσιμα δεδομένα.</p>
                 </div>
               ) : (
                 filteredInsights.map((insight, index) => (
@@ -184,8 +184,8 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
             <div className="rounded-xl border border-[#E8E8ED] bg-[#FAFBFC] p-5 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <p className="font-semibold text-[#1A1A1A]">Εφαρμογή προτεραιότητας</p>
-                  <p className="text-xs text-[#6B7280] mt-1 max-w-md leading-snug">
+                  <p className="font-semibold text-[var(--text-primary)]">Εφαρμογή προτεραιότητας</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1 max-w-md leading-snug">
                     Μεταφέρει στην πρώτη διαθέσιμη ενότητα με βάση τη σειρά προτεραιότητας των σημαντικότερων ευρημάτων.
                   </p>
                 </div>
@@ -206,7 +206,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
           <aside className="xl:col-span-4 space-y-4 xl:sticky xl:top-4">
             <div className="rounded-2xl border border-[#E8E8ED] bg-white p-6 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--nts-accent)]/20 to-violet-500/10 flex items-center justify-center overflow-hidden border border-[#F0F0F0]">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--nts-accent)]/20 to-violet-500/10 flex items-center justify-center overflow-hidden border border-[var(--border)]">
                   <img
                     src="/mark.png"
                     alt=""
@@ -217,8 +217,8 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
                   />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-[#1A1A1A]">Βοηθός & γνωσιακή βάση</h3>
-                  <p className="text-xs text-[#6B7280]">Ερωτήσεις για τη χρήση της πλατφόρμας</p>
+                  <h3 className="font-semibold text-[var(--text-primary)]">Βοηθός & γνωσιακή βάση</h3>
+                  <p className="text-xs text-[var(--text-muted)]">Ερωτήσεις για τη χρήση της πλατφόρμας</p>
                 </div>
               </div>
               <p className="text-sm text-[#4A5568] leading-relaxed mb-4">
@@ -229,25 +229,25 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
               </Button>
             </div>
 
-            <div className="rounded-2xl border border-[#E8E8ED] bg-[#F9FAFB] p-5 text-sm text-[#4A5568]">
-              <p className="font-semibold text-[#1A1A1A] mb-3 text-xs uppercase tracking-wide">Υπόμνημα τύπων</p>
+            <div className="rounded-2xl border border-[#E8E8ED] bg-[var(--surface-1)] p-5 text-sm text-[#4A5568]">
+              <p className="font-semibold text-[var(--text-primary)] mb-3 text-xs uppercase tracking-wide">Υπόμνημα τύπων</p>
               <ul className="space-y-3">
                 <li className="flex gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
                   <span>
-                    <strong className="text-[#1A1A1A]">Ευκαιρία</strong>: αξιοποίηση τάσης ή δυναμικού που δεν έχει ακόμη αξιοποιηθεί επαρκώς
+                    <strong className="text-[var(--text-primary)]">Ευκαιρία</strong>: αξιοποίηση τάσης ή δυναμικού που δεν έχει ακόμη αξιοποιηθεί επαρκώς
                   </span>
                 </li>
                 <li className="flex gap-2">
                   <span className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0" />
                   <span>
-                    <strong className="text-[#1A1A1A]">Προειδοποίηση</strong>: ρίσκο που απαιτεί άμεση προσοχή
+                    <strong className="text-[var(--text-primary)]">Προειδοποίηση</strong>: ρίσκο που απαιτεί άμεση προσοχή
                   </span>
                 </li>
                 <li className="flex gap-2">
                   <span className="w-2 h-2 rounded-full bg-sky-500 mt-1.5 shrink-0" />
                   <span>
-                    <strong className="text-[#1A1A1A]">Σύσταση</strong>: επόμενο βήμα βελτιστοποίησης ή οργάνωσης
+                    <strong className="text-[var(--text-primary)]">Σύσταση</strong>: επόμενο βήμα βελτιστοποίησης ή οργάνωσης
                   </span>
                 </li>
               </ul>
@@ -256,10 +256,10 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
             <button
               type="button"
               onClick={() => onSectionChange?.('help')}
-              className="w-full flex items-center justify-between rounded-xl border border-[#E8E8ED] bg-white px-4 py-3 text-sm font-medium text-[#4A5568] hover:bg-[#FAFAFA] transition-colors"
+              className="w-full flex items-center justify-between rounded-xl border border-[#E8E8ED] bg-white px-4 py-3 text-sm font-medium text-[#4A5568] hover:bg-[var(--surface-1)] transition-colors"
             >
               Μετάβαση στο Help
-              <ArrowRight size={16} className="text-[#9CA3AF]" />
+              <ArrowRight size={16} className="text-[var(--text-muted)]" />
             </button>
           </aside>
         </div>

@@ -58,7 +58,7 @@ export function ScenarioSelector({
                 w-full h-full min-w-0 min-h-[220px] p-4 rounded-xl border-2 text-left transition-all duration-200 flex flex-col
                 ${isSelected
                   ? 'border-[var(--nts-accent)] bg-[var(--nts-light-gray)]'
-                  : 'border-[#E5E5E5] bg-white hover:border-[var(--nts-accent)]/50'
+                  : 'border-[var(--border)] bg-white hover:border-[var(--nts-accent)]/50'
                 }
               `}
               style={{
@@ -85,10 +85,10 @@ export function ScenarioSelector({
                   </motion.div>
                 )}
               </div>
-              <h3 className="font-semibold text-[#1A1A1A] mt-3 text-sm">
+              <h3 className="font-semibold text-[var(--text-primary)] mt-3 text-sm">
                 {scenario.name}
               </h3>
-              <p className="text-xs text-[#4A4A4A] mt-1">
+              <p className="text-xs text-[var(--text-secondary)] mt-1">
                 {scenario.description}
               </p>
               {erpHints?.[scenario.id] && (
@@ -102,10 +102,10 @@ export function ScenarioSelector({
                 return (
                   <div className="flex items-center gap-1 mt-2">
                     {dur === 'ongoing'
-                      ? <Infinity size={12} className="text-[#9CA3AF]" />
-                      : <Clock size={12} className="text-[#9CA3AF]" />
+                      ? <Infinity size={12} className="text-[var(--text-muted)]" />
+                      : <Clock size={12} className="text-[var(--text-muted)]" />
                     }
-                    <span className="text-[10px] text-[#9CA3AF]">
+                    <span className="text-[10px] text-[var(--text-muted)]">
                       {dur === 'ongoing' ? 'Συνεχής' : `${dur} ημέρες`}
                     </span>
                   </div>
@@ -113,7 +113,7 @@ export function ScenarioSelector({
               })()}
               
               {scenario.weights && (
-                <div className="mt-auto pt-3 border-t border-[#E5E5E5]">
+                <div className="mt-auto pt-3 border-t border-[var(--border)]">
                   <div className="flex gap-1">
                     {Object.entries(scenario.weights)
                       .sort((a, b) => b[1] - a[1])
@@ -134,7 +134,7 @@ export function ScenarioSelector({
                         />
                       ))}
                   </div>
-                  <p className="text-[10px] text-[#9CA3AF] mt-1">
+                  <p className="text-[10px] text-[var(--text-muted)] mt-1">
                     {scenario.cardHint ??
                       `${Object.entries(scenario.weights)
                         .sort((a, b) => b[1] - a[1])

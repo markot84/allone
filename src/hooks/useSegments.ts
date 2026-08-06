@@ -98,7 +98,7 @@ function rebuildSegmentsFromCustomerSummaries(summariesBySegment: Map<string, Se
       count: summary.count,
       percentage: totalCount > 0 ? Math.round((summary.count / totalCount) * 10000) / 100 : 0,
       revenue_share: totalMonetary > 0 ? Math.round((summary.monetary / totalMonetary) * 10000) / 100 : 0,
-      color: '#6B7280',
+      color: 'var(--text-muted)',
       description: '',
       icon: '',
     } as RFMSegment;

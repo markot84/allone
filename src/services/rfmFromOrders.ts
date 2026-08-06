@@ -983,7 +983,7 @@ export function computeRfmSegmentsFromEcommerceOrders(
         count: g.count,
         percentage: n > 0 ? Math.round((g.count / n) * 1000) / 10 : 0,
         revenue_share: totalRevenue > 0 ? Math.round((g.revenue / totalRevenue) * 1000) / 10 : 0,
-        color: '#6B7280',
+        color: 'var(--text-muted)',
         description: SEGMENT_DESCRIPTION[g.id] || 'Υπολογισμένο από παραγγελίες e-shop',
         icon: '',
         behavioral,

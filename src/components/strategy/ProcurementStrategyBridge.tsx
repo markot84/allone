@@ -83,14 +83,14 @@ export function ProcurementStrategyBridge({
     n >= 1000 ? `${(n / 1000).toFixed(1).replace('.', ',')}k€` : `${Math.round(n)}€`;
 
   return (
-    <div className="rounded-xl border border-[#E5E7EB] bg-gradient-to-br from-[#FAFAFA] to-white overflow-hidden shadow-sm">
+    <div className="rounded-xl border border-[var(--border)] bg-gradient-to-br from-[var(--surface-1)] to-white overflow-hidden shadow-sm">
       <div className="border-b border-[#E8E8E8] bg-white">
         <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2">
           <button
             type="button"
             aria-expanded={expanded}
             onClick={() => setExpanded((value) => !value)}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left hover:text-[#111827]"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left hover:text-[var(--text-primary)]"
           >
             {expanded ? (
               <ChevronDown size={16} className="shrink-0 text-gray-500" strokeWidth={2.25} />
@@ -101,7 +101,7 @@ export function ProcurementStrategyBridge({
               <Package size={16} className="text-[#7C3AED]" aria-hidden />
             </div>
             <div className="min-w-0">
-              <h3 className="truncate text-sm font-bold text-[#111827] sm:text-base">
+              <h3 className="truncate text-sm font-bold text-[var(--text-primary)] sm:text-base">
                 Ειδοποιήσεις από Product Intelligence
               </h3>
               <p className="text-[10px] text-gray-500 sm:text-[11px]">

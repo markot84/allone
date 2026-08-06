@@ -560,13 +560,13 @@ function AccountPickerModal({
   const S = {
     overlay: { position: 'fixed' as const, inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' },
     card: { maxWidth: '420px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' },
-    header: { display: 'flex', alignItems: 'center', gap: '12px', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' },
+    header: { display: 'flex', alignItems: 'center', gap: '12px', padding: '20px 24px', borderBottom: '1px solid var(--surface-2)' },
     iconWrap: { flexShrink: 0, width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center' },
     body: { padding: '20px 24px' },
     warning: { display: 'flex', gap: '8px', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px' },
-    input: { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const },
+    input: { width: '100%', borderRadius: '8px', border: '1px solid var(--border)', padding: '10px 12px', fontSize: '14px', backgroundColor: 'var(--surface-1)', outline: 'none', boxSizing: 'border-box' as const },
     footer: { display: 'flex', gap: '10px', padding: '0 24px 20px' },
-    btnSecondary: { flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: '#374151' },
+    btnSecondary: { flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: 'var(--text-secondary)' },
     btnPrimary: (disabled: boolean) => ({ flex: 1, padding: '9px 16px', borderRadius: '8px', border: 'none', backgroundColor: disabled ? '#FCA868' : '#F97316', fontSize: '13px', fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }),
   };
 
@@ -579,8 +579,8 @@ function AccountPickerModal({
             <Building2 size={18} color="#4F46E5" />
           </div>
           <div>
-            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>{modalTitle}</p>
-            <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>για το brand <strong>{brandName}</strong></p>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{modalTitle}</p>
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>για το brand <strong>{brandName}</strong></p>
           </div>
         </div>
 
@@ -602,13 +602,13 @@ function AccountPickerModal({
                 style={S.input}
                 onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
               />
-              <p style={{ margin: '8px 0 0', fontSize: '11px', color: '#9CA3AF' }}>
+              <p style={{ margin: '8px 0 0', fontSize: '11px', color: 'var(--text-muted)' }}>
                 {manualHelp}
               </p>
             </div>
           ) : (
             <div>
-              <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#6B7280' }}>
+              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--text-muted)' }}>
                 Επίλεξε τον λογαριασμό για το brand:
               </p>
               <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -618,14 +618,14 @@ function AccountPickerModal({
                     style={{
                       display: 'flex', alignItems: 'center', gap: '12px',
                       padding: '12px 16px', borderRadius: '10px', cursor: 'pointer',
-                      border: `2px solid ${selected?.id === acc.id ? '#6366F1' : '#E5E7EB'}`,
+                      border: `2px solid ${selected?.id === acc.id ? '#6366F1' : 'var(--border)'}`,
                       backgroundColor: selected?.id === acc.id ? '#EEF2FF' : '#fff',
                     }}
                   >
                     <input type="radio" name="adAccount" value={acc.id} checked={selected?.id === acc.id} onChange={() => setSelected(acc)} style={{ accentColor: '#6366F1', flexShrink: 0 }} />
                     <div>
-                      <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: '#111827' }}>{acc.name}</p>
-                      <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF' }}>{acc.id}</p>
+                      <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{acc.name}</p>
+                      <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>{acc.id}</p>
                     </div>
                   </label>
                 ))}
@@ -669,30 +669,30 @@ function ShopDomainModal({
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
       <div style={{ maxWidth: '420px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--surface-2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '24px' }}>🟢</span>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση Shopify</p>
-              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>Εισάγετε το domain του καταστήματός σας</p>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>Σύνδεση Shopify</p>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Εισάγετε το domain του καταστήματός σας</p>
             </div>
           </div>
-          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
             <X size={18} />
           </button>
         </div>
 
         <div style={{ padding: '20px 24px' }}>
-          <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Shop Domain</label>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Shop Domain</label>
           <input
             type="text"
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
             placeholder="mystore.myshopify.com"
-            style={{ width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' }}
+            style={{ width: '100%', borderRadius: '8px', border: '1px solid var(--border)', padding: '10px 12px', fontSize: '14px', backgroundColor: 'var(--surface-1)', outline: 'none', boxSizing: 'border-box' }}
             onKeyDown={(e) => e.key === 'Enter' && domain.trim() && onConfirm(domain.trim())}
           />
-          <p style={{ margin: '8px 0 0', fontSize: '11px', color: '#9CA3AF' }}>
+          <p style={{ margin: '8px 0 0', fontSize: '11px', color: 'var(--text-muted)' }}>
             Μπορείτε να γράψετε μόνο το store name (π.χ. "mystore") ή ολόκληρο το domain.
           </p>
         </div>
@@ -701,7 +701,7 @@ function ShopDomainModal({
           <button
             onClick={onCancel}
             disabled={loading}
-            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: 'var(--text-secondary)' }}
           >
             Άκυρο
           </button>
@@ -773,35 +773,35 @@ function WooCredentialsModal({
     }
   };
 
-  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid var(--border)', padding: '10px 12px', fontSize: '14px', backgroundColor: 'var(--surface-1)', outline: 'none', boxSizing: 'border-box' as const };
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
       <div style={{ maxWidth: '460px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--surface-2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '24px' }}>🟣</span>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση WooCommerce</p>
-              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>REST API credentials από το WordPress Admin</p>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>Σύνδεση WooCommerce</p>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>REST API credentials από το WordPress Admin</p>
             </div>
           </div>
-          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
             <X size={18} />
           </button>
         </div>
 
         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>e-shop URL</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>e-shop URL</label>
             <input type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://mystore.com" style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Consumer Key</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Consumer Key</label>
             <input type="text" value={consumerKey} onChange={(e) => setConsumerKey(e.target.value)} placeholder="ck_..." style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Consumer Secret</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Consumer Secret</label>
             <div style={{ position: 'relative' }}>
               <input
                 type={showSecret ? 'text' : 'password'}
@@ -814,14 +814,14 @@ function WooCredentialsModal({
               <button
                 type="button"
                 onClick={() => setShowSecret(!showSecret)}
-                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '2px' }}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}
               >
                 {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
 
-          <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
+          <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
             WordPress Admin → WooCommerce → Settings → Advanced → REST API → Add Key (Read permissions)
           </p>
 
@@ -837,7 +837,7 @@ function WooCredentialsModal({
           <button
             onClick={onCancel}
             disabled={loading}
-            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: 'var(--text-secondary)' }}
           >
             Άκυρο
           </button>
@@ -903,7 +903,7 @@ function MagentoConsolidatedRevenueToggle({
   };
 
   return (
-    <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-emerald-200 bg-white p-3 text-xs leading-relaxed text-[#374151]">
+    <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-emerald-200 bg-white p-3 text-xs leading-relaxed text-[var(--text-secondary)]">
       <input
         type="checkbox"
         checked={syncAllStores}
@@ -912,9 +912,9 @@ function MagentoConsolidatedRevenueToggle({
         className="mt-0.5"
       />
       <span>
-        <span className="font-semibold text-[#1A1A1A] block mb-1">Όλα τα Magento store views (συγκεντρωτικά KPIs)</span>
+        <span className="font-semibold text-[var(--text-primary)] block mb-1">Όλα τα Magento store views (συγκεντρωτικά KPIs)</span>
         Όταν ένα Magento installation έχει πολλαπλά storefronts / store views, η ενεργοποίηση ενοποιεί τις παραγγελίες όλων των views στα αθροίσματα εσόδων — χρήσιμο για πολλές αγορές ή ξεχωριστά e-shops που μοιράζονται το ίδιο backend.
-        <span className="block mt-1 text-[#6B7280]">
+        <span className="block mt-1 text-[var(--text-muted)]">
           Αν είναι off, τα KPIs βασίζονται μόνο στο store view που αντιστοιχεί στο store code της σύνδεσης. Για εξαίρεση συγκεκριμένου eshop (hostname) ενώ το συγκεντρωτικό είναι on, ορίστε κανόνα στο μπλοκ <strong>Sales Channel Rules</strong> → πεδίο <strong>Domain eshop (hostname)</strong> μετά από Magento sync.
         </span>
       </span>
@@ -986,32 +986,32 @@ function MagentoCredentialsModal({
     }
   };
 
-  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid var(--border)', padding: '10px 12px', fontSize: '14px', backgroundColor: 'var(--surface-1)', outline: 'none', boxSizing: 'border-box' as const };
   const isValid = storeUrl.trim() && accessToken.trim();
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
       <div style={{ maxWidth: '460px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--surface-2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '24px' }}>🔶</span>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση Magento</p>
-              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>Integration Access Token από το Magento Admin</p>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>Σύνδεση Magento</p>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Integration Access Token από το Magento Admin</p>
             </div>
           </div>
-          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
             <X size={18} />
           </button>
         </div>
 
         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>e-shop URL</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>e-shop URL</label>
             <input type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://mymagentostore.com" style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Access Token</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Access Token</label>
             <div style={{ position: 'relative' }}>
               <input
                 type={showToken ? 'text' : 'password'}
@@ -1024,13 +1024,13 @@ function MagentoCredentialsModal({
               <button
                 type="button"
                 onClick={() => setShowToken(!showToken)}
-                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '2px' }}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}
               >
                 {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
-          <label className="flex items-start gap-2 rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] p-3 text-xs leading-relaxed text-[#374151]">
+          <label className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-3 text-xs leading-relaxed text-[var(--text-secondary)]">
             <input
               type="checkbox"
               checked={syncAllStores}
@@ -1038,14 +1038,14 @@ function MagentoCredentialsModal({
               className="mt-0.5"
             />
             <span>
-              <span className="font-semibold text-[#111827]">Να συμπεριληφθούν όλα τα Magento store views στον τζίρο</span>
-              <span className="block text-[#6B7280] mt-1">
+              <span className="font-semibold text-[var(--text-primary)]">Να συμπεριληφθούν όλα τα Magento store views στον τζίρο</span>
+              <span className="block text-[var(--text-muted)] mt-1">
                 Για πολλαπλά storefronts στο ίδιο installation (διαφορετικές αγορές, γλώσσες ή ξεχωριστά e-shops): ενοποιεί τις παραγγελίες σε ένα κοινό σύνολο KPIs αντί να μετρά μόνο το store view της σύνδεσης.
               </span>
             </span>
           </label>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Store Code (προαιρετικό)</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Store Code (προαιρετικό)</label>
             <input
               type="text"
               value={storeCode}
@@ -1054,14 +1054,14 @@ function MagentoCredentialsModal({
               style={inputStyle}
               onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
             />
-            <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#9CA3AF', lineHeight: '1.45' }}>
+            <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.45' }}>
               Αν το Magento installation έχει πολλά store views, βάλε εδώ το σωστό code. Αν μείνει κενό,
               το σύστημα προσπαθεί πρώτα να βρει το σωστό store από το URL του e-shop.
             </p>
           </div>
 
-          <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
-            <strong style={{ color: '#6B7280' }}>Magento:</strong> αν εμφανίζεται «Integration not secure», συνήθως τα πεδία{' '}
+          <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+            <strong style={{ color: 'var(--text-muted)' }}>Magento:</strong> αν εμφανίζεται «Integration not secure», συνήθως τα πεδία{' '}
             <strong>Callback URL</strong> / <strong>Identity Link URL</strong> είναι κενά — το Magento 2.4 το θεωρεί «μη ασφαλές».
             Συμπληρώστε και τα δύο με το <strong>HTTPS base URL του e-shop</strong> (π.χ. https://www.toshop.gr/) και Save.
             Το allone χρησιμοποιεί μόνο το <strong>Access Token</strong> (Bearer) — όχι OAuth redirect. Μετά: Activate → αντιγράψτε το Access Token από τα 4 keys.
@@ -1113,7 +1113,7 @@ function MagentoCredentialsModal({
           <button
             onClick={onCancel}
             disabled={loading}
-            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: 'var(--text-secondary)' }}
           >
             Άκυρο
           </button>
@@ -1195,28 +1195,28 @@ function MegaventoryCredentialsModal({
     }
   };
 
-  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid var(--border)', padding: '10px 12px', fontSize: '14px', backgroundColor: 'var(--surface-1)', outline: 'none', boxSizing: 'border-box' as const };
   const isValid = apiKey.trim().length > 0;
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
       <div style={{ maxWidth: '460px', width: '100%', maxHeight: '90vh', overflow: 'auto', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--surface-2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '24px' }}>📦</span>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση Megaventory</p>
-              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>API key από Megaventory → My Profile</p>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>Σύνδεση Megaventory</p>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>API key από Megaventory → My Profile</p>
             </div>
           </div>
-          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
             <X size={18} />
           </button>
         </div>
 
         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>API Key</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>API Key</label>
             <div style={{ position: 'relative' }}>
               <input
                 type={showKey ? 'text' : 'password'}
@@ -1229,7 +1229,7 @@ function MegaventoryCredentialsModal({
               <button
                 type="button"
                 onClick={() => setShowKey(!showKey)}
-                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '2px' }}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}
               >
                 {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -1237,8 +1237,8 @@ function MegaventoryCredentialsModal({
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>
-              Custom Report ID <span style={{ fontWeight: 400, color: '#9CA3AF' }}>(allone)</span>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+              Custom Report ID <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(allone)</span>
             </label>
             <input
               type="text"
@@ -1248,7 +1248,7 @@ function MegaventoryCredentialsModal({
               placeholder="π.χ. 4919"
               style={inputStyle}
             />
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '12px', color: '#374151', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '12px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
               <input
                 type="checkbox"
                 checked={customReportEnabled}
@@ -1258,8 +1258,8 @@ function MegaventoryCredentialsModal({
             </label>
           </div>
 
-          <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
-            <strong style={{ color: '#6B7280' }}>Πού θα το βρεις:</strong> Megaventory → επάνω δεξιά (avatar) → <strong>My Profile</strong> →
+          <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+            <strong style={{ color: 'var(--text-muted)' }}>Πού θα το βρεις:</strong> Megaventory → επάνω δεξιά (avatar) → <strong>My Profile</strong> →
             καρτέλα <strong>API Access</strong> → Generate / Copy <strong>API key</strong>.
             Χρειάζονται δικαιώματα ανάγνωσης σε Sales, Purchases, Documents, Products, Inventory & Suppliers.
           </p>
@@ -1276,7 +1276,7 @@ function MegaventoryCredentialsModal({
           <button
             onClick={onCancel}
             disabled={loading}
-            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: 'var(--text-secondary)' }}
           >
             Άκυρο
           </button>
@@ -1317,7 +1317,7 @@ function SoftOneCredentialsModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const toast = useToast();
-  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid var(--border)', padding: '10px 12px', fontSize: '14px', backgroundColor: 'var(--surface-1)', outline: 'none', boxSizing: 'border-box' as const };
 
   const handleConnect = async () => {
     if (!serviceUrl.trim() || !username.trim() || !password || !appId.trim()) return;
@@ -1361,12 +1361,12 @@ function SoftOneCredentialsModal({
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
       <div style={{ maxWidth: '480px', width: '100%', maxHeight: '90vh', overflow: 'auto', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--surface-2)' }}>
           <div>
-            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση SoftOne</p>
-            <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>Web Services URL (…/s1services) — βλ. softone.gr/ws</p>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>Σύνδεση SoftOne</p>
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Web Services URL (…/s1services) — βλ. softone.gr/ws</p>
           </div>
-          <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
+          <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
             <X size={18} />
           </button>
         </div>
@@ -1383,7 +1383,7 @@ function SoftOneCredentialsModal({
             <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>Password</label>
             <div style={{ position: 'relative' }}>
               <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...inputStyle, paddingRight: '40px' }} />
-              <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+              <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
@@ -1426,7 +1426,7 @@ function SoftOneCredentialsModal({
           )}
         </div>
         <div style={{ display: 'flex', gap: '10px', padding: '0 24px 20px' }}>
-          <button type="button" onClick={onCancel} disabled={loading} style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
+          <button type="button" onClick={onCancel} disabled={loading} style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
             Άκυρο
           </button>
           <button
@@ -1452,7 +1452,7 @@ function EpsilonNetCredentialsModal({ brandId, onSuccess, onCancel }: { brandId:
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const toast = useToast();
-  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid var(--border)', padding: '10px 12px', fontSize: '14px', backgroundColor: 'var(--surface-1)', outline: 'none', boxSizing: 'border-box' as const };
 
   const handleConnect = async () => {
     if (!subscriptionKey.trim() || !email.trim() || !password) return;
@@ -1489,12 +1489,12 @@ function EpsilonNetCredentialsModal({ brandId, onSuccess, onCancel }: { brandId:
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
       <div style={{ maxWidth: '460px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--surface-2)' }}>
           <div>
-            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Epsilon Net e-Shop API</p>
-            <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>Κλειδί συνδρομής + διαπιστευτήρια (myaccount.epsilonnet.gr)</p>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>Epsilon Net e-Shop API</p>
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Κλειδί συνδρομής + διαπιστευτήρια (myaccount.epsilonnet.gr)</p>
           </div>
-          <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+          <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
             <X size={18} />
           </button>
         </div>
@@ -1511,7 +1511,7 @@ function EpsilonNetCredentialsModal({ brandId, onSuccess, onCancel }: { brandId:
             <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>Password</label>
             <div style={{ position: 'relative' }}>
               <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...inputStyle, paddingRight: '40px' }} />
-              <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+              <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
@@ -1524,7 +1524,7 @@ function EpsilonNetCredentialsModal({ brandId, onSuccess, onCancel }: { brandId:
           )}
         </div>
         <div style={{ display: 'flex', gap: '10px', padding: '0 24px 20px' }}>
-          <button type="button" onClick={onCancel} disabled={loading} style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px' }}>
+          <button type="button" onClick={onCancel} disabled={loading} style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: '#fff', fontSize: '13px' }}>
             Άκυρο
           </button>
           <button
@@ -1558,7 +1558,7 @@ function EntersoftCredentialsModal({ brandId, onSuccess, onCancel }: { brandId: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const toast = useToast();
-  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid var(--border)', padding: '10px 12px', fontSize: '14px', backgroundColor: 'var(--surface-1)', outline: 'none', boxSizing: 'border-box' as const };
 
   const handleConnect = async () => {
     if (!webApiBaseUrl.trim() || !userId.trim() || !password) return;
@@ -1603,12 +1603,12 @@ function EntersoftCredentialsModal({ brandId, onSuccess, onCancel }: { brandId: 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
       <div style={{ maxWidth: '480px', width: '100%', maxHeight: '90vh', overflow: 'auto', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--surface-2)' }}>
           <div>
-            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Entersoft Web API</p>
-            <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>Βάση URL (με / στο τέλος) · api/Login/Login</p>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>Entersoft Web API</p>
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Βάση URL (με / στο τέλος) · api/Login/Login</p>
           </div>
-          <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+          <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
             <X size={18} />
           </button>
         </div>
@@ -1625,7 +1625,7 @@ function EntersoftCredentialsModal({ brandId, onSuccess, onCancel }: { brandId: 
             <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px' }}>Password</label>
             <div style={{ position: 'relative' }}>
               <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...inputStyle, paddingRight: '40px' }} />
-              <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+              <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
@@ -1675,7 +1675,7 @@ function EntersoftCredentialsModal({ brandId, onSuccess, onCancel }: { brandId: 
           )}
         </div>
         <div style={{ display: 'flex', gap: '10px', padding: '0 24px 20px' }}>
-          <button type="button" onClick={onCancel} disabled={loading} style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff' }}>
+          <button type="button" onClick={onCancel} disabled={loading} style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: '#fff' }}>
             Άκυρο
           </button>
           <button
@@ -1795,10 +1795,10 @@ function MegaventoryCustomReportSettingsInline({
   };
 
   return (
-    <div className="rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] p-3 shadow-sm">
-      <p className="mb-2 text-sm font-semibold text-[#111827]">Custom report (allone)</p>
-      <p className="mb-1 text-xs text-[#6B7280]">Τα δεδομένα του αποθηκευμένου report στο Megaventory συγχρονίζονται στο Firestore ανά brand.</p>
-      <label htmlFor={`mv-cr-id-${brandId}`} className="mb-1 block text-xs font-medium text-[#374151]">
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-3 shadow-sm">
+      <p className="mb-2 text-sm font-semibold text-[var(--text-primary)]">Custom report (allone)</p>
+      <p className="mb-1 text-xs text-[var(--text-muted)]">Τα δεδομένα του αποθηκευμένου report στο Megaventory συγχρονίζονται στο Firestore ανά brand.</p>
+      <label htmlFor={`mv-cr-id-${brandId}`} className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
         Report ID
       </label>
       <input
@@ -1809,35 +1809,35 @@ function MegaventoryCustomReportSettingsInline({
         onChange={(e) => setReportId(e.target.value)}
         disabled={!canManage || saving}
         placeholder="4919"
-        className="mb-3 max-w-[220px] rounded-md border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-sm text-[#111827] shadow-sm disabled:opacity-50"
+        className="mb-3 max-w-[220px] rounded-md border border-[var(--border)] bg-white px-2.5 py-1.5 text-sm text-[var(--text-primary)] shadow-sm disabled:opacity-50"
       />
-      <label className="mb-3 flex cursor-pointer items-start gap-3 text-sm leading-snug text-[#374151]">
+      <label className="mb-3 flex cursor-pointer items-start gap-3 text-sm leading-snug text-[var(--text-secondary)]">
         <input
           type="checkbox"
           checked={enabled}
           onChange={(e) => setEnabled(e.target.checked)}
           disabled={!canManage || saving}
-          className="mt-0.5 h-5 w-5 shrink-0 rounded border-2 border-[#D1D5DB] text-[var(--nts-accent,#f97316)] accent-[var(--nts-accent,#f97316)] disabled:opacity-50"
+          className="mt-0.5 h-5 w-5 shrink-0 rounded border-2 border-[var(--border-strong)] text-[var(--nts-accent,#f97316)] accent-[var(--nts-accent,#f97316)] disabled:opacity-50"
         />
         <span>Να συμπεριλαμβάνεται το custom report στο Sync (χειροκίνητο / νυχτερινό)</span>
       </label>
-      <div className="mb-3 rounded-md border border-[#E5E7EB] bg-white p-2.5">
-        <p className="mb-1 text-xs font-medium text-[#374151]">Αποθήκες stock</p>
-        <p className="mb-2 text-xs text-[#6B7280]">
+      <div className="mb-3 rounded-md border border-[var(--border)] bg-white p-2.5">
+        <p className="mb-1 text-xs font-medium text-[var(--text-secondary)]">Αποθήκες stock</p>
+        <p className="mb-2 text-xs text-[var(--text-muted)]">
           Επίλεξε ποιες αποθήκες μετράνε στο διαθέσιμο stock. Καμία επιλογή = όλες οι αποθήκες. Η αλλαγή επανυπολογίζει όλο το stock.
         </p>
         {locLoading ? (
-          <p className="text-xs text-[#6B7280]">Φόρτωση αποθηκών…</p>
+          <p className="text-xs text-[var(--text-muted)]">Φόρτωση αποθηκών…</p>
         ) : locError ? (
           <p className="text-xs text-[#B91C1C]">{locError}</p>
         ) : locations.length === 0 ? (
-          <p className="text-xs text-[#6B7280]">Δεν βρέθηκαν αποθήκες.</p>
+          <p className="text-xs text-[var(--text-muted)]">Δεν βρέθηκαν αποθήκες.</p>
         ) : (
           <div className="flex flex-col gap-1.5">
             {locations.map((loc) => {
               const checked = stockLocations.includes(loc.id);
               return (
-                <label key={loc.id} className="flex cursor-pointer items-center gap-2 text-sm text-[#374151]">
+                <label key={loc.id} className="flex cursor-pointer items-center gap-2 text-sm text-[var(--text-secondary)]">
                   <input
                     type="checkbox"
                     checked={checked}
@@ -1847,7 +1847,7 @@ function MegaventoryCustomReportSettingsInline({
                       )
                     }
                     disabled={!canManage || saving}
-                    className="h-4 w-4 shrink-0 rounded border-2 border-[#D1D5DB] text-[var(--nts-accent,#f97316)] accent-[var(--nts-accent,#f97316)] disabled:opacity-50"
+                    className="h-4 w-4 shrink-0 rounded border-2 border-[var(--border-strong)] text-[var(--nts-accent,#f97316)] accent-[var(--nts-accent,#f97316)] disabled:opacity-50"
                   />
                   <span>{loc.name || loc.id}</span>
                 </label>
@@ -1860,7 +1860,7 @@ function MegaventoryCustomReportSettingsInline({
         type="button"
         onClick={() => void handleSaveSettings()}
         disabled={!canManage || saving}
-        className="rounded-md bg-[#0EA5E9] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#0284C7] disabled:cursor-not-allowed disabled:bg-[#9CA3AF]"
+        className="rounded-md bg-[#0EA5E9] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#0284C7] disabled:cursor-not-allowed disabled:bg-[var(--text-muted)]"
       >
         {saving ? 'Αποθήκευση...' : 'Αποθήκευση ρυθμίσεων'}
       </button>
@@ -1928,36 +1928,36 @@ function OpenCartCredentialsModal({
     }
   };
 
-  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid var(--border)', padding: '10px 12px', fontSize: '14px', backgroundColor: 'var(--surface-1)', outline: 'none', boxSizing: 'border-box' as const };
   const isValid = storeUrl.trim() && clientId.trim() && clientSecret.trim() && token.trim() && username.trim() && password.trim();
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
       <div style={{ maxWidth: '520px', width: '100%', maxHeight: 'calc(100vh - 32px)', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--surface-2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '24px' }}>🛍️</span>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση OpenCart</p>
-              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>OAuth credentials από το OpenCart REST Admin API</p>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>Σύνδεση OpenCart</p>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>OAuth credentials από το OpenCart REST Admin API</p>
             </div>
           </div>
-          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
             <X size={18} />
           </button>
         </div>
 
         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>e-shop URL</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>e-shop URL</label>
             <input type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://myopencartstore.com" style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Client ID</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Client ID</label>
             <input type="text" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="OAuth client_id" style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Client Secret</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Client Secret</label>
             <div style={{ position: 'relative' }}>
               <input
                 type={showSecrets ? 'text' : 'password'}
@@ -1970,14 +1970,14 @@ function OpenCartCredentialsModal({
               <button
                 type="button"
                 onClick={() => setShowSecrets(!showSecrets)}
-                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '2px' }}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}
               >
                 {showSecrets ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Token</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Token</label>
             <input
               type={showSecrets ? 'text' : 'password'}
               value={token}
@@ -1988,11 +1988,11 @@ function OpenCartCredentialsModal({
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Username</label>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Username</label>
               <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Admin/API username" style={inputStyle} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Password</label>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Password</label>
               <input
                 type={showSecrets ? 'text' : 'password'}
                 value={password}
@@ -2004,7 +2004,7 @@ function OpenCartCredentialsModal({
             </div>
           </div>
 
-          <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
+          <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
             Χρησιμοποίησε τα OAuth στοιχεία από το OpenCart REST Admin API extension. Το token αποθηκεύεται κρυπτογραφημένο και στέλνεται ως Bearer token στα REST endpoints.
           </p>
 
@@ -2020,7 +2020,7 @@ function OpenCartCredentialsModal({
           <button
             onClick={onCancel}
             disabled={loading}
-            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: 'var(--text-secondary)' }}
           >
             Άκυρο
           </button>
@@ -2996,13 +2996,13 @@ export function ConnectorsPanel() {
             className="mb-4"
             toolbarAriaLabel="Platform connectors"
             title={
-              <h3 className="flex items-center gap-2 text-base font-semibold text-[#1A1A1A] sm:text-lg">
+              <h3 className="flex items-center gap-2 text-base font-semibold text-[var(--text-primary)] sm:text-lg">
                 <Link2 size={20} className="shrink-0 text-[var(--nts-accent-text)]" />
                 Platform Connectors
               </h3>
             }
             description={
-              <p className="text-sm text-[#6B7280]">
+              <p className="text-sm text-[var(--text-muted)]">
                 {isB2B
                   ? 'Σύνδεσε demand, analytics και B2B-ready data sources. Τα disabled modules δεν εμφανίζονται.'
                   : 'Σύνδεσε Ad Platforms & E-shop για αυτόματη εισαγωγή δεδομένων (23:00)'}
@@ -3036,10 +3036,10 @@ export function ConnectorsPanel() {
           )}
 
           {loading ? (
-            <div className="rounded-xl border border-dashed border-[#D1D5DB] bg-[#FAFAFA] px-4 py-8 text-center">
+            <div className="rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-1)] px-4 py-8 text-center">
               <Spinner size="sm" className="mx-auto mb-3" />
-              <p className="text-sm font-semibold text-[#4B5563]">Ανάκτηση αποθηκευμένων συνδέσεων…</p>
-              <p className="mt-1 text-xs text-[#9CA3AF]">
+              <p className="text-sm font-semibold text-[var(--text-secondary)]">Ανάκτηση αποθηκευμένων συνδέσεων…</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
                 Οι ρυθμίσεις παραμένουν ασφαλώς στη Firebase. Δεν γίνεται reset σε refresh.
               </p>
             </div>
@@ -3075,7 +3075,7 @@ export function ConnectorsPanel() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h4 className="text-base font-semibold tracking-tight text-[#1A1A1A]">{meta.title}</h4>
+                          <h4 className="text-base font-semibold tracking-tight text-[var(--text-primary)]">{meta.title}</h4>
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${meta.countChip}`}
                           >
@@ -3084,7 +3084,7 @@ export function ConnectorsPanel() {
                               : `${group.connectors.length} πλατφόρμες`}
                           </span>
                         </div>
-                        <p className="mt-1 text-xs leading-relaxed text-[#6B7280]">{group.description}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">{group.description}</p>
                       </div>
                     </div>
 
@@ -3179,12 +3179,12 @@ export function ConnectorsPanel() {
                       <div className="flex items-center gap-3">
                         <div>
                           <div className="flex items-center gap-2">
-                            <h4 className="font-semibold text-[#1A1A1A]">{conn.name}</h4>
+                            <h4 className="font-semibold text-[var(--text-primary)]">{conn.name}</h4>
                             {conn.comingSoon && (
                               <span className="text-[10px] font-medium bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">Σύντομα</span>
                             )}
                           </div>
-                          <p className="text-xs text-[#6B7280] mt-0.5">{conn.description}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{conn.description}</p>
                           {conn.readOnlyNotice && (
                             <p className="text-[10px] text-emerald-600 mt-1 flex items-center gap-1">
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -3223,7 +3223,7 @@ export function ConnectorsPanel() {
                     )}
 
                     {isConnected && (
-                      <div className="mb-3 text-xs text-[#6B7280] space-y-1">
+                      <div className="mb-3 text-xs text-[var(--text-muted)] space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
                             <CheckCircle2 size={12} />
@@ -3248,7 +3248,7 @@ export function ConnectorsPanel() {
                                   ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
                                   : syncChipPartial
                                     ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-300'
-                                    : 'bg-white text-[#6B7280] ring-1 ring-emerald-200'
+                                    : 'bg-white text-[var(--text-muted)] ring-1 ring-emerald-200'
                               }`}
                               title={
                                 syncChipPartial
@@ -3280,7 +3280,7 @@ export function ConnectorsPanel() {
                                   [conn.id]: !prev[conn.id],
                                 }))
                               }
-                              className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-[#374151] hover:bg-white/80"
+                              className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-white/80"
                             >
                               {detailsExpanded ? 'Σύμπτυξη' : 'Λεπτομέρειες'}
                               <ChevronDown
@@ -3295,7 +3295,7 @@ export function ConnectorsPanel() {
                             {identityLines.map((line) => (
                               <p key={line}>{line}</p>
                             ))}
-                            {connectedAt && <p className="text-[#9CA3AF]">Συνδέθηκε: {formatConnectorDate(connectedAt)}</p>}
+                            {connectedAt && <p className="text-[var(--text-muted)]">Συνδέθηκε: {formatConnectorDate(connectedAt)}</p>}
                             {recentFailedAttempt && (
                               <p className="text-red-700/90">
                                 Τελευταία προσπάθεια: {formatConnectorDate(lastAttempt!.at)} — αποτυχία
@@ -3303,7 +3303,7 @@ export function ConnectorsPanel() {
                               </p>
                             )}
                             {lastSyncAt && (
-                              <p className="text-[#9CA3AF]">
+                              <p className="text-[var(--text-muted)]">
                                 {syncChipPartial ? 'Τελευταία εισαγωγή (μερικό)' : 'Τελευταίο sync'}:{' '}
                                 {formatConnectorDate(lastSyncAt)}
                                 {recentFailedAttempt ? ' (παλαιότερη από την αποτυχημένη προσπάθεια)' : ''}
@@ -3311,7 +3311,7 @@ export function ConnectorsPanel() {
                             )}
                             {ECOMMERCE_CONNECTOR_IDS.has(conn.id) && isConnected && (
                               <>
-                                <p className="text-[#9CA3AF]">
+                                <p className="text-[var(--text-muted)]">
                                   Παραγγελίες: {ordersSyncAt ? formatConnectorDate(ordersSyncAt) : '—'} · Προϊόντα:{' '}
                                   {productsSyncAt ? formatConnectorDate(productsSyncAt) : '—'}
                                 </p>
@@ -3323,7 +3323,7 @@ export function ConnectorsPanel() {
                                   </p>
                                 )}
                                 {typeof state.lastSyncImported === 'number' && state.lastSyncImported > 0 && (
-                                  <p className="text-[#9CA3AF]">
+                                  <p className="text-[var(--text-muted)]">
                                     Τελευταία προσπάθεια: {state.lastSyncOrders ?? 0} παραγγελίες ·{' '}
                                     {state.lastSyncProducts ?? 0} προϊόντα
                                     {connectorAttemptAt ? ` (${formatConnectorDate(connectorAttemptAt)})` : ''}
@@ -3332,7 +3332,7 @@ export function ConnectorsPanel() {
                               </>
                             )}
                             {syncJob?.status && (
-                              <p className="text-[#9CA3AF]">
+                              <p className="text-[var(--text-muted)]">
                                 Background job:{' '}
                                 {opencartBackfillContinuing && syncJob.status === 'completed'
                                   ? 'backfill continuing (auto-resume)'
@@ -3492,8 +3492,8 @@ export function ConnectorsPanel() {
             <div className="flex items-start gap-3">
               <span className="text-xl shrink-0" aria-hidden>🛍️</span>
               <div className="min-w-0">
-                <h4 className="text-sm font-semibold text-[#1A1A1A]">Skroutz — XML κατάλογος</h4>
-                <p className="text-xs text-[#6B7280] mt-1 leading-relaxed">
+                <h4 className="text-sm font-semibold text-[var(--text-primary)]">Skroutz — XML κατάλογος</h4>
+                <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
                   Δεν απαιτείται OAuth. Προσθέστε το δημόσιο URL του XML από το merchant panel του Skroutz στην ενότητα{' '}
                   <strong>Αποθηκευμένα Feed Sources</strong> (λειτουργία Feed) ή ανεβάστε αρχείο .xml με τύπο Skroutz.
                 </p>
@@ -3520,7 +3520,7 @@ export function ConnectorsPanel() {
           </div>
           )}
 
-          <p className="text-xs text-[#9CA3AF] mt-4">
+          <p className="text-xs text-[var(--text-muted)] mt-4">
             Κάθε brand συνδέεται με τους δικούς του λογαριασμούς. Τα credentials αποθηκεύονται ασφαλώς στο Firebase.
           </p>
         </div>

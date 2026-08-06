@@ -62,7 +62,7 @@ export function MarketExplorationPage({ onSectionChange }: MarketExplorationPage
       <PageHeader
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Market Exploration</h2>}
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Workspace για νέα markets, νέα verticals και channel rollouts με έμφαση σε margin, stock risk και sales readiness.
           </p>
         }
@@ -119,11 +119,11 @@ export function MarketExplorationPage({ onSectionChange }: MarketExplorationPage
             <div className="p-5">
               <div className="mb-3 flex items-center gap-2">
                 <lane.icon size={18} className="text-[var(--nts-accent-text)]" />
-                <h3 className="font-semibold text-[#1A1A1A]">{lane.title}</h3>
+                <h3 className="font-semibold text-[var(--text-primary)]">{lane.title}</h3>
               </div>
               <div className="space-y-2">
                 {lane.bullets.map((bullet) => (
-                  <div key={bullet} className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-sm text-[#6B7280]">
+                  <div key={bullet} className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--text-muted)]">
                     {bullet}
                   </div>
                 ))}
@@ -138,20 +138,20 @@ export function MarketExplorationPage({ onSectionChange }: MarketExplorationPage
           <div className="p-6">
             <div className="mb-4 flex items-center gap-2">
               <Globe2 size={18} className="text-[var(--nts-accent-text)]" />
-              <h3 className="text-lg font-semibold text-[#1A1A1A]">Go-to-market blueprint</h3>
+              <h3 className="text-lg font-semibold text-[var(--text-primary)]">Go-to-market blueprint</h3>
             </div>
             <div className="space-y-3">
-              <div className="rounded-lg border border-[#E5E5E5] p-4">
-                <p className="text-sm font-semibold text-[#1A1A1A]">Market thesis</p>
-                <p className="mt-1 text-sm text-[#6B7280]">Ποιο πρόβλημα λύνεις, σε ποιο ICP, με ποιο margin και ποιο service promise.</p>
+              <div className="rounded-lg border border-[var(--border)] p-4">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Market thesis</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">Ποιο πρόβλημα λύνεις, σε ποιο ICP, με ποιο margin και ποιο service promise.</p>
               </div>
-              <div className="rounded-lg border border-[#E5E5E5] p-4">
-                <p className="text-sm font-semibold text-[#1A1A1A]">Route to market</p>
-                <p className="mt-1 text-sm text-[#6B7280]">Direct sales, distributor, digital demand gen ή υβριδικό μοντέλο ανά αγορά.</p>
+              <div className="rounded-lg border border-[var(--border)] p-4">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Route to market</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">Direct sales, distributor, digital demand gen ή υβριδικό μοντέλο ανά αγορά.</p>
               </div>
-              <div className="rounded-lg border border-[#E5E5E5] p-4">
-                <p className="text-sm font-semibold text-[#1A1A1A]">Execution constraints</p>
-                <p className="mt-1 text-sm text-[#6B7280]">Stock availability, local compliance, pricing logic και sales enablement assets.</p>
+              <div className="rounded-lg border border-[var(--border)] p-4">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Execution constraints</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">Stock availability, local compliance, pricing logic και sales enablement assets.</p>
               </div>
             </div>
           </div>
@@ -161,28 +161,28 @@ export function MarketExplorationPage({ onSectionChange }: MarketExplorationPage
           <div className="p-6">
             <div className="mb-4 flex items-center gap-2">
               <MapPinned size={18} className="text-[var(--nts-accent-text)]" />
-              <h3 className="text-lg font-semibold text-[#1A1A1A]">Suggested next steps</h3>
+              <h3 className="text-lg font-semibold text-[var(--text-primary)]">Suggested next steps</h3>
             </div>
             <div className="grid grid-cols-1 gap-3">
-              <div className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-                <p className="text-sm font-semibold text-[#1A1A1A]">Commercial strategy</p>
-                <p className="mt-1 text-sm text-[#6B7280]">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Commercial strategy</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">
                   {activeStrategy ? `Active motion: ${getStrategyName(activeStrategy.scenarioId)}.` : 'Ορισμός strategy package για το νέο market motion.'}
                 </p>
                 <Button variant="secondary" size="sm" className="mt-4" onClick={() => onSectionChange?.('strategy')}>
                   Open Strategy
                 </Button>
               </div>
-              <div className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-                <p className="text-sm font-semibold text-[#1A1A1A]">Field execution</p>
-                <p className="mt-1 text-sm text-[#6B7280]">Μετέφερε το rollout σε tasks, briefings και owners ώστε να μην μείνει η αγορά στο επίπεδο ιδέας.</p>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Field execution</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">Μετέφερε το rollout σε tasks, briefings και owners ώστε να μην μείνει η αγορά στο επίπεδο ιδέας.</p>
                 <Button variant="secondary" size="sm" className="mt-4" onClick={() => onSectionChange?.('coordination')}>
                   Open Coordination
                 </Button>
               </div>
-              <div className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-                <p className="text-sm font-semibold text-[#1A1A1A]">Demand validation</p>
-                <p className="mt-1 text-sm text-[#6B7280]">Τρέξε pilot demand capture και measurement πριν από full-scale market launch.</p>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Demand validation</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">Τρέξε pilot demand capture και measurement πριν από full-scale market launch.</p>
                 <Button variant="secondary" size="sm" className="mt-4" onClick={() => onSectionChange?.('campaigns')}>
                   Open Campaigns
                 </Button>

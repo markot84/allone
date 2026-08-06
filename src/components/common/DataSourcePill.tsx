@@ -8,7 +8,7 @@ type DataSourcePillProps = {
 };
 
 const toneClasses = {
-  neutral: 'border-[#E5E7EB] bg-white text-[#4B5563]',
+  neutral: 'border-[var(--border)] bg-white text-[var(--text-secondary)]',
   success: 'border-emerald-100 bg-emerald-50 text-emerald-800',
   warning: 'border-amber-100 bg-amber-50 text-amber-800',
 };

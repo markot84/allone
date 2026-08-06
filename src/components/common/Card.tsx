@@ -35,7 +35,7 @@ export function Card({
         className={`card-primer ${className.includes('h-full') ? 'h-full' : ''}`}
         style={{
           background: 'var(--nts-bg-pure)',
-          border: '1px solid var(--borderColor-default, #d0d7de)',
+          border: '1px solid var(--borderColor-default, var(--border))',
           borderRadius: 8,
           padding: paddingPx[padding],
           cursor: (hover || onClick) ? 'pointer' : 'default',
@@ -52,7 +52,7 @@ export function Card({
         onMouseLeave={(e) => {
           if (!hover && !onClick) return;
           (e.currentTarget as HTMLDivElement).style.background = 'var(--nts-bg-pure)';
-          (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--borderColor-default, #d0d7de)';
+          (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--borderColor-default, var(--border))';
           (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 6px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08)';
         }}
       >
@@ -77,7 +77,7 @@ export function CardHeader({ title, subtitle, icon, action, className = '' }: Ca
     >
       <div className="flex min-w-0 flex-1 items-start gap-2">
         {icon && (
-          <span className="shrink-0" style={{ color: 'var(--fgColor-muted, #57606a)' }}>
+          <span className="shrink-0" style={{ color: 'var(--fgColor-muted, var(--text-muted))' }}>
             {icon}
           </span>
         )}
@@ -93,14 +93,14 @@ export function CardHeader({ title, subtitle, icon, action, className = '' }: Ca
                 as="p"
                 size="small"
                 className="!mt-0.5 !block break-words text-pretty leading-relaxed [overflow-wrap:anywhere]"
-                style={{ margin: 0, marginTop: 2, color: 'var(--fgColor-muted, #57606a)' }}
+                style={{ margin: 0, marginTop: 2, color: 'var(--fgColor-muted, var(--text-muted))' }}
               >
                 {subtitle}
               </Text>
             ) : (
               <div
                 className="mt-0.5 max-w-full space-y-1.5 text-[13px] leading-snug [&_p]:m-0"
-                style={{ color: 'var(--fgColor-muted, #57606a)' }}
+                style={{ color: 'var(--fgColor-muted, var(--text-muted))' }}
               >
                 {subtitle}
               </div>

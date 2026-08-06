@@ -483,7 +483,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
             <button
               type="button"
               onClick={toggleCollapsed}
-              className="shrink-0 p-2 rounded-lg hover:bg-[#F3F4F6] text-[var(--nts-medium-gray)] transition-colors"
+              className="shrink-0 p-2 rounded-lg hover:bg-[var(--surface-2)] text-[var(--nts-medium-gray)] transition-colors"
               aria-expanded={!collapsed}
               title={collapsed ? 'Ανάπτυξη' : 'Σύμπτυξη'}
             >
@@ -512,13 +512,13 @@ export function MorningBriefing(props: MorningBriefingProps) {
                 exit={{ opacity: 0 }}
                 className="space-y-3"
               >
-                <div className="h-4 bg-[#F3F4F6] rounded-md w-full animate-pulse" />
-                <div className="h-4 bg-[#F3F4F6] rounded-md w-[90%] animate-pulse" />
-                <div className="h-4 bg-[#F3F4F6] rounded-md w-[75%] animate-pulse" />
+                <div className="h-4 bg-[var(--surface-2)] rounded-md w-full animate-pulse" />
+                <div className="h-4 bg-[var(--surface-2)] rounded-md w-[90%] animate-pulse" />
+                <div className="h-4 bg-[var(--surface-2)] rounded-md w-[75%] animate-pulse" />
                 <div className="flex gap-2 mt-4">
-                  <div className="h-8 bg-[#F3F4F6] rounded-lg w-1/3 animate-pulse" />
-                  <div className="h-8 bg-[#F3F4F6] rounded-lg w-1/3 animate-pulse" />
-                  <div className="h-8 bg-[#F3F4F6] rounded-lg w-1/3 animate-pulse" />
+                  <div className="h-8 bg-[var(--surface-2)] rounded-lg w-1/3 animate-pulse" />
+                  <div className="h-8 bg-[var(--surface-2)] rounded-lg w-1/3 animate-pulse" />
+                  <div className="h-8 bg-[var(--surface-2)] rounded-lg w-1/3 animate-pulse" />
                 </div>
               </motion.div>
             )}

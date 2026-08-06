@@ -19,7 +19,7 @@ export function ModalHeader({
 }: ModalHeaderProps) {
   return (
     <div
-      className={`flex min-w-0 flex-col gap-3 border-b border-[#E5E5E5] p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between lg:gap-4 ${className}`.trim()}
+      className={`flex min-w-0 flex-col gap-3 border-b border-[var(--border)] p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between lg:gap-4 ${className}`.trim()}
     >
       <div className="min-w-0 flex-1 space-y-1">
         {title}

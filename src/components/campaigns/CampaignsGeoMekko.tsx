@@ -124,20 +124,20 @@ function ChartTooltip({
   ].filter((item) => item.value > 0);
 
   return (
-    <div className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 shadow-lg">
-      <p className="text-xs font-semibold text-[#111827]">{label}</p>
-      {row.subtitle && <p className="text-[11px] text-[#6B7280]">{row.subtitle}</p>}
-      <p className="mt-1 text-[11px] text-[#374151]">
+    <div className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 shadow-lg">
+      <p className="text-xs font-semibold text-[var(--text-primary)]">{label}</p>
+      {row.subtitle && <p className="text-[11px] text-[var(--text-muted)]">{row.subtitle}</p>}
+      <p className="mt-1 text-[11px] text-[var(--text-secondary)]">
         Σύνολο {meta.tooltipLabel}: {meta.format(row.totalValue)}
       </p>
       <div className="mt-2 space-y-1">
         {items.map((item) => (
           <div key={item.key} className="flex items-center justify-between gap-3 text-[11px]">
-            <span className="inline-flex items-center gap-1.5 text-[#4B5563]">
+            <span className="inline-flex items-center gap-1.5 text-[var(--text-secondary)]">
               <span className="inline-block size-2 rounded-sm" style={{ backgroundColor: item.color }} />
               {item.label}
             </span>
-            <span className="font-medium text-[#111827]">
+            <span className="font-medium text-[var(--text-primary)]">
               {meta.format(item.value)} ({((item.value / row.totalValue) * 100).toFixed(1)}%)
             </span>
           </div>
@@ -182,7 +182,7 @@ export function CampaignsGeoMekko({ columns, level, metric, onMetricChange }: Pr
 
   return (
     <div
-      className="px-4 pb-4 border-b border-[#E5E7EB]"
+      className="px-4 pb-4 border-b border-[var(--border)]"
       role="img"
       aria-label={
         level === 'country'
@@ -192,10 +192,10 @@ export function CampaignsGeoMekko({ columns, level, metric, onMetricChange }: Pr
     >
       <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
         <div>
-          <h3 className="text-xs font-semibold text-[#111827] uppercase tracking-wide">
+          <h3 className="text-xs font-semibold text-[var(--text-primary)] uppercase tracking-wide">
             {metricMeta.label} ανά {level === 'country' ? 'χώρα' : 'τοποθεσία'} και κανάλι
           </h3>
-          <p className="text-[11px] text-[#6B7280] mt-0.5">
+          <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
             Top {columns.length} περιοχές με βάση το επιλεγμένο metric και στοίβαξη ανά κανάλι.
           </p>
         </div>
@@ -223,9 +223,9 @@ export function CampaignsGeoMekko({ columns, level, metric, onMetricChange }: Pr
         </div>
       </div>
 
-      <div className="rounded-md border border-[#E5E7EB] bg-white px-2 py-3">
+      <div className="rounded-md border border-[var(--border)] bg-white px-2 py-3">
         {columns.length === 0 || grandTotal <= 0 ? (
-          <div className="flex h-[220px] items-center justify-center text-center text-sm text-[#9CA3AF]">
+          <div className="flex h-[220px] items-center justify-center text-center text-sm text-[var(--text-muted)]">
             Δεν υπάρχουν διαθέσιμα δεδομένα για το metric `{metricMeta.shortLabel}` σε αυτό το επίπεδο τοποθεσίας.
           </div>
         ) : (
@@ -237,19 +237,19 @@ export function CampaignsGeoMekko({ columns, level, metric, onMetricChange }: Pr
                 margin={{ top: 4, right: 12, left: 12, bottom: 4 }}
                 barCategoryGap={10}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-2)" horizontal={false} />
                 <XAxis
                   type="number"
-                  tick={{ fontSize: 11, fill: '#6B7280' }}
+                  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
                   tickFormatter={(value) => METRIC_META[metric].tick(Number(value))}
-                  stroke="#D1D5DB"
+                  stroke="var(--border-strong)"
                 />
                 <YAxis
                   type="category"
                   dataKey="label"
                   width={130}
-                  tick={{ fontSize: 11, fill: '#374151' }}
-                  stroke="#D1D5DB"
+                  tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
+                  stroke="var(--border-strong)"
                 />
                 <RechartsTooltip content={<ChartTooltip metric={metric} />} cursor={{ fill: 'rgba(249, 115, 22, 0.08)' }} />
                 <Bar dataKey="googleAds" stackId="spend" fill={CHANNEL_FILL['Google Ads']} name={CHANNEL_LABEL['Google Ads']} radius={[0, 0, 0, 0]} />
@@ -262,7 +262,7 @@ export function CampaignsGeoMekko({ columns, level, metric, onMetricChange }: Pr
       </div>
 
       {channelsInUse.length > 0 && (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 justify-center text-[10px] text-[#4B5563]">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 justify-center text-[10px] text-[var(--text-secondary)]">
           {channelsInUse.map((ch) => (
             <span key={ch} className="inline-flex items-center gap-1">
               <span

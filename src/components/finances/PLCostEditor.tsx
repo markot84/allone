@@ -134,15 +134,15 @@ export function PLCostEditor({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
+    <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white">
       {/* Header */}
       <div className="flex items-start gap-3 border-b border-rose-100 bg-rose-50/40 px-4 py-3.5">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-rose-100 bg-white">
           <ReceiptText size={17} className="text-rose-500" />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-[#111827]">Κόστη Επιχείρησης (P&L)</p>
-          <p className="mt-0.5 text-[11px] leading-snug text-[#6B7280]">
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Κόστη Επιχείρησης (P&L)</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">
             Κατηγορίες κόστους με μηνιαία ποσά · subtotal ανά κατηγορία · % τζίρου περιόδου
           </p>
         </div>
@@ -151,7 +151,7 @@ export function PLCostEditor({
       {/* Categories */}
       <div className="p-4 pb-3">
         {cats.length === 0 ? (
-          <p className="py-2 text-xs text-[#9CA3AF]">
+          <p className="py-2 text-xs text-[var(--text-muted)]">
             Δεν υπάρχουν γραμμές κόστους. Προσθέστε την πρώτη γραμμή.
           </p>
         ) : (
@@ -169,7 +169,7 @@ export function PLCostEditor({
                     singleCategoryMode
                       ? 'space-y-2'
                       : `overflow-hidden rounded-lg border ${
-                          synced ? 'border-rose-200 shadow-[inset_3px_0_0_0_#fb7185]' : 'border-[#E5E7EB]'
+                          synced ? 'border-rose-200 shadow-[inset_3px_0_0_0_#fb7185]' : 'border-[var(--border)]'
                         } bg-white`
                   }
                 >
@@ -189,15 +189,15 @@ export function PLCostEditor({
                       onChange={(e) => renameCat(cat.id, e.target.value)}
                       placeholder="Όνομα κατηγορίας"
                       disabled={disabled}
-                      className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#111827] outline-none placeholder:text-slate-300 disabled:opacity-60"
+                      className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[var(--text-primary)] outline-none placeholder:text-slate-300 disabled:opacity-60"
                     />
                     <div className="ml-auto flex shrink-0 items-center gap-3">
-                      <span className="font-mono text-sm font-semibold text-[#374151]">
+                      <span className="font-mono text-sm font-semibold text-[var(--text-secondary)]">
                         {formatCurrencyCompact(total)}
-                        <span className="ml-0.5 text-[11px] font-normal text-[#9CA3AF]">/μήνα</span>
+                        <span className="ml-0.5 text-[11px] font-normal text-[var(--text-muted)]">/μήνα</span>
                       </span>
                       {pct > 0 && (
-                        <span className="hidden text-[11px] text-[#9CA3AF] sm:inline">
+                        <span className="hidden text-[11px] text-[var(--text-muted)] sm:inline">
                           {pct.toFixed(1)}%
                         </span>
                       )}
@@ -229,7 +229,7 @@ export function PLCostEditor({
                               ? `relative flex flex-col gap-2 rounded-lg border p-3 transition-colors sm:flex-row sm:items-end ${
                                   synced
                                     ? 'border-rose-200 bg-rose-50/40 shadow-[inset_3px_0_0_0_#fb7185]'
-                                    : 'border-[#E5E7EB] bg-white'
+                                    : 'border-[var(--border)] bg-white'
                                 }`
                               : 'flex items-center gap-2 py-2'
                           }
@@ -241,7 +241,7 @@ export function PLCostEditor({
                           )}
                           <label className={singleCategoryMode ? 'min-w-[140px] flex-1' : 'min-w-0 flex-1'}>
                             {singleCategoryMode && (
-                              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                                 Περιγραφή
                               </span>
                             )}
@@ -251,14 +251,14 @@ export function PLCostEditor({
                             onChange={(e) => updateLine(cat.id, line.id, 'label', e.target.value)}
                             placeholder="Περιγραφή κόστους"
                             disabled={disabled}
-                            className={`rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-60 ${
+                            className={`rounded-md border border-[var(--border)] px-2.5 py-1.5 text-sm text-[var(--text-primary)] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-60 ${
                               singleCategoryMode ? 'mt-1 w-full' : 'min-w-0 w-full'
                             }`}
                           />
                           </label>
                           <label className={singleCategoryMode ? 'w-full sm:w-28' : 'relative flex shrink-0 items-center'}>
                             {singleCategoryMode && (
-                              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">€ / μήνα</span>
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">€ / μήνα</span>
                             )}
                           <div className="relative flex shrink-0 items-center">
                             <span className="pointer-events-none absolute left-2.5 text-xs text-slate-400">€</span>
@@ -270,7 +270,7 @@ export function PLCostEditor({
                               onChange={(e) => updateLine(cat.id, line.id, 'amountEUR', e.target.value)}
                               placeholder="0"
                               disabled={disabled}
-                              className={`rounded-md border border-[#E5E7EB] py-1.5 pl-6 pr-2 text-right font-mono text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-60 ${
+                              className={`rounded-md border border-[var(--border)] py-1.5 pl-6 pr-2 text-right font-mono text-sm text-[var(--text-primary)] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-60 ${
                                 singleCategoryMode ? 'mt-1 w-full' : 'w-24'
                               }`}
                             />
@@ -310,23 +310,23 @@ export function PLCostEditor({
       {/* Footer */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rose-100 bg-rose-50/30 px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span className="text-xs text-[#6B7280]">
+          <span className="text-xs text-[var(--text-muted)]">
             Σύνολο:{' '}
-            <span className="font-mono font-semibold text-[#111827]">{formatCurrencyCompact(totalMonthly)}</span>
-            <span className="ml-0.5 text-[11px] text-[#9CA3AF]">/μήνα</span>
+            <span className="font-mono font-semibold text-[var(--text-primary)]">{formatCurrencyCompact(totalMonthly)}</span>
+            <span className="ml-0.5 text-[11px] text-[var(--text-muted)]">/μήνα</span>
           </span>
           {periodMonths > 0 && periodMonths !== 1 && (
-            <span className="text-xs text-[#6B7280]">
+            <span className="text-xs text-[var(--text-muted)]">
               Περίοδος:{' '}
-              <span className="font-mono font-semibold text-[#111827]">
+              <span className="font-mono font-semibold text-[var(--text-primary)]">
                 {formatCurrencyCompact(totalMonthly * periodMonths)}
               </span>
             </span>
           )}
           {monthlyRevenue > 0 && totalMonthly > 0 && (
-            <span className="text-xs text-[#6B7280]">
+            <span className="text-xs text-[var(--text-muted)]">
               % τζίρου:{' '}
-              <span className="font-semibold text-[#111827]">
+              <span className="font-semibold text-[var(--text-primary)]">
                 {((totalMonthly / monthlyRevenue) * 100).toFixed(1)}%
               </span>
             </span>
@@ -337,7 +337,7 @@ export function PLCostEditor({
             type="button"
             onClick={addPrimaryLine}
             disabled={disabled}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-[#4B5563] hover:border-rose-400 hover:text-rose-600 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:border-rose-400 hover:text-rose-600 disabled:opacity-40"
           >
             <Plus size={13} />
             Γραμμή
@@ -349,13 +349,13 @@ export function PLCostEditor({
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
               !isDirty || isSaving || disabled
                 ? 'cursor-not-allowed bg-slate-100 text-slate-400'
-                : 'bg-[#111827] text-white shadow-sm hover:bg-[#1f2937]'
+                : 'bg-[var(--text-primary)] text-white shadow-sm hover:bg-[#1f2937]'
             }`}
           >
             {isSaving ? 'Αποθήκευση…' : 'Αποθήκευση'}
           </button>
           {!isDirty && !disabled && !isSaving && (
-            <span className="text-[11px] text-[#9CA3AF]">Καμία αλλαγή</span>
+            <span className="text-[11px] text-[var(--text-muted)]">Καμία αλλαγή</span>
           )}
         </div>
       </div>

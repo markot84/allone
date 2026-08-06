@@ -275,11 +275,11 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
       <div className="space-y-6">
         <PageHeader
           title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Οικονομικά Επιχείρησης</h2>}
-          description={<p className="text-sm text-[#4A4A4A] sm:text-base">Τζίρος και οργανικά έσοδα (χωρίς campaigns)</p>}
+          description={<p className="text-sm text-[var(--text-secondary)] sm:text-base">Τζίρος και οργανικά έσοδα (χωρίς campaigns)</p>}
         />
         <Card padding="lg" className="text-center py-12">
-          <p className="text-[#4A4A4A] mb-4">Δεν υπάρχουν ακόμα δεδομένα (e-shop, campaigns ή οργανικά).</p>
-          <p className="text-sm text-[#4A4A4A]">
+          <p className="text-[var(--text-secondary)] mb-4">Δεν υπάρχουν ακόμα δεδομένα (e-shop, campaigns ή οργανικά).</p>
+          <p className="text-sm text-[var(--text-secondary)]">
             Συνδέστε κανάλια από τις Συνδέσεις ή εισάγετε οργανικό τζίρο από την{' '}
             <button
               type="button"
@@ -302,7 +302,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
       <PageHeader
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Οικονομικά Επιχείρησης</h2>}
         description={
-          <p className="text-sm text-[#4A4A4A]">
+          <p className="text-sm text-[var(--text-secondary)]">
             Πλήρης εικόνα τζίρου για την επιλεγμένη περίοδο
           </p>
         }
@@ -350,8 +350,8 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         )}
       </div>
 
-      <p className="text-xs text-[#6B7280] sm:text-sm">
-        <span className="font-medium text-[#374151]">Ενεργή περίοδος:</span>{' '}
+      <p className="text-xs text-[var(--text-muted)] sm:text-sm">
+        <span className="font-medium text-[var(--text-secondary)]">Ενεργή περίοδος:</span>{' '}
         {formatPeriodDate(periodDates.fromDate)} — {formatPeriodDate(periodDates.toDate)}
         {hasImported ? ` · ${records.length} περίοδοι εισαγωγής organic` : ''}
         {organicRevenueSource === 'ga4' ? ' · GA4 organic' : ''}
@@ -365,28 +365,28 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             <TrendingUp size={26} className="text-[var(--nts-accent-text)]" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium uppercase tracking-wide text-[#9CA3AF]">
+            <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
               {hasErpBusinessRevenue
                 ? 'Συνολικός Τζίρος Επιχείρησης'
                 : 'Σύνολο Εσόδων'}
             </p>
             <div className="mt-0.5 flex flex-wrap items-baseline gap-3">
-              <span className="text-4xl font-bold font-mono tabular-nums text-[#111827]">
+              <span className="text-4xl font-bold font-mono tabular-nums text-[var(--text-primary)]">
                 {formatCurrencyCompact(dashboardTotalRevenueFinance)}
               </span>
               {hasErpBusinessRevenue && businessRevenue.isLoading && (
-                <span className="text-xs text-[#9CA3AF]">ανανέωση…</span>
+                <span className="text-xs text-[var(--text-muted)]">ανανέωση…</span>
               )}
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-[#374151]">
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-[var(--text-secondary)]">
                 Πηγή: {dashboardRevenueSourceLabel}
               </span>
               {hasErpBusinessRevenue && (
-                <span className="text-xs text-[#6B7280]">Φυσικά καταστήματα · B2B · online</span>
+                <span className="text-xs text-[var(--text-muted)]">Φυσικά καταστήματα · B2B · online</span>
               )}
             </div>
-            <p className="mt-2 text-xs text-[#9CA3AF] leading-relaxed">
+            <p className="mt-2 text-xs text-[var(--text-muted)] leading-relaxed">
               {hasErpBusinessRevenue
                 ? 'Συνολικά παραστατικά ERP — περιλαμβάνει όλα τα κανάλια. Για ROAS και ανάλυση e-shop → ROI & Απόδοση.'
                 : enabledModules.procurement
@@ -409,11 +409,11 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         {(ecomm.hasData || eshopTotals.campaigns > 0 || eshopTotals.organic > 0) && (
           <>
             <div className="flex items-center gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                 Ανάλυση e-shop περιόδου
               </span>
               {hasErpBusinessRevenue && (
-                <span className="text-[11px] text-[#9CA3AF]">· περιλαμβάνεται στον ERP τζίρο</span>
+                <span className="text-[11px] text-[var(--text-muted)]">· περιλαμβάνεται στον ERP τζίρο</span>
               )}
             </div>
             <div className="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
@@ -423,11 +423,11 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
                   <Euro size={18} className="text-[var(--nts-accent-text)]" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-[#6B7280]">Σύνολο e-shop</p>
-                  <p className="text-lg font-bold font-mono tabular-nums text-[#111827]">
+                  <p className="text-xs text-[var(--text-muted)]">Σύνολο e-shop</p>
+                  <p className="text-lg font-bold font-mono tabular-nums text-[var(--text-primary)]">
                     {ecomm.hasData ? formatCurrencyCompact(eshopTotals.eshopTotal) : '—'}
                   </p>
-                  <p className="text-[11px] text-[#9CA3AF]">Παραγγελίες περιόδου</p>
+                  <p className="text-[11px] text-[var(--text-muted)]">Παραγγελίες περιόδου</p>
                 </div>
               </div>
               {/* Campaigns */}
@@ -436,11 +436,11 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
                   <Megaphone size={18} className="text-amber-600" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-[#6B7280]">Έσοδα καμπανιών</p>
-                  <p className="text-lg font-bold font-mono tabular-nums text-[#111827]">
+                  <p className="text-xs text-[var(--text-muted)]">Έσοδα καμπανιών</p>
+                  <p className="text-lg font-bold font-mono tabular-nums text-[var(--text-primary)]">
                     {formatCurrencyCompact(eshopTotals.campaigns)}
                   </p>
-                  <p className="text-[11px] text-[#9CA3AF]">Google Ads / Meta conversion value</p>
+                  <p className="text-[11px] text-[var(--text-muted)]">Google Ads / Meta conversion value</p>
                 </div>
               </div>
               {/* Organic */}
@@ -449,11 +449,11 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
                   <Leaf size={18} className="text-emerald-600" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-[#6B7280]">Organic revenue</p>
-                  <p className="text-lg font-bold font-mono tabular-nums text-[#111827]">
+                  <p className="text-xs text-[var(--text-muted)]">Organic revenue</p>
+                  <p className="text-lg font-bold font-mono tabular-nums text-[var(--text-primary)]">
                     {formatCurrencyCompact(eshopTotals.organic)}
                   </p>
-                  <p className="text-[11px] text-[#9CA3AF]">Import ή GA4</p>
+                  <p className="text-[11px] text-[var(--text-muted)]">Import ή GA4</p>
                 </div>
               </div>
             </div>
@@ -497,8 +497,8 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             >
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-semibold text-[#374151]">EBITDA (εκτίμηση περιόδου)</p>
-                  <p className="text-xs text-[#9CA3AF]">
+                  <p className="text-sm font-semibold text-[var(--text-secondary)]">EBITDA (εκτίμηση περιόδου)</p>
+                  <p className="text-xs text-[var(--text-muted)]">
                     Τζίρος − σύνολο κόστων P&L περιόδου
                   </p>
                 </div>
@@ -507,15 +507,15 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
                     {ebitda >= 0 ? '+' : ''}{formatCurrencyCompact(ebitda)}
                   </p>
                   {dashboardTotalRevenueFinance > 0 && (
-                    <p className="text-xs text-[#9CA3AF]">
+                    <p className="text-xs text-[var(--text-muted)]">
                       {((ebitda / dashboardTotalRevenueFinance) * 100).toFixed(1)}% margin
                     </p>
                   )}
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[#6B7280]">
-                <span>Τζίρος: <span className="font-semibold text-[#374151] font-mono">{formatCurrencyCompact(dashboardTotalRevenueFinance)}</span></span>
-                <span>Κόστη: <span className="font-semibold text-[#374151] font-mono">−{formatCurrencyCompact(plTotalMonthly * periodMonths)}</span></span>
+              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--text-muted)]">
+                <span>Τζίρος: <span className="font-semibold text-[var(--text-secondary)] font-mono">{formatCurrencyCompact(dashboardTotalRevenueFinance)}</span></span>
+                <span>Κόστη: <span className="font-semibold text-[var(--text-secondary)] font-mono">−{formatCurrencyCompact(plTotalMonthly * periodMonths)}</span></span>
               </div>
             </Card>
           )}
@@ -524,14 +524,14 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
 
       {records.length > 0 && (
         <Card padding="lg">
-          <h3 className="font-semibold text-[#1A1A1A] mb-4 flex items-center gap-2">
+          <h3 className="font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
             <TrendingUp size={18} className="text-[var(--nts-accent-text)]" />
             Λεπτομέρειες organic ανά περίοδο (import)
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="text-left text-xs text-[#4A4A4A] border-b border-[#E5E5E5]">
+                <tr className="text-left text-xs text-[var(--text-secondary)] border-b border-[var(--border)]">
                   <th className="pb-3 font-medium">Περίοδος</th>
                   <th className="pb-3 font-medium text-right">Οργανικά Έσοδα</th>
                 </tr>
@@ -540,8 +540,8 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
                 {([...records] as OrganicRevenue[])
                   .sort((a, b) => (b.period || '').localeCompare(a.period || ''))
                   .map((r) => (
-                    <tr key={r.id} className="border-b border-[#E5E5E5] last:border-0 hover:bg-[#F5F5F5]">
-                      <td className="py-3 font-medium text-[#1A1A1A]">{r.period}</td>
+                    <tr key={r.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
+                      <td className="py-3 font-medium text-[var(--text-primary)]">{r.period}</td>
                       <td className="py-3 text-right font-mono">€{formatCurrency(r.organic_revenue || 0)}</td>
                     </tr>
                   ))}

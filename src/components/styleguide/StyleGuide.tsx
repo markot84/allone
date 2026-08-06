@@ -6,7 +6,8 @@ import { SegmentMigrationSankey } from '../rfm/SegmentMigrationSankey';
 import { BriefingNarrative } from '../dashboard/BriefingNarrative';
 import { EnterpriseBadge } from '../common/EnterpriseBadge';
 import type { BriefingData } from '../../services/morningBriefing';
-import { contrastOnWhite } from '../../utils/color';
+import { contrastRatio } from '../../utils/color';
+import { useTheme } from '../../hooks/useTheme';
 import { readTokenColor } from '../../utils/cssToken';
 import type { SegmentMigrationFlow } from '../../services/rfmFromOrders';
 import type { Product, RFMSegment } from '../../types';
@@ -62,8 +63,8 @@ const SEGMENTS: Swatch[] = [
   { token: '--seg-lost' },
 ];
 
-/** Tokens whose accessible use is constrained; checked live against white. */
-const TEXT_ON_WHITE = [
+/** Tokens whose accessible use is constrained; checked live against the ACTIVE canvas. */
+const CONSTRAINED_TEXT_TOKENS = [
   '--brand-navy',
   '--sky-500',
   '--orange-700',
@@ -83,14 +84,25 @@ function verdict(ratio: number): { label: string; token: string } {
   return { label: 'Never as text', token: '--danger' };
 }
 
-/** Token values are fixed once the stylesheet is parsed, so they are read once on mount. */
+/**
+ * Live token values.
+ *
+ * These used to be read once on mount, on the reasoning that a stylesheet does not change after it
+ * is parsed. Switching themes changes what the same token resolves to, so a one-shot read leaves
+ * this page asserting the previous theme's numbers — the one failure mode a consistency checkpoint
+ * cannot have. Re-reading on `theme` is what keeps the page a measurement rather than a record.
+ */
 function useTokenValues(tokens: string[]): Record<string, string> {
-  const [values] = useState<Record<string, string>>(() => {
+  const { theme } = useTheme();
+  const key = tokens.join('|');
+  return useMemo(() => {
     if (typeof window === 'undefined') return {};
     const styles = getComputedStyle(document.documentElement);
-    return Object.fromEntries(tokens.map((token) => [token, styles.getPropertyValue(token).trim()]));
-  });
-  return values;
+    return Object.fromEntries(key.split('|').map((token) => [token, styles.getPropertyValue(token).trim()]));
+    // `theme` is the trigger, not an input: it is never read inside, but it is precisely what makes
+    // getComputedStyle return different values, which is the one thing the linter cannot see.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, theme]);
 }
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -149,13 +161,19 @@ function SwatchGrid({ items }: { items: Swatch[] }) {
 }
 
 function ContrastTable() {
-  const values = useTokenValues(TEXT_ON_WHITE);
+  const { theme } = useTheme();
+  // `--surface-0` is the card surface in both themes — white in the light theme, so the numbers this
+  // page has always reported are unchanged there, and navy in the cockpit.
+  const values = useTokenValues([...CONSTRAINED_TEXT_TOKENS, '--surface-0']);
+  const canvas = values['--surface-0'] || '#FFFFFF';
+  const canvasLabel = theme === 'dark' ? 'On the cockpit canvas' : 'On white';
+
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 520 }}>
         <thead>
           <tr>
-            {['Token', 'Value', 'On white', 'Permitted for'].map((h) => (
+            {['Token', 'Value', canvasLabel, 'Permitted for'].map((h) => (
               <th
                 key={h}
                 style={{
@@ -174,9 +192,9 @@ function ContrastTable() {
           </tr>
         </thead>
         <tbody>
-          {TEXT_ON_WHITE.map((token) => {
+          {CONSTRAINED_TEXT_TOKENS.map((token) => {
             const value = values[token] || '';
-            const ratio = contrastOnWhite(value);
+            const ratio = contrastRatio(value, canvas);
             const v = ratio ? verdict(ratio) : null;
             return (
               <tr key={token}>
@@ -616,6 +634,7 @@ function RadarDemo() {
 }
 
 export function StyleGuide() {
+  const { theme } = useTheme();
   return (
     <div style={{ background: 'var(--surface-0)', minHeight: '100vh' }}>
       <div style={{ maxWidth: 1080, margin: '0 auto', padding: '48px 24px 96px' }}>
@@ -640,7 +659,11 @@ export function StyleGuide() {
 
         <Section
           title="Contrast — measured, not assumed"
-          description="This is the constraint that decides where each colour may appear. Orange and gold fail for body text on white; that is why an orange text token exists separately from the orange background token."
+          description={
+            theme === 'dark'
+              ? 'This is the constraint that decides where each colour may appear, and it is not a property of the colour — it is a property of the pair. Every verdict below inverts against the light theme: gold, barred from text at 1.60:1 on white, measures over 10:1 here, while navy stops being a text colour altogether.'
+              : 'This is the constraint that decides where each colour may appear. Orange and gold fail for body text on white; that is why an orange text token exists separately from the orange background token.'
+          }
         >
           <ContrastTable />
         </Section>

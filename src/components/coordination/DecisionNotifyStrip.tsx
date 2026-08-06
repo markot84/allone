@@ -85,7 +85,7 @@ export function DecisionNotifyStrip({ decision: d, variant = 'default' }: Decisi
 
   const shell =
     variant === 'embedded'
-      ? 'rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] p-3 space-y-3'
+      ? 'rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-3 space-y-3'
       : 'rounded-xl border border-[var(--nts-accent)]/25 bg-gradient-to-br from-[var(--nts-accent)]/[0.06] to-transparent p-4 space-y-3';
 
   return (
@@ -96,8 +96,8 @@ export function DecisionNotifyStrip({ decision: d, variant = 'default' }: Decisi
             <Bell size={18} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-[#111827]">Ειδοποίηση τμημάτων</p>
-            <p className="text-xs text-[#6B7280] mt-0.5">
+            <p className="text-sm font-semibold text-[var(--text-primary)]">Ειδοποίηση τμημάτων</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
               {d.status === 'proposal'
                 ? 'Ένα βήμα: επιλέξτε μήνυμα και στείλτε ειδοποίηση στα τμήματα της πρότασης τμήματος.'
                 : 'Ένα βήμα: επιλέξτε μήνυμα και στείλτε ειδοποίηση στα τμήματα της εμπορικής πολιτικής.'}
@@ -107,7 +107,7 @@ export function DecisionNotifyStrip({ decision: d, variant = 'default' }: Decisi
       )}
 
       {variant === 'embedded' && (
-        <p className="text-[11px] font-medium text-[#6B7280]">Νέα ειδοποίηση (in-app & email)</p>
+        <p className="text-[11px] font-medium text-[var(--text-muted)]">Νέα ειδοποίηση (in-app & email)</p>
       )}
 
       {depts.length === 0 ? (
@@ -140,29 +140,29 @@ export function DecisionNotifyStrip({ decision: d, variant = 'default' }: Decisi
           </Button>
 
           {canSeeDiagnostics && lastDispatch && (
-            <details className="rounded-lg border border-[#E5E7EB] bg-white p-2.5">
-              <summary className="cursor-pointer text-[11px] font-medium text-[#6B7280]">
+            <details className="rounded-lg border border-[var(--border)] bg-white p-2.5">
+              <summary className="cursor-pointer text-[11px] font-medium text-[var(--text-muted)]">
                 Diagnostics αποστολής (admin)
               </summary>
-              <div className="mt-2 text-[11px] text-[#374151] space-y-1">
+              <div className="mt-2 text-[11px] text-[var(--text-secondary)] space-y-1">
                 <p>
-                  <span className="text-[#6B7280]">Χρόνος:</span>{' '}
+                  <span className="text-[var(--text-muted)]">Χρόνος:</span>{' '}
                   {new Date(lastDispatch.at).toLocaleString('el-GR')}
                 </p>
                 <p>
-                  <span className="text-[#6B7280]">In-app recipients:</span>{' '}
+                  <span className="text-[var(--text-muted)]">In-app recipients:</span>{' '}
                   {lastDispatch.result.inAppRecipients}
                 </p>
                 <p>
-                  <span className="text-[#6B7280]">Email recipients:</span>{' '}
+                  <span className="text-[var(--text-muted)]">Email recipients:</span>{' '}
                   {lastDispatch.result.emailRecipients}
                 </p>
                 <p>
-                  <span className="text-[#6B7280]">Email sent:</span>{' '}
+                  <span className="text-[var(--text-muted)]">Email sent:</span>{' '}
                   {lastDispatch.result.emailSent}
                 </p>
                 <p>
-                  <span className="text-[#6B7280]">Email failed:</span>{' '}
+                  <span className="text-[var(--text-muted)]">Email failed:</span>{' '}
                   <span className={lastDispatch.result.emailFailed > 0 ? 'text-[#DC2626] font-semibold' : ''}>
                     {lastDispatch.result.emailFailed}
                   </span>

@@ -5,11 +5,11 @@ function weightBar(label: string, value: number): string {
   const barWidth = Math.round(value * 2.5);
   return `
     <div style="display:flex;align-items:center;gap:10px;margin:4px 0">
-      <span style="width:90px;font-size:12px;color:#4A4A4A">${escapeHtml(label)}</span>
-      <div style="flex:1;height:6px;background:#F5F5F5;border-radius:3px;overflow:hidden">
+      <span style="width:90px;font-size:12px;color:var(--text-secondary)">${escapeHtml(label)}</span>
+      <div style="flex:1;height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden">
         <div style="width:${barWidth}%;height:100%;background:#F97316;border-radius:3px"></div>
       </div>
-      <span style="font-size:12px;font-weight:600;color:#1A1A1A;width:36px;text-align:right">${value}%</span>
+      <span style="font-size:12px;font-weight:600;color:var(--text-primary);width:36px;text-align:right">${value}%</span>
     </div>`;
 }
 
@@ -26,8 +26,8 @@ export function generatePackageHtml(data: SharedPackageData): string {
   const primaryHtml = data.primaryChannels.map((ch, i) => {
     const pct = Object.entries(data.budgetAllocation)
       .find(([k]) => ch.toLowerCase().includes(k) || k.includes(ch.toLowerCase().split(' ')[0]));
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#FAFAFA;border-radius:8px;margin:4px 0">
-      <span style="font-size:13px;color:#1A1A1A"><strong>${i + 1}.</strong> ${escapeHtml(ch)}</span>
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--surface-1);border-radius:8px;margin:4px 0">
+      <span style="font-size:13px;color:var(--text-primary)"><strong>${i + 1}.</strong> ${escapeHtml(ch)}</span>
       ${pct ? `<span style="font-size:11px;font-weight:600;color:#F97316">${pct[1]}%</span>` : ''}
     </div>`;
   }).join('');
@@ -36,8 +36,8 @@ export function generatePackageHtml(data: SharedPackageData): string {
     const pct = Object.entries(data.budgetAllocation)
       .find(([k]) => ch.toLowerCase().includes(k) || k.includes(ch.toLowerCase().split(' ')[0]));
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;margin:3px 0">
-      <span style="font-size:12px;color:#4A4A4A">${data.primaryChannels.length + i + 1}. ${escapeHtml(ch)}</span>
-      ${pct ? `<span style="font-size:11px;color:#9CA3AF">${pct[1]}%</span>` : ''}
+      <span style="font-size:12px;color:var(--text-secondary)">${data.primaryChannels.length + i + 1}. ${escapeHtml(ch)}</span>
+      ${pct ? `<span style="font-size:11px;color:var(--text-muted)">${pct[1]}%</span>` : ''}
     </div>`;
   }).join('');
 
@@ -45,7 +45,7 @@ export function generatePackageHtml(data: SharedPackageData): string {
   // neutralize our injected <p> tags; markers (`||`, `—`, `•`) contain no escaped characters.
   const rationaleHtml = data.rationale
     ? escapeHtml(data.rationale)
-        .replace(/\|\|/g, '</p><p style="margin:8px 0;font-size:13px;color:#4A4A4A;line-height:1.6">')
+        .replace(/\|\|/g, '</p><p style="margin:8px 0;font-size:13px;color:var(--text-secondary);line-height:1.6">')
         .replace(/—/g, ',')
         .replace(/•\s*/g, '<br>· ')
     : '';
@@ -62,7 +62,7 @@ export function generatePackageHtml(data: SharedPackageData): string {
   }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    color: #1A1A1A;
+    color: var(--text-primary);
     max-width: 700px;
     margin: 0 auto;
     padding: 40px 32px;
@@ -76,8 +76,8 @@ export function generatePackageHtml(data: SharedPackageData): string {
     padding-bottom: 16px;
     margin-bottom: 28px;
   }
-  .brand-name { font-size: 22px; font-weight: 700; color: #1A1A1A; }
-  .date { font-size: 12px; color: #9CA3AF; margin-top: 4px; }
+  .brand-name { font-size: 22px; font-weight: 700; color: var(--text-primary); }
+  .date { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
   .logo { font-size: 28px; font-weight: 800; color: #F97316; }
   .section { margin-bottom: 24px; }
   .section-title {
@@ -85,10 +85,10 @@ export function generatePackageHtml(data: SharedPackageData): string {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1.5px;
-    color: #9CA3AF;
+    color: var(--text-muted);
     margin-bottom: 10px;
     padding-bottom: 4px;
-    border-bottom: 1px solid #F5F5F5;
+    border-bottom: 1px solid var(--surface-2);
   }
   .meta-grid {
     display: grid;
@@ -98,11 +98,11 @@ export function generatePackageHtml(data: SharedPackageData): string {
   }
   .meta-card {
     padding: 14px;
-    background: #FAFAFA;
+    background: var(--surface-1);
     border-radius: 10px;
   }
-  .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #9CA3AF; font-weight: 600; }
-  .meta-value { font-size: 15px; font-weight: 600; color: #1A1A1A; margin-top: 4px; }
+  .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 600; }
+  .meta-value { font-size: 15px; font-weight: 600; color: var(--text-primary); margin-top: 4px; }
   .segment-pill {
     display: inline-block;
     padding: 4px 10px;
@@ -111,16 +111,16 @@ export function generatePackageHtml(data: SharedPackageData): string {
     margin: 2px 4px 2px 0;
   }
   .ideal { background: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }
-  .good { background: #F5F5F5; color: #4A4A4A; border: 1px dashed #D1D5DB; }
+  .good { background: var(--surface-2); color: var(--text-secondary); border: 1px dashed var(--border-strong); }
   .footer {
     margin-top: 32px;
     padding-top: 16px;
-    border-top: 1px solid #E5E5E5;
+    border-top: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
-  .footer-text { font-size: 11px; color: #9CA3AF; }
+  .footer-text { font-size: 11px; color: var(--text-muted); }
   .footer-brand { font-size: 14px; font-weight: 700; color: #F97316; }
 </style>
 </head>
@@ -171,7 +171,7 @@ export function generatePackageHtml(data: SharedPackageData): string {
   ${rationaleHtml ? `
   <div class="section">
     <div class="section-title">AI Analysis</div>
-    <p style="margin:8px 0;font-size:13px;color:#4A4A4A;line-height:1.6">${rationaleHtml}</p>
+    <p style="margin:8px 0;font-size:13px;color:var(--text-secondary);line-height:1.6">${rationaleHtml}</p>
   </div>` : ''}
 
   <div class="footer">

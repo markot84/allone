@@ -20,84 +20,84 @@ export const knowledgeCategories = [
     title: 'Ξεκινώντας',
     icon: 'GS',
     description: 'Βασικές έννοιες και πρώτα βήματα',
-    color: '#6B7280'
+    color: 'var(--text-muted)'
   },
   {
     id: 'data-import',
     title: 'Εισαγωγή Δεδομένων',
     icon: 'DI',
     description: 'Πώς να φορτώσετε και να διαχειριστείτε δεδομένα',
-    color: '#6B7280'
+    color: 'var(--text-muted)'
   },
   {
     id: 'strategy',
     title: 'Στρατηγική Προτεραιοποίησης',
     icon: 'SW',
     description: 'Ρύθμιση βαρών και στρατηγικών',
-    color: '#6B7280'
+    color: 'var(--text-muted)'
   },
   {
     id: 'rfm',
     title: 'RFM Ανάλυση',
     icon: 'DA',
     description: 'Κατανόηση των customer segments',
-    color: '#6B7280'
+    color: 'var(--text-muted)'
   },
   {
     id: 'products',
     title: 'Product Intelligence',
     icon: 'PI',
     description: 'Διαχείριση προϊόντων και αποθεμάτων',
-    color: '#6B7280'
+    color: 'var(--text-muted)'
   },
   {
     id: 'channels',
     title: 'Channel Activation',
     icon: 'CA',
     description: 'Προτάσεις καναλιών και budget allocation',
-    color: '#6B7280'
+    color: 'var(--text-muted)'
   },
   {
     id: 'content',
     title: 'Content Strategy',
     icon: 'CS',
     description: 'Συγχρονισμός περιεχομένου με στρατηγική',
-    color: '#6B7280'
+    color: 'var(--text-muted)'
   },
   {
     id: 'roi',
     title: 'ROI Attribution',
     icon: 'RA',
     description: 'Μέτρηση επιπτώσης allone',
-    color: '#6B7280'
+    color: 'var(--text-muted)'
   },
   {
     id: 'dashboard',
     title: 'Dashboard & Analytics',
     icon: 'DB',
     description: 'Ερμηνεία δεδομένων και KPIs',
-    color: '#6B7280'
+    color: 'var(--text-muted)'
   },
   {
     id: 'troubleshooting',
     title: 'Αντιμετώπιση Προβλημάτων',
     icon: 'TR',
     description: 'Συχνά προβλήματα και λύσεις',
-    color: '#6B7280'
+    color: 'var(--text-muted)'
   },
   {
     id: 'coordination',
     title: 'Συντονισμός Τμημάτων',
     icon: 'CO',
     description: 'Briefing Board, αποφάσεις και συντονισμός ομάδων',
-    color: '#6B7280'
+    color: 'var(--text-muted)'
   },
   {
     id: 'automation',
     title: 'Αυτοματισμοί',
     icon: 'AU',
     description: 'Smart triggers και αυτόματη λήψη αποφάσεων',
-    color: '#6B7280'
+    color: 'var(--text-muted)'
   },
   {
     id: 'connectors',

@@ -1083,7 +1083,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             </div>
           </Card>
         ) : (
-          <Card padding="lg" className="border border-dashed border-[#D1D5DB] bg-[#FAFAFA]">
+          <Card padding="lg" className="border border-dashed border-[var(--border-strong)] bg-[var(--surface-1)]">
             <h3 className="text-base font-semibold text-[var(--nts-charcoal)]">Γεμίστε το Dashboard</h3>
             <p className="mt-1 text-sm leading-relaxed text-[var(--nts-medium-gray)]">
               Δεν εμφανίζονται ακόμα τα στοιχεία που τροφοδοτούν τα κύρια charts (καμπάνιες, RFM από παραγγελίες ή προϊόντα). Συνδέστε πηγές ή κάντε εισαγωγή από το Data Import.
@@ -1447,9 +1447,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             </div>
             {/* Pointer to a deeper revenue page — dropped entirely when that page is hidden. */}
             {!isSectionHidden(isB2B ? 'finances' : 'roi') && (
-              <p className="text-[12px] text-[#6B7280] leading-relaxed">
-                {isB2B ? 'Για αναλυτικότερη οικονομική εικόνα, baseline revenue και πρόσθετα B2B data feeds, άνοιξε ' : <>Για <strong className="text-[#4B5563] font-medium">Campaign ROI incl. costs</strong>,{' '}
-                <strong className="text-[#4B5563] font-medium">e-shop ROI</strong>, Platform ROAS και σύγκριση εσόδων με το e-shop, ανοίξτε </>}
+              <p className="text-[12px] text-[var(--text-muted)] leading-relaxed">
+                {isB2B ? 'Για αναλυτικότερη οικονομική εικόνα, baseline revenue και πρόσθετα B2B data feeds, άνοιξε ' : <>Για <strong className="text-[var(--text-secondary)] font-medium">Campaign ROI incl. costs</strong>,{' '}
+                <strong className="text-[var(--text-secondary)] font-medium">e-shop ROI</strong>, Platform ROAS και σύγκριση εσόδων με το e-shop, ανοίξτε </>}
                 <button
                   type="button"
                   onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}
@@ -1477,7 +1477,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <h4 className="text-sm font-semibold text-[#1A1A1A]">E-commerce</h4>
+                    <h4 className="text-sm font-semibold text-[var(--text-primary)]">E-commerce</h4>
                     {ecomKpisRefreshing && (
                       <span
                         className="inline-flex w-2 h-2 rounded-full bg-[var(--nts-accent)] animate-pulse"
@@ -1486,39 +1486,39 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                       />
                     )}
                   </div>
-                  <span className="text-[10px] text-[#9CA3AF]">
+                  <span className="text-[10px] text-[var(--text-muted)]">
                     {ecomm.connectedPlatforms.length} πλατφόρμες · επιλεγμένη περίοδος
                   </span>
                 </div>
               </div>
-              <ArrowRight size={16} className="text-[#D1D5DB] group-hover:text-[var(--nts-accent-text)] transition-colors" />
+              <ArrowRight size={16} className="text-[var(--border-strong)] group-hover:text-[var(--nts-accent-text)] transition-colors" />
             </div>
 
             <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 2xl:grid-cols-4 2xl:items-end">
               <div>
                 <div className="flex items-center gap-1 mb-0.5">
-                  <p className="text-[11px] text-[#6B7280]">e-shop Revenue</p>
+                  <p className="text-[11px] text-[var(--text-muted)]">e-shop Revenue</p>
                   <Tooltip content="Πραγματικά καθαρά έσοδα e-shop (χωρίς ΦΠΑ) από τις συνδεδεμένες πλατφόρμες για την επιλεγμένη περίοδο." size={12} />
                 </div>
-                <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(storeRevenueInPeriod)}</p>
+                <p className="text-lg font-bold text-[var(--text-primary)]">{formatCurrencyCompact(storeRevenueInPeriod)}</p>
               </div>
               <div>
                 <div className="flex items-center gap-1 mb-0.5">
-                  <p className="text-[11px] text-[#6B7280]">Παραγγελίες</p>
+                  <p className="text-[11px] text-[var(--text-muted)]">Παραγγελίες</p>
                   <Tooltip content="Παραγγελίες από Shopify/WooCommerce/OpenCart/Magento για την επιλεγμένη περίοδο (εξαιρούνται cancelled)." size={12} />
                 </div>
-                <p className="text-lg font-bold text-[#1A1A1A]">{formatNumber(ordersInPeriod)}</p>
+                <p className="text-lg font-bold text-[var(--text-primary)]">{formatNumber(ordersInPeriod)}</p>
               </div>
               <div>
                 <div className="flex items-center gap-1 mb-0.5">
-                  <p className="text-[11px] text-[#6B7280]">AOV</p>
+                  <p className="text-[11px] text-[var(--text-muted)]">AOV</p>
                   <Tooltip content="Average Order Value (χωρίς ΦΠΑ): καθαρός τζίρος e-shop / Παραγγελίες της επιλεγμένης περιόδου." size={12} />
                 </div>
-                <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(eshopAovInPeriod)}</p>
+                <p className="text-lg font-bold text-[var(--text-primary)]">{formatCurrencyCompact(eshopAovInPeriod)}</p>
               </div>
               <div>
-                <p className="text-[11px] text-[#6B7280] mb-0.5">Top Platform</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">{ecommTopPlatformDisplay}</p>
+                <p className="text-[11px] text-[var(--text-muted)] mb-0.5">Top Platform</p>
+                <p className="text-lg font-bold text-[var(--text-primary)]">{ecommTopPlatformDisplay}</p>
               </div>
               {/* Mini sparkline — filtered for the selected period */}
               {(() => {
@@ -1553,10 +1553,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <BarChart3 size={18} className="text-orange-500" />
-                <h4 className="text-sm font-semibold text-[#1A1A1A]">Web Analytics</h4>
-                <span className="text-[10px] text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded">{ga4.propertyName}</span>
+                <h4 className="text-sm font-semibold text-[var(--text-primary)]">Web Analytics</h4>
+                <span className="text-[10px] text-[var(--text-muted)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded">{ga4.propertyName}</span>
               </div>
-              <span className="text-[10px] text-[#9CA3AF]">
+              <span className="text-[10px] text-[var(--text-muted)]">
                 {ga4TotalsInPeriod.hasData ? 'επιλεγμένη περίοδος' : 'χωρίς ημερήσια δεδομένα — εμφάνιση συνολικού ιστορικού'}
               </span>
             </div>
@@ -1567,8 +1567,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             <>
             <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 2xl:grid-cols-4">
               <div>
-                <p className="text-[11px] text-[#6B7280] mb-0.5">Sessions</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">{fmt(t.sessions)}</p>
+                <p className="text-[11px] text-[var(--text-muted)] mb-0.5">Sessions</p>
+                <p className="text-lg font-bold text-[var(--text-primary)]">{fmt(t.sessions)}</p>
                 {!t.hasData && ga4.weeklyChange?.sessions != null && (
                   <p className={`text-[10px] font-medium ${ga4.weeklyChange.sessions >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                     {ga4.weeklyChange.sessions >= 0 ? '+' : ''}{ga4.weeklyChange.sessions.toFixed(1)}% vs προηγ. 7ημ.
@@ -1576,8 +1576,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 )}
               </div>
               <div>
-                <p className="text-[11px] text-[#6B7280] mb-0.5">Users</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">{fmt(t.users)}</p>
+                <p className="text-[11px] text-[var(--text-muted)] mb-0.5">Users</p>
+                <p className="text-lg font-bold text-[var(--text-primary)]">{fmt(t.users)}</p>
                 {!t.hasData && ga4.weeklyChange?.users != null && (
                   <p className={`text-[10px] font-medium ${ga4.weeklyChange.users >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                     {ga4.weeklyChange.users >= 0 ? '+' : ''}{ga4.weeklyChange.users.toFixed(1)}% vs προηγ. 7ημ.
@@ -1585,13 +1585,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 )}
               </div>
               <div>
-                <p className="text-[11px] text-[#6B7280] mb-0.5">Bounce Rate</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">{(t.bounceRate * 100).toFixed(1)}%</p>
-                <p className="text-[10px] text-[#9CA3AF]">μέσος όρος περιόδου</p>
+                <p className="text-[11px] text-[var(--text-muted)] mb-0.5">Bounce Rate</p>
+                <p className="text-lg font-bold text-[var(--text-primary)]">{(t.bounceRate * 100).toFixed(1)}%</p>
+                <p className="text-[10px] text-[var(--text-muted)]">μέσος όρος περιόδου</p>
               </div>
               <div>
-                <p className="text-[11px] text-[#6B7280] mb-0.5">Conversions</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">{t.conversions.toLocaleString()}</p>
+                <p className="text-[11px] text-[var(--text-muted)] mb-0.5">Conversions</p>
+                <p className="text-lg font-bold text-[var(--text-primary)]">{t.conversions.toLocaleString()}</p>
                 {!t.hasData && ga4.weeklyChange?.conversions != null && (
                   <p className={`text-[10px] font-medium ${ga4.weeklyChange.conversions >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                     {ga4.weeklyChange.conversions >= 0 ? '+' : ''}{ga4.weeklyChange.conversions.toFixed(1)}% vs προηγ. 7ημ.
@@ -1621,7 +1621,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                       }}
                       labelFormatter={(label) => formatDashChartDateKeyTick(String(label))}
                       formatter={(value: unknown) => [formatNumber(Number(value) || 0), 'Sessions']}
-                      labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
+                      labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: 4 }}
                     />
                     <Area
                       type="monotone"
@@ -1661,25 +1661,25 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             subtitle={
               chartUsesProcurement ? (
                 <p>
-                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Πηγή: Procurement</strong> — εκτίμηση πραγματικού τζίρου για την επιλεγμένη περίοδο.
+                  <strong className="font-semibold text-[var(--fgColor-default,var(--text-primary))]">Πηγή: Procurement</strong> — εκτίμηση πραγματικού τζίρου για την επιλεγμένη περίοδο.
                 </p>
               ) : chartUsesErp ? (
                 <p>
-                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Τζίρος επιχείρησης</strong> από συγχρονισμένα ERP παραστατικά για την επιλεγμένη περίοδο.
+                  <strong className="font-semibold text-[var(--fgColor-default,var(--text-primary))]">Τζίρος επιχείρησης</strong> από συγχρονισμένα ERP παραστατικά για την επιλεγμένη περίοδο.
                 </p>
               ) : enabledModules.ecommerce && ecomm.hasData ? (
                 <p>
-                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Καθαρός τζίρος παραγγελιών</strong> από το e-shop aggregate, συγχρονισμένος με την επιλεγμένη περίοδο.
+                  <strong className="font-semibold text-[var(--fgColor-default,var(--text-primary))]">Καθαρός τζίρος παραγγελιών</strong> από το e-shop aggregate, συγχρονισμένος με την επιλεγμένη περίοδο.
                 </p>
               ) : (
                 <p>
                   {isB2B ? (
                     <>
-                      Βασική εικόνα <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + demand generation</strong> μέχρι να προστεθεί ERP ή invoicing feed.
+                      Βασική εικόνα <strong className="font-semibold text-[var(--fgColor-default,var(--text-primary))]">organic + demand generation</strong> μέχρι να προστεθεί ERP ή invoicing feed.
                     </>
                   ) : (
                     <>
-                      Εκτίμηση <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + καμπανιών</strong> όταν δεν υπάρχει σύνδεση e-shop.
+                      Εκτίμηση <strong className="font-semibold text-[var(--fgColor-default,var(--text-primary))]">organic + καμπανιών</strong> όταν δεν υπάρχει σύνδεση e-shop.
                     </>
                   )}
                 </p>
@@ -1709,19 +1709,19 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     <stop offset="100%" stopColor={REV_CHART_ESHOP} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis
                   dataKey="dateKey"
-                  tick={{ fill: '#57606a', fontSize: 12 }}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
                   tickFormatter={(v) => formatDashChartDateKeyTick(String(v))}
-                  axisLine={{ stroke: '#d0d7de' }}
-                  tickLine={{ stroke: '#d0d7de' }}
+                  axisLine={{ stroke: 'var(--border)' }}
+                  tickLine={{ stroke: 'var(--border)' }}
                 />
                 <YAxis
                   width={52}
-                  tick={{ fill: '#57606a', fontSize: 12 }}
-                  axisLine={{ stroke: '#d0d7de' }}
-                  tickLine={{ stroke: '#d0d7de' }}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
+                  axisLine={{ stroke: 'var(--border)' }}
+                  tickLine={{ stroke: 'var(--border)' }}
                   tickFormatter={formatRevenueChartYAxisTick}
                   tickCount={6}
                 />
@@ -1739,7 +1739,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     formatCurrencyCompact(Number(value) || 0),
                     revenuePerformanceChartLabel,
                   ]}
-                  labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
+                  labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: 4 }}
                 />
                 <Area
                   type="linear"
@@ -1764,11 +1764,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             </div>
             </>
           ) : (
-            <div className="w-full h-[288px] flex items-center justify-center bg-[#F5F5F5] rounded-lg">
+            <div className="w-full h-[288px] flex items-center justify-center bg-[var(--surface-2)] rounded-lg">
               <div className="text-center">
-                <TrendingUp size={32} className="text-[#9CA3AF] mx-auto mb-2" />
-                <p className="text-sm text-[#4A4A4A] font-medium">Δεν υπάρχουν δεδομένα</p>
-                <p className="text-xs text-[#9CA3AF] mt-1">Συνδέστε Analytics ή Campaigns για να εμφανιστεί η εικόνα απόδοσης εσόδων.</p>
+                <TrendingUp size={32} className="text-[var(--text-muted)] mx-auto mb-2" />
+                <p className="text-sm text-[var(--text-secondary)] font-medium">Δεν υπάρχουν δεδομένα</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Συνδέστε Analytics ή Campaigns για να εμφανιστεί η εικόνα απόδοσης εσόδων.</p>
               </div>
             </div>
           )}
@@ -1786,35 +1786,35 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <button
                 type="button"
                 onClick={() => onSectionChange?.('accounts')}
-                className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4 text-left transition-colors hover:border-[var(--nts-accent)]"
+                className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4 text-left transition-colors hover:border-[var(--nts-accent)]"
               >
-                <div className="flex items-center gap-2 text-[#1A1A1A]">
+                <div className="flex items-center gap-2 text-[var(--text-primary)]">
                   <Building2 size={16} className="text-[var(--nts-accent-text)]" />
                   <span className="font-semibold">Account Intelligence</span>
                 </div>
-                <p className="mt-2 text-sm text-[#6B7280]">Πλαίσιο αξιολόγησης για βασικούς λογαριασμούς, κίνδυνο ανανέωσης και δυνατότητες cross-sell.</p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">Πλαίσιο αξιολόγησης για βασικούς λογαριασμούς, κίνδυνο ανανέωσης και δυνατότητες cross-sell.</p>
               </button>
               <button
                 type="button"
                 onClick={() => onSectionChange?.('sales')}
-                className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4 text-left transition-colors hover:border-[var(--nts-accent)]"
+                className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4 text-left transition-colors hover:border-[var(--nts-accent)]"
               >
-                <div className="flex items-center gap-2 text-[#1A1A1A]">
+                <div className="flex items-center gap-2 text-[var(--text-primary)]">
                   <Handshake size={16} className="text-[var(--nts-accent-text)]" />
                   <span className="font-semibold">Sales Pipeline</span>
                 </div>
-                <p className="mt-2 text-sm text-[#6B7280]">Λειτουργική παρακολούθηση για opportunities, pricing blockers και πειθαρχία στα επόμενα βήματα.</p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">Λειτουργική παρακολούθηση για opportunities, pricing blockers και πειθαρχία στα επόμενα βήματα.</p>
               </button>
               <button
                 type="button"
                 onClick={() => onSectionChange?.('markets')}
-                className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4 text-left transition-colors hover:border-[var(--nts-accent)]"
+                className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4 text-left transition-colors hover:border-[var(--nts-accent)]"
               >
-                <div className="flex items-center gap-2 text-[#1A1A1A]">
+                <div className="flex items-center gap-2 text-[var(--text-primary)]">
                   <Globe2 size={16} className="text-[var(--nts-accent-text)]" />
                   <span className="font-semibold">Market Exploration</span>
                 </div>
-                <p className="mt-2 text-sm text-[#6B7280]">Σχεδιασμός go-to-market για νέες αγορές, verticals και συνεργασίες διανομής.</p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">Σχεδιασμός go-to-market για νέες αγορές, verticals και συνεργασίες διανομής.</p>
               </button>
             </div>
           </Card>
@@ -1839,11 +1839,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             >
               {/* The div stays mounted (ResizeObserver wiring) — only the children swap. */}
               {showSegmentsEmptyState ? (
-                <div className="w-full h-full flex items-center justify-center bg-[#F5F5F5] rounded-lg">
+                <div className="w-full h-full flex items-center justify-center bg-[var(--surface-2)] rounded-lg">
                   <div className="text-center px-4">
-                    <Users size={32} className="text-[#9CA3AF] mx-auto mb-2" />
-                    <p className="text-sm text-[#4A4A4A] font-medium">Δεν υπάρχει πρόσφατη μηνιαία ανάλυση πελατών</p>
-                    <p className="text-xs text-[#9CA3AF] mt-1">
+                    <Users size={32} className="text-[var(--text-muted)] mx-auto mb-2" />
+                    <p className="text-sm text-[var(--text-secondary)] font-medium">Δεν υπάρχει πρόσφατη μηνιαία ανάλυση πελατών</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">
                       {aggregateStatus === 'running'
                         ? 'Η μηνιαία ανάλυση εκτελείται αυτή τη στιγμή…'
                         : 'Η ανάλυση RFM εκτελείται αυτόματα κάθε μήνα. Πατήστε την κάρτα για το Data Analysis — η "Ανανέωση ανάλυσης" είναι διαθέσιμη σε διαχειριστές.'}
@@ -1864,13 +1864,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     labelLine={false}
                   >
                     {dashboardRfmSegments.map((segment) => (
-                      <Cell key={segment.id} fill={segment.color ?? '#6B7280'} stroke="#fff" strokeWidth={2} />
+                      <Cell key={segment.id} fill={segment.color ?? 'var(--text-muted)'} stroke="#fff" strokeWidth={2} />
                     ))}
                   </Pie>
                   <RechartsTooltip
                     contentStyle={{
                       backgroundColor: '#fff',
-                      border: '1px solid #d0d7de',
+                      border: '1px solid var(--border)',
                       borderRadius: '6px',
                       fontSize: '12px',
                       padding: '8px 12px'
@@ -1892,15 +1892,15 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                         className="w-2.5 h-2.5 rounded-full"
                         style={{ backgroundColor: segment.color }}
                       />
-                      <span className="text-[#4A4A4A]">{segment.name}</span>
+                      <span className="text-[var(--text-secondary)]">{segment.name}</span>
                     </div>
-                    <span className="font-medium text-[#1A1A1A] font-mono" title="Μερίδιο επί του συνόλου πελατών RFM">
+                    <span className="font-medium text-[var(--text-primary)] font-mono" title="Μερίδιο επί του συνόλου πελατών RFM">
                       {formatPercent(segment.percentage ?? 0, 1)}
                     </span>
                   </div>
                 ))}
                 {showSegmentsStaleSourceNote && (
-                  <p className="text-xs text-[#9CA3AF] pt-1">
+                  <p className="text-xs text-[var(--text-muted)] pt-1">
                     Πηγή: εισαγωγή segments — δεν υπάρχει πρόσφατη μηνιαία ανάλυση RFM.
                   </p>
                 )}
@@ -1922,18 +1922,18 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             icon={<Megaphone size={18} className="text-[var(--nts-accent-text)]" />}
           />
 
-          <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-[#6B7280]">
+          <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-[var(--text-muted)]">
             <span>
               Δαπάνη{' '}
-              <strong className="font-mono text-[#1A1A1A]">{formatCurrencyCompact(campaignMetrics.totalSpend)}</strong>
+              <strong className="font-mono text-[var(--text-primary)]">{formatCurrencyCompact(campaignMetrics.totalSpend)}</strong>
             </span>
             <span>
               Conversion value{' '}
-              <strong className="font-mono text-[#1A1A1A]">{formatCurrencyCompact(campaignMetrics.totalRevenue)}</strong>
+              <strong className="font-mono text-[var(--text-primary)]">{formatCurrencyCompact(campaignMetrics.totalRevenue)}</strong>
             </span>
             <span>
               Platform ROAS{' '}
-              <strong className="font-mono text-[#1A1A1A]">
+              <strong className="font-mono text-[var(--text-primary)]">
                 {campaignMetrics.totalSpend > 0 ? `${formatNumber(campaignMetrics.roas, 2)}×` : '—'}
               </strong>
             </span>
@@ -1948,20 +1948,20 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     <stop offset="100%" stopColor={ADS_CONV_COLOR} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis
                   dataKey="dateKey"
                   tickFormatter={(v) => formatDashChartDateKeyTick(String(v))}
-                  tick={{ fill: '#57606a', fontSize: 11 }}
-                  axisLine={{ stroke: '#d0d7de' }}
-                  tickLine={{ stroke: '#d0d7de' }}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                  axisLine={{ stroke: 'var(--border)' }}
+                  tickLine={{ stroke: 'var(--border)' }}
                 />
                 <YAxis
                   yAxisId="currency"
                   width={52}
-                  tick={{ fill: '#57606a', fontSize: 11 }}
-                  axisLine={{ stroke: '#d0d7de' }}
-                  tickLine={{ stroke: '#d0d7de' }}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                  axisLine={{ stroke: 'var(--border)' }}
+                  tickLine={{ stroke: 'var(--border)' }}
                   tickFormatter={formatRevenueChartYAxisTick}
                   tickCount={5}
                 />
@@ -1970,8 +1970,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   orientation="right"
                   width={42}
                   tick={{ fill: ADS_ROAS_COLOR, fontSize: 11 }}
-                  axisLine={{ stroke: '#d0d7de' }}
-                  tickLine={{ stroke: '#d0d7de' }}
+                  axisLine={{ stroke: 'var(--border)' }}
+                  tickLine={{ stroke: 'var(--border)' }}
                   tickFormatter={(value) => `${formatNumber(Number(value) || 0, 1)}×`}
                   tickCount={5}
                 />
@@ -2033,7 +2033,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[#6B7280]">
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[var(--text-muted)]">
             <span className="inline-flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: ADS_SPEND_COLOR }} />
               Δαπάνη
@@ -2070,7 +2070,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     e.stopPropagation();
                     onOpenInsights?.();
                   }}
-                  className="text-xs font-medium text-[#9CA3AF] hover:text-[#4A4A4A] transition-colors"
+                  className="text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
                 >
                   Όλα ({aiInsights.length})
                 </button>
@@ -2079,22 +2079,22 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           />
           <div className="space-y-3 flex-1">
             {aiInsights.slice(0, 4).map((insight, index) => {
-              const borderColor = insight.type === 'warning' ? '#F59E0B' : insight.type === 'opportunity' ? '#22C55E' : '#9CA3AF';
+              const borderColor = insight.type === 'warning' ? '#F59E0B' : insight.type === 'opportunity' ? '#22C55E' : 'var(--text-muted)';
               return (
                 <motion.div
                   key={index}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="p-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA]"
+                  className="p-3 rounded-lg border border-[var(--border)] bg-[var(--surface-1)]"
                   style={{ borderLeftWidth: 3, borderLeftColor: borderColor }}
                 >
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-[#1A1A1A] text-[13px] mb-0.5 leading-snug">
+                      <h4 className="font-semibold text-[var(--text-primary)] text-[13px] mb-0.5 leading-snug">
                         {insight.title}
                       </h4>
-                      <p className="text-[12px] text-[#9CA3AF] leading-relaxed line-clamp-2">
+                      <p className="text-[12px] text-[var(--text-muted)] leading-relaxed line-clamp-2">
                         {insight.insight}
                       </p>
                     </div>
@@ -2103,7 +2103,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                         e.stopPropagation();
                         handleInsightAction(insight);
                       }}
-                      className="text-[11px] font-medium text-[#4A4A4A] whitespace-nowrap px-2 py-1 rounded-md border border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors cursor-pointer flex-shrink-0 mt-0.5"
+                      className="text-[11px] font-medium text-[var(--text-secondary)] whitespace-nowrap px-2 py-1 rounded-md border border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors cursor-pointer flex-shrink-0 mt-0.5"
                     >
                       {insight.action}
                     </button>

@@ -47,7 +47,7 @@ export function DepartmentBriefingFields({
     <div className="space-y-3">
       {showDepartmentRow && (
       <div>
-        <p className="text-xs font-medium text-[#6B7280] mb-2 flex items-center gap-1.5">
+        <p className="text-xs font-medium text-[var(--text-muted)] mb-2 flex items-center gap-1.5">
           <Users size={12} /> Ειδοποίηση τμημάτων
         </p>
         {deptSelectable && onToggleDept ? (
@@ -60,7 +60,7 @@ export function DepartmentBriefingFields({
                 className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
                   selectedDepts.includes(k)
                     ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/8 text-[var(--nts-accent-text)] font-medium'
-                    : 'border-[#E5E7EB] text-[#9CA3AF] hover:border-[#D1D5DB] hover:text-[#6B7280]'
+                    : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text-muted)]'
                 }`}
               >
                 {v}
@@ -72,7 +72,7 @@ export function DepartmentBriefingFields({
             {selectedDepts.map((dep) => (
               <span
                 key={dep}
-                className="text-[10px] px-2 py-0.5 rounded-md bg-white/80 border border-[#E5E7EB] text-[#374151]"
+                className="text-[10px] px-2 py-0.5 rounded-md bg-white/80 border border-[var(--border)] text-[var(--text-secondary)]"
               >
                 {DEPARTMENT_LABELS[dep] ?? dep}
               </span>
@@ -83,11 +83,11 @@ export function DepartmentBriefingFields({
       )}
 
       <div className="space-y-2">
-        <label className="text-xs font-medium text-[#374151]">Μήνυμα προς τα τμήματα</label>
+        <label className="text-xs font-medium text-[var(--text-secondary)]">Μήνυμα προς τα τμήματα</label>
         <select
           value={templateId}
           onChange={(e) => onTemplateIdChange(e.target.value)}
-          className={`w-full px-3 py-2 ${pad} border border-[#E5E7EB] rounded-lg bg-white focus:outline-none focus:border-[var(--nts-accent)]`}
+          className={`w-full px-3 py-2 ${pad} border border-[var(--border)] rounded-lg bg-white focus:outline-none focus:border-[var(--nts-accent)]`}
         >
           {BRIEFING_MESSAGE_TEMPLATES.map((t) => (
             <option key={t.id} value={t.id}>
@@ -95,25 +95,25 @@ export function DepartmentBriefingFields({
             </option>
           ))}
         </select>
-        <p className="text-xs text-[#6B7280] leading-snug pl-0.5 border-l-2 border-[#E5E7EB] pl-2">{template.body}</p>
+        <p className="text-xs text-[var(--text-muted)] leading-snug pl-0.5 border-l-2 border-[var(--border)] pl-2">{template.body}</p>
         <input
           type="text"
           value={extraLine}
           onChange={(e) => onExtraLineChange(e.target.value)}
           placeholder="Προαιρετική γραμμή (π.χ. deadline ή project)"
-          className={`w-full px-3 py-2 ${pad} border border-[#E5E7EB] rounded-lg bg-white placeholder:text-[#9CA3AF] focus:outline-none focus:border-[var(--nts-accent)]`}
+          className={`w-full px-3 py-2 ${pad} border border-[var(--border)] rounded-lg bg-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--nts-accent)]`}
         />
       </div>
 
       {showAdditionalNote && onAdditionalNoteChange && (
         <div>
-          <label className="text-xs font-medium text-[#374151] mb-1 block">Επιπλέον σημείωση</label>
+          <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block">Επιπλέον σημείωση</label>
           <textarea
             value={additionalNote}
             onChange={(e) => onAdditionalNoteChange(e.target.value)}
             rows={compact ? 2 : 3}
             placeholder="Λεπτομέρειες για τα τμήματα (προαιρετικά)…"
-            className="w-full px-3 py-2.5 text-sm border border-[#E5E7EB] rounded-xl focus:outline-none focus:border-[var(--nts-accent)] resize-none text-[#374151] placeholder:text-[#D1D5DB] bg-[#FAFAFA]"
+            className="w-full px-3 py-2.5 text-sm border border-[var(--border)] rounded-xl focus:outline-none focus:border-[var(--nts-accent)] resize-none text-[var(--text-secondary)] placeholder:text-[var(--border-strong)] bg-[var(--surface-1)]"
           />
         </div>
       )}

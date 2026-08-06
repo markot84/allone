@@ -112,13 +112,13 @@ export function AutomationSettingsPage() {
       <PageHeader
         toolbarAriaLabel="Αποθήκευση ρυθμίσεων"
         title={
-          <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold text-[#111827] sm:text-2xl">
+          <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
             <Zap size={20} className="shrink-0 text-[var(--nts-accent-text)] sm:h-[22px] sm:w-[22px]" />
             Αυτοματισμοί Εμπορικών Αποφάσεων
           </h1>
         }
         description={
-          <p className="text-sm text-[#6B7280]">
+          <p className="text-sm text-[var(--text-muted)]">
             Ενεργοποιήστε τα σήματα που θέλετε να παρακολουθεί η εφαρμογή
           </p>
         }
@@ -141,12 +141,12 @@ export function AutomationSettingsPage() {
       {/* Appearance — per-user accent (localStorage), off while the brand palette is fixed. */}
       {ACCENT_PICKER_ENABLED && (
       <Card padding="none">
-        <div className="flex items-center gap-2 border-b border-[#F3F4F6] px-5 py-3.5">
+        <div className="flex items-center gap-2 border-b border-[var(--surface-2)] px-5 py-3.5">
           <Palette size={16} className="shrink-0 text-[var(--nts-accent-text)]" />
-          <h2 className="text-sm font-semibold text-[#111827]">Εμφάνιση</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Εμφάνιση</h2>
         </div>
         <div className="px-5 py-4">
-          <p className="mb-3 text-xs text-[#6B7280]">
+          <p className="mb-3 text-xs text-[var(--text-muted)]">
             Χρώμα έμφασης της εφαρμογής. Αποθηκεύεται στον δικό σου browser.
           </p>
           <div className="flex flex-wrap gap-2.5">
@@ -161,8 +161,8 @@ export function AutomationSettingsPage() {
                   title={preset.label}
                   className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
                     selected
-                      ? 'border-[#111827]/30 bg-[#F9FAFB] ring-2 ring-offset-1'
-                      : 'border-[#E5E7EB] hover:border-[#D1D5DB]'
+                      ? 'border-[var(--text-primary)]/30 bg-[var(--surface-1)] ring-2 ring-offset-1'
+                      : 'border-[var(--border)] hover:border-[var(--border-strong)]'
                   }`}
                   style={selected ? ({ '--tw-ring-color': preset.swatch } as React.CSSProperties) : undefined}
                 >
@@ -184,7 +184,7 @@ export function AutomationSettingsPage() {
       {/* Active Alerts */}
       {newAlerts.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-[#111827]">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">
             Ενεργές ειδοποιήσεις
             <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-red-500 text-white">
               {newAlerts.length}
@@ -201,12 +201,12 @@ export function AutomationSettingsPage() {
               >
                 <Icon size={16} style={{ color: style.color }} className="mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[#111827]">{alert.title}</p>
-                  <p className="text-xs text-[#6B7280] mt-0.5">{alert.description}</p>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">{alert.title}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">{alert.description}</p>
                   {alert.suggestions.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {alert.suggestions.map((s, i) => (
-                        <span key={i} className="text-[10px] px-2 py-0.5 rounded-md bg-white/80 text-[#374151] border border-[#E5E7EB]">
+                        <span key={i} className="text-[10px] px-2 py-0.5 rounded-md bg-white/80 text-[var(--text-secondary)] border border-[var(--border)]">
                           {s}
                         </span>
                       ))}
@@ -217,7 +217,7 @@ export function AutomationSettingsPage() {
                   onClick={() => handleDismissAlert(alert)}
                   className="p-1 hover:bg-white/50 rounded transition-colors shrink-0"
                 >
-                  <X size={14} className="text-[#9CA3AF]" />
+                  <X size={14} className="text-[var(--text-muted)]" />
                 </button>
               </div>
             );
@@ -232,13 +232,13 @@ export function AutomationSettingsPage() {
 
         return (
           <Card key={group.id} padding="none" className={isLocked ? 'opacity-60' : ''}>
-            <div className="flex flex-col gap-2 border-b border-[#F3F4F6] px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[#111827]">
+            <div className="flex flex-col gap-2 border-b border-[var(--surface-2)] px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
                 {group.label}
                 {isLocked && <EnterpriseBadge inline />}
               </h2>
               {!isLocked && (
-                <span className="shrink-0 text-[10px] text-[#9CA3AF]">
+                <span className="shrink-0 text-[10px] text-[var(--text-muted)]">
                   {groupTriggers.filter(t => triggers[t.id]?.enabled).length}/{groupTriggers.length} ενεργά
                 </span>
               )}
@@ -246,13 +246,13 @@ export function AutomationSettingsPage() {
 
             {isLocked ? (
               <div className="px-5 py-6 text-center">
-                <Lock size={20} className="mx-auto mb-2 text-[#9CA3AF]" />
-                <p className="text-sm text-[#6B7280]">
+                <Lock size={20} className="mx-auto mb-2 text-[var(--text-muted)]" />
+                <p className="text-sm text-[var(--text-muted)]">
                   Οι αυτοματισμοί Procurement είναι διαθέσιμοι στο Enterprise plan
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-[#F3F4F6]">
+              <div className="divide-y divide-[var(--surface-2)]">
                 {groupTriggers.map(triggerDef => {
                   const config = triggers[triggerDef.id] ?? {
                     enabled: false,
@@ -267,7 +267,7 @@ export function AutomationSettingsPage() {
                         <button
                           onClick={() => updateTrigger(triggerDef.id, { enabled: !config.enabled })}
                           className={`relative inline-flex items-center w-9 h-5 rounded-full transition-colors shrink-0 ${
-                            config.enabled ? 'bg-[#22C55E]' : 'bg-[#D1D5DB]'
+                            config.enabled ? 'bg-[#22C55E]' : 'bg-[var(--border-strong)]'
                           }`}
                         >
                           <span
@@ -279,8 +279,8 @@ export function AutomationSettingsPage() {
 
                         {/* Label & description */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-[#111827]">{triggerDef.label}</p>
-                          <p className="text-xs text-[#9CA3AF]">{triggerDef.description}</p>
+                          <p className="text-sm font-medium text-[var(--text-primary)]">{triggerDef.label}</p>
+                          <p className="text-xs text-[var(--text-muted)]">{triggerDef.description}</p>
                         </div>
                       </div>
 
@@ -290,30 +290,30 @@ export function AutomationSettingsPage() {
                           {/* Threshold */}
                           {triggerDef.thresholdLabel && (
                             <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-[#6B7280]">{triggerDef.thresholdLabel}</span>
+                              <span className="text-xs text-[var(--text-muted)]">{triggerDef.thresholdLabel}</span>
                               <input
                                 type="number"
                                 value={config.threshold ?? triggerDef.defaultThreshold ?? 0}
                                 onChange={e => updateTrigger(triggerDef.id, { threshold: parseFloat(e.target.value) || 0 })}
-                                className="w-20 px-2 py-1 text-xs border border-[#E5E7EB] rounded-lg text-center focus:outline-none focus:border-[var(--nts-accent)]"
+                                className="w-20 px-2 py-1 text-xs border border-[var(--border)] rounded-lg text-center focus:outline-none focus:border-[var(--nts-accent)]"
                               />
                               {triggerDef.thresholdUnit && (
-                                <span className="text-[10px] text-[#9CA3AF]">{triggerDef.thresholdUnit}</span>
+                                <span className="text-[10px] text-[var(--text-muted)]">{triggerDef.thresholdUnit}</span>
                               )}
                             </div>
                           )}
 
                           {/* Interval */}
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-[#6B7280]">Κάθε</span>
+                            <span className="text-xs text-[var(--text-muted)]">Κάθε</span>
                             <input
                               type="number"
                               value={config.checkIntervalDays}
                               onChange={e => updateTrigger(triggerDef.id, { checkIntervalDays: parseInt(e.target.value) || 1 })}
-                              className="w-14 px-2 py-1 text-xs border border-[#E5E7EB] rounded-lg text-center focus:outline-none focus:border-[var(--nts-accent)]"
+                              className="w-14 px-2 py-1 text-xs border border-[var(--border)] rounded-lg text-center focus:outline-none focus:border-[var(--nts-accent)]"
                               min={1}
                             />
-                            <span className="text-[10px] text-[#9CA3AF]">ημ.</span>
+                            <span className="text-[10px] text-[var(--text-muted)]">ημ.</span>
                           </div>
 
                           {/* Auto-briefing toggle */}
@@ -322,7 +322,7 @@ export function AutomationSettingsPage() {
                             className={`flex items-center gap-1 px-2 py-1 text-xs rounded-lg border transition-all ${
                               config.autoBriefing
                                 ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/8 text-[var(--nts-accent-text)] font-medium'
-                                : 'border-[#E5E7EB] text-[#9CA3AF] hover:border-[#D1D5DB]'
+                                : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-strong)]'
                             }`}
                             title="Αυτόματη δημιουργία εμπορικής πολιτικής στο Συντονισμό Τμημάτων"
                           >
@@ -332,7 +332,7 @@ export function AutomationSettingsPage() {
 
                           {/* Last check info */}
                           {config.lastCheckedAt && (
-                            <span className="text-[10px] text-[#D1D5DB] flex items-center gap-1">
+                            <span className="text-[10px] text-[var(--border-strong)] flex items-center gap-1">
                               <CheckCircle2 size={10} />
                               {new Date(config.lastCheckedAt).toLocaleDateString('el-GR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                             </span>
@@ -349,8 +349,8 @@ export function AutomationSettingsPage() {
       })}
 
       {/* Plan info */}
-      <div className="text-xs text-[#9CA3AF] text-center py-2">
-        Plan: <strong className="text-[#6B7280]">{plan === 'enterprise' ? 'Enterprise' : 'Growth'}</strong>
+      <div className="text-xs text-[var(--text-muted)] text-center py-2">
+        Plan: <strong className="text-[var(--text-muted)]">{plan === 'enterprise' ? 'Enterprise' : 'Growth'}</strong>
         {' · '}
         {TRIGGERS_CATALOG.filter(t => t.planRequired === 'growth' || isEnterprise).length} αυτοματισμοί διαθέσιμοι
       </div>

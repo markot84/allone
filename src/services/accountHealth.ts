@@ -76,6 +76,6 @@ export const SEGMENT_META: Record<AccountHealthSegment, { label: string; color: 
   champion: { label: 'Champion', color: '#059669', bg: '#ecfdf5', description: 'Υψηλή συχνότητα, πρόσφατη αγορά, σημαντική συνεισφορά εσόδων.' },
   growing: { label: 'Growing', color: '#2563eb', bg: '#eff6ff', description: 'Αυξητική τάση — αξίζει cross-sell & upsell focus.' },
   at_risk: { label: 'At Risk', color: '#d97706', bg: '#fffbeb', description: 'Μειωμένη δραστηριότητα — χρειάζεται proactive επικοινωνία.' },
-  dormant: { label: 'Dormant', color: '#9ca3af', bg: '#f9fafb', description: 'Ανενεργός λογαριασμός — rescue motion ή declassification.' },
+  dormant: { label: 'Dormant', color: 'var(--text-muted)', bg: 'var(--surface-1)', description: 'Ανενεργός λογαριασμός — rescue motion ή declassification.' },
   new: { label: 'New', color: '#7c3aed', bg: '#f5f3ff', description: 'Νέος λογαριασμός — onboarding & first order focus.' },
 };

@@ -256,7 +256,7 @@ function BrandMenu({
             style={{
               ...menuStyle,
               background: 'var(--bgColor-default, #ffffff)',
-              border: '1px solid var(--borderColor-default, #d0d7de)',
+              border: '1px solid var(--borderColor-default, var(--border))',
               borderRadius: 8,
               boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
             }}
@@ -273,7 +273,7 @@ function BrandMenu({
                   background: currentBrand?.id === b.id ? 'var(--bgColor-muted, #f6f8fa)' : 'transparent',
                   cursor: 'pointer',
                   fontSize: 14,
-                  color: currentBrand?.id === b.id ? 'var(--nts-accent)' : 'var(--fgColor-default, #24292f)'
+                  color: currentBrand?.id === b.id ? 'var(--nts-accent)' : 'var(--fgColor-default, var(--text-primary))'
                 }}
               >
                 {b.name}
@@ -381,16 +381,16 @@ function AccountMenu({
             style={{
               ...menuStyle,
               background: 'var(--bgColor-default, #ffffff)',
-              border: '1px solid var(--borderColor-default, #d0d7de)',
+              border: '1px solid var(--borderColor-default, var(--border))',
               borderRadius: 8,
               boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
             }}
           >
-            <div style={{ padding: 12, borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
-              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 2 }}>Account</Text>
+            <div style={{ padding: 12, borderBottom: '1px solid var(--borderColor-default, var(--border))' }}>
+              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, var(--text-muted))', marginBottom: 2 }}>Account</Text>
               <Text as="div" size="small" weight="semibold" style={{ wordBreak: 'break-all' }}>{user.email}</Text>
               {user.displayName && (
-                <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)' }}>{user.displayName}</Text>
+                <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, var(--text-muted))' }}>{user.displayName}</Text>
               )}
               <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
                 {hasPasswordProvider && (
@@ -404,8 +404,8 @@ function AccountMenu({
 
             {/* Accent color (per-user, localStorage) — off while the brand palette is fixed. */}
             {ACCENT_PICKER_ENABLED && (
-            <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
-              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 8 }}>
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--borderColor-default, var(--border))' }}>
+              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, var(--text-muted))', marginBottom: 8 }}>
                 Χρώμα έμφασης
               </Text>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -426,7 +426,7 @@ function AccountMenu({
                         background: preset.swatch2
                           ? `linear-gradient(135deg, ${preset.swatch} 0 50%, ${preset.swatch2} 50% 100%)`
                           : preset.swatch,
-                        border: selected ? '2px solid var(--fgColor-default, #24292f)' : '2px solid transparent',
+                        border: selected ? '2px solid var(--fgColor-default, var(--text-primary))' : '2px solid transparent',
                         boxShadow: selected ? `0 0 0 2px ${preset.swatch}` : 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                         cursor: 'pointer',
                         display: 'flex',
@@ -447,14 +447,14 @@ function AccountMenu({
 
             {/* Link providers */}
             {!hasPasswordProvider && (
-              <div style={{ borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
+              <div style={{ borderBottom: '1px solid var(--borderColor-default, var(--border))' }}>
                 {!showSetPassword ? (
                   <button
                     onClick={() => setShowSetPassword(true)}
                     style={{
                       width: '100%', padding: '10px 12px', textAlign: 'left',
                       border: 'none', background: 'transparent', cursor: 'pointer',
-                      fontSize: 13, color: 'var(--fgColor-default, #24292f)'
+                      fontSize: 13, color: 'var(--fgColor-default, var(--text-primary))'
                     }}
                   >
                     Ορισμός κωδικού
@@ -509,7 +509,7 @@ function AccountMenu({
             )}
 
             {!hasGoogleProvider && (
-              <div style={{ borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
+              <div style={{ borderBottom: '1px solid var(--borderColor-default, var(--border))' }}>
                 <button
                   onClick={async () => {
                     try {
@@ -523,7 +523,7 @@ function AccountMenu({
                   style={{
                     width: '100%', padding: '10px 12px', textAlign: 'left',
                     border: 'none', background: 'transparent', cursor: 'pointer',
-                    fontSize: 13, color: 'var(--fgColor-default, #24292f)'
+                    fontSize: 13, color: 'var(--fgColor-default, var(--text-primary))'
                   }}
                 >
                   Σύνδεση Google λογαριασμού
@@ -611,13 +611,13 @@ function AccentMenu() {
             style={{
               ...menuStyle,
               background: 'var(--bgColor-default, #ffffff)',
-              border: '1px solid var(--borderColor-default, #d0d7de)',
+              border: '1px solid var(--borderColor-default, var(--border))',
               borderRadius: 8,
               boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
               padding: 12,
             }}
           >
-            <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 8 }}>
+            <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, var(--text-muted))', marginBottom: 8 }}>
               Χρώμα έμφασης
             </Text>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -638,7 +638,7 @@ function AccentMenu() {
                       background: preset.swatch2
                         ? `linear-gradient(135deg, ${preset.swatch} 0 50%, ${preset.swatch2} 50% 100%)`
                         : preset.swatch,
-                      border: selected ? '2px solid var(--fgColor-default, #24292f)' : '2px solid transparent',
+                      border: selected ? '2px solid var(--fgColor-default, var(--text-primary))' : '2px solid transparent',
                       boxShadow: selected ? `0 0 0 2px ${preset.swatch}` : 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                       cursor: 'pointer',
                       display: 'flex',

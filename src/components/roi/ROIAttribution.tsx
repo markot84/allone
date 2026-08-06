@@ -63,7 +63,7 @@ function formatMultiplierValue(value: number | null | undefined, decimals = 2): 
 }
 
 function getEfficiencyColor(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(value)) return '#111827';
+  if (value == null || Number.isNaN(value)) return 'var(--text-primary)';
   return value >= 1 ? '#059669' : '#EF4444';
 }
 
@@ -74,7 +74,7 @@ function RoasAnalysisMetricCard({ row }: { row: RoasAnalysisMetricRow }) {
       <div className="mt-1 min-h-[1.75rem] font-mono text-xl font-bold tabular-nums text-[var(--nts-charcoal)] sm:text-2xl">
         {row.v}
       </div>
-      <div className="mt-2 border-t border-[#F3F4F6] pt-2 text-[11px] leading-snug text-[#6B7280] sm:text-[12px]">{row.note}</div>
+      <div className="mt-2 border-t border-[var(--surface-2)] pt-2 text-[11px] leading-snug text-[var(--text-muted)] sm:text-[12px]">{row.note}</div>
     </div>
   );
 }
@@ -120,7 +120,7 @@ function RoasAnalysisGroupSection({
         <div className={`w-1 shrink-0 self-stretch rounded-full ${s.bar}`} aria-hidden />
         <div className="min-w-0">
           <h3 className={`text-[11px] font-bold uppercase tracking-wide ${s.titleClass}`}>{title}</h3>
-          <p className="mt-1 text-[11px] leading-relaxed text-[#6B7280] sm:text-[12px]">{description}</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)] sm:text-[12px]">{description}</p>
         </div>
       </div>
       {children}
@@ -451,7 +451,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         subtitle: hasCampaigns
           ? `${campaignsTyped.length} καμπάνιες · media spend`
           : 'Κόστος διαφήμισης στην περίοδο',
-        color: '#111827',
+        color: 'var(--text-primary)',
         iconWrapClass: 'bg-slate-100 text-slate-600',
         tooltip:
           'Συνολικό media spend από τις διαφημιστικές πλατφόρμες για την επιλεγμένη περίοδο. Δεν περιλαμβάνει agency, εργαλεία ή one-off έξοδα — αυτά εμφανίζονται στο «Marketing Expenses».',
@@ -464,7 +464,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           performanceSummary.monthlyRateHints.length > 0
             ? 'Agency, εργαλεία και one-off στην περίοδο'
             : 'Έξοδα εκτός media spend',
-        color: '#111827',
+        color: 'var(--text-primary)',
         iconWrapClass: 'bg-amber-50 text-amber-600',
         tooltip:
           'Επιπλέον marketing expenses εκτός media spend. Τα σταθερά μηνιαία (π.χ. agency) μετρούν πλήρες ποσό ανά ημερολογιακό μήνα που καλύπτει η περίοδο· ποσοστά επί budget και one-off παραμένουν κατανομή ανά ημέρα.',
@@ -474,7 +474,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         label: 'Συνολικό κόστος marketing',
         value: formatCurrencyCompact(totalMarketingCost),
         subtitle: 'Campaigns Spend + Marketing Expenses',
-        color: '#111827',
+        color: 'var(--text-primary)',
         iconWrapClass: 'bg-orange-50 text-orange-600',
         tooltip:
           'Άθροισμα Campaigns Spend και Marketing Expenses: media spend συν agency, εργαλεία και one-off από το Finances / Channel Activation.',
@@ -647,7 +647,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               subtitle="Τζίρος e-shop (χωρίς ΦΠΑ) − έσοδα καμπανιών"
               color={
                 performanceSummary.revenueGap == null
-                  ? '#111827'
+                  ? 'var(--text-primary)'
                   : performanceSummary.revenueGap >= 0
                     ? '#22C55E'
                     : '#EF4444'
@@ -657,7 +657,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           )}
         </div>
         <div className="mt-4 space-y-2">
-          <p className="text-[11px] text-[#9CA3AF] leading-relaxed">
+          <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
             Τα organic revenue προέρχονται από μηνιαίο import όταν υπάρχει, αλλιώς από ημερήσιο <strong>GA4</strong> sync. Το revenue gap δείχνει πόσο απέχει ο συνολικός τζίρος του store από τα attributed έσοδα καμπανιών.
           </p>
           {!hasOrganic && organicRevenueInPeriod === 0 && (
@@ -837,7 +837,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                       Marketing Expenses inputs: {performanceSummary.monthlyRateHints.join(' · ')}
                     </p>
                   )}
-                  <p className="text-[11px] text-[#9CA3AF] leading-relaxed">
+                  <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
                     Τα επιπλέον κόστη marketing ορίζονται στη σελίδα <span className="font-medium text-[var(--nts-accent-text)]">Finances</span>. Τα σταθερά μηνιαία (π.χ. agency) μετρούν πλήρες ποσό για κάθε ημερολογιακό μήνα που περιλαμβάνεται· άλλες γραμμές αναλογικά στις {performanceSummary.periodDayCount} ημέρες.
                   </p>
                 </div>
@@ -858,7 +858,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                   ? `Οργανικά έσοδα, καμπάνιες και e-shop ανά ημέρα (${formatPeriodDate(periodDates.fromDate)} — ${formatPeriodDate(periodDates.toDate)})`
                   : `Οργανικά έσοδα και καμπάνιες ανά ημέρα (${formatPeriodDate(periodDates.fromDate)} — ${formatPeriodDate(periodDates.toDate)})`}
                 {organicUsesChannelFallback && (
-                  <span className="block text-[11px] font-normal text-[#9CA3AF] mt-1.5 leading-snug">
+                  <span className="block text-[11px] font-normal text-[var(--text-muted)] mt-1.5 leading-snug">
                     Όταν λείπει το ημερήσιο organic στο sync, η γραμμή Organic εκτιμάται από το σύνολο organic στους πίνακες καναλιών GA4 (ομοιόμορφα στο εύρος sync, κλιμακωμένα στην περίοδο).
                   </span>
                 )}
@@ -882,7 +882,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                   <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
               <XAxis
                 dataKey="date"
                 tickFormatter={(d) => (typeof d === 'string' ? formatTrendDayLabel(d) : String(d))}
@@ -891,22 +891,22 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 angle={trendData.length > 14 ? -35 : 0}
                 textAnchor={trendData.length > 14 ? 'end' : 'middle'}
                 height={trendData.length > 14 ? 56 : 32}
-                tick={{ fill: '#57606a', fontSize: 11 }}
-                axisLine={{ stroke: '#d0d7de' }}
-                tickLine={{ stroke: '#d0d7de' }}
+                tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                axisLine={{ stroke: 'var(--border)' }}
+                tickLine={{ stroke: 'var(--border)' }}
               />
               <YAxis
                 tickFormatter={(v) =>
                   Math.abs(v) >= 1000 ? `€${(v / 1000).toFixed(v >= 10_000 ? 0 : 1)}K` : `€${Math.round(v)}`
                 }
-                tick={{ fill: '#57606a', fontSize: 12 }}
-                axisLine={{ stroke: '#d0d7de' }}
-                tickLine={{ stroke: '#d0d7de' }}
+                tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
+                axisLine={{ stroke: 'var(--border)' }}
+                tickLine={{ stroke: 'var(--border)' }}
               />
               <RechartsTooltip
                 contentStyle={{
                   backgroundColor: '#fff',
-                  border: '1px solid #d0d7de',
+                  border: '1px solid var(--border)',
                   borderRadius: '6px',
                   fontSize: '12px',
                   padding: '8px 12px',
@@ -924,7 +924,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                     ? formatTrendDayLabel(label)
                     : String(label)
                 }
-                labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
+                labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: 4 }}
               />
               <Legend
                 formatter={(value) =>
@@ -1115,7 +1115,7 @@ function RoiKpiTabCard({
 }) {
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="h-full">
-      <div className="group flex h-full min-h-[92px] items-center gap-3 rounded-xl border border-[#E8EAED] bg-white px-3.5 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-[box-shadow,border-color] duration-200 hover:border-[#D1D5DB] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] sm:gap-4 sm:px-4 sm:py-4">
+      <div className="group flex h-full min-h-[92px] items-center gap-3 rounded-xl border border-[#E8EAED] bg-white px-3.5 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-[box-shadow,border-color] duration-200 hover:border-[var(--border-strong)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] sm:gap-4 sm:px-4 sm:py-4">
         <div
           className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${iconWrapClass}`}
           aria-hidden
@@ -1124,7 +1124,7 @@ function RoiKpiTabCard({
         </div>
         <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
           <div className="flex items-center gap-1">
-            <span className="text-[11px] font-medium leading-snug text-[#6B7280] sm:text-xs">{label}</span>
+            <span className="text-[11px] font-medium leading-snug text-[var(--text-muted)] sm:text-xs">{label}</span>
             {tooltip ? <Tooltip content={tooltip} size={12} /> : null}
           </div>
           <p
@@ -1134,7 +1134,7 @@ function RoiKpiTabCard({
             {value}
           </p>
           {subtitle ? (
-            <p className="line-clamp-2 text-[10px] leading-snug text-[#9CA3AF] sm:text-[11px]">{subtitle}</p>
+            <p className="line-clamp-2 text-[10px] leading-snug text-[var(--text-muted)] sm:text-[11px]">{subtitle}</p>
           ) : null}
         </div>
       </div>

@@ -596,7 +596,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       <PageHeader
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Marketing Plan</h2>}
         description={
-          <p className="text-sm text-[#4A4A4A]">
+          <p className="text-sm text-[var(--text-secondary)]">
             Εμπορικό πλάνο δράσης από περσινές πωλήσεις, τρέχον απόθεμα, καμπάνιες, κοινό και ανταγωνισμό.
           </p>
         }
@@ -617,8 +617,8 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         />
         {activeInfo.length === 0 ? (
           <div className="mt-4 rounded-xl border border-dashed border-[var(--nts-accent)]/25 bg-white/70 p-3">
-            <p className="text-sm font-medium text-[#1A1A1A]">Δεν υπάρχουν ακόμη ενεργές εμπορικές πληροφορίες για αυτό το Marketing Plan.</p>
-            <p className="mt-1 text-xs text-[#6B7280]">
+            <p className="text-sm font-medium text-[var(--text-primary)]">Δεν υπάρχουν ακόμη ενεργές εμπορικές πληροφορίες για αυτό το Marketing Plan.</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
               Πρόσθεσε πληροφορίες από τη σελίδα «Εμπορικές Πληροφορίες» ή ρώτησε τον Mark και πάτησε «Καταχώριση & άνοιγμα Marketing Plan». Θα χρησιμοποιηθούν ως context, όχι ως απόλυτα δεδομένα.
             </p>
             <Button className="mt-3" variant="ghost" size="sm" onClick={() => onSectionChange?.('commercial-info')}>
@@ -634,14 +634,14 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                     {info.source === 'mark' ? 'από Mark' : 'Εμπορικές Πληροφορίες'}
                   </Badge>
                   <Badge variant="default">{COMMERCIAL_FACTOR_LABEL[info.factorType] ?? info.factorType}</Badge>
-                  <span className="text-xs text-[#6B7280]">
+                  <span className="text-xs text-[var(--text-muted)]">
                     {COMMERCIAL_DIRECTION_LABEL[info.direction] ?? info.direction} · επίδραση {COMMERCIAL_MAGNITUDE_LABEL[info.magnitude] ?? info.magnitude} · βεβαιότητα {COMMERCIAL_CONFIDENCE_LABEL[info.confidence] ?? info.confidence}
                     {(info.horizonFrom || info.horizonTo) ? ` · ${info.horizonFrom ?? '…'} → ${info.horizonTo ?? '…'}` : ''}
                   </span>
                 </div>
-                <p className="mt-2 text-sm font-semibold text-[#1A1A1A]">{info.summary}</p>
+                <p className="mt-2 text-sm font-semibold text-[var(--text-primary)]">{info.summary}</p>
                 {(info.brands.length > 0 || info.categories.length > 0 || info.parentSkus.length > 0) && (
-                  <p className="mt-1 text-xs text-[#6B7280]">
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
                     {[
                       info.brands.length ? `επωνυμίες: ${info.brands.join(', ')}` : '',
                       info.categories.length ? `κατηγορίες: ${info.categories.join(', ')}` : '',
@@ -650,7 +650,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                   </p>
                 )}
                 {info.markContext?.summaryBullets && info.markContext.summaryBullets.length > 0 && (
-                  <ul className="mt-2 space-y-1 text-xs text-[#4A4A4A]">
+                  <ul className="mt-2 space-y-1 text-xs text-[var(--text-secondary)]">
                     {info.markContext.summaryBullets.map((bullet, idx) => (
                       <li key={`${info.id}-${idx}`} className="flex gap-2">
                         <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nts-accent)]" />
@@ -662,7 +662,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
               </div>
             ))}
             {activeInfo.length > 4 && (
-              <p className="text-xs text-[#6B7280]">
+              <p className="text-xs text-[var(--text-muted)]">
                 +{activeInfo.length - 4} ακόμη ενεργές πληροφορίες λαμβάνονται υπόψη στο πλάνο.
               </p>
             )}
@@ -682,7 +682,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
               className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${
                 preset === p.id
                   ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]'
-                  : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
+                  : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]'
               }`}
             >
               {p.label}
@@ -707,7 +707,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             {generating ? 'Δημιουργία…' : draft ? 'Επαναδημιουργία plan' : 'Δημιουργία enriched plan'}
         </Button>
           {loadingContext && !draft && (
-            <span className="text-xs text-[#6B7280]">Φόρτωση δεδομένων βάσης (περσινές πωλήσεις & απόθεμα)…</span>
+            <span className="text-xs text-[var(--text-muted)]">Φόρτωση δεδομένων βάσης (περσινές πωλήσεις & απόθεμα)…</span>
           )}
           {generateError && (
             <span className="text-xs font-medium text-rose-600">⚠ {generateError} · πάτησε «Δημιουργία» ξανά.</span>
@@ -744,8 +744,8 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             </div>
             )}
             {draft.totalSkusCovered != null && (
-              <p className="mt-3 text-xs text-[#6B7280]">
-                Κάλυψη αποθέματος: <span className="font-semibold text-[#374151]">{formatNumber(draft.totalSkusCovered)} SKU</span> από τον ενεργό κατάλογο (εμπλουτισμένο με procurement signals όπου υπάρχουν)
+              <p className="mt-3 text-xs text-[var(--text-muted)]">
+                Κάλυψη αποθέματος: <span className="font-semibold text-[var(--text-secondary)]">{formatNumber(draft.totalSkusCovered)} SKU</span> από τον ενεργό κατάλογο (εμπλουτισμένο με procurement signals όπου υπάρχουν)
               </p>
             )}
             {draft.risks.length > 0 && (
@@ -771,7 +771,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             }
           >
             {draft.reorderPlan.length === 0 ? (
-              <p className="text-sm text-[#6B7280]">Δεν υπάρχουν αρκετά περσινά δεδομένα για πρόταση παραγγελίας.</p>
+              <p className="text-sm text-[var(--text-muted)]">Δεν υπάρχουν αρκετά περσινά δεδομένα για πρόταση παραγγελίας.</p>
             ) : (
               <>
                 <div className="grid gap-3 lg:grid-cols-2">
@@ -779,10 +779,10 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                 </div>
                 {draft.skuSuggestions.length > 0 && (
                   <div className="mt-5">
-                    <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">SKU opportunities ({draft.skuSuggestions.length})</p>
-                    <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
+                    <p className="mb-2 text-xs font-semibold uppercase text-[var(--text-muted)]">SKU opportunities ({draft.skuSuggestions.length})</p>
+                    <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
                       <table className="w-full text-sm">
-                        <thead className="bg-[#F9FAFB] text-xs text-[#6B7280]">
+                        <thead className="bg-[var(--surface-1)] text-xs text-[var(--text-muted)]">
                           <tr>
                             <th className="px-3 py-2 text-left">SKU</th>
                             <th className="px-3 py-2 text-left">Προϊόν</th>
@@ -814,7 +814,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           >
             {/* Budget split */}
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">
+              <p className="mb-2 text-xs font-semibold uppercase text-[var(--text-muted)]">
                 Κατανομή budget
                 {draft.budgetSplitSource === 'data' && <span className="ml-2 text-emerald-600 normal-case font-normal">· από πραγματικές καμπάνιες</span>}
               </p>
@@ -829,7 +829,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             {/* Campaign recommendations */}
             {draft.campaignRecommendations.length > 0 && (
               <div className="mt-5">
-                <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">Campaign recommendations</p>
+                <p className="mb-2 text-xs font-semibold uppercase text-[var(--text-muted)]">Campaign recommendations</p>
                 <div className="space-y-2">
                   {draft.campaignRecommendations.map((c) => <CampaignRec key={c.id} rec={c} />)}
                 </div>
@@ -838,7 +838,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
 
             {/* Performance actions */}
             <div className="mt-5">
-              <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">Ενέργειες</p>
+              <p className="mb-2 text-xs font-semibold uppercase text-[var(--text-muted)]">Ενέργειες</p>
               <ul className="space-y-2">
                 {draft.performance.map((item) => <ActionItem key={item.id} item={item} />)}
               </ul>
@@ -856,10 +856,10 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           >
             {draft.ga4ChannelSummary.length > 0 && (
               <div className="mb-4">
-                <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">Κανάλια επισκεψιμότητας</p>
-                <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
+                <p className="mb-2 text-xs font-semibold uppercase text-[var(--text-muted)]">Κανάλια επισκεψιμότητας</p>
+                <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
                   <table className="w-full text-sm">
-                    <thead className="bg-[#F9FAFB] text-xs text-[#6B7280]">
+                    <thead className="bg-[var(--surface-1)] text-xs text-[var(--text-muted)]">
                       <tr>
                         <th className="px-3 py-2 text-left">Κανάλι</th>
                         <th className="px-3 py-2 text-right">Sessions</th>
@@ -868,7 +868,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                     </thead>
                     <tbody>
                       {draft.ga4ChannelSummary.map((s) => (
-                        <tr key={s.channel} className="border-t border-[#E5E7EB]">
+                        <tr key={s.channel} className="border-t border-[var(--border)]">
                           <td className="px-3 py-2 font-medium">{s.channel}</td>
                           <td className="px-3 py-2 text-right font-mono">{formatNumber(s.sessions)}</td>
                           {draft.ga4ChannelSummary.some((x) => x.revenue > 0) && (
@@ -896,7 +896,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             badge={draft.rfmTactics.length > 0 ? `${draft.rfmTactics.reduce((s, t) => s + t.size, 0).toLocaleString('el-GR')} πελάτες στα segments` : 'RFM data'}
           >
             {draft.rfmTactics.length === 0 ? (
-              <p className="text-sm text-[#6B7280]">Δεν υπάρχουν RFM δεδομένα. Πήγαινε στο <span className="text-[var(--nts-accent-text)]">RFM Segmentation</span> για να δεις τα segments σου.</p>
+              <p className="text-sm text-[var(--text-muted)]">Δεν υπάρχουν RFM δεδομένα. Πήγαινε στο <span className="text-[var(--nts-accent-text)]">RFM Segmentation</span> για να δεις τα segments σου.</p>
             ) : (
               <div className="grid gap-3 lg:grid-cols-2">
                 {draft.rfmTactics.map((tactic) => <RfmTacticCard key={tactic.segmentName} tactic={tactic} />)}
@@ -914,7 +914,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             badge={draft.priceBenchmarkAlerts.length > 0 ? `${draft.priceBenchmarkAlerts.length} SKU με σημαντική απόκλιση` : 'Price benchmarks'}
           >
             {draft.priceBenchmarkAlerts.length === 0 ? (
-              <p className="text-sm text-[#6B7280]">Δεν υπάρχουν δεδομένα σύγκρισης τιμών. Σύνδεσε Google Merchant Center για price benchmarks.</p>
+              <p className="text-sm text-[var(--text-muted)]">Δεν υπάρχουν δεδομένα σύγκρισης τιμών. Σύνδεσε Google Merchant Center για price benchmarks.</p>
             ) : (
               <>
                 {draft.priceBenchmarkAlerts.filter((a) => a.direction === 'above').length > 0 && (
@@ -950,17 +950,17 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             onToggle={() => toggleSection('message')}
             badge={draft.coreMessage.source === 'ai' ? 'Gemini AI' : 'Fallback'}
           >
-            <p className="text-base font-semibold text-[#1A1A1A]">{draft.coreMessage.headline}</p>
-            <p className="mt-2 text-sm leading-relaxed text-[#4A4A4A]">{draft.coreMessage.campaignAngle}</p>
+            <p className="text-base font-semibold text-[var(--text-primary)]">{draft.coreMessage.headline}</p>
+            <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">{draft.coreMessage.campaignAngle}</p>
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
-                <p className="text-xs font-semibold uppercase text-[#9CA3AF]">Proof points</p>
-                <ul className="mt-2 space-y-1 text-sm text-[#374151]">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-3">
+                <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Proof points</p>
+                <ul className="mt-2 space-y-1 text-sm text-[var(--text-secondary)]">
                   {draft.coreMessage.proofPoints.map((point) => <li key={point}>• {point}</li>)}
                 </ul>
               </div>
-              <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
-                <p className="text-xs font-semibold uppercase text-[#9CA3AF]">CTA ideas</p>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-3">
+                <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">CTA ideas</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {draft.coreMessage.ctaIdeas.map((cta) => <Badge key={cta} variant="info" size="sm">{cta}</Badge>)}
                 </div>
@@ -993,15 +993,15 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       {/* Saved plans */}
       {savedPlans.length > 0 && (
         <Card padding="md">
-          <p className="mb-3 text-xs font-semibold uppercase text-[#9CA3AF]">Αποθηκευμένα plans</p>
-          <ul className="divide-y divide-[#E5E7EB]">
+          <p className="mb-3 text-xs font-semibold uppercase text-[var(--text-muted)]">Αποθηκευμένα plans</p>
+          <ul className="divide-y divide-[var(--border)]">
             {savedPlans.slice(0, 8).map((row) => (
               <li key={row.id} className="flex items-center justify-between py-2">
                 <div>
-                  <span className="text-sm font-medium text-[#1A1A1A]">{row.plan?.periodLabel}</span>
-                  <span className="ml-2 text-xs text-[#9CA3AF]">{String(row.savedAt ?? '').slice(0, 10)}</span>
+                  <span className="text-sm font-medium text-[var(--text-primary)]">{row.plan?.periodLabel}</span>
+                  <span className="ml-2 text-xs text-[var(--text-muted)]">{String(row.savedAt ?? '').slice(0, 10)}</span>
                   {row.plan?.fromDate && (
-                    <span className="ml-2 text-xs text-[#9CA3AF]">{row.plan.fromDate} – {row.plan.toDate}</span>
+                    <span className="ml-2 text-xs text-[var(--text-muted)]">{row.plan.fromDate} – {row.plan.toDate}</span>
                   )}
                 </div>
                 <Button
@@ -1051,10 +1051,10 @@ function PlanSection({
       >
         <div className="flex items-center gap-2">
           {icon}
-          <span className="font-semibold text-[#1A1A1A]">{title}</span>
-          {badge && <span className="rounded-full bg-[#F3F4F6] px-2 py-0.5 text-[10px] font-medium text-[#6B7280]">{badge}</span>}
+          <span className="font-semibold text-[var(--text-primary)]">{title}</span>
+          {badge && <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">{badge}</span>}
         </div>
-        {open ? <ChevronUp size={16} className="text-[#9CA3AF]" /> : <ChevronDown size={16} className="text-[#9CA3AF]" />}
+        {open ? <ChevronUp size={16} className="text-[var(--text-muted)]" /> : <ChevronDown size={16} className="text-[var(--text-muted)]" />}
       </button>
       {open && <div id={`plan-content-${id}`} className="mt-4">{children}</div>}
     </Card>
@@ -1068,7 +1068,7 @@ function PlanProgress({ stages, pct, generating }: { stages: PlanStage[]; pct: n
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Sparkles size={18} className="text-[var(--nts-accent-text)]" />
-          <span className="font-semibold text-[#1A1A1A]">
+          <span className="font-semibold text-[var(--text-primary)]">
             {generating ? 'Σύνθεση enriched plan…' : 'Φόρτωση & ανάλυση δεδομένων…'}
           </span>
         </div>
@@ -1076,18 +1076,18 @@ function PlanProgress({ stages, pct, generating }: { stages: PlanStage[]; pct: n
       </div>
 
       {/* Progress bar */}
-      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#F3F4F6]">
+      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[var(--surface-2)]">
         <div
           className="h-full rounded-full bg-[var(--nts-accent)] transition-all duration-500 ease-out"
           style={{ width: `${Math.max(4, pct)}%` }}
         />
       </div>
-      <p className="mt-2 text-xs text-[#9CA3AF]">{doneCount}/{stages.length} βήματα ολοκληρώθηκαν</p>
+      <p className="mt-2 text-xs text-[var(--text-muted)]">{doneCount}/{stages.length} βήματα ολοκληρώθηκαν</p>
 
       {/* Stage checklist */}
       <ul className="mt-4 space-y-2.5">
         {stages.map((s) => {
-          const stateClass = s.done ? 'text-emerald-600' : s.active ? 'text-[var(--nts-accent-text)]' : 'text-[#9CA3AF]';
+          const stateClass = s.done ? 'text-emerald-600' : s.active ? 'text-[var(--nts-accent-text)]' : 'text-[var(--text-muted)]';
           return (
             <li key={s.id} className="flex items-start gap-3">
               <span className="mt-0.5 shrink-0">
@@ -1096,15 +1096,15 @@ function PlanProgress({ stages, pct, generating }: { stages: PlanStage[]; pct: n
                 ) : s.active ? (
                   <Spinner size="sm" />
                 ) : (
-                  <Circle size={18} className="text-[#D1D5DB]" />
+                  <Circle size={18} className="text-[var(--border-strong)]" />
                 )}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <span className={`text-sm font-medium ${s.done ? 'text-[#1A1A1A]' : stateClass}`}>{s.label}</span>
-                  {s.meta && <span className="text-xs text-[#6B7280]">· {s.meta}</span>}
+                  <span className={`text-sm font-medium ${s.done ? 'text-[var(--text-primary)]' : stateClass}`}>{s.label}</span>
+                  {s.meta && <span className="text-xs text-[var(--text-muted)]">· {s.meta}</span>}
                 </div>
-                {s.detail && <p className="text-xs text-[#9CA3AF]">{s.detail}</p>}
+                {s.detail && <p className="text-xs text-[var(--text-muted)]">{s.detail}</p>}
               </div>
             </li>
           );
@@ -1116,9 +1116,9 @@ function PlanProgress({ stages, pct, generating }: { stages: PlanStage[]; pct: n
 
 function ContextPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-[#1A1A1A]">{value}</p>
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{value}</p>
     </div>
   );
 }
@@ -1127,11 +1127,11 @@ function LearningItem({ item }: { item: CommercialLearning }) {
   const Icon = item.verdict === 'positive' ? ArrowUpRight : ArrowDownRight;
   const tone = item.verdict === 'positive' ? 'text-emerald-600' : 'text-rose-600';
   return (
-    <li className="flex items-start gap-2 rounded-lg border border-[#E5E7EB] bg-white p-2.5">
+    <li className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-white p-2.5">
       <Icon size={14} className={`mt-0.5 shrink-0 ${tone}`} />
       <div className="min-w-0">
-        <p className="truncate text-xs font-semibold text-[#1A1A1A]">{item.title}</p>
-        <p className="text-xs leading-relaxed text-[#6B7280]">{item.detail}</p>
+        <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{item.title}</p>
+        <p className="text-xs leading-relaxed text-[var(--text-muted)]">{item.detail}</p>
       </div>
     </li>
   );
@@ -1156,17 +1156,17 @@ function LearningsCard({
       <button type="button" onClick={onToggle} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={open}>
         <div className="flex items-center gap-2">
           <TrendingUp size={18} className="text-[var(--nts-accent-text)]" />
-          <span className="font-semibold text-[#1A1A1A]">Μαθήματα από προηγούμενες αποφάσεις</span>
-          <span className="rounded-full bg-[#F3F4F6] px-2 py-0.5 text-[10px] font-medium text-[#6B7280]">{windowLabel}</span>
+          <span className="font-semibold text-[var(--text-primary)]">Μαθήματα από προηγούμενες αποφάσεις</span>
+          <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">{windowLabel}</span>
         </div>
-        {open ? <ChevronUp size={16} className="text-[#9CA3AF]" /> : <ChevronDown size={16} className="text-[#9CA3AF]" />}
+        {open ? <ChevronUp size={16} className="text-[var(--text-muted)]" /> : <ChevronDown size={16} className="text-[var(--text-muted)]" />}
       </button>
       {open && (
         <div className="mt-4">
           {loading ? (
-            <div className="flex items-center gap-2 text-sm text-[#6B7280]"><Spinner size="sm" /> Ανάλυση αποφάσεων…</div>
+            <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]"><Spinner size="sm" /> Ανάλυση αποφάσεων…</div>
           ) : total === 0 ? (
-            <p className="text-sm text-[#6B7280]">
+            <p className="text-sm text-[var(--text-muted)]">
               Δεν εντοπίστηκαν σαφείς αποφάσεις (αλλαγές budget/τιμών) στις τελευταίες 90 ημέρες. Μόλις γίνουν ουσιαστικές αλλαγές, θα εμφανιστούν εδώ ως ιδέες.
             </p>
           ) : (
@@ -1174,7 +1174,7 @@ function LearningsCard({
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase text-emerald-700">Τι λειτούργησε — επανέλαβε ({learnings!.wins.length})</p>
                 {learnings!.wins.length === 0 ? (
-                  <p className="text-xs text-[#9CA3AF]">—</p>
+                  <p className="text-xs text-[var(--text-muted)]">—</p>
                 ) : (
                   <ul className="space-y-2">{learnings!.wins.map((i) => <LearningItem key={i.id} item={i} />)}</ul>
                 )}
@@ -1182,15 +1182,15 @@ function LearningsCard({
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase text-rose-700">Τι απέτυχε — απόφυγε/διόρθωσε ({learnings!.misses.length})</p>
                 {learnings!.misses.length === 0 ? (
-                  <p className="text-xs text-[#9CA3AF]">—</p>
+                  <p className="text-xs text-[var(--text-muted)]">—</p>
                 ) : (
                   <ul className="space-y-2">{learnings!.misses.map((i) => <LearningItem key={i.id} item={i} />)}</ul>
                 )}
               </div>
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">Αλλαγές τιμών που απέδωσαν ({learnings!.priceWins.length})</p>
+                <p className="mb-2 text-xs font-semibold uppercase text-[var(--text-muted)]">Αλλαγές τιμών που απέδωσαν ({learnings!.priceWins.length})</p>
                 {learnings!.priceWins.length === 0 ? (
-                  <p className="text-xs text-[#9CA3AF]">—</p>
+                  <p className="text-xs text-[var(--text-muted)]">—</p>
                 ) : (
                   <ul className="space-y-2">{learnings!.priceWins.map((i) => <LearningItem key={i.id} item={i} />)}</ul>
                 )}
@@ -1204,10 +1204,10 @@ function LearningsCard({
 }
 
 function Metric({ label, value, color }: { label: string; value: string; color?: 'green' | 'amber' | 'red' }) {
-  const textColor = color === 'green' ? 'text-emerald-600' : color === 'amber' ? 'text-amber-600' : color === 'red' ? 'text-rose-600' : 'text-[#1A1A1A]';
+  const textColor = color === 'green' ? 'text-emerald-600' : color === 'amber' ? 'text-amber-600' : color === 'red' ? 'text-rose-600' : 'text-[var(--text-primary)]';
   return (
-    <div className="rounded-lg border border-[#E5E7EB] px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">{label}</p>
+    <div className="rounded-lg border border-[var(--border)] px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">{label}</p>
       <p className={`mt-1 font-mono text-lg font-bold ${textColor}`}>{value}</p>
     </div>
   );
@@ -1216,10 +1216,10 @@ function Metric({ label, value, color }: { label: string; value: string; color?:
 function BudgetPill({ label, pct, monthlyBudget }: { label: string; pct: number; monthlyBudget?: number }) {
   const euro = monthlyBudget && monthlyBudget > 0 ? Math.round((monthlyBudget * pct) / 100) : null;
   return (
-    <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-center">
-      <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">{label}</p>
-      <p className="font-mono text-xl font-bold text-[#1A1A1A]">{pct}%</p>
-      {euro != null && <p className="font-mono text-xs text-[#6B7280]">{formatCurrency(euro, 0)}/μήνα</p>}
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-center">
+      <p className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">{label}</p>
+      <p className="font-mono text-xl font-bold text-[var(--text-primary)]">{pct}%</p>
+      {euro != null && <p className="font-mono text-xs text-[var(--text-muted)]">{formatCurrency(euro, 0)}/μήνα</p>}
     </div>
   );
 }
@@ -1233,7 +1233,7 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
   const skus = row.skus ?? [];
   const canExpand = skus.length > 0;
   return (
-    <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
+    <div className="rounded-xl border border-[var(--border)] bg-white p-4">
       <button
         type="button"
         onClick={() => canExpand && setExpanded((v) => !v)}
@@ -1241,13 +1241,13 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
         className={`flex w-full items-start justify-between gap-3 text-left ${canExpand ? 'cursor-pointer' : 'cursor-default'}`}
       >
         <div className="min-w-0">
-          <p className="flex items-center gap-1.5 font-semibold text-[#1A1A1A]">
+          <p className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
             {canExpand && (
-              <ChevronRight size={14} className={`shrink-0 text-[#9CA3AF] transition-transform ${expanded ? 'rotate-90' : ''}`} />
+              <ChevronRight size={14} className={`shrink-0 text-[var(--text-muted)] transition-transform ${expanded ? 'rotate-90' : ''}`} />
             )}
             <span className="truncate">{row.subcategory || row.category}</span>
           </p>
-          <p className="text-xs text-[#6B7280]">{[row.category, row.brand].filter(Boolean).join(' · ') || '—'}</p>
+          <p className="text-xs text-[var(--text-muted)]">{[row.category, row.brand].filter(Boolean).join(' · ') || '—'}</p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <Badge variant={tone} size="sm">{actionLabel}</Badge>
@@ -1256,26 +1256,26 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
               <span className={`text-[10px] font-semibold ${marginTone}`}>Margin {row.marginPct}%</span>
             )}
             {row.daysOfCover != null && (
-              <span className="text-[10px] text-[#9CA3AF]">· {formatNumber(row.daysOfCover)}ημ.</span>
+              <span className="text-[10px] text-[var(--text-muted)]">· {formatNumber(row.daysOfCover)}ημ.</span>
             )}
           </div>
         </div>
       </button>
       <div className="mt-3 grid grid-cols-3 gap-2">
-        <div className="rounded-lg bg-[#F9FAFB] px-2 py-1.5 text-center">
-          <p className="text-[10px] text-[#9CA3AF]">Πέρυσι</p>
-          <p className="font-mono text-sm font-bold text-[#1A1A1A]">{formatNumber(row.lastYearUnits)} τεμ.</p>
+        <div className="rounded-lg bg-[var(--surface-1)] px-2 py-1.5 text-center">
+          <p className="text-[10px] text-[var(--text-muted)]">Πέρυσι</p>
+          <p className="font-mono text-sm font-bold text-[var(--text-primary)]">{formatNumber(row.lastYearUnits)} τεμ.</p>
         </div>
-        <div className="rounded-lg bg-[#F9FAFB] px-2 py-1.5 text-center">
-          <p className="text-[10px] text-[#9CA3AF]">Stock</p>
-          <p className={`font-mono text-sm font-bold ${row.currentStock < row.lastYearUnits * 0.35 ? 'text-rose-600' : 'text-[#1A1A1A]'}`}>{formatNumber(row.currentStock)}</p>
+        <div className="rounded-lg bg-[var(--surface-1)] px-2 py-1.5 text-center">
+          <p className="text-[10px] text-[var(--text-muted)]">Stock</p>
+          <p className={`font-mono text-sm font-bold ${row.currentStock < row.lastYearUnits * 0.35 ? 'text-rose-600' : 'text-[var(--text-primary)]'}`}>{formatNumber(row.currentStock)}</p>
         </div>
-        <div className="rounded-lg bg-[#F9FAFB] px-2 py-1.5 text-center">
-          <p className="text-[10px] text-[#9CA3AF]">Πρόταση{row.reorderQtySource === 'erp' ? ' · ERP' : ''}</p>
+        <div className="rounded-lg bg-[var(--surface-1)] px-2 py-1.5 text-center">
+          <p className="text-[10px] text-[var(--text-muted)]">Πρόταση{row.reorderQtySource === 'erp' ? ' · ERP' : ''}</p>
           <p className="font-mono text-sm font-bold text-[var(--nts-accent-text)]">{formatNumber(row.estimatedReorderQty)}</p>
         </div>
       </div>
-      <p className="mt-2 text-xs leading-relaxed text-[#6B7280]">{row.rationale}</p>
+      <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">{row.rationale}</p>
       {canExpand && (
         <button
           type="button"
@@ -1286,9 +1286,9 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
         </button>
       )}
       {expanded && canExpand && (
-        <div className="mt-2 overflow-hidden rounded-lg border border-[#E5E7EB]">
+        <div className="mt-2 overflow-hidden rounded-lg border border-[var(--border)]">
           <table className="w-full text-left text-[11px]">
-            <thead className="bg-[#F9FAFB] text-[10px] uppercase tracking-wide text-[#9CA3AF]">
+            <thead className="bg-[var(--surface-1)] text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
               <tr>
                 <th className="px-2 py-1.5 font-medium">SKU</th>
                 <th className="px-2 py-1.5 font-medium">Προϊόν</th>
@@ -1300,19 +1300,19 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
             </thead>
             <tbody>
               {skus.map((s) => (
-                <tr key={s.sku} className="border-t border-[#F0F0F0] hover:bg-[#FAFAFA]">
-                  <td className="px-2 py-1.5 font-mono text-[#6B7280]">{s.sku}</td>
+                <tr key={s.sku} className="border-t border-[var(--border)] hover:bg-[var(--surface-1)]">
+                  <td className="px-2 py-1.5 font-mono text-[var(--text-muted)]">{s.sku}</td>
                   <td className="px-2 py-1.5">
-                    <p className="truncate font-medium text-[#1A1A1A]" title={s.name}>{s.name}</p>
+                    <p className="truncate font-medium text-[var(--text-primary)]" title={s.name}>{s.name}</p>
                   </td>
                   <td className="px-2 py-1.5 text-right font-mono">{formatNumber(s.lastYearUnits)}</td>
-                  <td className={`px-2 py-1.5 text-right font-mono ${s.currentStock < s.lastYearUnits * 0.35 ? 'text-rose-600' : 'text-[#1A1A1A]'}`}>{formatNumber(s.currentStock)}</td>
+                  <td className={`px-2 py-1.5 text-right font-mono ${s.currentStock < s.lastYearUnits * 0.35 ? 'text-rose-600' : 'text-[var(--text-primary)]'}`}>{formatNumber(s.currentStock)}</td>
                   <td className={`px-2 py-1.5 text-right font-mono ${
-                    s.marginPct == null ? 'text-[#9CA3AF]' : s.marginPct >= 30 ? 'text-emerald-600' : s.marginPct >= 15 ? 'text-amber-600' : 'text-rose-600'
+                    s.marginPct == null ? 'text-[var(--text-muted)]' : s.marginPct >= 30 ? 'text-emerald-600' : s.marginPct >= 15 ? 'text-amber-600' : 'text-rose-600'
                   }`}>{s.marginPct == null ? '—' : `${s.marginPct}%`}</td>
                   <td className="px-2 py-1.5 text-right font-mono font-semibold text-[var(--nts-accent-text)]">
                     {formatNumber(s.estimatedReorderQty)}
-                    {s.reorderQtySource === 'erp' && <span className="ml-1 text-[9px] font-normal text-[#9CA3AF]">ERP</span>}
+                    {s.reorderQtySource === 'erp' && <span className="ml-1 text-[9px] font-normal text-[var(--text-muted)]">ERP</span>}
                   </td>
                 </tr>
               ))}
@@ -1326,20 +1326,20 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
 
 function SkuRow({ row }: { row: MarketingPlanSkuSuggestion }) {
   return (
-    <tr className="border-t border-[#E5E7EB] hover:bg-[#FAFAFA]">
-      <td className="px-3 py-2 font-mono text-xs text-[#1A1A1A]">{row.sku}</td>
+    <tr className="border-t border-[var(--border)] hover:bg-[var(--surface-1)]">
+      <td className="px-3 py-2 font-mono text-xs text-[var(--text-primary)]">{row.sku}</td>
       <td className="px-3 py-2">
-        <p className="font-medium text-[#1A1A1A]">{row.name}</p>
-        <p className="text-xs text-[#6B7280]">{[row.category, row.brand].filter(Boolean).join(' · ')}</p>
+        <p className="font-medium text-[var(--text-primary)]">{row.name}</p>
+        <p className="text-xs text-[var(--text-muted)]">{[row.category, row.brand].filter(Boolean).join(' · ')}</p>
       </td>
       <td className="px-3 py-2 text-right font-mono">{formatNumber(row.lastYearUnits)}</td>
       <td className="px-3 py-2 text-right font-mono">{formatNumber(row.currentStock)}</td>
       <td className={`px-3 py-2 text-right font-mono ${
-        row.marginPct == null ? 'text-[#9CA3AF]' : row.marginPct >= 30 ? 'text-emerald-600' : row.marginPct >= 15 ? 'text-amber-600' : 'text-rose-600'
+        row.marginPct == null ? 'text-[var(--text-muted)]' : row.marginPct >= 30 ? 'text-emerald-600' : row.marginPct >= 15 ? 'text-amber-600' : 'text-rose-600'
       }`}>{row.marginPct == null ? '—' : `${row.marginPct}%`}</td>
       <td className="px-3 py-2 text-right font-mono font-semibold text-[var(--nts-accent-text)]">
         {formatNumber(row.estimatedReorderQty)}
-        {row.reorderQtySource === 'erp' && <span className="ml-1 text-[9px] font-normal text-[#9CA3AF]">ERP</span>}
+        {row.reorderQtySource === 'erp' && <span className="ml-1 text-[9px] font-normal text-[var(--text-muted)]">ERP</span>}
       </td>
     </tr>
   );
@@ -1349,15 +1349,15 @@ function CampaignRec({ rec }: { rec: CampaignRecommendation }) {
   const actionColor = rec.action === 'scale' ? 'text-emerald-700 bg-emerald-50' : rec.action === 'pause' ? 'text-rose-700 bg-rose-50' : 'text-amber-700 bg-amber-50';
   const actionLabel = rec.action === 'scale' ? '↑ Scale' : rec.action === 'pause' ? '⏸ Pause' : '⦿ Monitor';
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-[#E5E7EB] px-3 py-2.5">
+    <div className="flex items-start gap-3 rounded-lg border border-[var(--border)] px-3 py-2.5">
       <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${actionColor}`}>{actionLabel}</span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-[#1A1A1A]">{rec.title}</p>
-        <p className="mt-0.5 text-xs text-[#6B7280]">{rec.rationale}</p>
+        <p className="truncate text-sm font-medium text-[var(--text-primary)]">{rec.title}</p>
+        <p className="mt-0.5 text-xs text-[var(--text-muted)]">{rec.rationale}</p>
       </div>
       <div className="shrink-0 text-right">
-        <p className="font-mono text-sm font-bold text-[#1A1A1A]">{rec.currentRoas}x</p>
-        <p className="text-[10px] text-[#9CA3AF]">ROAS</p>
+        <p className="font-mono text-sm font-bold text-[var(--text-primary)]">{rec.currentRoas}x</p>
+        <p className="text-[10px] text-[var(--text-muted)]">ROAS</p>
       </div>
     </div>
   );
@@ -1373,18 +1373,18 @@ function RfmTacticCard({ tactic }: { tactic: RfmTactic }) {
   };
   const channelLabel: Record<RfmTactic['channel'], string> = { email: 'Email', paid: 'Paid', organic: 'Organic' };
   return (
-    <div className={`rounded-xl border border-[#E5E7EB] border-l-4 ${segmentColor[tactic.segment]} p-4`}>
+    <div className={`rounded-xl border border-[var(--border)] border-l-4 ${segmentColor[tactic.segment]} p-4`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="font-semibold text-[#1A1A1A]">{tactic.segmentName}</p>
+        <p className="font-semibold text-[var(--text-primary)]">{tactic.segmentName}</p>
         <div className="flex items-center gap-1.5">
-          <span className="rounded-full bg-[#F3F4F6] px-2 py-0.5 text-[10px] font-medium text-[#6B7280]">{channelLabel[tactic.channel]}</span>
+          <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">{channelLabel[tactic.channel]}</span>
           {tactic.revenueShare > 0 && (
-            <span className="text-[10px] text-[#9CA3AF]">{tactic.revenueShare.toFixed(1)}% revenue</span>
+            <span className="text-[10px] text-[var(--text-muted)]">{tactic.revenueShare.toFixed(1)}% revenue</span>
           )}
         </div>
       </div>
-      <p className="mt-1.5 text-xs text-[#6B7280]">{formatNumber(tactic.size)} πελάτες</p>
-      <p className="mt-2 text-sm text-[#374151]">{tactic.action}</p>
+      <p className="mt-1.5 text-xs text-[var(--text-muted)]">{formatNumber(tactic.size)} πελάτες</p>
+      <p className="mt-2 text-sm text-[var(--text-secondary)]">{tactic.action}</p>
     </div>
   );
 }
@@ -1392,10 +1392,10 @@ function RfmTacticCard({ tactic }: { tactic: RfmTactic }) {
 function PriceAlert({ alert }: { alert: PriceBenchmarkAlert }) {
   const isAbove = alert.direction === 'above';
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] px-3 py-2.5">
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] px-3 py-2.5">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-[#1A1A1A]">{alert.title}</p>
-        <p className="text-xs text-[#6B7280]">
+        <p className="truncate text-sm font-medium text-[var(--text-primary)]">{alert.title}</p>
+        <p className="text-xs text-[var(--text-muted)]">
           Τιμή σου: {formatCurrency(alert.yourPrice, 2)} · Benchmark: {formatCurrency(alert.benchmarkPrice, 2)}
         </p>
       </div>
@@ -1409,15 +1409,15 @@ function PriceAlert({ alert }: { alert: PriceBenchmarkAlert }) {
 
 function ActionItem({ item }: { item: { id: string; channel: string; title: string; detail: string; priority: string } }) {
   return (
-    <li className="flex gap-2 rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm">
+    <li className="flex gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm">
       <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
         item.priority === 'high' ? 'bg-rose-100 text-rose-700' : item.priority === 'medium' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'
       }`}>
         {item.channel}
       </span>
       <div>
-        <p className="font-medium text-[#1A1A1A]">{item.title}</p>
-        <p className="mt-0.5 text-xs text-[#6B7280]">{item.detail}</p>
+        <p className="font-medium text-[var(--text-primary)]">{item.title}</p>
+        <p className="mt-0.5 text-xs text-[var(--text-muted)]">{item.detail}</p>
       </div>
     </li>
   );

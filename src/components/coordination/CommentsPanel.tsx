@@ -72,9 +72,9 @@ export function CommentsPanel({ entityType, entityId, entityTitle: _entityTitle 
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto space-y-3 p-3">
-        {isLoading && <div className="text-sm text-[#9CA3AF] text-center py-4">Φόρτωση...</div>}
+        {isLoading && <div className="text-sm text-[var(--text-muted)] text-center py-4">Φόρτωση...</div>}
         {!isLoading && comments.length === 0 && (
-          <div className="text-sm text-[#9CA3AF] text-center py-8">Κανένα σχόλιο ακόμη</div>
+          <div className="text-sm text-[var(--text-muted)] text-center py-8">Κανένα σχόλιο ακόμη</div>
         )}
         {comments.map(c => (
           <div key={c.id} className={`flex gap-2.5 ${c.authorId === user?.uid ? 'flex-row-reverse' : ''}`}>
@@ -83,18 +83,18 @@ export function CommentsPanel({ entityType, entityId, entityTitle: _entityTitle 
             </div>
             <div className={`max-w-[80%] ${c.authorId === user?.uid ? 'text-right' : ''}`}>
               <div className="flex items-center gap-1.5 mb-0.5">
-                <span className="text-xs font-semibold text-[#374151]">{c.authorName}</span>
+                <span className="text-xs font-semibold text-[var(--text-secondary)]">{c.authorName}</span>
                 {c.authorDepartment && DEPT_LABELS[c.authorDepartment] && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F3F4F6] text-[#6B7280]">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-muted)]">
                     {DEPT_LABELS[c.authorDepartment]}
                   </span>
                 )}
-                <span className="text-[10px] text-[#9CA3AF]">{formatTime(c.createdAt)}</span>
+                <span className="text-[10px] text-[var(--text-muted)]">{formatTime(c.createdAt)}</span>
               </div>
               <div className={`px-3 py-2 rounded-xl text-sm ${
                 c.authorId === user?.uid
                   ? 'bg-[var(--nts-accent)] text-white rounded-tr-sm'
-                  : 'bg-[#F3F4F6] text-[#374151] rounded-tl-sm'
+                  : 'bg-[var(--surface-2)] text-[var(--text-secondary)] rounded-tl-sm'
               }`}>
                 {c.text}
               </div>
@@ -104,14 +104,14 @@ export function CommentsPanel({ entityType, entityId, entityTitle: _entityTitle 
       </div>
 
       {/* Input */}
-      <div className="border-t border-[#F3F4F6] p-3 flex gap-2">
+      <div className="border-t border-[var(--surface-2)] p-3 flex gap-2">
         <input
           type="text"
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
           placeholder="Γράψε σχόλιο..."
-          className="flex-1 px-3 py-2 text-sm bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
+          className="flex-1 px-3 py-2 text-sm bg-[var(--surface-1)] border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
         />
         <button
           onClick={handleSend}

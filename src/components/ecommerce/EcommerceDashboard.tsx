@@ -93,7 +93,7 @@ type SalesChannelBreakdownRow = {
 
 const TOOLTIP_STYLE: React.CSSProperties = {
   backgroundColor: '#fff',
-  border: '1px solid #d0d7de',
+  border: '1px solid var(--border)',
   borderRadius: 6,
   fontSize: 12,
   padding: '8px 12px',
@@ -218,8 +218,8 @@ function buildSalesChannelBreakdownFromOrders(orders: EcommerceRawOrder[]): Sale
 
 function OrderStatusBadge({ status }: { status: string }) {
   const s = (status || '').toLowerCase();
-  let bg = '#F3F4F6';
-  let fg = '#6B7280';
+  let bg = 'var(--surface-2)';
+  let fg = 'var(--text-muted)';
 
   if (['paid', 'completed', 'complete', 'fulfilled', 'processing'].includes(s)) {
     bg = '#DCFCE7'; fg = '#16A34A';
@@ -707,16 +707,16 @@ export function EcommerceDashboard() {
       <div className="space-y-6">
         <PageHeader
           title={
-            <h2 className="flex items-center gap-2 text-xl font-bold text-[#1A1A1A]">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-[var(--text-primary)]">
               <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent-text)]" />
               E-commerce
             </h2>
           }
           description={
-            <p className="text-sm text-[#6B7280]">Δεδομένα παραγγελιών και προϊόντων από τα συνδεδεμένα e-shop</p>
+            <p className="text-sm text-[var(--text-muted)]">Δεδομένα παραγγελιών και προϊόντων από τα συνδεδεμένα e-shop</p>
           }
         />
-        <div className="py-16 text-center text-[#6B7280]">
+        <div className="py-16 text-center text-[var(--text-muted)]">
           <div className="animate-spin h-8 w-8 border-2 border-orange-400 border-t-transparent rounded-full mx-auto mb-3" />
           Φόρτωση e-commerce δεδομένων…
         </div>
@@ -730,21 +730,21 @@ export function EcommerceDashboard() {
       <div className="space-y-6">
         <PageHeader
           title={
-            <h2 className="flex items-center gap-2 text-xl font-bold text-[#1A1A1A]">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-[var(--text-primary)]">
               <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent-text)]" />
               E-commerce
             </h2>
           }
           description={
-            <p className="text-sm text-[#6B7280]">Δεδομένα παραγγελιών και προϊόντων από τα συνδεδεμένα e-shop</p>
+            <p className="text-sm text-[var(--text-muted)]">Δεδομένα παραγγελιών και προϊόντων από τα συνδεδεμένα e-shop</p>
           }
         />
 
         <Card>
           <div className="p-10 text-center">
-            <ShoppingCart size={48} className="mx-auto text-[#D1D5DB] mb-4" />
-            <h3 className="text-base font-semibold text-[#1A1A1A] mb-2">Δεν υπάρχουν δεδομένα e-commerce</h3>
-            <p className="text-sm text-[#6B7280] mb-6 max-w-md mx-auto">
+            <ShoppingCart size={48} className="mx-auto text-[var(--border-strong)] mb-4" />
+            <h3 className="text-base font-semibold text-[var(--text-primary)] mb-2">Δεν υπάρχουν δεδομένα e-commerce</h3>
+            <p className="text-sm text-[var(--text-muted)] mb-6 max-w-md mx-auto">
               Συνδέστε τουλάχιστον ένα e-shop (Shopify, WooCommerce, OpenCart ή Magento) και κάντε sync για να δείτε τα δεδομένα σας εδώ.
             </p>
             <button
@@ -764,19 +764,19 @@ export function EcommerceDashboard() {
     <div className="space-y-6">
       <PageHeader
         title={
-          <h2 className="flex items-center gap-2 text-xl font-bold text-[#1A1A1A]">
+          <h2 className="flex items-center gap-2 text-xl font-bold text-[var(--text-primary)]">
             <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent-text)]" />
             E-commerce
           </h2>
         }
         description={
-          <p className="text-sm text-[#6B7280]">
+          <p className="text-sm text-[var(--text-muted)]">
             Δεδομένα {ecomm.connectedPlatforms.map((p) => PLATFORM_LABELS[p] || p).join(', ')}
           </p>
         }
         meta={
           ecomm.syncedAt ? (
-            <p className="text-[10px] text-[#9CA3AF]">
+            <p className="text-[10px] text-[var(--text-muted)]">
               Τελευταίο sync:{' '}
               {ecomm.syncedAt?.toDate?.()
                 ? ecomm.syncedAt.toDate().toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -834,30 +834,30 @@ export function EcommerceDashboard() {
                       <stop offset="95%" stopColor="var(--nts-accent)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-2)" />
                   <XAxis
                     dataKey="date"
-                    tick={{ fill: '#57606a', fontSize: 10 }}
+                    tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
                     tickFormatter={(v: string) => v.slice(5)}
-                    axisLine={{ stroke: '#d0d7de' }}
-                    tickLine={{ stroke: '#d0d7de' }}
+                    axisLine={{ stroke: 'var(--border)' }}
+                    tickLine={{ stroke: 'var(--border)' }}
                   />
                   <YAxis
-                    tick={{ fill: '#57606a', fontSize: 10 }}
+                    tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
                     tickFormatter={(v: number) => `€${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
-                    axisLine={{ stroke: '#d0d7de' }}
-                    tickLine={{ stroke: '#d0d7de' }}
+                    axisLine={{ stroke: 'var(--border)' }}
+                    tickLine={{ stroke: 'var(--border)' }}
                   />
                   <RechartsTooltip
                     contentStyle={TOOLTIP_STYLE}
-                    labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
+                    labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: 4 }}
                     formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Έσοδα']}
                   />
                   <Area type="monotone" dataKey="revenue" stroke="var(--nts-accent)" fill="url(#ecommRevGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-8 text-center">Δεν υπάρχουν δεδομένα εσόδων</p>
+              <p className="text-sm text-[var(--text-muted)] py-8 text-center">Δεν υπάρχουν δεδομένα εσόδων</p>
             )}
           </div>
         </Card>
@@ -867,23 +867,23 @@ export function EcommerceDashboard() {
           <CardHeader title="Ανά πλατφόρμα" subtitle={`${effectiveFrom} — ${effectiveTo}`} />
           <div className="px-5 pb-5">
             {rawOrdersLoading && !rawOrdersLoaded && (
-              <p className="text-xs text-[#9CA3AF] mb-3">Φόρτωση πλήρους ιστορικού παραγγελιών για το εύρος…</p>
+              <p className="text-xs text-[var(--text-muted)] mb-3">Φόρτωση πλήρους ιστορικού παραγγελιών για το εύρος…</p>
             )}
             {displayPlatformBreakdown.length > 0 ? (
               <>
                 <ResponsiveContainer width="100%" height={160}>
                   <BarChart data={displayPlatformBreakdown} layout="vertical">
-                    <XAxis type="number" tick={{ fill: '#57606a', fontSize: 10 }} tickFormatter={(v: number) => `€${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`} />
+                    <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickFormatter={(v: number) => `€${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`} />
                     <YAxis
                       type="category"
                       dataKey="platform"
-                      tick={{ fill: '#374151', fontSize: 11 }}
+                      tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
                       tickFormatter={(v: string) => PLATFORM_LABELS[v] || v}
                       width={90}
                     />
                     <RechartsTooltip
                       contentStyle={TOOLTIP_STYLE}
-                      labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
+                      labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: 4 }}
                       formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Έσοδα']}
                       labelFormatter={(l: string) => PLATFORM_LABELS[l] || l}
                     />
@@ -902,11 +902,11 @@ export function EcommerceDashboard() {
                         <div className="flex items-center justify-between text-xs mb-1">
                           <div className="flex items-center gap-2">
                             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: PLATFORM_COLORS[p.platform] || '#94A3B8' }} />
-                            <span className="text-[#374151] font-medium">{PLATFORM_LABELS[p.platform] || p.platform}</span>
+                            <span className="text-[var(--text-secondary)] font-medium">{PLATFORM_LABELS[p.platform] || p.platform}</span>
                           </div>
-                          <span className="text-[#6B7280]">{p.orders} orders · {pct.toFixed(0)}%</span>
+                          <span className="text-[var(--text-muted)]">{p.orders} orders · {pct.toFixed(0)}%</span>
                         </div>
-                        <div className="h-1 bg-[#F3F4F6] rounded-full overflow-hidden">
+                        <div className="h-1 bg-[var(--surface-2)] rounded-full overflow-hidden">
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${pct}%` }}
@@ -921,7 +921,7 @@ export function EcommerceDashboard() {
                 </div>
               </>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-8 text-center">—</p>
+              <p className="text-sm text-[var(--text-muted)] py-8 text-center">—</p>
             )}
           </div>
         </Card>
@@ -934,35 +934,35 @@ export function EcommerceDashboard() {
             subtitle={`${effectiveFrom} — ${effectiveTo}`}
           />
           <div className="px-5 pb-5">
-            <p className="mb-3 max-w-3xl text-[11px] leading-relaxed text-[#6B7280]">
+            <p className="mb-3 max-w-3xl text-[11px] leading-relaxed text-[var(--text-muted)]">
               Core revenue = τζίρος που μετρά στα e-shop KPI/ROI. Τα εξαιρούμενα ποσά είναι πραγματικές
               παραγγελίες του καναλιού, αλλά δεν μπαίνουν στον καθαρό τζίρο e-shop.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {displaySalesChannelBreakdown.map((row) => {
-                const color = SALES_CHANNEL_COLORS[row.channel] || '#6B7280';
+                const color = SALES_CHANNEL_COLORS[row.channel] || 'var(--text-muted)';
                 const includedPct = row.revenue > 0 ? (row.includedRevenue / row.revenue) * 100 : 0;
                 return (
-                  <div key={row.channel} className="rounded-xl border border-[#E5E7EB] bg-white p-3">
+                  <div key={row.channel} className="rounded-xl border border-[var(--border)] bg-white p-3">
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                        <span className="text-xs font-semibold text-[#111827] truncate">{row.label}</span>
+                        <span className="text-xs font-semibold text-[var(--text-primary)] truncate">{row.label}</span>
                       </div>
-                      <span className="text-[10px] text-[#6B7280] whitespace-nowrap">{formatNumber(row.orders)} total orders</span>
+                      <span className="text-[10px] text-[var(--text-muted)] whitespace-nowrap">{formatNumber(row.orders)} total orders</span>
                     </div>
-                    <p className="mb-0.5 text-[10px] text-[#6B7280]">Μετράει στα e-shop KPI</p>
-                    <div className="text-sm font-bold text-[#111827] tabular-nums">
+                    <p className="mb-0.5 text-[10px] text-[var(--text-muted)]">Μετράει στα e-shop KPI</p>
+                    <div className="text-sm font-bold text-[var(--text-primary)] tabular-nums">
                       {formatCurrencyCompact(row.includedRevenue)}
                     </div>
-                    <p className="mt-0.5 text-[10px] text-[#9CA3AF]">
+                    <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">
                       {formatNumber(row.includedOrders)} core orders
                     </p>
-                    <div className="mt-2 h-1.5 bg-[#F3F4F6] rounded-full overflow-hidden">
+                    <div className="mt-2 h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${includedPct}%`, backgroundColor: color }} />
                     </div>
                     {row.excludedOrders > 0 && (
-                      <p className="mt-1.5 text-[10px] text-[#9CA3AF]">
+                      <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">
                         Εξαιρείται από KPI: {formatCurrencyCompact(row.excludedRevenue)} / {formatNumber(row.excludedOrders)} orders
                       </p>
                     )}
@@ -998,7 +998,7 @@ export function EcommerceDashboard() {
                     </Pie>
                     <RechartsTooltip
                       formatter={(value, name) => [`${Number(value ?? 0).toLocaleString()} παραγγελίες`, String(name)]}
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--border)' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -1006,13 +1006,13 @@ export function EcommerceDashboard() {
                   {paymentMethodPieData.map((entry) => (
                     <div key={entry.name} className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                      <span className="text-[11px] text-[#374151]">{entry.name}</span>
+                      <span className="text-[11px] text-[var(--text-secondary)]">{entry.name}</span>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-10 text-center">Δεν υπάρχουν διαθέσιμα δεδομένα τρόπου πληρωμής</p>
+              <p className="text-sm text-[var(--text-muted)] py-10 text-center">Δεν υπάρχουν διαθέσιμα δεδομένα τρόπου πληρωμής</p>
             )}
           </div>
         </Card>
@@ -1040,7 +1040,7 @@ export function EcommerceDashboard() {
                     </Pie>
                     <RechartsTooltip
                       formatter={(value, name) => [`${Number(value ?? 0).toLocaleString()} παραγγελίες`, String(name)]}
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--border)' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -1048,13 +1048,13 @@ export function EcommerceDashboard() {
                   {shippingMethodPieData.map((entry) => (
                     <div key={entry.name} className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                      <span className="text-[11px] text-[#374151]">{entry.name}</span>
+                      <span className="text-[11px] text-[var(--text-secondary)]">{entry.name}</span>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-10 text-center">Δεν υπάρχουν διαθέσιμα δεδομένα τρόπου αποστολής</p>
+              <p className="text-sm text-[var(--text-muted)] py-10 text-center">Δεν υπάρχουν διαθέσιμα δεδομένα τρόπου αποστολής</p>
             )}
           </div>
         </Card>
@@ -1078,7 +1078,7 @@ export function EcommerceDashboard() {
                   setProdPage(1);
                 }}
                 placeholder="Αναζήτηση προϊόντος / SKU"
-                className="h-8 px-2.5 rounded-md border border-[#E5E7EB] text-xs min-w-[220px]"
+                className="h-8 px-2.5 rounded-md border border-[var(--border)] text-xs min-w-[220px]"
               />
               <select
                 value={prodScope}
@@ -1086,7 +1086,7 @@ export function EcommerceDashboard() {
                   setProdScope(e.target.value as ProductScope);
                   setProdPage(1);
                 }}
-                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs min-w-[180px]"
+                className="h-8 px-2 rounded-md border border-[var(--border)] text-xs min-w-[180px]"
               >
                 <option value="all">Όλα τα SKUs</option>
                 <option value="parents_only">Μόνο Parent SKUs</option>
@@ -1098,7 +1098,7 @@ export function EcommerceDashboard() {
                   setProdRows(v as RowsPerPage);
                   setProdPage(1);
                 }}
-                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs"
+                className="h-8 px-2 rounded-md border border-[var(--border)] text-xs"
               >
                 <option value="10">10 / σελίδα</option>
                 <option value="20">20 / σελίδα</option>
@@ -1107,28 +1107,28 @@ export function EcommerceDashboard() {
                 <option value="all">Προβολή όλων</option>
               </select>
               <Tooltip content="Όλα τα SKUs: κάθε προϊόν όπως πωλήθηκε (parent+child ενοποιημένα). Μόνο Parent SKUs: ομαδοποίηση παραλλαγών — πρώτα από τον κατάλογο (Magento item_group_id), αλλιώς κόβεται μόνο αναγνωρισμένο μέγεθος/gauge (π.χ. -1.30mm, -L3, -XL).">
-                <span className="text-[11px] text-[#9CA3AF]">Filters</span>
+                <span className="text-[11px] text-[var(--text-muted)]">Filters</span>
               </Tooltip>
             </div>
             {pagedProducts.length > 0 ? (
               <div className="overflow-x-auto -mx-5 px-5">
                 <table className="w-full text-left text-xs" style={{ minWidth: 340 }}>
                   <thead>
-                    <tr className="border-b border-[#E5E7EB]">
-                      <th className="pb-2.5 font-medium text-[#6B7280] pr-4">Προϊόν</th>
+                    <tr className="border-b border-[var(--border)]">
+                      <th className="pb-2.5 font-medium text-[var(--text-muted)] pr-4">Προϊόν</th>
                       <th
-                        className="pb-2.5 font-medium text-[#6B7280] text-right cursor-pointer select-none whitespace-nowrap"
+                        className="pb-2.5 font-medium text-[var(--text-muted)] text-right cursor-pointer select-none whitespace-nowrap"
                         onClick={() => toggleProdSort('revenue')}
                       >
-                        <span className="inline-flex items-center gap-0.5 hover:text-[#111827] transition-colors">
+                        <span className="inline-flex items-center gap-0.5 hover:text-[var(--text-primary)] transition-colors">
                           Έσοδα <SortIcon active={prodSort.field === 'revenue'} dir={prodSort.dir} />
                         </span>
                       </th>
                       <th
-                        className="pb-2.5 font-medium text-[#6B7280] text-right cursor-pointer select-none whitespace-nowrap"
+                        className="pb-2.5 font-medium text-[var(--text-muted)] text-right cursor-pointer select-none whitespace-nowrap"
                         onClick={() => toggleProdSort('quantity')}
                       >
-                        <span className="inline-flex items-center gap-0.5 hover:text-[#111827] transition-colors">
+                        <span className="inline-flex items-center gap-0.5 hover:text-[var(--text-primary)] transition-colors">
                           Qty <SortIcon active={prodSort.field === 'quantity'} dir={prodSort.dir} />
                         </span>
                       </th>
@@ -1141,21 +1141,21 @@ export function EcommerceDashboard() {
                       return (
                         <tr
                           key={p.sku + i}
-                          className="border-b border-[#F9FAFB] last:border-0 hover:bg-[#F9FAFB] transition-colors"
+                          className="border-b border-[var(--surface-1)] last:border-0 hover:bg-[var(--surface-1)] transition-colors"
                         >
                           <td className="py-2.5 pr-4">
-                            <p className="text-[#111827] font-medium truncate max-w-[220px]">{p.name || p.sku}</p>
-                            {p.sku !== p.name && <p className="text-[10px] text-[#9CA3AF] truncate max-w-[220px]">{p.sku}</p>}
+                            <p className="text-[var(--text-primary)] font-medium truncate max-w-[220px]">{p.name || p.sku}</p>
+                            {p.sku !== p.name && <p className="text-[10px] text-[var(--text-muted)] truncate max-w-[220px]">{p.sku}</p>}
                           </td>
                           <td className="py-2.5 text-right">
                             <div className="flex flex-col items-end">
-                              <span className="text-[#111827] font-semibold tabular-nums">€{formatNumber(p.revenue, 2)}</span>
-                              <div className="w-16 h-1 bg-[#F3F4F6] rounded-full overflow-hidden mt-1">
+                              <span className="text-[var(--text-primary)] font-semibold tabular-nums">€{formatNumber(p.revenue, 2)}</span>
+                              <div className="w-16 h-1 bg-[var(--surface-2)] rounded-full overflow-hidden mt-1">
                                 <div className="h-full rounded-full bg-[#F97316]/60" style={{ width: `${barPct}%` }} />
                               </div>
                             </div>
                           </td>
-                          <td className="py-2.5 text-right text-[#6B7280] tabular-nums">{p.quantity}</td>
+                          <td className="py-2.5 text-right text-[var(--text-muted)] tabular-nums">{p.quantity}</td>
                         </tr>
                       );
                     })}
@@ -1163,18 +1163,18 @@ export function EcommerceDashboard() {
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-4 text-center">
+              <p className="text-sm text-[var(--text-muted)] py-4 text-center">
                 {rawOrdersLoading
                   ? 'Προετοιμασία προϊόντων…'
                   : 'Δεν βρέθηκαν προϊόντα με τα τρέχοντα φίλτρα'}
               </p>
             )}
-            <div className="mt-3 flex items-center justify-between text-[11px] text-[#6B7280]">
+            <div className="mt-3 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
               <span>Σύνολο: {filteredProducts.length} προϊόντα</span>
               {prodRows !== 'all' && (
                 <div className="inline-flex items-center gap-1">
                   <button
-                    className="px-2 py-1 rounded border border-[#E5E7EB] disabled:opacity-40"
+                    className="px-2 py-1 rounded border border-[var(--border)] disabled:opacity-40"
                     disabled={safeProdPage <= 1}
                     onClick={() => setProdPage((p) => Math.max(1, p - 1))}
                   >
@@ -1182,7 +1182,7 @@ export function EcommerceDashboard() {
                   </button>
                   <span>{safeProdPage}/{prodTotalPages}</span>
                   <button
-                    className="px-2 py-1 rounded border border-[#E5E7EB] disabled:opacity-40"
+                    className="px-2 py-1 rounded border border-[var(--border)] disabled:opacity-40"
                     disabled={safeProdPage >= prodTotalPages}
                     onClick={() => setProdPage((p) => Math.min(prodTotalPages, p + 1))}
                   >
@@ -1210,7 +1210,7 @@ export function EcommerceDashboard() {
                   setOrderPage(1);
                 }}
                 placeholder="Αναζήτηση order / όνομα / status"
-                className="h-8 px-2.5 rounded-md border border-[#E5E7EB] text-xs min-w-[220px]"
+                className="h-8 px-2.5 rounded-md border border-[var(--border)] text-xs min-w-[220px]"
               />
               <select
                 value={orderPlatform}
@@ -1218,7 +1218,7 @@ export function EcommerceDashboard() {
                   setOrderPlatform(e.target.value);
                   setOrderPage(1);
                 }}
-                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs"
+                className="h-8 px-2 rounded-md border border-[var(--border)] text-xs"
               >
                 <option value="all">Όλες οι πλατφόρμες</option>
                 {orderPlatforms.map((p) => (
@@ -1231,7 +1231,7 @@ export function EcommerceDashboard() {
                   setOrderStatus(e.target.value);
                   setOrderPage(1);
                 }}
-                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs"
+                className="h-8 px-2 rounded-md border border-[var(--border)] text-xs"
               >
                 <option value="all">Όλα τα statuses</option>
                 {orderStatuses.map((s) => (
@@ -1245,7 +1245,7 @@ export function EcommerceDashboard() {
                   setOrderRows(v as RowsPerPage);
                   setOrderPage(1);
                 }}
-                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs"
+                className="h-8 px-2 rounded-md border border-[var(--border)] text-xs"
               >
                 <option value="10">10 / σελίδα</option>
                 <option value="20">20 / σελίδα</option>
@@ -1254,38 +1254,38 @@ export function EcommerceDashboard() {
                 <option value="all">Προβολή όλων</option>
               </select>
               <Tooltip content="Συνδυάστε platform/status/search για drill-down. Τα φίλτρα εφαρμόζονται πριν το sort και την pagination.">
-                <span className="text-[11px] text-[#9CA3AF]">Filters</span>
+                <span className="text-[11px] text-[var(--text-muted)]">Filters</span>
               </Tooltip>
             </div>
             {pagedOrders.length > 0 ? (
               <div className="overflow-x-auto -mx-5 px-5">
                 <table className="w-full text-left text-xs" style={{ minWidth: 580 }}>
                   <thead>
-                    <tr className="border-b border-[#E5E7EB]">
+                    <tr className="border-b border-[var(--border)]">
                       <th
-                        className="pb-2.5 font-medium text-[#6B7280] cursor-pointer select-none whitespace-nowrap"
+                        className="pb-2.5 font-medium text-[var(--text-muted)] cursor-pointer select-none whitespace-nowrap"
                         onClick={() => toggleOrderSort('createdAt')}
                       >
-                        <span className="inline-flex items-center gap-0.5 hover:text-[#111827] transition-colors">
+                        <span className="inline-flex items-center gap-0.5 hover:text-[var(--text-primary)] transition-colors">
                           Ημ/νία <SortIcon active={orderSort.field === 'createdAt'} dir={orderSort.dir} />
                         </span>
                       </th>
-                      <th className="pb-2.5 font-medium text-[#6B7280]">Order</th>
+                      <th className="pb-2.5 font-medium text-[var(--text-muted)]">Order</th>
                       <th
-                        className="pb-2.5 font-medium text-[#6B7280] cursor-pointer select-none whitespace-nowrap"
+                        className="pb-2.5 font-medium text-[var(--text-muted)] cursor-pointer select-none whitespace-nowrap"
                         onClick={() => toggleOrderSort('platform')}
                       >
-                        <span className="inline-flex items-center gap-0.5 hover:text-[#111827] transition-colors">
+                        <span className="inline-flex items-center gap-0.5 hover:text-[var(--text-primary)] transition-colors">
                           Platform <SortIcon active={orderSort.field === 'platform'} dir={orderSort.dir} />
                         </span>
                       </th>
-                      <th className="pb-2.5 font-medium text-[#6B7280]">Κανάλι</th>
-                      <th className="pb-2.5 font-medium text-[#6B7280]">Status</th>
+                      <th className="pb-2.5 font-medium text-[var(--text-muted)]">Κανάλι</th>
+                      <th className="pb-2.5 font-medium text-[var(--text-muted)]">Status</th>
                       <th
-                        className="pb-2.5 font-medium text-[#6B7280] text-right cursor-pointer select-none whitespace-nowrap"
+                        className="pb-2.5 font-medium text-[var(--text-muted)] text-right cursor-pointer select-none whitespace-nowrap"
                         onClick={() => toggleOrderSort('total')}
                       >
-                        <span className="inline-flex items-center gap-0.5 hover:text-[#111827] transition-colors">
+                        <span className="inline-flex items-center gap-0.5 hover:text-[var(--text-primary)] transition-colors">
                           Total <SortIcon active={orderSort.field === 'total'} dir={orderSort.dir} />
                         </span>
                       </th>
@@ -1295,14 +1295,14 @@ export function EcommerceDashboard() {
                     {pagedOrders.map((o, i) => (
                       <tr
                         key={o.orderId + i}
-                        className="border-b border-[#F9FAFB] last:border-0 hover:bg-[#F9FAFB] transition-colors"
+                        className="border-b border-[var(--surface-1)] last:border-0 hover:bg-[var(--surface-1)] transition-colors"
                       >
-                        <td className="py-2.5 text-[#6B7280] whitespace-nowrap tabular-nums">
+                        <td className="py-2.5 text-[var(--text-muted)] whitespace-nowrap tabular-nums">
                           {o.createdAt
                             ? new Date(o.createdAt).toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: '2-digit' })
                             : '—'}
                         </td>
-                        <td className="py-2.5 text-[#111827] font-medium">{o.orderName || o.orderId}</td>
+                        <td className="py-2.5 text-[var(--text-primary)] font-medium">{o.orderName || o.orderId}</td>
                         <td className="py-2.5">
                           <span
                             className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap"
@@ -1315,8 +1315,8 @@ export function EcommerceDashboard() {
                           <span
                             className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap"
                             style={{
-                              backgroundColor: `${SALES_CHANNEL_COLORS[(o.salesChannel || 'direct_eshop') as EcommerceSalesChannel] || '#6B7280'}18`,
-                              color: SALES_CHANNEL_COLORS[(o.salesChannel || 'direct_eshop') as EcommerceSalesChannel] || '#6B7280',
+                              backgroundColor: `${SALES_CHANNEL_COLORS[(o.salesChannel || 'direct_eshop') as EcommerceSalesChannel] || 'var(--text-muted)'}18`,
+                              color: SALES_CHANNEL_COLORS[(o.salesChannel || 'direct_eshop') as EcommerceSalesChannel] || 'var(--text-muted)',
                             }}
                             title={o.revenueIncluded === false ? `Εκτός core revenue: ${o.exclusionReason || 'review'}` : 'Included στο core revenue'}
                           >
@@ -1326,25 +1326,25 @@ export function EcommerceDashboard() {
                         <td className="py-2.5">
                           <OrderStatusBadge status={o.status} />
                         </td>
-                        <td className="py-2.5 text-right text-[#111827] font-semibold tabular-nums">€{o.total.toFixed(2)}</td>
+                        <td className="py-2.5 text-right text-[var(--text-primary)] font-semibold tabular-nums">€{o.total.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-4 text-center">
+              <p className="text-sm text-[var(--text-muted)] py-4 text-center">
                 {rawOrdersLoading
                   ? 'Φόρτωση παραγγελιών για το επιλεγμένο διάστημα…'
                   : 'Δεν βρέθηκαν παραγγελίες με τα τρέχοντα φίλτρα'}
               </p>
             )}
-            <div className="mt-3 flex items-center justify-between text-[11px] text-[#6B7280]">
+            <div className="mt-3 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
               <span>Σύνολο: {filteredOrders.length} παραγγελίες</span>
               {orderRows !== 'all' && (
                 <div className="inline-flex items-center gap-1">
                   <button
-                    className="px-2 py-1 rounded border border-[#E5E7EB] disabled:opacity-40"
+                    className="px-2 py-1 rounded border border-[var(--border)] disabled:opacity-40"
                     disabled={safeOrderPage <= 1}
                     onClick={() => setOrderPage((p) => Math.max(1, p - 1))}
                   >
@@ -1352,7 +1352,7 @@ export function EcommerceDashboard() {
                   </button>
                   <span>{safeOrderPage}/{orderTotalPages}</span>
                   <button
-                    className="px-2 py-1 rounded border border-[#E5E7EB] disabled:opacity-40"
+                    className="px-2 py-1 rounded border border-[var(--border)] disabled:opacity-40"
                     disabled={safeOrderPage >= orderTotalPages}
                     onClick={() => setOrderPage((p) => Math.min(orderTotalPages, p + 1))}
                   >
@@ -1369,7 +1369,7 @@ export function EcommerceDashboard() {
       <div className="flex justify-center">
         <button
           onClick={() => { window.location.hash = '#data'; }}
-          className="inline-flex items-center gap-1.5 text-xs text-[#6B7280] hover:text-[var(--nts-accent-text)] transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--nts-accent-text)] transition-colors"
         >
           Διαχείριση Connectors <ArrowRight size={12} />
         </button>

@@ -56,7 +56,7 @@ export function InsightCard({ insight, index, onAction, canNavigate }: InsightCa
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <h3 className="font-semibold text-[#1A1A1A] text-base leading-snug">{insight.title}</h3>
+              <h3 className="font-semibold text-[var(--text-primary)] text-base leading-snug">{insight.title}</h3>
               <Badge
                 variant={insight.impact === 'high' ? 'danger' : insight.impact === 'medium' ? 'warning' : 'default'}
                 size="sm"
@@ -65,7 +65,7 @@ export function InsightCard({ insight, index, onAction, canNavigate }: InsightCa
                 {impactLabel}
               </Badge>
             </div>
-            <div className="mt-2 text-sm text-[#4A5568] [&_p]:text-sm [&_strong]:font-semibold [&_strong]:text-[#1A1A1A] leading-relaxed">
+            <div className="mt-2 text-sm text-[#4A5568] [&_p]:text-sm [&_strong]:font-semibold [&_strong]:text-[var(--text-primary)] leading-relaxed">
               <FormattedProse content={insight.insight} variant="compact" />
             </div>
             <button
@@ -75,7 +75,7 @@ export function InsightCard({ insight, index, onAction, canNavigate }: InsightCa
               className={`mt-4 inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
                 canNavigate
                   ? 'text-[var(--nts-accent-text)] hover:underline cursor-pointer'
-                  : 'text-[#9CA3AF] cursor-not-allowed opacity-60'
+                  : 'text-[var(--text-muted)] cursor-not-allowed opacity-60'
               }`}
             >
               {insight.action}

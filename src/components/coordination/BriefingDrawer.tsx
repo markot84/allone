@@ -147,31 +147,31 @@ export function BriefingDrawer({ strategyName, initialTitle, onClose, onSent }: 
         onClick={onClose}
       />
 
-      <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-2xl shadow-2xl border-t border-[#E5E7EB] animate-in slide-in-from-bottom max-h-[min(92vh,900px)] flex flex-col">
+      <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-2xl shadow-2xl border-t border-[var(--border)] animate-in slide-in-from-bottom max-h-[min(92vh,900px)] flex flex-col">
         <div className="max-w-2xl mx-auto px-5 py-5 w-full overflow-y-auto">
-          <div className="w-10 h-1 bg-[#E5E7EB] rounded-full mx-auto mb-4" />
+          <div className="w-10 h-1 bg-[var(--border)] rounded-full mx-auto mb-4" />
 
           <div className="mb-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <h3 className="text-base font-semibold text-[#111827]">Αποστολή Briefing</h3>
-              <p className="mt-0.5 text-xs text-[#9CA3AF]">Ειδοποίηση τμημάτων για νέα στρατηγική</p>
+              <h3 className="text-base font-semibold text-[var(--text-primary)]">Αποστολή Briefing</h3>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">Ειδοποίηση τμημάτων για νέα στρατηγική</p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 self-end p-1.5 transition-colors hover:bg-[#F3F4F6] rounded-lg sm:self-start"
+              className="shrink-0 self-end p-1.5 transition-colors hover:bg-[var(--surface-2)] rounded-lg sm:self-start"
             >
-              <X size={17} className="text-[#6B7280]" />
+              <X size={17} className="text-[var(--text-muted)]" />
             </button>
           </div>
 
           <div className="mb-3">
-            <label className="text-xs font-medium text-[#374151] mb-1 block">Τίτλος εμπορικής πολιτικής</label>
+            <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block">Τίτλος εμπορικής πολιτικής</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm font-medium border border-[#E5E7EB] rounded-xl focus:outline-none focus:border-[var(--nts-accent)] bg-[#FAFAFA]"
+              className="w-full px-3 py-2.5 text-sm font-medium border border-[var(--border)] rounded-xl focus:outline-none focus:border-[var(--nts-accent)] bg-[var(--surface-1)]"
               placeholder="Τίτλος briefing"
             />
           </div>

@@ -268,14 +268,14 @@ export function CampaignsGeoTab({ campaigns }: Props) {
     }
   };
   const SortIcon = ({ col }: { col: SortCol }) => {
-    if (sortCol !== col) return <ArrowUpDown size={12} className="text-[#D1D5DB]" />;
+    if (sortCol !== col) return <ArrowUpDown size={12} className="text-[var(--border-strong)]" />;
     return sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />;
   };
 
   if (campaigns.length === 0) {
     return (
       <Card>
-        <div className="py-10 text-center text-sm text-[#9CA3AF]">Δεν υπάρχουν καμπάνιες.</div>
+        <div className="py-10 text-center text-sm text-[var(--text-muted)]">Δεν υπάρχουν καμπάνιες.</div>
       </Card>
     );
   }
@@ -297,7 +297,7 @@ export function CampaignsGeoTab({ campaigns }: Props) {
           subtitle="Clicks, impressions, purchases & ROAS ανά χώρα."
           icon={<Globe size={18} className="text-[var(--nts-orange)]" />}
         />
-        <div className="px-4 pb-6 text-center text-sm text-[#9CA3AF]">
+        <div className="px-4 pb-6 text-center text-sm text-[var(--text-muted)]">
           Δεν υπάρχουν δεδομένα ανά χώρα. Τρέξτε sync στο Google Ads / Meta.
         </div>
       </Card>
@@ -319,19 +319,19 @@ export function CampaignsGeoTab({ campaigns }: Props) {
           <div className="flex flex-wrap items-center gap-2 justify-end">
             <LevelToggle level={level} onChange={setLevel} hasCity={hasAnyCityData} />
             <div className="relative">
-              <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+              <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={level === 'country' ? 'Αναζήτηση χώρας' : 'Αναζήτηση χώρας ή πόλης'}
-                className="pl-7 pr-2 py-1.5 text-xs border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[var(--nts-orange)]"
+                className="pl-7 pr-2 py-1.5 text-xs border border-[var(--border)] rounded-md focus:outline-none focus:border-[var(--nts-orange)]"
               />
             </div>
           </div>
         }
       />
       {emptyCity ? (
-        <div className="px-4 pb-6 text-center text-sm text-[#9CA3AF]">
+        <div className="px-4 pb-6 text-center text-sm text-[var(--text-muted)]">
           Δεν υπάρχουν δεδομένα ανά πόλη/περιοχή ακόμα. Μετά το επόμενο sync (Google Ads / Meta) θα εμφανιστούν εδώ.
         </div>
       ) : (
@@ -339,17 +339,17 @@ export function CampaignsGeoTab({ campaigns }: Props) {
       <CampaignsGeoMekko columns={mekkoColumns} level={level} metric={chartMetric} onMetricChange={setChartMetric} />
       <div className="overflow-x-auto max-h-[min(78vh,920px)] overflow-y-auto">
         <table className="w-full text-left text-sm">
-          <thead className="sticky top-0 bg-[#F9FAFB] z-10 text-xs text-[#6B7280] uppercase tracking-wider">
+          <thead className="sticky top-0 bg-[var(--surface-1)] z-10 text-xs text-[var(--text-muted)] uppercase tracking-wider">
             <tr>
               <th
-                className="px-3 py-2.5 font-medium cursor-pointer hover:text-[#111827]"
+                className="px-3 py-2.5 font-medium cursor-pointer hover:text-[var(--text-primary)]"
                 onClick={() => toggleSort('country')}
               >
                 <span className="inline-flex items-center gap-1">Χώρα <SortIcon col="country" /></span>
               </th>
               {level === 'city' && (
                 <th
-                  className="px-3 py-2.5 font-medium cursor-pointer hover:text-[#111827]"
+                  className="px-3 py-2.5 font-medium cursor-pointer hover:text-[var(--text-primary)]"
                   onClick={() => toggleSort('locality')}
                 >
                   <div className="inline-flex flex-col items-start gap-1 normal-case">
@@ -361,7 +361,7 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                     />
                     <SortIcon col="locality" />
                     </span>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium tracking-normal normal-case text-[#6B7280]">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium tracking-normal normal-case text-[var(--text-muted)]">
                       <span className="rounded bg-[#FFEDD5] px-1.5 py-0.5 text-[#F97316]">Google: city</span>
                       <span className="rounded bg-[#DBEAFE] px-1.5 py-0.5 text-[#3B82F6]">Meta: region</span>
                     </span>
@@ -369,37 +369,37 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                 </th>
               )}
               <th
-                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[#111827]"
+                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[var(--text-primary)]"
                 onClick={() => toggleSort('impressions')}
               >
                 <span className="inline-flex items-center gap-1 justify-end w-full">Impr. <SortIcon col="impressions" /></span>
               </th>
               <th
-                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[#111827]"
+                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[var(--text-primary)]"
                 onClick={() => toggleSort('clicks')}
               >
                 <span className="inline-flex items-center gap-1 justify-end w-full">Clicks <SortIcon col="clicks" /></span>
               </th>
               <th
-                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[#111827]"
+                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[var(--text-primary)]"
                 onClick={() => toggleSort('ctr')}
               >
                 <span className="inline-flex items-center gap-1 justify-end w-full">CTR <SortIcon col="ctr" /></span>
               </th>
               <th
-                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[#111827]"
+                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[var(--text-primary)]"
                 onClick={() => toggleSort('amount_spent')}
               >
                 <span className="inline-flex items-center gap-1 justify-end w-full">Spend <SortIcon col="amount_spent" /></span>
               </th>
               <th
-                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[#111827]"
+                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[var(--text-primary)]"
                 onClick={() => toggleSort('cpc')}
               >
                 <span className="inline-flex items-center gap-1 justify-end w-full">CPC <SortIcon col="cpc" /></span>
               </th>
               <th
-                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[#111827]"
+                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[var(--text-primary)]"
                 onClick={() => toggleSort('conversions')}
               >
                 <span className="inline-flex items-center gap-1 justify-end w-full">
@@ -409,35 +409,35 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                 </span>
               </th>
               <th
-                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[#111827]"
+                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[var(--text-primary)]"
                 onClick={() => toggleSort('conversion_value')}
               >
                 <span className="inline-flex items-center gap-1 justify-end w-full">Έσοδα <SortIcon col="conversion_value" /></span>
               </th>
               <th
-                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[#111827]"
+                className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-[var(--text-primary)]"
                 onClick={() => toggleSort('roas')}
               >
                 <span className="inline-flex items-center gap-1 justify-end w-full">ROAS <SortIcon col="roas" /></span>
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#F3F4F6]">
+          <tbody className="divide-y divide-[var(--surface-2)]">
             {visibleRows.map((r) =>
               r.kind === 'country' ? (
-                <tr key={r.country} className="hover:bg-[#FAFAFA] transition-colors">
+                <tr key={r.country} className="hover:bg-[var(--surface-1)] transition-colors">
                   <td className="px-3 py-2.5">
-                    <span className="inline-flex items-center gap-2 text-sm text-[#111827] font-medium">
+                    <span className="inline-flex items-center gap-2 text-sm text-[var(--text-primary)] font-medium">
                       {formatCountryLabel(r.country)}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtNum(r.impressions)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtNum(r.clicks)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#6B7280]">{fmtPct(r.ctr)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtMoney(r.amount_spent)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#6B7280]">{fmtCpc(r.cpc)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtConvGeo(r.conversions)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtMoney(r.conversion_value)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-primary)]">{fmtNum(r.impressions)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-primary)]">{fmtNum(r.clicks)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-muted)]">{fmtPct(r.ctr)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-primary)]">{fmtMoney(r.amount_spent)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-muted)]">{fmtCpc(r.cpc)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-primary)]">{fmtConvGeo(r.conversions)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-primary)]">{fmtMoney(r.conversion_value)}</td>
                   <td className="px-3 py-2.5 text-right font-mono">
                     <span
                       className={`px-1.5 py-0.5 rounded-md ${
@@ -453,20 +453,20 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                   </td>
                 </tr>
               ) : (
-                <tr key={r.key} className="hover:bg-[#FAFAFA] transition-colors">
+                <tr key={r.key} className="hover:bg-[var(--surface-1)] transition-colors">
                   <td className="px-3 py-2.5">
-                    <span className="inline-flex items-center gap-2 text-sm text-[#111827] font-medium">
+                    <span className="inline-flex items-center gap-2 text-sm text-[var(--text-primary)] font-medium">
                       {formatCountryLabel(r.country)}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-sm text-[#374151]">{r.locality}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtNum(r.impressions)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtNum(r.clicks)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#6B7280]">{fmtPct(r.ctr)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtMoney(r.amount_spent)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#6B7280]">{fmtCpc(r.cpc)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtConvGeo(r.conversions)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtMoney(r.conversion_value)}</td>
+                  <td className="px-3 py-2.5 text-sm text-[var(--text-secondary)]">{r.locality}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-primary)]">{fmtNum(r.impressions)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-primary)]">{fmtNum(r.clicks)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-muted)]">{fmtPct(r.ctr)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-primary)]">{fmtMoney(r.amount_spent)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-muted)]">{fmtCpc(r.cpc)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-primary)]">{fmtConvGeo(r.conversions)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[var(--text-primary)]">{fmtMoney(r.conversion_value)}</td>
                   <td className="px-3 py-2.5 text-right font-mono">
                     <span
                       className={`px-1.5 py-0.5 rounded-md ${
@@ -485,8 +485,8 @@ export function CampaignsGeoTab({ campaigns }: Props) {
             )}
           </tbody>
           {rows.length > 1 && (
-            <tfoot className="sticky bottom-0 bg-[#F9FAFB] border-t-2 border-[#E5E7EB]">
-              <tr className="text-xs font-semibold text-[#374151]">
+            <tfoot className="sticky bottom-0 bg-[var(--surface-1)] border-t-2 border-[var(--border)]">
+              <tr className="text-xs font-semibold text-[var(--text-secondary)]">
                 <td className="px-3 py-2.5" colSpan={level === 'city' ? 2 : 1}>
                   Σύνολο ({rows.length})
                 </td>
@@ -509,11 +509,11 @@ export function CampaignsGeoTab({ campaigns }: Props) {
           )}
         </table>
         {!hasSearch && rows.length > 5 && (
-          <div className="sticky bottom-0 flex justify-center border-t border-[#E5E7EB] bg-white/95 px-3 py-3 backdrop-blur">
+          <div className="sticky bottom-0 flex justify-center border-t border-[var(--border)] bg-white/95 px-3 py-3 backdrop-blur">
             <button
               type="button"
               onClick={() => setShowAllRows((v) => !v)}
-              className="rounded-md border border-[#E5E7EB] px-3 py-1.5 text-xs font-medium text-[#374151] transition-colors hover:bg-[#F9FAFB]"
+              className="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-1)]"
             >
               {showAllRows
                 ? 'Εμφάνιση μόνο top 5 βάσει impressions'
@@ -522,7 +522,7 @@ export function CampaignsGeoTab({ campaigns }: Props) {
           </div>
         )}
         {rows.length === 0 && search && (
-          <p className="text-sm text-[#9CA3AF] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
+          <p className="text-sm text-[var(--text-muted)] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
         )}
       </div>
       </>
@@ -538,12 +538,12 @@ function LevelToggle(props: {
 }) {
   const { level, onChange, hasCity } = props;
   return (
-    <div className="inline-flex rounded-md border border-[#E5E7EB] overflow-hidden text-xs">
+    <div className="inline-flex rounded-md border border-[var(--border)] overflow-hidden text-xs">
       <button
         type="button"
         onClick={() => onChange('country')}
         className={`px-2.5 py-1.5 font-medium transition-colors ${
-          level === 'country' ? 'bg-[var(--nts-orange)] text-white' : 'bg-white text-[#6B7280] hover:bg-[#F9FAFB]'
+          level === 'country' ? 'bg-[var(--nts-orange)] text-white' : 'bg-white text-[var(--text-muted)] hover:bg-[var(--surface-1)]'
         }`}
       >
         Χώρα
@@ -551,8 +551,8 @@ function LevelToggle(props: {
       <button
         type="button"
         onClick={() => onChange('city')}
-        className={`px-2.5 py-1.5 font-medium transition-colors border-l border-[#E5E7EB] ${
-          level === 'city' ? 'bg-[var(--nts-orange)] text-white' : 'bg-white text-[#6B7280] hover:bg-[#F9FAFB]'
+        className={`px-2.5 py-1.5 font-medium transition-colors border-l border-[var(--border)] ${
+          level === 'city' ? 'bg-[var(--nts-orange)] text-white' : 'bg-white text-[var(--text-muted)] hover:bg-[var(--surface-1)]'
         }`}
         title={!hasCity ? 'Θα εμφανιστεί μετά από sync με ενημερωμένους connectors' : undefined}
       >

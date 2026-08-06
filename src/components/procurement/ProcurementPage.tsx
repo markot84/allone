@@ -65,7 +65,7 @@ const EXCLUDED_KEYS = new Set(['id', 'brandId', 'rowIndex', 'sheetType', 'create
 
 const CHART_COLORS = {
   accent: '#F97316',
-  secondary: '#78716C',
+  secondary: 'var(--text-muted)',
   success: '#22C55E',
   warning: '#F59E0B',
   danger: '#EF4444',
@@ -75,7 +75,7 @@ const CHART_COLORS = {
 
 const EVAL_COLORS: Record<string, string> = {
   A: '#22C55E', B: '#F59E0B', C: '#EF4444',
-  VIP: '#3B82F6', Καλή: '#F59E0B', Νέος: '#6B7280',
+  VIP: '#3B82F6', Καλή: '#F59E0B', Νέος: 'var(--text-muted)',
   Άριστα: '#22C55E', Καλά: '#F59E0B', Μέτρια: '#EF4444',
 };
 
@@ -99,7 +99,7 @@ const BADGE_STYLES: Record<string, string> = {
   Όχι: 'bg-gray-100 text-gray-600 border-gray-200',
 };
 
-const STAT_LINE_COLORS = ['#F97316', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B', '#EF4444', '#78716C'];
+const STAT_LINE_COLORS = ['#F97316', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B', '#EF4444', 'var(--text-muted)'];
 
 /** Canonical column order per sheet (matches PROCUREMENT_TEMPLATE.xlsx). Unknown cols go to the end. */
 const CANONICAL_COLUMN_ORDER: Record<ProcurementSheetType, string[]> = {
@@ -550,7 +550,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
   if (chartData.length === 0) return null;
 
   const W = chartWidth;
-  const axisStyle = { fill: '#57606a', fontSize: 11 };
+  const axisStyle = { fill: 'var(--text-muted)', fontSize: 11 };
   const marginH = { top: 5, right: 20, left: 0, bottom: 5 };
   const marginV = { top: 10, right: 10, left: 0, bottom: 5 };
 
@@ -560,7 +560,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <BarChart layout="vertical" width={W} height={H} data={chartData} margin={marginH}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
           <XAxis type="number" tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => Number(v).toLocaleString('el-GR')} />
           <YAxis type="category" dataKey="name" width={Y_AXIS_WIDTH} tick={axisStyle} tickLine={false} axisLine={false} />
           <RechartsTooltip formatter={(v: number | undefined) => [Number(v ?? 0).toLocaleString('el-GR'), 'Απόθεμα']} />
@@ -579,7 +579,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <BarChart layout="vertical" width={W} height={H} data={chartData} margin={marginH}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
           <XAxis type="number" tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => `€${v}`} />
           <YAxis type="category" dataKey="name" width={Y_AXIS_WIDTH} tick={axisStyle} tickLine={false} axisLine={false} />
           <RechartsTooltip formatter={(v: number | undefined, name: string | undefined) => [`€${(v ?? 0).toFixed(2)}`, name === 'primary' ? 'Πρωτογενές κόστος' : 'Δευτερογενές κόστος']} />
@@ -596,7 +596,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <BarChart width={W} height={220} data={chartData} margin={marginV}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="name" tick={axisStyle} tickLine={false} axisLine={false} />
           <YAxis tick={axisStyle} tickLine={false} axisLine={false} allowDecimals={false} />
           <RechartsTooltip formatter={(v: number | undefined) => [v ?? 0, 'Αριθμός ειδών']} />
@@ -614,7 +614,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <BarChart width={W} height={220} data={chartData} margin={marginV}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="name" tick={axisStyle} tickLine={false} axisLine={false} />
           <YAxis tick={axisStyle} tickLine={false} axisLine={false} allowDecimals={false} />
           <RechartsTooltip formatter={(v: number | undefined) => [v ?? 0, 'Αριθμός πελατών']} />
@@ -633,7 +633,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <BarChart layout="vertical" width={W} height={H} data={chartData} margin={marginH}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
           <XAxis type="number" tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => `€${v}`} />
           <YAxis type="category" dataKey="name" width={Y_AXIS_WIDTH} tick={axisStyle} tickLine={false} axisLine={false} />
           <RechartsTooltip formatter={(v: number | undefined, name: string | undefined) => [`€${(v ?? 0).toFixed(2)}`, name === 'cost' ? 'Συνολικό κόστος' : 'Μέση τιμή πώλησης']} />
@@ -650,7 +650,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <BarChart layout="vertical" width={W} height={H} data={chartData} margin={marginH}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
           <XAxis type="number" tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => `€${Number(v).toLocaleString('el-GR', { maximumFractionDigits: 0 })}`} />
           <YAxis type="category" dataKey="name" width={Y_AXIS_WIDTH} tick={axisStyle} tickLine={false} axisLine={false} />
           <RechartsTooltip formatter={(v: number | undefined, name: string | undefined) => [`€${Number(v ?? 0).toLocaleString('el-GR')}`, name === 'turnover' ? 'Τζίρος' : 'Κέρδος']} />
@@ -669,7 +669,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <LineChart width={W} height={240} data={chartData} margin={marginV}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="period" tick={axisStyle} tickLine={false} axisLine={false} />
           <YAxis tick={axisStyle} tickLine={false} axisLine={false} />
           <RechartsTooltip wrapperStyle={{ fontSize: 11 }} />

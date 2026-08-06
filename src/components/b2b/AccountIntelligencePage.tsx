@@ -35,14 +35,14 @@ export function AccountIntelligencePage({ onSectionChange }: AccountIntelligence
       <PageHeader
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Account Intelligence</h2>}
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Το B2B replacement του retail RFM: health, priority και growth potential ανά πελάτη ή account cluster.
           </p>
         }
       />
 
       {/* Tab switcher */}
-      <div className="flex gap-1 rounded-xl border border-[#eef0f3] bg-[#f9fafb] p-1 w-fit">
+      <div className="flex gap-1 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-1 w-fit">
         {([
           { id: 'framework' as AccountTab, label: 'Framework', icon: LayoutGrid },
           { id: 'health' as AccountTab, label: 'Account Health Score', icon: ShieldCheck },
@@ -112,20 +112,20 @@ export function AccountIntelligencePage({ onSectionChange }: AccountIntelligence
           <div className="p-6">
             <div className="mb-4 flex items-center gap-2">
               <Building2 size={18} className="text-[var(--nts-accent-text)]" />
-              <h3 className="text-lg font-semibold text-[#1A1A1A]">Account scoring model</h3>
+              <h3 className="text-lg font-semibold text-[var(--text-primary)]">Account scoring model</h3>
             </div>
             <div className="space-y-3">
-              <div className="rounded-lg border border-[#E5E5E5] p-4">
-                <p className="text-sm font-semibold text-[#1A1A1A]">Revenue quality</p>
-                <p className="mt-1 text-sm text-[#6B7280]">Contract value, gross margin, payment consistency και ιστορικό repeat orders.</p>
+              <div className="rounded-lg border border-[var(--border)] p-4">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Revenue quality</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">Contract value, gross margin, payment consistency και ιστορικό repeat orders.</p>
               </div>
-              <div className="rounded-lg border border-[#E5E5E5] p-4">
-                <p className="text-sm font-semibold text-[#1A1A1A]">Commercial momentum</p>
-                <p className="mt-1 text-sm text-[#6B7280]">Recency of last deal, meeting cadence, response rate και probability to expand wallet share.</p>
+              <div className="rounded-lg border border-[var(--border)] p-4">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Commercial momentum</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">Recency of last deal, meeting cadence, response rate και probability to expand wallet share.</p>
               </div>
-              <div className="rounded-lg border border-[#E5E5E5] p-4">
-                <p className="text-sm font-semibold text-[#1A1A1A]">Operational fit</p>
-                <p className="mt-1 text-sm text-[#6B7280]">Availability, lead times, dependency on scarce SKUs και service complexity.</p>
+              <div className="rounded-lg border border-[var(--border)] p-4">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Operational fit</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">Availability, lead times, dependency on scarce SKUs και service complexity.</p>
               </div>
             </div>
           </div>
@@ -135,19 +135,19 @@ export function AccountIntelligencePage({ onSectionChange }: AccountIntelligence
           <div className="p-6">
             <div className="mb-4 flex items-center gap-2">
               <Wallet size={18} className="text-[var(--nts-accent-text)]" />
-              <h3 className="text-lg font-semibold text-[#1A1A1A]">Signals to import next</h3>
+              <h3 className="text-lg font-semibold text-[var(--text-primary)]">Signals to import next</h3>
             </div>
-            <div className="space-y-3 text-sm text-[#6B7280]">
-              <div className="rounded-lg border border-[#E5E5E5] p-4">
-                <p className="font-semibold text-[#1A1A1A]">Invoices & receivables</p>
+            <div className="space-y-3 text-sm text-[var(--text-muted)]">
+              <div className="rounded-lg border border-[var(--border)] p-4">
+                <p className="font-semibold text-[var(--text-primary)]">Invoices & receivables</p>
                 <p className="mt-1">Για DSO, overdue exposure και πραγματική συνεισφορά κάθε account.</p>
               </div>
-              <div className="rounded-lg border border-[#E5E5E5] p-4">
-                <p className="font-semibold text-[#1A1A1A]">Customer list / CRM export</p>
+              <div className="rounded-lg border border-[var(--border)] p-4">
+                <p className="font-semibold text-[var(--text-primary)]">Customer list / CRM export</p>
                 <p className="mt-1">Για territory ownership, industry classification και stage-based follow-up.</p>
               </div>
-              <div className="rounded-lg border border-[#E5E5E5] p-4">
-                <p className="font-semibold text-[#1A1A1A]">Quote history</p>
+              <div className="rounded-lg border border-[var(--border)] p-4">
+                <p className="font-semibold text-[var(--text-primary)]">Quote history</p>
                 <p className="mt-1">Για win/loss learnings, discount discipline και average deal cycle by segment.</p>
               </div>
             </div>
@@ -159,26 +159,26 @@ export function AccountIntelligencePage({ onSectionChange }: AccountIntelligence
         <div className="p-6">
           <div className="mb-4 flex items-center gap-2">
             <BarChart3 size={18} className="text-[var(--nts-accent-text)]" />
-            <h3 className="text-lg font-semibold text-[#1A1A1A]">Activation path</h3>
+            <h3 className="text-lg font-semibold text-[var(--text-primary)]">Activation path</h3>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-              <p className="text-sm font-semibold text-[#1A1A1A]">1. Define account tiers</p>
-              <p className="mt-1 text-sm text-[#6B7280]">Strategic, growth, defend και opportunistic accounts ανά margin και opportunity size.</p>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">1. Define account tiers</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">Strategic, growth, defend και opportunistic accounts ανά margin και opportunity size.</p>
               <Button variant="secondary" size="sm" className="mt-4" onClick={() => onSectionChange?.('reports')}>
                 Open Reports
               </Button>
             </div>
-            <div className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-              <p className="text-sm font-semibold text-[#1A1A1A]">2. Connect finance truth</p>
-              <p className="mt-1 text-sm text-[#6B7280]">ERP / invoicing imports για να συνδεθεί account score με πραγματικό revenue quality.</p>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">2. Connect finance truth</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">ERP / invoicing imports για να συνδεθεί account score με πραγματικό revenue quality.</p>
               <Button variant="secondary" size="sm" className="mt-4" onClick={() => onSectionChange?.('data')}>
                 Open Data Import
               </Button>
             </div>
-            <div className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-              <p className="text-sm font-semibold text-[#1A1A1A]">3. Operationalize actions</p>
-              <p className="mt-1 text-sm text-[#6B7280]">Πέρασε renewals, cross-sell και rescue motions σε `Sales Pipeline` και `Coordination`.</p>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">3. Operationalize actions</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">Πέρασε renewals, cross-sell και rescue motions σε `Sales Pipeline` και `Coordination`.</p>
               <Button variant="secondary" size="sm" className="mt-4" onClick={() => onSectionChange?.('sales')}>
                 Open Sales Pipeline
               </Button>
@@ -189,11 +189,11 @@ export function AccountIntelligencePage({ onSectionChange }: AccountIntelligence
 
       <Card>
         <div className="p-5">
-          <div className="mb-3 flex items-center gap-2 text-[#1A1A1A]">
+          <div className="mb-3 flex items-center gap-2 text-[var(--text-primary)]">
             <FileSpreadsheet size={18} className="text-[var(--nts-accent-text)]" />
             <h3 className="font-semibold">B2B account dataset</h3>
           </div>
-          <p className="text-sm leading-relaxed text-[#6B7280]">
+          <p className="text-sm leading-relaxed text-[var(--text-muted)]">
             Το edition είναι έτοιμο να υποδεχθεί customer list, invoicing και quote history. Μέχρι να μπουν αυτά τα feeds,
             η σελίδα λειτουργεί σαν scoring framework για να ευθυγραμμίσεις διοίκηση, πωλήσεις και finance γύρω από τους
             σωστούς B2B λογαριασμούς.

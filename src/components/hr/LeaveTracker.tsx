@@ -59,7 +59,7 @@ export function LeaveTracker() {
     await updateLeave.mutateAsync({ id, status });
   };
 
-  const inputCls = 'w-full rounded-lg border border-[#1f2328]/15 bg-white px-3 py-2 text-sm text-[var(--nts-charcoal)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30';
+  const inputCls = 'w-full rounded-lg border border-[var(--text-primary)]/15 bg-white px-3 py-2 text-sm text-[var(--nts-charcoal)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30';
 
   return (
     <div className="space-y-5">
@@ -78,7 +78,7 @@ export function LeaveTracker() {
       </div>
 
       <Card padding="none">
-        <div className="flex items-center justify-between p-5 border-b border-[#eef0f3]">
+        <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
           <CardHeader
             title="Αιτήσεις αδείας"
             subtitle={`${leaves.length} εγγραφές`}
@@ -97,7 +97,7 @@ export function LeaveTracker() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#eef0f3] bg-[#f9fafb]">
+                <tr className="border-b border-[var(--border)] bg-[var(--surface-1)]">
                   {['Εργαζόμενος', 'Τύπος', 'Από', 'Έως', 'Ημέρες', 'Κατάσταση', 'Ενέργειες'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--nts-medium-gray)]">{h}</th>
                   ))}
@@ -105,7 +105,7 @@ export function LeaveTracker() {
               </thead>
               <tbody>
                 {leaves.map((lv) => (
-                  <tr key={lv.id} className="border-b border-[#eef0f3] hover:bg-[#f9fafb]/60">
+                  <tr key={lv.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-1)]/60">
                     <td className="px-4 py-3 font-medium text-[var(--nts-charcoal)]">{lv.employeeName}</td>
                     <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{leaveTypeLabel[lv.type]}</td>
                     <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{lv.startDate}</td>

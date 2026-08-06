@@ -22,7 +22,7 @@ export function StrategyBriefingQuickStrip({
 
   return (
     <>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-[#E5E7EB] bg-gradient-to-r from-[var(--nts-accent)]/[0.06] to-transparent px-4 py-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-[var(--border)] bg-gradient-to-r from-[var(--nts-accent)]/[0.06] to-transparent px-4 py-3">
         <div className="flex items-start gap-3 min-w-0">
           <div className="p-2 rounded-lg bg-[var(--nts-accent)]/15 text-[var(--nts-accent-text)] shrink-0">
             <Sparkles size={18} />

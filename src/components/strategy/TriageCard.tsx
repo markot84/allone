@@ -299,7 +299,7 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
   // ── LOADING STATE ─────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-[#E5E7EB] bg-gradient-to-br from-[#FAFAFA] to-white overflow-hidden shadow-sm animate-pulse">
+      <div className="rounded-xl border border-[var(--border)] bg-gradient-to-br from-[var(--surface-1)] to-white overflow-hidden shadow-sm animate-pulse">
         <div className="px-4 py-3 border-b border-[#E8E8E8] bg-white">
           <div className="h-5 w-72 bg-gray-100 rounded" />
         </div>
@@ -368,14 +368,14 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
   };
 
   return (
-    <div className="rounded-xl border border-[#E5E7EB] bg-gradient-to-br from-[#FAFAFA] to-white overflow-hidden shadow-sm">
+    <div className="rounded-xl border border-[var(--border)] bg-gradient-to-br from-[var(--surface-1)] to-white overflow-hidden shadow-sm">
       {/* HEADER — same pattern as Product Intelligence bridge */}
       <div className="border-b border-[#E8E8E8] bg-white">
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-2 sm:px-4 sm:py-2.5">
           <div className="shrink-0 p-1 rounded-lg bg-[#7C3AED]/10">
             <Target size={14} className="text-[#7C3AED]" aria-hidden />
           </div>
-          <span className="shrink-0 text-sm font-bold tracking-tight text-[#111827] sm:text-base">
+          <span className="shrink-0 text-sm font-bold tracking-tight text-[var(--text-primary)] sm:text-base">
             Εμπορικές Προτεραιότητες
           </span>
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 sm:justify-center">

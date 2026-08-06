@@ -35,11 +35,27 @@ export function relativeLuminance([r, g, b]: Rgb): number {
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 
-/** Contrast ratio against pure white — the app background, so this is the ratio that usually matters. */
+/** Contrast ratio against pure white. */
 export function contrastOnWhite(value: string): number | null {
   const rgb = toRgb(value);
   if (!rgb) return null;
   return 1.05 / (relativeLuminance(rgb) + 0.05);
+}
+
+/**
+ * Contrast ratio between any two colours.
+ *
+ * `contrastOnWhite` assumed the canvas, which held for exactly as long as there was one theme. A
+ * ratio measured against white says nothing useful about text on the cockpit's navy — it is not a
+ * stricter answer, it is an answer to a different question.
+ */
+export function contrastRatio(foreground: string, background: string): number | null {
+  const fg = toRgb(foreground);
+  const bg = toRgb(background);
+  if (!fg || !bg) return null;
+  const a = relativeLuminance(fg);
+  const b = relativeLuminance(bg);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
 /** Mix a colour toward white. `amount` 0 = untouched, 1 = white. */

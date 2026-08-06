@@ -15,8 +15,8 @@ const statusConfig = {
   draft: {
     label: 'Προσχέδιο',
     icon: <FileText size={14} className="text-[var(--nts-medium-gray)]" />,
-    color: '#4A4A4A',
-    bgColor: '#F5F5F5'
+    color: 'var(--text-secondary)',
+    bgColor: 'var(--surface-2)'
   },
   pending_review: {
     label: 'Σε Αναμονή Αξιολόγησης',
@@ -33,8 +33,8 @@ const statusConfig = {
   implementing: {
     label: 'Σε Εφαρμογή',
     icon: <Rocket size={14} className="text-[var(--nts-medium-gray)]" />,
-    color: '#6B7280',
-    bgColor: '#F3F4F6'
+    color: 'var(--text-muted)',
+    bgColor: 'var(--surface-2)'
   }
 };
 
@@ -147,9 +147,9 @@ export function ApprovalWorkflow({ status, onStatusChange }: ApprovalWorkflowPro
             e.stopPropagation();
             setShowDropdown((v) => !v);
           }}
-          className="p-2 rounded-lg hover:bg-[#F5F5F5] transition-colors"
+          className="p-2 rounded-lg hover:bg-[var(--surface-2)] transition-colors"
         >
-          <ChevronDown size={16} className="text-[#4A4A4A]" />
+          <ChevronDown size={16} className="text-[var(--text-secondary)]" />
         </button>
 
         {showDropdown && dropdownStyle &&
@@ -158,7 +158,7 @@ export function ApprovalWorkflow({ status, onStatusChange }: ApprovalWorkflowPro
               ref={dropdownRef}
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="fixed bg-white rounded-lg shadow-lg border border-[#E5E5E5] py-1 z-[1000] max-h-[280px] overflow-y-auto"
+              className="fixed bg-white rounded-lg shadow-lg border border-[var(--border)] py-1 z-[1000] max-h-[280px] overflow-y-auto"
               style={{
                 top: dropdownStyle.top,
                 right: dropdownStyle.right,
@@ -174,15 +174,15 @@ export function ApprovalWorkflow({ status, onStatusChange }: ApprovalWorkflowPro
                     setShowDropdown(false);
                   }}
                   className={`
-                    w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-[#F5F5F5]
-                    ${key === status ? 'bg-[var(--nts-light-gray)] text-[var(--nts-accent-text)]' : 'text-[#1A1A1A]'}
+                    w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-[var(--surface-2)]
+                    ${key === status ? 'bg-[var(--nts-light-gray)] text-[var(--nts-accent-text)]' : 'text-[var(--text-primary)]'}
                   `}
                 >
                   <span className="inline-flex shrink-0">{cfg.icon}</span>
                   {cfg.label}
                 </button>
               ))}
-              <div className="border-t border-[#E5E5E5] my-1" />
+              <div className="border-t border-[var(--border)] my-1" />
               <button
                 onClick={() => {
                   onStatusChange('draft');

@@ -93,7 +93,7 @@ function ProductIntelligenceSkeleton() {
       >
         <Loader2 className="h-5 w-5 animate-spin text-[var(--nts-accent-text)] flex-shrink-0" aria-hidden />
         <span className="font-semibold text-[#9A3412]">Φόρτωση δεδομένων προϊόντων…</span>
-        <span className="text-[#78716C] text-xs sm:text-sm">
+        <span className="text-[var(--text-muted)] text-xs sm:text-sm">
           Εμφανίζεται το layout· τα νούμερα ενημερώνονται όταν ολοκληρωθεί το sync.
         </span>
       </div>
@@ -104,31 +104,31 @@ function ProductIntelligenceSkeleton() {
             key={i}
             className="rounded-xl border border-[#E8E8E8] bg-white p-4 h-[108px] shadow-sm"
           >
-            <div className="h-3 w-28 bg-[#E5E7EB] rounded-md mb-4 animate-pulse" />
-            <div className="h-8 w-24 bg-[#E5E7EB] rounded-md animate-pulse" />
+            <div className="h-3 w-28 bg-[var(--border)] rounded-md mb-4 animate-pulse" />
+            <div className="h-8 w-24 bg-[var(--border)] rounded-md animate-pulse" />
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-[88px] rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] animate-pulse" />
+          <div key={i} className="h-[88px] rounded-xl border border-[#E8E8E8] bg-[var(--surface-1)] animate-pulse" />
         ))}
       </div>
 
       <Card padding="none" className="overflow-hidden border-[#E8E8E8] shadow-sm">
-        <div className="p-4 border-b border-[#E5E5E5] flex flex-wrap gap-3">
-          <div className="h-10 flex-1 min-w-[200px] max-w-md bg-[#F3F4F6] rounded-lg animate-pulse" />
-          <div className="h-10 w-36 bg-[#F3F4F6] rounded-lg animate-pulse hidden sm:block" />
-          <div className="h-10 w-36 bg-[#F3F4F6] rounded-lg animate-pulse hidden md:block" />
+        <div className="p-4 border-b border-[var(--border)] flex flex-wrap gap-3">
+          <div className="h-10 flex-1 min-w-[200px] max-w-md bg-[var(--surface-2)] rounded-lg animate-pulse" />
+          <div className="h-10 w-36 bg-[var(--surface-2)] rounded-lg animate-pulse hidden sm:block" />
+          <div className="h-10 w-36 bg-[var(--surface-2)] rounded-lg animate-pulse hidden md:block" />
         </div>
         <div className="overflow-x-auto max-h-[min(52vh,480px)]">
           <table className="w-full">
             <thead>
-              <tr className="bg-[#F5F5F5]">
+              <tr className="bg-[var(--surface-2)]">
                 {['Προϊόν', 'Margin', 'Stock', 'DOS', 'Τιμή'].map((label, i) => (
                   <th key={label + i} className="px-3 py-2.5 text-left">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                       {label}
                     </span>
                   </th>
@@ -137,30 +137,30 @@ function ProductIntelligenceSkeleton() {
             </thead>
             <tbody>
               {Array.from({ length: 14 }).map((_, row) => (
-                <tr key={row} className="border-b border-[#F3F4F6]">
+                <tr key={row} className="border-b border-[var(--surface-2)]">
                   <td className="px-3 py-3">
-                    <div className="h-4 bg-[#E5E7EB] rounded animate-pulse w-[min(100%,14rem)]" />
+                    <div className="h-4 bg-[var(--border)] rounded animate-pulse w-[min(100%,14rem)]" />
                   </td>
                   <td className="px-3 py-3">
-                    <div className="h-4 w-12 bg-[#E5E7EB] rounded animate-pulse" />
+                    <div className="h-4 w-12 bg-[var(--border)] rounded animate-pulse" />
                   </td>
                   <td className="px-3 py-3 hidden sm:table-cell">
-                    <div className="h-4 w-10 bg-[#E5E7EB] rounded animate-pulse" />
+                    <div className="h-4 w-10 bg-[var(--border)] rounded animate-pulse" />
                   </td>
                   <td className="px-3 py-3 hidden md:table-cell">
-                    <div className="h-4 w-8 bg-[#E5E7EB] rounded animate-pulse" />
+                    <div className="h-4 w-8 bg-[var(--border)] rounded animate-pulse" />
                   </td>
                   <td className="px-3 py-3 hidden sm:table-cell">
-                    <div className="h-4 w-16 bg-[#E5E7EB] rounded animate-pulse" />
+                    <div className="h-4 w-16 bg-[var(--border)] rounded animate-pulse" />
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div className="p-4 border-t border-[#E5E5E5] flex justify-between">
-          <div className="h-4 w-48 bg-[#F3F4F6] rounded animate-pulse" />
-          <div className="h-9 w-56 bg-[#F3F4F6] rounded-lg animate-pulse" />
+        <div className="p-4 border-t border-[var(--border)] flex justify-between">
+          <div className="h-4 w-48 bg-[var(--surface-2)] rounded animate-pulse" />
+          <div className="h-9 w-56 bg-[var(--surface-2)] rounded-lg animate-pulse" />
         </div>
       </Card>
     </div>
@@ -529,14 +529,14 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         <PageHeader
           title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Product Intelligence</h2>}
           description={
-            <p className="text-sm text-[#4A4A4A] sm:text-base">Παρακολούθηση αποθέματος και απόδοσης προϊόντων</p>
+            <p className="text-sm text-[var(--text-secondary)] sm:text-base">Παρακολούθηση αποθέματος και απόδοσης προϊόντων</p>
           }
         />
         <Card padding="lg" className="text-center py-12">
-          <p className="text-[#4A4A4A] mb-4">
+          <p className="text-[var(--text-secondary)] mb-4">
             Δεν υπάρχουν imported προϊόντα ακόμα.
           </p>
-          <p className="text-sm text-[#4A4A4A]">
+          <p className="text-sm text-[var(--text-secondary)]">
             Ανεβάστε αρχείο ή συνδέστε πλατφόρμα από την{' '}
             <button
               type="button"
@@ -564,7 +564,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         toolbarAriaLabel="Εξαγωγή και διαγραφή προϊόντων"
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Product Intelligence</h2>}
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Παρακολούθηση αποθέματος και απόδοσης προϊόντων
           </p>
         }
@@ -702,7 +702,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           label={includeNoStock ? 'Total SKUs' : 'Active SKUs'}
           value={formatNumber(displayTotalSkus)}
           icon={<Package size={20} />}
-          color="#78716C"
+          color="var(--text-muted)"
           tooltip={includeNoStock ? 'Συνολικός αριθμός SKU στο ERP catalog.' : 'Ενεργά SKU με διαθέσιμο απόθεμα/stock signal, η βάση για συμπεράσματα και προτάσεις.'}
           active={stockCardFilter === 'all'}
           onClick={() => selectStockCardFilter('all')}
@@ -768,7 +768,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 border-l-4
                 ${alert.type === 'critical' ? 'border-l-[#EF4444] bg-[#FEE2E2]' :
                   alert.type === 'warning' ? 'border-l-[#F59E0B] bg-[#FEF3C7]' :
-                  'border-l-[#78716C] bg-[#F3F4F6]'}
+                  'border-l-[var(--text-muted)] bg-[var(--surface-2)]'}
               `}
             >
               <div className="flex items-start gap-3">
@@ -777,10 +777,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 ) : alert.type === 'warning' ? (
                   <AlertTriangle size={20} className="text-[#F59E0B] flex-shrink-0" />
                 ) : (
-                  <Info size={20} className="text-[#78716C] flex-shrink-0" />
+                  <Info size={20} className="text-[var(--text-muted)] flex-shrink-0" />
                 )}
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-[#1A1A1A]">{alert.message}</p>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">{alert.message}</p>
                   <button 
                     className="text-xs font-medium text-[var(--nts-accent-text)] mt-1 hover:underline cursor-pointer"
                     onClick={() => {
@@ -816,13 +816,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
       {/* Product Table */}
       <Card padding="none" data-product-table>
-        <div className="px-4 pt-4 pb-3 border-b border-[#E5E5E5] flex flex-wrap items-end gap-3 bg-[#FAFAFA]/60">
+        <div className="px-4 pt-4 pb-3 border-b border-[var(--border)] flex flex-wrap items-end gap-3 bg-[var(--surface-1)]/60">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Βάση ημερομηνίας</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Βάση ημερομηνίας</span>
             <select
               value={productDateMode}
               onChange={(e) => setProductDateMode(e.target.value as 'imported' | 'first_available')}
-              className="min-w-[200px] rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#374151] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+              className="min-w-[200px] rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-secondary)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
               aria-label="Βάση ημερομηνίας για φίλτρο"
             >
               <option value="imported">Ημερομηνία εισαγωγής</option>
@@ -830,7 +830,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Περίοδος</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Περίοδος</span>
             <DateRangePicker
               from={productDateFrom}
               to={productDateTo}
@@ -845,23 +845,23 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             />
           </div>
           {productDateFrom && productDateTo && (
-            <p className="text-xs text-[#78716C] max-w-md pb-1">
+            <p className="text-xs text-[var(--text-muted)] max-w-md pb-1">
               Εμφανίζονται SKU με {productDateMode === 'imported' ? 'ημερομηνία εισαγωγής' : 'πρώτη διαθεσιμότητα'} εντός της περιόδου. Το φίλτρο εφαρμόζεται server-side στο πλήρες inventory.
             </p>
           )}
         </div>
         {/* Filters — Excel-style filters (value list) + export */}
-        <div className="p-4 border-b border-[#E5E5E5]">
+        <div className="p-4 border-b border-[var(--border)]">
           <div className="flex flex-wrap gap-3 items-end">
             <div className="relative flex-1 min-w-[200px]">
-              <label className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] mb-1 block">Προϊόν / SKU</label>
-              <Search size={18} className="absolute left-3 top-[26px] text-[#9CA3AF]" />
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-1 block">Προϊόν / SKU</label>
+              <Search size={18} className="absolute left-3 top-[26px] text-[var(--text-muted)]" />
               <input
                 type="text"
                 placeholder="Όνομα ή SKU…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
+                className="w-full pl-10 pr-4 py-2 bg-[var(--surface-2)] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
               />
             </div>
             <ColumnExcelFilter
@@ -877,17 +877,17 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               onChange={handleTagIncludeChange}
               selectionMode="additive"
             />
-            <label className="flex min-h-[38px] items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#374151]">
+            <label className="flex min-h-[38px] items-center gap-2 rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-secondary)]">
               <input
                 type="checkbox"
                 checked={includeNoStock}
                 onChange={(e) => handleIncludeNoStockChange(e.target.checked)}
-                className="rounded border-[#D1D5DB] text-[var(--nts-accent-text)] focus:ring-[var(--nts-accent)]/30"
+                className="rounded border-[var(--border-strong)] text-[var(--nts-accent-text)] focus:ring-[var(--nts-accent)]/30"
               />
               <span className="whitespace-nowrap">Εμφάνιση no stock</span>
             </label>
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Margin tier</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Margin tier</span>
               <DropdownFilter
                 value={marginFilter}
                 onChange={setMarginFilter}
@@ -900,7 +900,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               />
             </div>
             <div className="flex flex-wrap items-end gap-2 sm:ml-auto">
-              <div className="text-sm text-[#4A4A4A] min-w-[120px]">
+              <div className="text-sm text-[var(--text-secondary)] min-w-[120px]">
                 {formatNumber(serverFilteredTotal)} γραμμές
               </div>
               <Button
@@ -933,35 +933,35 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         <div ref={tableScrollRef} className="overflow-x-auto max-h-[60vh] overflow-y-auto">
           <table className="w-full">
             <thead className="sticky top-0 z-10">
-              <tr className="bg-[#F5F5F5]">
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A]">
+              <tr className="bg-[var(--surface-2)]">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)]">
                   <button
                     onClick={() => handleSort('name')}
-                    className="flex items-center gap-1 hover:text-[#1A1A1A]"
+                    className="flex items-center gap-1 hover:text-[var(--text-primary)]"
                   >
                     Product
                     <SortIcon field="name" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden lg:table-cell">
                   <span className="inline-flex items-center gap-1">
                     Category
                     <Tooltip content="Κατηγορία προϊόντος (π.χ. από DSS: Προμηθευτής)." size={12} />
                   </span>
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A]">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)]">
                   <button
                     onClick={() => handleSort('margin_percentage')}
-                    className="flex items-center gap-1 hover:text-[#1A1A1A]"
+                    className="flex items-center gap-1 hover:text-[var(--text-primary)]"
                   >
                     Margin
                     <SortIcon field="margin_percentage" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden sm:table-cell">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden sm:table-cell">
                   <button
                     onClick={() => handleSort('stock_level')}
-                    className="flex items-center gap-1 hover:text-[#1A1A1A]"
+                    className="flex items-center gap-1 hover:text-[var(--text-primary)]"
                   >
                     <Tooltip content="Διαθέσιμο απόθεμα ανά SKU. Όπου υπάρχει ERP ανάλυση, εμφανίζεται και το stock on hand." size={12}>
                       Stock
@@ -969,38 +969,38 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     <SortIcon field="stock_level" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden md:table-cell">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden md:table-cell">
                   <Tooltip content="Εκτιμώμενες ημέρες αποθέματος βάσει ρυθμού πωλήσεων (Days of Stock)." size={12}>
                     <button
                       onClick={() => handleSort('stock_age_days')}
-                      className="flex items-center gap-1 hover:text-[#1A1A1A]"
+                      className="flex items-center gap-1 hover:text-[var(--text-primary)]"
                     >
                       DOS
                       <SortIcon field="stock_age_days" current={sortField} direction={sortDirection} />
                     </button>
                   </Tooltip>
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden lg:table-cell">
                   Tag
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden sm:table-cell">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden sm:table-cell">
                   <button
                     onClick={() => handleSort('price')}
-                    className="flex items-center gap-1 hover:text-[#1A1A1A]"
+                    className="flex items-center gap-1 hover:text-[var(--text-primary)]"
                   >
                     Price
                     <SortIcon field="price" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
                 {showVelocity && (
-                  <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden md:table-cell">
+                  <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden md:table-cell">
                     <Tooltip content="Μέσος ρυθμός πωλήσεων ανά ημέρα σε 90 / 30 / 7 ημέρες — δείχνει επιτάχυνση ή επιβράδυνση, όχι ημερήσιο ιστορικό." size={12}>
                       Trend
                     </Tooltip>
                   </th>
                 )}
                 {benchmarkCount > 0 && (
-                  <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
+                  <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden lg:table-cell">
                     <Tooltip content="Απόκλιση τιμής σε σχέση με τη μέση τιμή αγοράς (Google Merchant Center)." size={12}>
                       vs Market
                     </Tooltip>
@@ -1047,8 +1047,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         </div>
 
         {/* Pagination */}
-        <div className="p-4 border-t border-[#E5E5E5] flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-[#4A4A4A]">
+        <div className="p-4 border-t border-[var(--border)] flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-[var(--text-secondary)]">
             {serverFilteredTotal === 0
               ? 'Δεν βρέθηκαν προϊόντα'
               : `Εμφανίζονται ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, serverFilteredTotal)} από ${formatNumber(serverFilteredTotal)} προϊόντα`}
@@ -1063,7 +1063,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             >
               Προηγούμενα
             </Button>
-            <span className="text-sm text-[#4A4A4A] px-2">
+            <span className="text-sm text-[var(--text-secondary)] px-2">
               Σελίδα {currentPage} από {totalPages}
             </span>
             <Button
@@ -1133,12 +1133,12 @@ function SummaryCard({ label, value, subValue, icon, color, tooltip, active, onC
           <span style={{ color }}>{icon}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-[#4A4A4A]">
+          <p className="text-sm text-[var(--text-secondary)]">
             {tooltip ? <Tooltip content={tooltip}>{label}</Tooltip> : label}
           </p>
-          <p className="text-xl font-bold text-[#1A1A1A] font-mono">{value}</p>
+          <p className="text-xl font-bold text-[var(--text-primary)] font-mono">{value}</p>
           {subValue && (
-            <p className="text-xs text-[#9CA3AF]">{subValue}</p>
+            <p className="text-xs text-[var(--text-muted)]">{subValue}</p>
           )}
         </div>
         <div className="w-2 h-2 rounded-full flex-shrink-0 mt-2 transition-colors duration-200" style={{ backgroundColor: active ? color : 'transparent' }} />
@@ -1191,19 +1191,19 @@ function ProductRow({
   return (
     <tr
       style={{ height }}
-      className="border-b border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors duration-[var(--dur-state)]"
+      className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors duration-[var(--dur-state)]"
     >
       <td className="px-3 py-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <ProductThumbnail src={thumbUrl || undefined} alt={product.name} size="sm" />
           <div className="min-w-0">
-            <p className="text-xs font-medium text-[#1A1A1A] truncate">{product.name}</p>
+            <p className="text-xs font-medium text-[var(--text-primary)] truncate">{product.name}</p>
             <p className="text-[10px] text-[var(--text-muted)] truncate">{product.sku}</p>
           </div>
         </div>
       </td>
       <td className="px-3 py-2 hidden lg:table-cell">
-        <span className="text-xs text-[#4A4A4A] truncate block max-w-[120px]">{product.category}</span>
+        <span className="text-xs text-[var(--text-secondary)] truncate block max-w-[120px]">{product.category}</span>
       </td>
       <td className="px-3 py-2">
         <Badge
@@ -1226,7 +1226,7 @@ function ProductRow({
               size="sm"
               className="w-10"
             />
-            <span className="text-xs font-semibold tabular-nums text-[#1A1A1A]" data-numeric>
+            <span className="text-xs font-semibold tabular-nums text-[var(--text-primary)]" data-numeric>
               {formatNumber(effectiveStock)}
             </span>
           </div>
@@ -1257,7 +1257,7 @@ function ProductRow({
           {(() => {
             const dos = getDaysOfStock(product);
             if (useProcurementRowModel && dos === Infinity) {
-              return <span className="text-[#9CA3AF]">—</span>;
+              return <span className="text-[var(--text-muted)]">—</span>;
             }
             return dos === Infinity ? '∞' : `${Math.round(dos)}d`;
           })()}
@@ -1283,11 +1283,11 @@ function ProductRow({
             {productDisplayTag(product)}
           </Badge>
         ) : (
-          <span className="text-[10px] text-[#9CA3AF]">—</span>
+          <span className="text-[10px] text-[var(--text-muted)]">—</span>
         )}
       </td>
       <td className="px-3 py-2 hidden sm:table-cell">
-        <span className="text-xs font-mono text-[#1A1A1A]" data-numeric>
+        <span className="text-xs font-mono text-[var(--text-primary)]" data-numeric>
           €{formatCurrency(product.price ?? 0, 2)}
         </span>
       </td>
@@ -1301,7 +1301,7 @@ function ProductRow({
           {(() => {
             const candidates = [product.sku, product.id, product.name].filter(Boolean).map(k => k!.toLowerCase());
             const bm = candidates.reduce<{ priceDiff: number; benchmarkPrice: number } | undefined>((found, k) => found || benchmarkMap.get(k), undefined);
-            if (!bm) return <span className="text-[10px] text-[#9CA3AF]">—</span>;
+            if (!bm) return <span className="text-[10px] text-[var(--text-muted)]">—</span>;
             const diff = bm.priceDiff;
             return (
               <span
@@ -1351,20 +1351,20 @@ function DropdownFilter({ value, onChange, options }: DropdownFilterProps) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="px-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm flex items-center gap-2 hover:border-[var(--nts-accent)] transition-all"
+        className="px-4 py-2 bg-[var(--surface-2)] border border-transparent rounded-lg text-sm flex items-center gap-2 hover:border-[var(--nts-accent)] transition-all"
       >
         <span>{selected?.label ?? value}</span>
-        <ChevronDown size={14} className="text-[#9CA3AF]" />
+        <ChevronDown size={14} className="text-[var(--text-muted)]" />
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-[#E5E5E5] rounded-lg shadow-lg max-h-64 overflow-y-auto min-w-[200px]">
+        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-[var(--border)] rounded-lg shadow-lg max-h-64 overflow-y-auto min-w-[200px]">
           {options.map(o => (
             <button
               key={o.value}
               type="button"
               onClick={() => { onChange(o.value); setOpen(false); }}
-              className={`w-full text-left px-4 py-2 text-sm hover:bg-[#F5F5F5] transition-colors ${
-                o.value === value ? 'text-[var(--nts-accent-text)] font-medium bg-[#FFF7ED]' : 'text-[#1A1A1A]'
+              className={`w-full text-left px-4 py-2 text-sm hover:bg-[var(--surface-2)] transition-colors ${
+                o.value === value ? 'text-[var(--nts-accent-text)] font-medium bg-[#FFF7ED]' : 'text-[var(--text-primary)]'
               }`}
             >
               {o.label}

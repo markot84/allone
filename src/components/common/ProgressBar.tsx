@@ -28,12 +28,12 @@ export function ProgressBar({
   return (
     <div className={className}>
       {showLabel && (
-        <div className="flex justify-between text-xs text-[#4A4A4A] mb-1">
+        <div className="flex justify-between text-xs text-[var(--text-secondary)] mb-1">
           <span>{value}</span>
           <span>{max}</span>
         </div>
       )}
-      <div className={`bg-[#E5E5E5] rounded-full overflow-hidden ${sizes[size]}`}>
+      <div className={`bg-[var(--border)] rounded-full overflow-hidden ${sizes[size]}`}>
         <motion.div
           className="h-full rounded-full"
           style={{ backgroundColor: color }}

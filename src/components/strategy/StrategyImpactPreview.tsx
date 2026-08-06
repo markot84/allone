@@ -217,16 +217,16 @@ export function StrategyImpactSummary({
         className="relative z-[1] w-full max-w-3xl mx-auto px-4 pb-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="rounded-2xl border border-[#E5E5E5] bg-white shadow-[0_-4px_24px_rgba(0,0,0,0.12)] p-4">
+        <div className="rounded-2xl border border-[var(--border)] bg-white shadow-[0_-4px_24px_rgba(0,0,0,0.12)] p-4">
         <div className="flex items-start justify-between gap-2">
           <div id="strategy-impact-summary-title" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-1 min-w-0">
           <div className="flex items-center gap-2 text-sm min-w-0">
-            <span className="font-medium text-[#1A1A1A] truncate">{fromName}</span>
+            <span className="font-medium text-[var(--text-primary)] truncate">{fromName}</span>
             <ArrowRight size={14} className="text-[var(--nts-accent-text)] flex-shrink-0" />
-            <span className="font-medium text-[#1A1A1A] truncate">{toName}</span>
+            <span className="font-medium text-[var(--text-primary)] truncate">{toName}</span>
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-[#4A4A4A] flex-wrap">
+          <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)] flex-wrap">
             {impacts.up > 0 && (
               <span className="flex items-center gap-1 text-[#22C55E] font-medium">
                 <ArrowUp size={12} /> {impacts.up} προϊόντα ανεβαίνουν
@@ -238,7 +238,7 @@ export function StrategyImpactSummary({
               </span>
             )}
             {impacts.same > 0 && (
-              <span className="flex items-center gap-1 text-[#9CA3AF]">
+              <span className="flex items-center gap-1 text-[var(--text-muted)]">
                 <Minus size={12} /> {impacts.same} ίδια προϊόντα
               </span>
             )}
@@ -247,7 +247,7 @@ export function StrategyImpactSummary({
           <button
             type="button"
             onClick={onCancel}
-            className="shrink-0 p-2 rounded-lg hover:bg-[#F3F4F6] text-[#6B7280] hover:text-[#111827] transition-colors"
+            className="shrink-0 p-2 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             aria-label="Ακύρωση (κλείσιμο)"
           >
             <X size={18} />
@@ -255,7 +255,7 @@ export function StrategyImpactSummary({
         </div>
 
         {impacts.usedSample && (
-          <p className="text-[10px] text-[#9CA3AF] mt-2 leading-snug">
+          <p className="text-[10px] text-[var(--text-muted)] mt-2 leading-snug">
             Έλεγχος επίδρασης σε {impacts.sampleSize.toLocaleString('el-GR')} από{' '}
             {impacts.catalogTotal.toLocaleString('el-GR')} SKU (δείγμα για ταχύτητα· τα ↑/↓/ίδια αφορούν μόνο αυτό το
             υποσύνολο).
@@ -263,9 +263,9 @@ export function StrategyImpactSummary({
         )}
 
         {/* Duration selector */}
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#F5F5F5]">
-          <Clock size={13} className="text-[#9CA3AF] flex-shrink-0" />
-          <span className="text-xs text-[#9CA3AF] flex-shrink-0">Διάρκεια</span>
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[var(--surface-2)]">
+          <Clock size={13} className="text-[var(--text-muted)] flex-shrink-0" />
+          <span className="text-xs text-[var(--text-muted)] flex-shrink-0">Διάρκεια</span>
           <div className="flex items-center gap-1 flex-wrap">
             {[7, 14, 30, 60, 90].map(d => (
               <button
@@ -274,7 +274,7 @@ export function StrategyImpactSummary({
                 className={`px-2 py-0.5 text-[11px] font-medium rounded border transition-all ${
                   duration === d
                     ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
-                    : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+                    : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]/50'
                 }`}
               >
                 {d}ημ
@@ -285,7 +285,7 @@ export function StrategyImpactSummary({
               className={`px-2 py-0.5 text-[11px] font-medium rounded border transition-all ${
                 duration === 'ongoing'
                   ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
-                  : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+                  : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]/50'
               }`}
             >
               <Infinity size={11} />
@@ -297,7 +297,7 @@ export function StrategyImpactSummary({
           <button
             type="button"
             onClick={onCancel}
-            className="w-full sm:w-auto px-4 py-2 text-xs font-medium rounded-lg border border-[#D1D5DB] text-[#374151] bg-white hover:bg-[#F9FAFB] transition-colors"
+            className="w-full sm:w-auto px-4 py-2 text-xs font-medium rounded-lg border border-[var(--border-strong)] text-[var(--text-secondary)] bg-white hover:bg-[var(--surface-1)] transition-colors"
           >
             Ακύρωση
           </button>
@@ -305,7 +305,7 @@ export function StrategyImpactSummary({
           <button
             type="button"
             onClick={onDetails}
-            className="px-3 py-1.5 text-xs font-medium text-[#4A4A4A] hover:text-[var(--nts-accent-text)] transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--nts-accent-text)] transition-colors"
           >
             <ChevronDown size={12} className="inline mr-1" />
             Λεπτομέρειες
@@ -432,27 +432,27 @@ export function StrategyImpactModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-5 border-b border-[#E5E5E5]">
+        <div className="p-5 border-b border-[var(--border)]">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-[#1A1A1A]">{getImpactModalTitle(newScenarioId)}</h2>
+            <h2 className="text-base font-bold text-[var(--text-primary)]">{getImpactModalTitle(newScenarioId)}</h2>
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-lg hover:bg-[#F3F4F6] text-[#6B7280] hover:text-[#111827]"
+              className="p-2 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               aria-label="Ακύρωση (κλείσιμο)"
             >
               <X size={18} />
             </button>
           </div>
 
-          <div className="flex items-center gap-3 mt-3 p-3 bg-[#F5F5F5] rounded-lg text-sm">
-            <span className="font-medium text-[#1A1A1A]">{fromName}</span>
+          <div className="flex items-center gap-3 mt-3 p-3 bg-[var(--surface-2)] rounded-lg text-sm">
+            <span className="font-medium text-[var(--text-primary)]">{fromName}</span>
             {currentDuration !== undefined && (
-              <span className="text-[10px] text-[#9CA3AF]">{formatDuration(currentDuration)}</span>
+              <span className="text-[10px] text-[var(--text-muted)]">{formatDuration(currentDuration)}</span>
             )}
             <ArrowRight size={16} className="text-[var(--nts-accent-text)] flex-shrink-0" />
-            <span className="font-medium text-[#1A1A1A]">{toName}</span>
-            <span className="text-[10px] text-[#9CA3AF]">{formatDuration(confirmDuration)}</span>
+            <span className="font-medium text-[var(--text-primary)]">{toName}</span>
+            <span className="text-[10px] text-[var(--text-muted)]">{formatDuration(confirmDuration)}</span>
           </div>
         </div>
 
@@ -460,14 +460,14 @@ export function StrategyImpactModal({
           {/* Weight Diff */}
           {weightDiffs.length > 0 && (
             <div>
-              <h3 className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-2">Αλλαγές βαρών</h3>
+              <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-2">Αλλαγές βαρών</h3>
               <div className="flex flex-wrap gap-2">
                 {weightDiffs.map(d => (
-                  <span key={d.key} className="inline-flex items-center gap-1.5 text-xs bg-[#F5F5F5] rounded-md px-2 py-1">
+                  <span key={d.key} className="inline-flex items-center gap-1.5 text-xs bg-[var(--surface-2)] rounded-md px-2 py-1">
                     <span style={{ color: WEIGHT_COLORS[d.key] }}>●</span>
-                    <span className="text-[#4A4A4A]">{WEIGHT_LABELS[d.key]}</span>
-                    <span className="text-[#9CA3AF]">{d.from}%</span>
-                    <span className="text-[#9CA3AF]">→</span>
+                    <span className="text-[var(--text-secondary)]">{WEIGHT_LABELS[d.key]}</span>
+                    <span className="text-[var(--text-muted)]">{d.from}%</span>
+                    <span className="text-[var(--text-muted)]">→</span>
                     <span className={d.diff > 0 ? 'text-[#22C55E] font-medium' : 'text-[#EF4444] font-medium'}>
                       {d.to}%
                     </span>
@@ -483,14 +483,14 @@ export function StrategyImpactModal({
               onClick={() => setShowProducts(!showProducts)}
               className="flex items-center gap-2 w-full text-left"
             >
-              <Package size={15} className="text-[#4A4A4A]" />
-              <h3 className="text-sm font-semibold text-[#1A1A1A] flex-1">Προϊόντα</h3>
+              <Package size={15} className="text-[var(--text-secondary)]" />
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] flex-1">Προϊόντα</h3>
               <div className="flex items-center gap-3 text-xs">
                 {impacts.up > 0 && <span className="text-[#22C55E] font-medium">↑{impacts.up}</span>}
                 {impacts.down > 0 && <span className="text-[#EF4444] font-medium">↓{impacts.down}</span>}
-                <span className="text-[#9CA3AF]">{impacts.same} ίδια</span>
+                <span className="text-[var(--text-muted)]">{impacts.same} ίδια</span>
               </div>
-              <ChevronDown size={14} className={`text-[#9CA3AF] transition-transform ${showProducts ? 'rotate-180' : ''}`} />
+              <ChevronDown size={14} className={`text-[var(--text-muted)] transition-transform ${showProducts ? 'rotate-180' : ''}`} />
             </button>
 
             <AnimatePresence>
@@ -502,7 +502,7 @@ export function StrategyImpactModal({
                   className="overflow-hidden"
                 >
                   {impacts.usedSample && (
-                    <p className="text-[10px] text-[#9CA3AF] mb-2">
+                    <p className="text-[10px] text-[var(--text-muted)] mb-2">
                       Δείγμα {impacts.sampleSize.toLocaleString('el-GR')} /{' '}
                       {impacts.catalogTotal.toLocaleString('el-GR')} SKU.
                     </p>
@@ -511,19 +511,19 @@ export function StrategyImpactModal({
                     {impacts.samplesUp.map((p, i) => (
                       <div key={`up-${i}`} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded bg-[#F0FDF4]">
                         <ArrowUp size={11} className="text-[#22C55E] flex-shrink-0" />
-                        <span className="text-[#1A1A1A] truncate">{truncateName(p.name)}</span>
-                        {p.category && <span className="text-[#9CA3AF] ml-auto flex-shrink-0">{p.category}</span>}
+                        <span className="text-[var(--text-primary)] truncate">{truncateName(p.name)}</span>
+                        {p.category && <span className="text-[var(--text-muted)] ml-auto flex-shrink-0">{p.category}</span>}
                       </div>
                     ))}
                     {impacts.samplesDown.map((p, i) => (
                       <div key={`dn-${i}`} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded bg-[#FEF2F2]">
                         <ArrowDown size={11} className="text-[#EF4444] flex-shrink-0" />
-                        <span className="text-[#1A1A1A] truncate">{truncateName(p.name)}</span>
-                        {p.category && <span className="text-[#9CA3AF] ml-auto flex-shrink-0">{p.category}</span>}
+                        <span className="text-[var(--text-primary)] truncate">{truncateName(p.name)}</span>
+                        {p.category && <span className="text-[var(--text-muted)] ml-auto flex-shrink-0">{p.category}</span>}
                       </div>
                     ))}
                     {(impacts.up > 5 || impacts.down > 5) && (
-                      <p className="text-[10px] text-[#9CA3AF] text-center pt-1">
+                      <p className="text-[10px] text-[var(--text-muted)] text-center pt-1">
                         +{Math.max(0, impacts.up - 5) + Math.max(0, impacts.down - 5)} ακόμα προϊόντα
                       </p>
                     )}
@@ -535,8 +535,8 @@ export function StrategyImpactModal({
 
           {/* Content */}
           <div className="flex items-center gap-2">
-            <FileText size={15} className="text-[#4A4A4A]" />
-            <h3 className="text-sm font-semibold text-[#1A1A1A] flex-1">Περιεχόμενο</h3>
+            <FileText size={15} className="text-[var(--text-secondary)]" />
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex-1">Περιεχόμενο</h3>
             {hasContent && contentStats ? (
               <div className="flex items-center gap-3 text-xs">
                 <span className="text-[#22C55E] font-medium">{contentStats.aligned} ευθυγραμμισμένα</span>
@@ -545,28 +545,28 @@ export function StrategyImpactModal({
                 )}
               </div>
             ) : (
-              <span className="text-[10px] text-[#9CA3AF]">Εισαγάγετε περιεχόμενο για αναλυτική αποτίμηση</span>
+              <span className="text-[10px] text-[var(--text-muted)]">Εισαγάγετε περιεχόμενο για αναλυτική αποτίμηση</span>
             )}
           </div>
 
           {/* Campaigns */}
           <div className="flex items-center gap-2">
-            <Megaphone size={15} className="text-[#4A4A4A]" />
-            <h3 className="text-sm font-semibold text-[#1A1A1A] flex-1">Καμπάνιες</h3>
+            <Megaphone size={15} className="text-[var(--text-secondary)]" />
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex-1">Καμπάνιες</h3>
             {hasCampaigns && campaignStats ? (
-              <span className="text-xs text-[#78716C] font-medium">{campaignStats.active} ενεργά</span>
+              <span className="text-xs text-[var(--text-muted)] font-medium">{campaignStats.active} ενεργά</span>
             ) : (
-              <span className="text-[10px] text-[#9CA3AF]">Εισαγάγετε καμπάνιες για αναλυτική αποτίμηση</span>
+              <span className="text-[10px] text-[var(--text-muted)]">Εισαγάγετε καμπάνιες για αναλυτική αποτίμηση</span>
             )}
           </div>
 
           {/* Duration — must be visible before applying (same UX as the summary layer). */}
-          <div className="flex flex-col gap-2 pt-2 border-t border-[#F5F5F5]">
-            <div className="flex items-center gap-2 text-xs text-[#4A4A4A]">
-              <Clock size={14} className="text-[#9CA3AF] flex-shrink-0" aria-hidden />
-              <span className="font-medium text-[#1A1A1A]">Διάρκεια νέας πολιτικής</span>
+          <div className="flex flex-col gap-2 pt-2 border-t border-[var(--surface-2)]">
+            <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+              <Clock size={14} className="text-[var(--text-muted)] flex-shrink-0" aria-hidden />
+              <span className="font-medium text-[var(--text-primary)]">Διάρκεια νέας πολιτικής</span>
             </div>
-            <p className="text-[10px] text-[#9CA3AF] leading-snug">
+            <p className="text-[10px] text-[var(--text-muted)] leading-snug">
               Επιλέξτε πόσες ημέρες ισχύει η πολιτική (ή συνεχής). Η ημερομηνία λήξης υπολογίζεται από την ημέρα ενεργοποίησης.
             </p>
             <div className="flex items-center gap-1 flex-wrap">
@@ -578,7 +578,7 @@ export function StrategyImpactModal({
                   className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-all ${
                     confirmDuration === d
                       ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
-                      : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+                      : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]/50'
                   }`}
                 >
                   {d} ημ.
@@ -590,7 +590,7 @@ export function StrategyImpactModal({
                 className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-all ${
                   confirmDuration === 'ongoing'
                     ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
-                    : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+                    : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]/50'
                 }`}
                 title="Συνεχής — χωρίς αυτόματη λήξη"
               >
@@ -602,7 +602,7 @@ export function StrategyImpactModal({
         </div>
 
         {/* Actions */}
-        <div className="p-5 border-t border-[#E5E5E5] flex justify-end gap-3">
+        <div className="p-5 border-t border-[var(--border)] flex justify-end gap-3">
           <Button variant="ghost" onClick={onClose}>
             Ακύρωση
           </Button>

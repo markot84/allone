@@ -137,46 +137,46 @@ export function ColumnExcelFilter({
   const filterActive = value != null && value.length > 0 && value.length < allIds.length;
 
   if (options.length === 0) {
-    if (compact) return <span className="inline-block h-7 w-7 text-center text-xs text-[#D1D5DB]">—</span>;
+    if (compact) return <span className="inline-block h-7 w-7 text-center text-xs text-[var(--border-strong)]">—</span>;
     return (
       <div className="flex min-w-[140px] flex-col gap-1 opacity-60">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">{label}</span>
-        <span className="py-2 text-xs text-[#9CA3AF]">—</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</span>
+        <span className="py-2 text-xs text-[var(--text-muted)]">—</span>
       </div>
     );
   }
 
   const dropdown = open ? (
-    <div className="absolute left-0 top-full z-[60] mt-1 flex max-h-72 min-w-[260px] w-max max-w-[min(100vw-2rem,320px)] flex-col rounded-lg border border-[#E5E5E5] bg-white shadow-lg">
-      <div className="border-b border-[#E5E5E5] p-2">
+    <div className="absolute left-0 top-full z-[60] mt-1 flex max-h-72 min-w-[260px] w-max max-w-[min(100vw-2rem,320px)] flex-col rounded-lg border border-[var(--border)] bg-white shadow-lg">
+      <div className="border-b border-[var(--border)] p-2">
         <input
           type="search"
           placeholder="Αναζήτηση στη λίστα…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="w-full rounded-md border border-[#E5E7EB] px-2 py-1.5 text-xs focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
+          className="w-full rounded-md border border-[var(--border)] px-2 py-1.5 text-xs focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
         />
       </div>
       <div className="max-h-52 overflow-y-auto p-1">
         {filteredOpts.map((o) => (
           <label
             key={o.id}
-            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-[#374151] hover:bg-[#F9FAFB]"
+            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-1)]"
           >
             <input
               type="checkbox"
               checked={draftSelected.has(o.id)}
               onChange={() => toggle(o.id)}
-              className="rounded border-[#D1D5DB] text-[var(--nts-accent-text)] focus:ring-[var(--nts-accent)]/30"
+              className="rounded border-[var(--border-strong)] text-[var(--nts-accent-text)] focus:ring-[var(--nts-accent)]/30"
             />
             <span className="truncate">{o.label}</span>
           </label>
         ))}
       </div>
-      <div className="flex items-center justify-between gap-2 border-t border-[#E5E5E5] bg-[#FAFAFA]/90 p-2.5">
+      <div className="flex items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--surface-1)]/90 p-2.5">
         <button
           type="button"
-          className="whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium text-[#6B7280] hover:bg-white hover:underline"
+          className="whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium text-[var(--text-muted)] hover:bg-white hover:underline"
           onClick={() => {
             setDraftValue(null);
             setQ('');
@@ -205,7 +205,7 @@ export function ColumnExcelFilter({
           className={`relative inline-flex h-7 min-w-[28px] items-center justify-center rounded-md border px-1.5 transition-colors ${
             filterActive
               ? 'border-[var(--nts-accent)]/40 bg-orange-50/80 text-[var(--nts-accent-text)]'
-              : 'border-transparent text-[#6B7280] hover:border-[#E5E7EB] hover:bg-white'
+              : 'border-transparent text-[var(--text-muted)] hover:border-[var(--border)] hover:bg-white'
           }`}
           aria-expanded={open}
           aria-haspopup="listbox"
@@ -220,19 +220,19 @@ export function ColumnExcelFilter({
 
   return (
     <div ref={ref} className="relative flex min-w-[160px] flex-col gap-1">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">{label}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</span>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 rounded-lg border border-transparent bg-[#F5F5F5] px-3 py-2 text-left text-sm transition-all hover:border-[var(--nts-accent)]"
+        className="flex w-full items-center justify-between gap-2 rounded-lg border border-transparent bg-[var(--surface-2)] px-3 py-2 text-left text-sm transition-all hover:border-[var(--nts-accent)]"
         aria-expanded={open}
         aria-haspopup="listbox"
       >
         <span className="flex min-w-0 items-center gap-1.5 truncate">
-          <Filter size={14} className="shrink-0 text-[#9CA3AF]" aria-hidden />
-          <span className="text-[#374151]">{summary}</span>
+          <Filter size={14} className="shrink-0 text-[var(--text-muted)]" aria-hidden />
+          <span className="text-[var(--text-secondary)]">{summary}</span>
         </span>
-        <ChevronDown size={14} className="shrink-0 text-[#9CA3AF]" />
+        <ChevronDown size={14} className="shrink-0 text-[var(--text-muted)]" />
       </button>
       {dropdown}
     </div>

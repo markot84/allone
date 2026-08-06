@@ -44,7 +44,7 @@ export function SalesPipelinePage({ onSectionChange }: SalesPipelinePageProps = 
       <PageHeader
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Sales Pipeline</h2>}
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             B2B workspace για account coverage, next-step discipline και εμπορική εκτέλεση.
           </p>
         }
@@ -100,8 +100,8 @@ export function SalesPipelinePage({ onSectionChange }: SalesPipelinePageProps = 
               <KanbanSquare size={18} />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-[#1A1A1A]">Pipeline Blueprint</h3>
-              <p className="text-sm text-[#6B7280]">
+              <h3 className="text-lg font-semibold text-[var(--text-primary)]">Pipeline Blueprint</h3>
+              <p className="text-sm text-[var(--text-muted)]">
                 Μέχρι να προστεθεί πλήρες CRM layer, το workspace δίνει το λειτουργικό template που μπορείς να τρέχεις
                 μαζί με `Coordination`, `Campaigns` και `Sales Activation`.
               </p>
@@ -110,10 +110,10 @@ export function SalesPipelinePage({ onSectionChange }: SalesPipelinePageProps = 
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
             {pipelineStages.map((stage) => (
-              <div key={stage.title} className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-[#9CA3AF]">{stage.title}</p>
-                <p className="mt-2 text-2xl font-bold text-[#1A1A1A]">{stage.value}</p>
-                <p className="mt-2 text-sm leading-relaxed text-[#6B7280]">{stage.note}</p>
+              <div key={stage.title} className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{stage.title}</p>
+                <p className="mt-2 text-2xl font-bold text-[var(--text-primary)]">{stage.value}</p>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--text-muted)]">{stage.note}</p>
               </div>
             ))}
           </div>
@@ -123,11 +123,11 @@ export function SalesPipelinePage({ onSectionChange }: SalesPipelinePageProps = 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card>
           <div className="p-5">
-            <div className="mb-3 flex items-center gap-2 text-[#1A1A1A]">
+            <div className="mb-3 flex items-center gap-2 text-[var(--text-primary)]">
               <Users size={18} className="text-[var(--nts-accent-text)]" />
               <h3 className="font-semibold">Team cadence</h3>
             </div>
-            <p className="text-sm leading-relaxed text-[#6B7280]">
+            <p className="text-sm leading-relaxed text-[var(--text-muted)]">
               Τρέξε εβδομαδιαίο review με 3 buckets: stuck deals, pricing blockers, supply blockers. Το `Coordination`
               γίνεται το execution log του sales team.
             </p>
@@ -139,11 +139,11 @@ export function SalesPipelinePage({ onSectionChange }: SalesPipelinePageProps = 
 
         <Card>
           <div className="p-5">
-            <div className="mb-3 flex items-center gap-2 text-[#1A1A1A]">
+            <div className="mb-3 flex items-center gap-2 text-[var(--text-primary)]">
               <Megaphone size={18} className="text-[var(--nts-accent-text)]" />
               <h3 className="font-semibold">Sales activation</h3>
             </div>
-            <p className="text-sm leading-relaxed text-[#6B7280]">
+            <p className="text-sm leading-relaxed text-[var(--text-muted)]">
               Οι εμπορικές ενέργειες δεν είναι μόνο campaigns. Χτίσε outreach ανά account cluster, email nurture,
               distributor touchpoints και playbooks για την ομάδα πωλήσεων.
             </p>
@@ -155,11 +155,11 @@ export function SalesPipelinePage({ onSectionChange }: SalesPipelinePageProps = 
 
         <Card>
           <div className="p-5">
-            <div className="mb-3 flex items-center gap-2 text-[#1A1A1A]">
+            <div className="mb-3 flex items-center gap-2 text-[var(--text-primary)]">
               <Target size={18} className="text-[var(--nts-accent-text)]" />
               <h3 className="font-semibold">Demand generation</h3>
             </div>
-            <p className="text-sm leading-relaxed text-[#6B7280]">
+            <p className="text-sm leading-relaxed text-[var(--text-muted)]">
               Σύνδεσε την digital ζήτηση με το pipeline. Καμπάνιες, landing pages και content πρέπει να εξυπηρετούν
               συγκεκριμένα segments και φάσεις του deal cycle.
             </p>
@@ -172,22 +172,22 @@ export function SalesPipelinePage({ onSectionChange }: SalesPipelinePageProps = 
 
       <Card>
         <div className="p-5">
-          <div className="mb-3 flex items-center gap-2 text-[#1A1A1A]">
+          <div className="mb-3 flex items-center gap-2 text-[var(--text-primary)]">
             <Handshake size={18} className="text-[var(--nts-accent-text)]" />
             <h3 className="font-semibold">Recommended operating model</h3>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded-lg border border-[#E5E5E5] p-4">
-              <p className="text-sm font-semibold text-[#1A1A1A]">1. Account owner</p>
-              <p className="mt-1 text-sm text-[#6B7280]">Κάθε strategic account να έχει owner, next review date και clear commercial objective.</p>
+            <div className="rounded-lg border border-[var(--border)] p-4">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">1. Account owner</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">Κάθε strategic account να έχει owner, next review date και clear commercial objective.</p>
             </div>
-            <div className="rounded-lg border border-[#E5E5E5] p-4">
-              <p className="text-sm font-semibold text-[#1A1A1A]">2. Offer discipline</p>
-              <p className="mt-1 text-sm text-[#6B7280]">Κάθε proposal να περνά από pricing, margin και availability check πριν βγει προς τον πελάτη.</p>
+            <div className="rounded-lg border border-[var(--border)] p-4">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">2. Offer discipline</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">Κάθε proposal να περνά από pricing, margin και availability check πριν βγει προς τον πελάτη.</p>
             </div>
-            <div className="rounded-lg border border-[#E5E5E5] p-4">
-              <p className="text-sm font-semibold text-[#1A1A1A]">3. Weekly forecast</p>
-              <p className="mt-1 text-sm text-[#6B7280]">Η διοίκηση να βλέπει weekly forecast, blocked opportunities και top expansion plays σε ένα σημείο.</p>
+            <div className="rounded-lg border border-[var(--border)] p-4">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">3. Weekly forecast</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">Η διοίκηση να βλέπει weekly forecast, blocked opportunities και top expansion plays σε ένα σημείο.</p>
             </div>
           </div>
         </div>

@@ -13,7 +13,7 @@ export interface AccentColors {
 const FALLBACK: AccentColors = {
   accent: '#F97316',
   accentLight: '#FFEDD5',
-  chartSecondary: '#78716C',
+  chartSecondary: 'var(--text-muted)',
 };
 
 function readVar(name: string, fallback: string): string {

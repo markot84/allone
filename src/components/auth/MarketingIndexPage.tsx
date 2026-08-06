@@ -24,7 +24,7 @@ const primaryCtaClass =
   'inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold !text-white shadow-[0_12px_28px_rgba(249,115,22,0.32)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[var(--nts-accent-hover)] hover:!text-white hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)] active:translate-y-0';
 
 const darkCtaClass =
-  'inline-flex items-center justify-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-[#111827] px-5 py-3 text-sm font-semibold !text-white shadow-[0_12px_28px_rgba(17,24,39,0.18)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#0f172a] hover:!text-white hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111827] active:translate-y-0';
+  'inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--text-primary)]/10 bg-[var(--text-primary)] px-5 py-3 text-sm font-semibold !text-white shadow-[0_12px_28px_rgba(17,24,39,0.18)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#0f172a] hover:!text-white hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--text-primary)] active:translate-y-0';
 
 const heroLeadParagraph =
   'Το allone συνδέει τα δεδομένα σας - καταναλωτικά κοινά, προϊόντα, αποθέματα, ERP και διαφημιστικά κανάλια - σε ένα ενιαίο σύστημα ανάλυσης και λήψης αποφάσεων με τεχνητή νοημοσύνη. Δημιουργήθηκε από ανθρώπους του marketing και αναλυτές δεδομένων, και λειτουργεί ήδη εδώ και 4 χρόνια ως μεθοδολογία ανάπτυξης στοχευμένων προωθητικών ενεργειών με ισχυρά μετρήσιμα αποτελέσματα.';
@@ -277,7 +277,7 @@ const LANDING_MAX =
   'mx-auto w-full max-w-[min(90rem,94vw)] px-4 sm:px-6 lg:px-10 xl:px-14';
 
 const PREMIUM_SECTION_CARD =
-  'relative overflow-hidden rounded-[32px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_24px_60px_rgba(16,24,40,0.12)] md:p-8';
+  'relative overflow-hidden rounded-[32px] border border-[var(--text-primary)]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_24px_60px_rgba(16,24,40,0.12)] md:p-8';
 
 // ─── Sub-components ─────────────────────────────────────────────────────────────
 
@@ -295,7 +295,7 @@ function PreviewBlock(props: {
   const heading = dark ? 'text-white' : 'text-[var(--nts-charcoal)]';
   const valueBox = dark
     ? 'mt-4 rounded-xl border border-white/10 bg-white/6 p-4 text-sm font-medium text-white'
-    : 'mt-4 rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] p-4 text-sm font-medium text-[var(--nts-charcoal)]';
+    : 'mt-4 rounded-xl border border-[var(--text-primary)]/10 bg-[var(--nts-bg-subtle)] p-4 text-sm font-medium text-[var(--nts-charcoal)]';
 
   const body = (
     <>
@@ -331,7 +331,7 @@ function PreviewBlock(props: {
       key={point.title}
       className={[
         'relative overflow-hidden rounded-[28px] border p-5 shadow-[0_18px_44px_rgba(16,24,40,0.11)] md:p-6',
-        dark ? 'border-white/10 bg-[#101319] text-white' : 'border-[#1f2328]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] text-[var(--nts-charcoal)]'
+        dark ? 'border-white/10 bg-[#101319] text-white' : 'border-[var(--text-primary)]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] text-[var(--nts-charcoal)]'
       ].join(' ')}
     >
       <div className="pointer-events-none absolute left-0 top-0 h-1.5 w-full bg-[var(--nts-accent)]" />
@@ -339,7 +339,7 @@ function PreviewBlock(props: {
       {hasImage ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.15fr)] lg:items-center xl:gap-10">
           <div className="space-y-4">{body}</div>
-          <div className="relative flex min-h-0 items-center justify-center overflow-hidden rounded-[20px] border border-[#1f2328]/10 bg-[#f3f4f6] p-2 shadow-inner sm:min-h-[220px] sm:rounded-[24px] sm:p-3">
+          <div className="relative flex min-h-0 items-center justify-center overflow-hidden rounded-[20px] border border-[var(--text-primary)]/10 bg-[var(--surface-2)] p-2 shadow-inner sm:min-h-[220px] sm:rounded-[24px] sm:p-3">
             <img
               src={point.imageSrc}
               alt={`${point.title} screenshot`}
@@ -376,7 +376,7 @@ export function MarketingIndexPage({
       {/* ── Sticky header ────────────────────────────────────────────────── */}
       <header className="relative z-20">
         <div className={`${LANDING_MAX} pt-5`}>
-          <div className="rounded-[24px] border border-[#1f2328]/10 bg-white/88 px-4 py-3 shadow-[0_14px_34px_rgba(16,24,40,0.1)] backdrop-blur md:px-5">
+          <div className="rounded-[24px] border border-[var(--text-primary)]/10 bg-white/88 px-4 py-3 shadow-[0_14px_34px_rgba(16,24,40,0.1)] backdrop-blur md:px-5">
             <div className={`flex items-center gap-3 sm:gap-4 ${onReturnToApp || onOpenAuth ? 'justify-between' : ''}`}>
               <div className="flex min-w-0 flex-row items-center gap-3 sm:gap-4">
                 <AllOneLogo height={52} className="shrink-0 max-w-[60vw] sm:max-w-none sm:h-auto" />
@@ -397,7 +397,7 @@ export function MarketingIndexPage({
                   <button
                     type="button"
                     onClick={onReturnToApp}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-[#6B7280] transition hover:bg-[var(--nts-light-gray)] hover:text-[var(--nts-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)]"
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-[var(--text-muted)] transition hover:bg-[var(--nts-light-gray)] hover:text-[var(--nts-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)]"
                   >
                     <ArrowLeft size={14} strokeWidth={2} aria-hidden />
                     Επιστροφή στην εφαρμογή
@@ -411,9 +411,9 @@ export function MarketingIndexPage({
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-7 pt-4 md:pt-5`}>
-        <div className="relative overflow-hidden rounded-[40px] border border-[#1f2328]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fff7ed_52%,#ffffff_100%)] px-5 py-6 shadow-[0_30px_80px_rgba(16,24,40,0.16)] sm:px-7 md:px-10 md:py-9 lg:px-12">
+        <div className="relative overflow-hidden rounded-[40px] border border-[var(--text-primary)]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fff7ed_52%,#ffffff_100%)] px-5 py-6 shadow-[0_30px_80px_rgba(16,24,40,0.16)] sm:px-7 md:px-10 md:py-9 lg:px-12">
           <div className="pointer-events-none absolute right-[-120px] top-[-80px] h-80 w-80 rounded-full bg-[var(--nts-accent)]/18 blur-3xl" />
-          <div className="pointer-events-none absolute bottom-[-140px] left-[-40px] h-96 w-96 rounded-full bg-[#111827]/8 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-[-140px] left-[-40px] h-96 w-96 rounded-full bg-[var(--text-primary)]/8 blur-3xl" />
           <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--nts-accent)]/40 to-transparent" />
 
           <div className="relative">
@@ -447,7 +447,7 @@ export function MarketingIndexPage({
                       trackMetaContact();
                       trackGoogleCallConversion();
                     }}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-white/70 px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)] shadow-[0_8px_20px_rgba(16,24,40,0.06)] transition hover:border-[var(--nts-accent)]/30 hover:shadow-[0_8px_20px_rgba(249,115,22,0.10)]"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-[var(--text-primary)]/10 bg-white/70 px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)] shadow-[0_8px_20px_rgba(16,24,40,0.06)] transition hover:border-[var(--nts-accent)]/30 hover:shadow-[0_8px_20px_rgba(249,115,22,0.10)]"
                   >
                     <Phone size={16} className="text-[var(--nts-accent-text)]" aria-hidden />
                     2310.321625
@@ -455,8 +455,8 @@ export function MarketingIndexPage({
                 </div>
               </div>
 
-              <div className="relative overflow-hidden rounded-[28px] border border-[#1f2328]/10 bg-[#111827] p-2 shadow-[0_24px_60px_rgba(16,24,40,0.22)]">
-                <div className="absolute left-5 top-5 z-10 rounded-full border border-white/12 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#111827] shadow-[0_8px_18px_rgba(0,0,0,0.16)]">
+              <div className="relative overflow-hidden rounded-[28px] border border-[var(--text-primary)]/10 bg-[var(--text-primary)] p-2 shadow-[0_24px_60px_rgba(16,24,40,0.22)]">
+                <div className="absolute left-5 top-5 z-10 rounded-full border border-white/12 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[var(--text-primary)] shadow-[0_8px_18px_rgba(0,0,0,0.16)]">
                   Strategy dashboard
                 </div>
                 <img
@@ -469,7 +469,7 @@ export function MarketingIndexPage({
 
             <div className="mt-7 grid gap-3 md:grid-cols-3">
               {heroProofPoints.map((point) => (
-                <div key={point.label} className="rounded-2xl border border-[#1f2328]/10 bg-white/78 p-4 shadow-[0_10px_24px_rgba(16,24,40,0.08)] backdrop-blur">
+                <div key={point.label} className="rounded-2xl border border-[var(--text-primary)]/10 bg-white/78 p-4 shadow-[0_10px_24px_rgba(16,24,40,0.08)] backdrop-blur">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--nts-accent-text)]">{point.label}</p>
                   <p className="mt-2 text-sm font-semibold leading-6 text-[var(--nts-charcoal)]">{point.value}</p>
                 </div>
@@ -480,7 +480,7 @@ export function MarketingIndexPage({
               {heroSupportingParagraphs.map((p, index) => (
                 <div
                   key={p}
-                  className="relative overflow-hidden rounded-2xl border border-[#1f2328]/10 bg-white/72 p-4 shadow-[0_8px_20px_rgba(16,24,40,0.07)] backdrop-blur"
+                  className="relative overflow-hidden rounded-2xl border border-[var(--text-primary)]/10 bg-white/72 p-4 shadow-[0_8px_20px_rgba(16,24,40,0.07)] backdrop-blur"
                 >
                   <div className="pointer-events-none absolute left-0 top-0 h-full w-1 bg-[var(--nts-accent)]/70" />
                   <p className="mb-2 text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-accent-text)]">
@@ -509,7 +509,7 @@ export function MarketingIndexPage({
               </p>
               <div className="mt-6 grid gap-2">
                 {trustPosturePoints.map((point) => (
-                  <div key={point} className="flex items-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)]">
+                  <div key={point} className="flex items-center gap-2 rounded-2xl border border-[var(--text-primary)]/10 bg-[var(--nts-bg-subtle)] px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)]">
                     <ShieldCheck size={16} className="shrink-0 text-[var(--nts-accent-text)]" aria-hidden />
                     <span>{point}</span>
                   </div>
@@ -519,10 +519,10 @@ export function MarketingIndexPage({
 
             <div className="grid gap-4">
               {methodologySteps.map((step, index) => (
-                <div key={step.title} className="relative overflow-hidden rounded-3xl border border-[#1f2328]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] p-5 shadow-[0_12px_30px_rgba(16,24,40,0.08)]">
+                <div key={step.title} className="relative overflow-hidden rounded-3xl border border-[var(--text-primary)]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] p-5 shadow-[0_12px_30px_rgba(16,24,40,0.08)]">
                   <div className="pointer-events-none absolute right-[-48px] top-[-48px] h-28 w-28 rounded-full bg-[var(--nts-accent)]/10 blur-2xl" />
                   <div className="relative flex gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#111827] text-white shadow-[0_10px_22px_rgba(17,24,39,0.18)]">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--text-primary)] text-white shadow-[0_10px_22px_rgba(17,24,39,0.18)]">
                       {step.icon}
                     </div>
                     <div>
@@ -565,10 +565,10 @@ export function MarketingIndexPage({
             <div>
               <div className="grid gap-3 sm:grid-cols-2">
                 {dataIntroSources.map((source) => (
-                  <div key={source.name} className="group relative overflow-hidden rounded-3xl border border-[#1f2328]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] p-5 shadow-[0_14px_34px_rgba(16,24,40,0.08)] transition hover:-translate-y-1 hover:border-[var(--nts-accent)]/35 hover:shadow-[0_22px_46px_rgba(16,24,40,0.13)]">
+                  <div key={source.name} className="group relative overflow-hidden rounded-3xl border border-[var(--text-primary)]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] p-5 shadow-[0_14px_34px_rgba(16,24,40,0.08)] transition hover:-translate-y-1 hover:border-[var(--nts-accent)]/35 hover:shadow-[0_22px_46px_rgba(16,24,40,0.13)]">
                     <div className="pointer-events-none absolute right-[-36px] top-[-36px] h-24 w-24 rounded-full bg-[var(--nts-accent)]/10 blur-2xl transition group-hover:bg-[var(--nts-accent)]/18" />
                     <div className="relative flex items-start gap-4">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#111827] text-white shadow-[0_10px_22px_rgba(17,24,39,0.18)]">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--text-primary)] text-white shadow-[0_10px_22px_rgba(17,24,39,0.18)]">
                         {source.icon}
                       </div>
                       <div>
@@ -576,14 +576,14 @@ export function MarketingIndexPage({
                         <p className="mt-2 text-xs leading-5 text-[var(--nts-medium-gray)]">{source.description}</p>
                       </div>
                     </div>
-                    <p className="relative mt-4 rounded-full border border-[#1f2328]/10 bg-white px-3 py-1.5 text-[11px] font-semibold text-[var(--nts-charcoal)]">
+                    <p className="relative mt-4 rounded-full border border-[var(--text-primary)]/10 bg-white px-3 py-1.5 text-[11px] font-semibold text-[var(--nts-charcoal)]">
                       {source.examples}
                     </p>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-4 grid gap-2 rounded-3xl border border-[#1f2328]/10 bg-[#111827] p-3 text-white shadow-[0_18px_44px_rgba(17,24,39,0.18)] sm:grid-cols-3">
+              <div className="mt-4 grid gap-2 rounded-3xl border border-[var(--text-primary)]/10 bg-[var(--text-primary)] p-3 text-white shadow-[0_18px_44px_rgba(17,24,39,0.18)] sm:grid-cols-3">
                 {['Σύνδεση δεδομένων', 'AI ανάλυση', 'Εμπορική απόφαση'].map((step, index) => (
                   <div key={step} className="flex items-center gap-2 rounded-2xl bg-white/7 px-3 py-3 text-xs font-semibold">
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--nts-accent)] text-[11px] text-white">{index + 1}</span>
@@ -594,7 +594,7 @@ export function MarketingIndexPage({
             </div>
           </div>
 
-          <div className="mt-10 border-t border-[#1f2328]/10 pt-8">
+          <div className="mt-10 border-t border-[var(--text-primary)]/10 pt-8">
             <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-accent-text)]">Εμπορική νοημοσύνη μέσω AI</p>
             <p className="mt-3 text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
               Η πλατφόρμα αναλύει τα δεδομένα και δημιουργεί στρατηγική καθοδήγηση σε πέντε βασικούς άξονες:
@@ -635,8 +635,8 @@ export function MarketingIndexPage({
 
           <div className="relative mt-7 grid gap-4 md:grid-cols-2">
             {commerceUseCases.map((useCase) => (
-              <article key={useCase.title} className="overflow-hidden rounded-3xl border border-[#1f2328]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] shadow-[0_14px_34px_rgba(16,24,40,0.08)]">
-                <div className="border-b border-[#1f2328]/10 bg-[#111827] px-5 py-4 text-white">
+              <article key={useCase.title} className="overflow-hidden rounded-3xl border border-[var(--text-primary)]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] shadow-[0_14px_34px_rgba(16,24,40,0.08)]">
+                <div className="border-b border-[var(--text-primary)]/10 bg-[var(--text-primary)] px-5 py-4 text-white">
                   <div className="flex items-center gap-3">
                     <Store size={18} className="text-[var(--nts-accent-text)]" aria-hidden />
                     <h3 className="text-base font-semibold">{useCase.title}</h3>
@@ -648,7 +648,7 @@ export function MarketingIndexPage({
                     ['Τι κάνει το allone', useCase.action],
                     ['Business outcome', useCase.outcome],
                   ].map(([label, text]) => (
-                    <div key={label} className="rounded-2xl border border-[#1f2328]/10 bg-white p-4">
+                    <div key={label} className="rounded-2xl border border-[var(--text-primary)]/10 bg-white p-4">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--nts-accent-text)]">{label}</p>
                       <p className="mt-2 text-sm leading-6 text-[var(--nts-medium-gray)]">{text}</p>
                     </div>
@@ -663,7 +663,7 @@ export function MarketingIndexPage({
       {/* ── Why it stands out ──────────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
         <div className="grid items-stretch gap-5 lg:grid-cols-[1fr_1fr] lg:gap-8">
-          <div className="relative overflow-hidden rounded-[32px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_24px_56px_rgba(16,24,40,0.12)] md:p-8">
+          <div className="relative overflow-hidden rounded-[32px] border border-[var(--text-primary)]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_24px_56px_rgba(16,24,40,0.12)] md:p-8">
             <div className="pointer-events-none absolute right-[-90px] top-[-90px] h-56 w-56 rounded-full bg-[var(--nts-accent)]/10 blur-3xl" />
             <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent-text)]">Διαφορά</p>
             <h2 className="mt-4 text-xl font-semibold leading-snug text-[var(--nts-charcoal)] md:text-2xl">Γιατί ξεχωρίζει το allone</h2>
@@ -709,7 +709,7 @@ export function MarketingIndexPage({
           </div>
           <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {commerceScenarios.map((s) => (
-              <div key={s.title} className="group relative overflow-hidden rounded-3xl border border-[#1f2328]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] p-5 shadow-[0_12px_30px_rgba(16,24,40,0.08)] transition hover:-translate-y-1 hover:shadow-[0_20px_44px_rgba(16,24,40,0.13)]">
+              <div key={s.title} className="group relative overflow-hidden rounded-3xl border border-[var(--text-primary)]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] p-5 shadow-[0_12px_30px_rgba(16,24,40,0.08)] transition hover:-translate-y-1 hover:shadow-[0_20px_44px_rgba(16,24,40,0.13)]">
                 <div className="pointer-events-none absolute right-[-40px] top-[-40px] h-28 w-28 rounded-full bg-[var(--nts-accent)]/10 blur-2xl" />
                 <p className="relative inline-flex rounded-full border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/8 px-3 py-1 text-[11px] font-semibold text-[var(--nts-accent-text)]">{s.signal}</p>
                 <p className="relative mt-4 text-sm font-semibold text-[var(--nts-charcoal)]">{s.title}</p>
@@ -727,9 +727,9 @@ export function MarketingIndexPage({
           <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">Ποια προβλήματα επιλύει</h3>
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {problemsHowWeHelp.map((row, i) => (
-              <div key={i} className="rounded-3xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] p-5 shadow-[0_10px_26px_rgba(16,24,40,0.07)]">
+              <div key={i} className="rounded-3xl border border-[var(--text-primary)]/10 bg-[var(--nts-bg-subtle)] p-5 shadow-[0_10px_26px_rgba(16,24,40,0.07)]">
                 <div className="flex gap-4">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#111827] text-xs font-semibold text-white">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[var(--text-primary)] text-xs font-semibold text-white">{String(i + 1).padStart(2, '0')}</span>
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--nts-medium-gray)]">Πρόβλημα</p>
                     <p className="mt-2 text-sm font-semibold leading-relaxed text-[var(--nts-charcoal)]">{row.problem}</p>
@@ -747,7 +747,7 @@ export function MarketingIndexPage({
 
       {/* ── Proof & authority ─────────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
-        <div className="relative overflow-hidden rounded-[34px] border border-white/10 bg-[#111827] p-6 text-white shadow-[0_28px_70px_rgba(17,24,39,0.26)] md:p-8">
+        <div className="relative overflow-hidden rounded-[34px] border border-white/10 bg-[var(--text-primary)] p-6 text-white shadow-[0_28px_70px_rgba(17,24,39,0.26)] md:p-8">
           <div className="pointer-events-none absolute right-[-120px] top-[-120px] h-80 w-80 rounded-full bg-[var(--nts-accent)]/20 blur-3xl" />
           <div className="pointer-events-none absolute bottom-[-120px] left-[-80px] h-72 w-72 rounded-full bg-white/8 blur-3xl" />
           <div className="relative grid gap-7 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
@@ -793,7 +793,7 @@ export function MarketingIndexPage({
                 Πώς το allone μετατρέπει δεδομένα και νοημοσύνη σε στοχευμένη εμπορική δράση για e-shop owners και ομάδες marketing.
               </p>
             </div>
-            <div className="inline-flex items-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)]">
+            <div className="inline-flex items-center gap-2 rounded-2xl border border-[var(--text-primary)]/10 bg-[var(--nts-bg-subtle)] px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)]">
               <PackageCheck size={16} className="text-[var(--nts-accent-text)]" aria-hidden />
               Από insight σε action
             </div>
@@ -814,7 +814,7 @@ export function MarketingIndexPage({
 
       {/* ── Final CTA ─────────────────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
-        <div className="relative overflow-hidden rounded-[34px] border border-white/10 bg-[#111827] p-6 text-white shadow-[0_28px_70px_rgba(17,24,39,0.28)] md:p-8">
+        <div className="relative overflow-hidden rounded-[34px] border border-white/10 bg-[var(--text-primary)] p-6 text-white shadow-[0_28px_70px_rgba(17,24,39,0.28)] md:p-8">
           <div className="pointer-events-none absolute right-[-110px] top-[-120px] h-80 w-80 rounded-full bg-[var(--nts-accent)]/20 blur-3xl" />
           <div className="pointer-events-none absolute bottom-[-120px] left-[-80px] h-72 w-72 rounded-full bg-white/8 blur-3xl" />
           <div className="relative grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
@@ -862,7 +862,7 @@ export function MarketingIndexPage({
 
       {/* ── Compliance trust bar ─────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
-        <div className="flex flex-wrap items-center justify-center gap-6 rounded-3xl border border-[#1f2328]/10 bg-white/78 px-6 py-4 shadow-[0_12px_30px_rgba(16,24,40,0.06)] backdrop-blur md:px-10">
+        <div className="flex flex-wrap items-center justify-center gap-6 rounded-3xl border border-[var(--text-primary)]/10 bg-white/78 px-6 py-4 shadow-[0_12px_30px_rgba(16,24,40,0.06)] backdrop-blur md:px-10">
           {[
             { icon: <ShieldCheck size={15} />, text: 'GDPR-compliant' },
             { icon: <Brain size={15} />, text: 'EU AI Act — limited risk, transparent AI' },
@@ -878,7 +878,7 @@ export function MarketingIndexPage({
 
       {/* ── Footer brand tag ──────────────────────────────────────────────── */}
       <footer className={`${LANDING_MAX} pb-10 pt-2`}>
-        <div className="flex flex-col gap-4 border-t border-[#1f2328]/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-t border-[var(--text-primary)]/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--nts-medium-gray)]">
             <span className="shrink-0">Υποστήριξη και τεχνολογία:</span>
             <a

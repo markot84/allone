@@ -142,7 +142,7 @@ function MobileQuickActions({
               className={`flex min-h-12 min-w-16 flex-col items-center justify-center rounded-xl px-2 text-[11px] font-semibold transition-colors ${
                 selected
                   ? 'bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]'
-                  : 'text-[#4B5563] hover:bg-[#F3F4F6]'
+                  : 'text-[var(--text-secondary)] hover:bg-[var(--surface-2)]'
               }`}
             >
               <Icon size={16} />

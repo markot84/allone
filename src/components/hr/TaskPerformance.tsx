@@ -75,7 +75,7 @@ export function TaskPerformance() {
             </ResponsiveContainer>
           </div>
 
-          <div className="mt-4 divide-y divide-[#eef0f3]">
+          <div className="mt-4 divide-y divide-[var(--border)]">
             {stats.map((s) => (
               <div key={s.fullName} className="flex items-center justify-between py-2.5">
                 <div>
@@ -83,7 +83,7 @@ export function TaskPerformance() {
                   <p className="text-xs text-[var(--nts-medium-gray)]">{s.done} ολοκλ. / {s.assigned} σύνολο · {s.overdue} καθυστ.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-20 rounded-full bg-[#eef0f3] overflow-hidden">
+                  <div className="h-2 w-20 rounded-full bg-[var(--border)] overflow-hidden">
                     <div className="h-full rounded-full transition-all" style={{ width: `${s.rate ?? 0}%`, background: s.rate != null && s.rate >= 70 ? '#10b981' : s.rate != null && s.rate >= 40 ? '#f97316' : '#ef4444' }} />
                   </div>
                   <span className="text-sm font-mono font-bold text-[var(--nts-charcoal)] w-10 text-right">{s.rate ?? 0}%</span>

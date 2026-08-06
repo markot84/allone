@@ -15,7 +15,7 @@ const TYPE_META: Record<string, { icon: typeof Bell; color: string }> = {
   task_created: { icon: CheckSquare, color: '#3B82F6' },
   task_assigned: { icon: CheckSquare, color: '#8B5CF6' },
   task_completed: { icon: CheckSquare, color: '#10B981' },
-  comment_added: { icon: MessageSquare, color: '#6B7280' },
+  comment_added: { icon: MessageSquare, color: 'var(--text-muted)' },
   member_joined: { icon: Users, color: '#EC4899' },
 };
 
@@ -51,7 +51,7 @@ export function NotificationBell({
       background: '#fff',
       borderRadius: 12,
       boxShadow: '0 8px 30px rgba(0,0,0,0.18)',
-      border: '1px solid #E5E7EB',
+      border: '1px solid var(--border)',
       zIndex: 9999,
     });
   }, []);
@@ -139,9 +139,9 @@ export function NotificationBell({
         <div ref={dropdownRef} style={menuStyle}>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 16px', borderBottom: '1px solid #F3F4F6',
+            padding: '12px 16px', borderBottom: '1px solid var(--surface-2)',
           }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>Ειδοποιήσεις</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Ειδοποιήσεις</span>
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllRead}
@@ -159,7 +159,7 @@ export function NotificationBell({
           {/* Automation Alerts */}
           {newAlerts.length > 0 && (
             <>
-              <div style={{ padding: '8px 16px', fontSize: 11, fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #F3F4F6' }}>
+              <div style={{ padding: '8px 16px', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--surface-2)' }}>
                 <Zap size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
                 Αυτοματισμοί
               </div>
@@ -176,7 +176,7 @@ export function NotificationBell({
                     width: '100%', textAlign: 'left',
                     background: '#FEF2F2',
                     border: 'none', cursor: 'pointer',
-                    borderBottom: '1px solid #F3F4F6',
+                    borderBottom: '1px solid var(--surface-2)',
                     transition: 'background 0.15s',
                   }}
                   onMouseEnter={e => (e.currentTarget.style.background = '#FEE2E2')}
@@ -191,10 +191,10 @@ export function NotificationBell({
                     <AlertTriangle size={14} style={{ color: alert.severity === 'critical' ? '#DC2626' : '#F59E0B' }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginBottom: 2 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
                       {alert.title}
                     </div>
-                    <div style={{ fontSize: 12, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {alert.description}
                     </div>
                   </div>
@@ -203,7 +203,7 @@ export function NotificationBell({
                     style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0 }}
                     title="Απόρριψη"
                   >
-                    <span style={{ fontSize: 12, color: '#9CA3AF' }}>✕</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>✕</span>
                   </button>
                 </button>
               ))}
@@ -211,12 +211,12 @@ export function NotificationBell({
           )}
 
           {notifications.length === 0 && newAlerts.length === 0 ? (
-            <div style={{ padding: 32, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
               Δεν υπάρχουν ειδοποιήσεις
             </div>
           ) : notifications.length === 0 ? null : (
             notifications.slice(0, 20).map(n => {
-              const meta = TYPE_META[n.type] || { icon: Activity, color: '#9CA3AF' };
+              const meta = TYPE_META[n.type] || { icon: Activity, color: 'var(--text-muted)' };
               const Icon = meta.icon;
               return (
                 <button
@@ -225,13 +225,13 @@ export function NotificationBell({
                   style={{
                     display: 'flex', gap: 10, padding: '10px 16px',
                     width: '100%', textAlign: 'left',
-                    background: n.read ? 'transparent' : '#F9FAFB',
+                    background: n.read ? 'transparent' : 'var(--surface-1)',
                     border: 'none', cursor: 'pointer',
-                    borderBottom: '1px solid #F3F4F6',
+                    borderBottom: '1px solid var(--surface-2)',
                     transition: 'background 0.15s',
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#F3F4F6')}
-                  onMouseLeave={e => (e.currentTarget.style.background = n.read ? 'transparent' : '#F9FAFB')}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = n.read ? 'transparent' : 'var(--surface-1)')}
                 >
                   <div style={{
                     width: 32, height: 32, borderRadius: '50%',
@@ -242,13 +242,13 @@ export function NotificationBell({
                     <Icon size={14} style={{ color: meta.color }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: n.read ? 400 : 600, color: '#111827', marginBottom: 2 }}>
+                    <div style={{ fontSize: 13, fontWeight: n.read ? 400 : 600, color: 'var(--text-primary)', marginBottom: 2 }}>
                       {n.title}
                     </div>
-                    <div style={{ fontSize: 12, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {n.body}
                     </div>
-                    <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                       {formatTime(n.createdAt)}
                     </div>
                   </div>

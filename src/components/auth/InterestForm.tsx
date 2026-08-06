@@ -91,12 +91,12 @@ export function InterestForm() {
   };
 
   const inputClass =
-    'w-full rounded-xl border border-[#1f2328]/15 bg-[var(--nts-bg-pure)] px-4 py-2.5 text-sm text-[var(--nts-charcoal)] placeholder:text-[var(--nts-medium-gray)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30';
+    'w-full rounded-xl border border-[var(--text-primary)]/15 bg-[var(--nts-bg-pure)] px-4 py-2.5 text-sm text-[var(--nts-charcoal)] placeholder:text-[var(--nts-medium-gray)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30';
 
   return (
-    <Card padding="none" className="overflow-hidden border-[#1f2328]/10 shadow-[0_24px_60px_rgba(16,24,40,0.12)]">
+    <Card padding="none" className="overflow-hidden border-[var(--text-primary)]/10 shadow-[0_24px_60px_rgba(16,24,40,0.12)]">
       <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
-        <div className="relative overflow-hidden bg-[#111827] p-6 text-white md:p-8">
+        <div className="relative overflow-hidden bg-[var(--text-primary)] p-6 text-white md:p-8">
           <div className="pointer-events-none absolute right-[-100px] top-[-100px] h-64 w-64 rounded-full bg-[var(--nts-accent)]/25 blur-3xl" />
           <div className="relative">
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent-text)]">Demo request</p>
@@ -151,7 +151,7 @@ export function InterestForm() {
                       'rounded-full border px-3 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)]',
                       selected
                         ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white shadow-[0_8px_18px_rgba(249,115,22,0.22)]'
-                        : 'border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] text-[var(--nts-charcoal)] hover:border-[var(--nts-accent)]/40',
+                        : 'border-[var(--text-primary)]/10 bg-[var(--nts-bg-subtle)] text-[var(--nts-charcoal)] hover:border-[var(--nts-accent)]/40',
                     ].join(' ')}
                   >
                     {option}

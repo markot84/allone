@@ -179,7 +179,7 @@ export function Reports() {
         toolbarAriaLabel="Αναφορές"
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Reports & Analytics</h2>}
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Generate, schedule, and export performance reports
           </p>
         }
@@ -212,19 +212,19 @@ export function Reports() {
                   {report.icon}
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-[#1A1A1A]">{report.name}</h3>
-                  <p className="text-sm text-[#4A4A4A] mt-1">{report.description}</p>
+                  <h3 className="font-semibold text-[var(--text-primary)]">{report.name}</h3>
+                  <p className="text-sm text-[var(--text-secondary)] mt-1">{report.description}</p>
                   
                   <div className="flex items-center gap-3 mt-3">
                     <Badge variant="default" size="sm">{report.format}</Badge>
                     {reportDataCounts[report.id] !== undefined && (
-                      <span className="text-xs text-[#4A4A4A]">
+                      <span className="text-xs text-[var(--text-secondary)]">
                         Data: {typeof reportDataCounts[report.id] === 'number'
                           ? reportDataCounts[report.id].toLocaleString()
                           : reportDataCounts[report.id]}
                       </span>
                     )}
-                    <span className="text-xs text-[#9CA3AF]">
+                    <span className="text-xs text-[var(--text-muted)]">
                       Last: {report.lastGenerated}
                     </span>
                   </div>
@@ -296,7 +296,7 @@ export function Reports() {
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.1 }}
-              className="p-4 bg-[#F5F5F5] rounded-xl"
+              className="p-4 bg-[var(--surface-2)] rounded-xl"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -304,13 +304,13 @@ export function Reports() {
                     <FileText size={20} className="text-[var(--nts-accent-text)]" />
                   </div>
                   <div>
-                    <h4 className="font-medium text-[#1A1A1A]">{report.name}</h4>
+                    <h4 className="font-medium text-[var(--text-primary)]">{report.name}</h4>
                     <div className="flex items-center gap-4 mt-1">
-                      <span className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                      <span className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
                         <Clock size={12} />
                         {report.frequency}
                       </span>
-                      <span className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                      <span className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
                         <Mail size={12} />
                         {report.recipients?.length ?? 0} recipients
                       </span>
@@ -323,7 +323,7 @@ export function Reports() {
                     className="p-2 hover:bg-white rounded-lg transition-colors"
                     onClick={() => setExpandedScheduleId(expandedScheduleId === report.id ? null : report.id)}
                   >
-                    <ChevronRight size={16} className={`text-[#4A4A4A] transition-transform ${expandedScheduleId === report.id ? 'rotate-90' : ''}`} />
+                    <ChevronRight size={16} className={`text-[var(--text-secondary)] transition-transform ${expandedScheduleId === report.id ? 'rotate-90' : ''}`} />
                   </button>
                 </div>
               </div>
@@ -333,7 +333,7 @@ export function Reports() {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="mt-4 pt-4 border-t border-[#E5E5E5] flex items-center gap-2"
+                    className="mt-4 pt-4 border-t border-[var(--border)] flex items-center gap-2"
                   >
                     <Button
                       variant="ghost"
@@ -364,37 +364,37 @@ export function Reports() {
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card padding="md">
           <div className="text-center">
-            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{productsCount}</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">Products</p>
+            <p className="text-3xl font-bold text-[var(--text-primary)] font-mono">{productsCount}</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">Products</p>
             <p className="text-xs text-[#22C55E]">In catalog</p>
           </div>
         </Card>
         <Card padding="md">
           <div className="text-center">
-            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{segmentsCount}</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">Segments</p>
-            <p className="text-xs text-[#4A4A4A]">RFM</p>
+            <p className="text-3xl font-bold text-[var(--text-primary)] font-mono">{segmentsCount}</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">Segments</p>
+            <p className="text-xs text-[var(--text-secondary)]">RFM</p>
           </div>
         </Card>
         <Card padding="md">
           <div className="text-center">
-            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{campaignsTyped.length}</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">Campaigns</p>
+            <p className="text-3xl font-bold text-[var(--text-primary)] font-mono">{campaignsTyped.length}</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">Campaigns</p>
             <p className="text-xs text-[#8B5CF6]">Ενεργό</p>
           </div>
         </Card>
         <Card padding="md">
           <div className="text-center">
-            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{hasOrganic ? '✓' : '—'}</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">Οργανικά Έσοδα</p>
+            <p className="text-3xl font-bold text-[var(--text-primary)] font-mono">{hasOrganic ? '✓' : '—'}</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">Οργανικά Έσοδα</p>
             <p className="text-xs text-[#22C55E]">{hasOrganic ? 'Εισαγόμενα' : 'Χωρίς δεδομένα'}</p>
           </div>
         </Card>
         <Card padding="md">
           <div className="text-center">
-            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{ecomm.hasData ? formatNumber(ecomm.orderCount) : '—'}</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">E-shop Orders</p>
-            <p className="text-xs text-[#4A4A4A]">{ecomm.hasData ? formatCurrencyCompact(ecomm.totalRevenue) : 'Χωρίς δεδομένα'}</p>
+            <p className="text-3xl font-bold text-[var(--text-primary)] font-mono">{ecomm.hasData ? formatNumber(ecomm.orderCount) : '—'}</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">E-shop Orders</p>
+            <p className="text-xs text-[var(--text-secondary)]">{ecomm.hasData ? formatCurrencyCompact(ecomm.totalRevenue) : 'Χωρίς δεδομένα'}</p>
           </div>
         </Card>
       </div>
@@ -472,28 +472,28 @@ function ScheduleModal({
           toolbarAriaLabel="Κλείσιμο"
           title={<h3 className="text-lg font-bold text-[var(--text-heading)]">Νέος Προγραμματισμός Report</h3>}
           actions={
-            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
-              <X size={20} className="text-[#4A4A4A]" />
+            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[var(--surface-2)]">
+              <X size={20} className="text-[var(--text-secondary)]" />
             </button>
           }
         />
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[#4A4A4A] mb-1">Όνομα</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Όνομα</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="π.χ. Weekly Executive Summary"
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
+              className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-[#4A4A4A] mb-1">Τύπος Report</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Τύπος Report</label>
             <select
               value={reportType}
               onChange={(e) => setReportType(e.target.value)}
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
+              className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
             >
               {reportTypes.map((r: ReportTypeItem) => (
                 <option key={r.id} value={r.id}>{r.name}</option>
@@ -501,11 +501,11 @@ function ScheduleModal({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-[#4A4A4A] mb-1">Συχνότητα</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Συχνότητα</label>
             <select
               value={frequency}
               onChange={(e) => setFrequency(e.target.value)}
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
+              className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
             >
               <option value="Daily 8:00 AM">Καθημερινά 8:00</option>
               <option value="Every Monday 9:00 AM">Καθε Δευτέρα 9:00</option>
@@ -514,12 +514,12 @@ function ScheduleModal({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-[#4A4A4A] mb-1">Email recipients (χωρισμένα με κόμμα)</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Email recipients (χωρισμένα με κόμμα)</label>
             <input
               value={recipientsStr}
               onChange={(e) => setRecipientsStr(e.target.value)}
               placeholder="email1@company.com, email2@company.com"
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
+              className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
             />
           </div>
           <div className="flex gap-3 pt-4">
@@ -565,21 +565,21 @@ function CustomReportModal({
           toolbarAriaLabel="Κλείσιμο"
           title={<h3 className="text-lg font-bold text-[var(--text-heading)]">Προσαρμοσμένη αναφορά</h3>}
           actions={
-            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
-              <X size={20} className="text-[#4A4A4A]" />
+            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[var(--surface-2)]">
+              <X size={20} className="text-[var(--text-secondary)]" />
             </button>
           }
         />
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[#4A4A4A] mb-2">Επιλέξτε τύπο report</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Επιλέξτε τύπο report</label>
             <select
               value={selectedId}
               onChange={(e) => {
                 setSelectedId(e.target.value);
                 setFormat(isPdfSupported(e.target.value) ? 'pdf' : 'excel');
               }}
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
+              className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
             >
               {reportTypes.map((r: ReportTypeItem) => (
                 <option key={r.id} value={r.id}>{r.name} ({r.format})</option>
@@ -588,11 +588,11 @@ function CustomReportModal({
           </div>
           {isPdfSupported(selectedId) && (
             <div>
-              <label className="block text-sm font-medium text-[#4A4A4A] mb-2">Μορφή</label>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Μορφή</label>
               <select
                 value={format}
                 onChange={(e) => setFormat(e.target.value as ReportFormat)}
-                className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
+                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
               >
                 <option value="pdf">PDF</option>
                 <option value="excel">Excel</option>

@@ -209,16 +209,16 @@ export function SalesBaseSetupModal({
   const catS = sliceGroups(categoryGroups);
 
   const renderGroupTable = (title: string, shown: GroupRow[], restCount: number, totalGroups: number) => (
-    <div className="rounded-xl border border-[#E5E5E5] overflow-hidden">
-      <div className="px-3 py-2 bg-[#F9FAFB] border-b border-[#E5E5E5] flex items-center gap-2">
-        <Layers size={14} className="text-[#6B7280]" />
-        <span className="text-xs font-semibold text-[#374151]">{title}</span>
-        <span className="text-[10px] text-[#9CA3AF] ml-auto">{totalGroups} ομάδες</span>
+    <div className="rounded-xl border border-[var(--border)] overflow-hidden">
+      <div className="px-3 py-2 bg-[var(--surface-1)] border-b border-[var(--border)] flex items-center gap-2">
+        <Layers size={14} className="text-[var(--text-muted)]" />
+        <span className="text-xs font-semibold text-[var(--text-secondary)]">{title}</span>
+        <span className="text-[10px] text-[var(--text-muted)] ml-auto">{totalGroups} ομάδες</span>
       </div>
       <div className="max-h-[220px] overflow-auto">
         <table className="w-full text-left text-[11px]">
-          <thead className="sticky top-0 bg-white border-b border-[#F3F4F6] z-[1]">
-            <tr className="text-[#9CA3AF]">
+          <thead className="sticky top-0 bg-white border-b border-[var(--surface-2)] z-[1]">
+            <tr className="text-[var(--text-muted)]">
               <th className="px-3 py-2 font-medium">Ομάδα</th>
               <th className="px-3 py-2 font-medium text-right">SKU</th>
               <th className="px-3 py-2 font-medium text-right">Μέσο score</th>
@@ -226,11 +226,11 @@ export function SalesBaseSetupModal({
           </thead>
           <tbody>
             {shown.map((g) => (
-              <tr key={g.label} className="border-b border-[#F9FAFB]">
-                <td className="px-3 py-1.5 text-[#111827] truncate max-w-[180px]" title={g.label}>
+              <tr key={g.label} className="border-b border-[var(--surface-1)]">
+                <td className="px-3 py-1.5 text-[var(--text-primary)] truncate max-w-[180px]" title={g.label}>
                   {g.label}
                 </td>
-                <td className="px-3 py-1.5 text-right font-mono text-[#4B5563]">{g.count}</td>
+                <td className="px-3 py-1.5 text-right font-mono text-[var(--text-secondary)]">{g.count}</td>
                 <td className="px-3 py-1.5 text-right font-mono font-medium text-[var(--nts-accent-text)]">
                   {g.avgMomentum.toFixed(0)}
                 </td>
@@ -239,7 +239,7 @@ export function SalesBaseSetupModal({
           </tbody>
         </table>
         {restCount > 0 && (
-          <p className="text-[10px] text-[#9CA3AF] px-3 py-2 border-t border-[#F3F4F6]">
+          <p className="text-[10px] text-[var(--text-muted)] px-3 py-2 border-t border-[var(--surface-2)]">
             +{restCount} ακόμα ομάδες με λιγότερα SKU (συμπεριλαμβάνονται στο σύνολο παρακάτω).
           </p>
         )}
@@ -263,15 +263,15 @@ export function SalesBaseSetupModal({
           className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#E5E5E5]">
+          <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[var(--border)]">
             <div>
-              <h2 className="text-base font-bold text-[#1A1A1A]">Sales Optimization — εύρος με φίλτρα</h2>
-              <p className="text-xs text-[#6B7280] mt-1 leading-relaxed">
+              <h2 className="text-base font-bold text-[var(--text-primary)]">Sales Optimization — εύρος με φίλτρα</h2>
+              <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
                 Ορίστε preset ρυθμού πωλήσεων και φίλτρα. Η στρατηγική εφαρμόζεται σε <strong>όλα</strong> τα SKU που
                 πληρούν τα κριτήρια. Παρακάτω εμφανίζεται συνοπτική εικόνα ανά μάρκα και κατηγορία, χωρίς αναλυτική λίστα προϊόντων.
               </p>
             </div>
-            <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#F5F5F5] text-[#9CA3AF]">
+            <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-muted)]">
               <X size={18} />
             </button>
           </div>
@@ -341,7 +341,7 @@ export function SalesBaseSetupModal({
                   className={`flex gap-2 rounded-xl border p-2.5 cursor-pointer text-left transition-colors ${
                     preset === opt.id
                       ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/5'
-                      : 'border-[#E5E5E5] hover:border-[var(--nts-accent)]/40'
+                      : 'border-[var(--border)] hover:border-[var(--nts-accent)]/40'
                   }`}
                 >
                   <input
@@ -352,8 +352,8 @@ export function SalesBaseSetupModal({
                     onChange={() => setPreset(opt.id)}
                   />
                   <span className="min-w-0">
-                    <span className="text-xs font-semibold text-[#1A1A1A] block">{opt.label}</span>
-                    <span className="text-[10px] text-[#6B7280] leading-snug">{opt.hint}</span>
+                    <span className="text-xs font-semibold text-[var(--text-primary)] block">{opt.label}</span>
+                    <span className="text-[10px] text-[var(--text-muted)] leading-snug">{opt.hint}</span>
                   </span>
                 </label>
               );
@@ -363,13 +363,13 @@ export function SalesBaseSetupModal({
                   {allOpt && renderOpt(allOpt)}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] px-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)] px-1">
                         Μηδενικές πωλήσεις σε χρονικό παράθυρο
                       </p>
                       <div className="space-y-2">{zeroOpts.map(renderOpt)}</div>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] px-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)] px-1">
                         Χωρίς πωλήσεις και στασιμότητα
                       </p>
                       <div className="space-y-2">{otherOpts.map(renderOpt)}</div>
@@ -380,18 +380,18 @@ export function SalesBaseSetupModal({
             })()}
 
             {hasProcurementCategories && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA]">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--surface-1)]">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                   Πηγή κατηγοριών
                 </span>
-                <div className="ml-auto inline-flex rounded-lg border border-[#E5E5E5] bg-white p-0.5">
+                <div className="ml-auto inline-flex rounded-lg border border-[var(--border)] bg-white p-0.5">
                   <button
                     type="button"
                     onClick={() => setCategorySource('product')}
                     className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
                       categorySource === 'product'
                         ? 'bg-[var(--nts-accent)] text-white'
-                        : 'text-[#4B5563] hover:bg-[#F5F5F5]'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--surface-2)]'
                     }`}
                     title="Από στήλη Category του products import (ευρεία εμπορική κατηγορία)"
                   >
@@ -403,7 +403,7 @@ export function SalesBaseSetupModal({
                     className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
                       categorySource === 'procurement'
                         ? 'bg-[var(--nts-accent)] text-white'
-                        : 'text-[#4B5563] hover:bg-[#F5F5F5]'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--surface-2)]'
                     }`}
                     title="Από procurement_inventory: STATUS / ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ (π.χ. «Επί παραγγελία», «Προς κατάργηση»)"
                   >
@@ -415,13 +415,13 @@ export function SalesBaseSetupModal({
 
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex-1 min-w-[140px]">
-                <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">Μάρκα / προμηθευτής</label>
+                <label className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">Μάρκα / προμηθευτής</label>
                 <input
                   list="sales-base-brands"
                   value={brandFilter}
                   onChange={(e) => setBrandFilter(e.target.value)}
                   placeholder="Φίλτρο…"
-                  className="mt-0.5 w-full text-xs border border-[#E5E5E5] rounded-lg px-2 py-1.5"
+                  className="mt-0.5 w-full text-xs border border-[var(--border)] rounded-lg px-2 py-1.5"
                 />
                 <datalist id="sales-base-brands">
                   {brandOptions.map((b) => (
@@ -430,13 +430,13 @@ export function SalesBaseSetupModal({
                 </datalist>
               </div>
               <div className="flex-1 min-w-[140px]">
-                <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">Κατηγορία</label>
+                <label className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">Κατηγορία</label>
                 <input
                   list="sales-base-cats"
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
                   placeholder="Φίλτρο…"
-                  className="mt-0.5 w-full text-xs border border-[#E5E5E5] rounded-lg px-2 py-1.5"
+                  className="mt-0.5 w-full text-xs border border-[var(--border)] rounded-lg px-2 py-1.5"
                 />
                 <datalist id="sales-base-cats">
                   {categoryOptions.map((c) => (
@@ -445,23 +445,23 @@ export function SalesBaseSetupModal({
                 </datalist>
               </div>
               <div className="flex-[2] min-w-[180px]">
-                <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">Αναζήτηση</label>
+                <label className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">Αναζήτηση</label>
                 <div className="relative mt-0.5">
-                  <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                  <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Όνομα ή SKU…"
-                    className="w-full text-xs border border-[#E5E5E5] rounded-lg pl-7 pr-2 py-1.5"
+                    className="w-full text-xs border border-[var(--border)] rounded-lg pl-7 pr-2 py-1.5"
                   />
                 </div>
               </div>
             </div>
 
             {categoryOptions.length > 1 && (
-              <div className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2.5">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2.5">
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">
+                  <label className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">
                     Εξαίρεση κατηγοριών
                   </label>
                   {excludedCategories.length > 0 && (
@@ -485,7 +485,7 @@ export function SalesBaseSetupModal({
                         className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${
                           active
                             ? 'bg-red-50 border-red-300 text-red-700 line-through'
-                            : 'bg-white border-[#E5E5E5] text-[#4B5563] hover:border-[var(--nts-accent)]/40'
+                            : 'bg-white border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]/40'
                         }`}
                         title={active ? 'Κάντε κλικ για επανένταξη' : 'Κάντε κλικ για εξαίρεση'}
                       >
@@ -494,7 +494,7 @@ export function SalesBaseSetupModal({
                     );
                   })}
                 </div>
-                <p className="text-[10px] text-[#9CA3AF] mt-1.5">
+                <p className="text-[10px] text-[var(--text-muted)] mt-1.5">
                   Χρήσιμο για κατηγορίες-status (π.χ. «Επί παραγγελία», «Προς κατάργηση») που εκ φύσεως δεν έχουν
                   πωλήσεις.
                 </p>
@@ -502,16 +502,16 @@ export function SalesBaseSetupModal({
             )}
 
             <div className="rounded-lg border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/5 px-3 py-2">
-              <p className="text-xs font-medium text-[#1A1A1A]">
+              <p className="text-xs font-medium text-[var(--text-primary)]">
                 Σύνολο <span className="text-[var(--nts-accent-text)]">{totalMatched.toLocaleString('el-GR')}</span> SKU
                 ταιριάζουν με τα κριτήρια.
                 {excludedCategories.length > 0 && (
-                  <span className="text-[10px] text-[#6B7280] font-normal ml-1">
+                  <span className="text-[10px] text-[var(--text-muted)] font-normal ml-1">
                     (εξαιρούνται {excludedCategories.length} κατηγορίες)
                   </span>
                 )}
               </p>
-              <p className="text-[10px] text-[#6B7280] mt-1">
+              <p className="text-[10px] text-[var(--text-muted)] mt-1">
                 Στην επόμενη οθόνη επιλέγετε διάρκεια· η στρατηγική ισχύει για όλα αυτά τα SKU (όχι επιλογή ανά
                 γραμμή).
               </p>
@@ -525,15 +525,15 @@ export function SalesBaseSetupModal({
             )}
 
             {totalMatched === 0 && (
-              <p className="text-xs text-center text-[#9CA3AF] py-6">Δεν βρέθηκε κανένα SKU που να ικανοποιεί τα επιλεγμένα φίλτρα ή preset.</p>
+              <p className="text-xs text-center text-[var(--text-muted)] py-6">Δεν βρέθηκε κανένα SKU που να ικανοποιεί τα επιλεγμένα φίλτρα ή preset.</p>
             )}
           </div>
 
-          <div className="flex justify-end gap-2 px-5 py-3 border-t border-[#E5E5E5] bg-[#FAFAFA]">
+          <div className="flex justify-end gap-2 px-5 py-3 border-t border-[var(--border)] bg-[var(--surface-1)]">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 text-xs font-medium text-[#6B7280] hover:text-[#111827]"
+              className="px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             >
               Ακύρωση
             </button>

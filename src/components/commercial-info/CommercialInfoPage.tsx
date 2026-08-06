@@ -176,7 +176,7 @@ function CommercialInfoGuide() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-3">
           <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Τι σημαίνουν οι ετικέτες</p>
           <div className="mt-3 space-y-2 text-xs text-[var(--nts-medium-gray)]">
             <p><span className="font-semibold text-[var(--nts-charcoal)]">Τύπος</span>: π.χ. {FACTOR_LABEL.instinct} = {FACTOR_HELP.instinct}</p>

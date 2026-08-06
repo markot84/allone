@@ -24,7 +24,7 @@ export function MetaAttributionSelector({ compact = false }: { compact?: boolean
       <select
         value={metaWindow}
         onChange={(e) => setMetaWindow(e.target.value as MetaAttributionWindow)}
-        className="text-xs border border-[#E5E5E5] rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30 hover:border-[var(--nts-accent)]/50 transition-colors min-h-[36px]"
+        className="text-xs border border-[var(--border)] rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30 hover:border-[var(--nts-accent)]/50 transition-colors min-h-[36px]"
         aria-label="Meta attribution window"
       >
         {options.map((w) => (

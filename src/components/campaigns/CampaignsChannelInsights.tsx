@@ -9,7 +9,7 @@ import type { Campaign } from '../../types';
 const CHANNEL_DOT_COLORS: Record<string, string> = {
   'Google Ads': '#4285F4',
   Meta: '#1877F2',
-  Other: '#78716C',
+  Other: 'var(--text-muted)',
   'Google Shopping': '#34A853',
   Facebook: '#1877F2',
   Instagram: '#E4405F',
@@ -43,7 +43,7 @@ export function CampaignsChannelInsights({ campaigns }: { campaigns: Campaign[] 
             <div className="flex items-center gap-2 mb-3">
               <div
                 className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: CHANNEL_DOT_COLORS[ch.channel] || '#78716C' }}
+                style={{ backgroundColor: CHANNEL_DOT_COLORS[ch.channel] || 'var(--text-muted)' }}
               />
               <span className="font-medium text-[var(--nts-charcoal)] text-sm">{ch.channel}</span>
               <span className="text-xs text-[var(--nts-medium-gray)] ml-auto">

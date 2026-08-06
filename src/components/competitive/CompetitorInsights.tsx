@@ -1108,36 +1108,36 @@ export function CompetitorInsights() {
     <div className="space-y-6">
       <PageHeader
         title={
-          <h2 className="flex flex-wrap items-center gap-2 text-xl font-bold text-[#1A1A1A] sm:text-2xl">
+          <h2 className="flex flex-wrap items-center gap-2 text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
             <Search size={22} className="shrink-0 text-[var(--nts-accent-text)] sm:h-6 sm:w-6" />
             <span>Competitive Intelligence</span>
             <Tooltip content={TOOLTIP_CI_REFRESH} size={18} />
           </h2>
         }
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Price benchmarking (Google Merchant Center) & Ad monitoring (Meta Ad Library)
           </p>
         }
       />
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 bg-[#F3F4F6] p-1 rounded-lg w-fit">
+      <div className="flex items-center gap-1 bg-[var(--surface-2)] p-1 rounded-lg w-fit">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
               activeTab === tab.id
-                ? 'bg-white text-[#111827] shadow-sm'
-                : 'text-[#6B7280] hover:text-[#374151]'
+                ? 'bg-white text-[var(--text-primary)] shadow-sm'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
             }`}
           >
             {tab.icon}
             {tab.label}
             {(tab.count ?? 0) > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded-full font-mono ${
-                activeTab === tab.id ? 'bg-[var(--nts-accent)] text-white' : 'bg-[#E5E7EB] text-[#6B7280]'
+                activeTab === tab.id ? 'bg-[var(--nts-accent)] text-white' : 'bg-[var(--border)] text-[var(--text-muted)]'
               }`}>
                 {tab.count}
               </span>
@@ -1218,7 +1218,7 @@ export function CompetitorInsights() {
           <Card>
             <div className="p-5">
               <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-                <h3 className="text-base font-semibold text-[#1A1A1A]">Price Benchmarks — Google Merchant Center</h3>
+                <h3 className="text-base font-semibold text-[var(--text-primary)]">Price Benchmarks — Google Merchant Center</h3>
                 <div className="flex items-center gap-2 flex-wrap">
                   {benchmarkQuickFilter !== 'all' && (
                     <button
@@ -1248,7 +1248,7 @@ export function CompetitorInsights() {
                         type="button"
                         disabled={filteredBenchmarks.length === 0}
                         onClick={() => void handleExportBenchmarks('csv')}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[#F9FAFB] disabled:opacity-40 disabled:pointer-events-none"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] bg-white border border-[var(--border)] rounded-lg hover:bg-[var(--surface-1)] disabled:opacity-40 disabled:pointer-events-none"
                         title="Φιλτραρισμένα αποτελέσματα πίνακα. CSV UTF-8."
                       >
                         <FileText size={13} />
@@ -1258,7 +1258,7 @@ export function CompetitorInsights() {
                         type="button"
                         disabled={filteredBenchmarks.length === 0}
                         onClick={() => void handleExportBenchmarks('xlsx')}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[#F9FAFB] disabled:opacity-40 disabled:pointer-events-none"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] bg-white border border-[var(--border)] rounded-lg hover:bg-[var(--surface-1)] disabled:opacity-40 disabled:pointer-events-none"
                         title="Φιλτραρισμένα αποτελέσματα πίνακα. Excel."
                       >
                         <FileSpreadsheet size={13} />
@@ -1267,13 +1267,13 @@ export function CompetitorInsights() {
                     </>
                   )}
                   <div className="relative">
-                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                     <input
                       type="text"
                       value={benchmarkSearch}
                       onChange={(e) => setBenchmarkSearch(e.target.value)}
                       placeholder="Αναζήτηση SKU..."
-                      className="pl-8 pr-3 py-1.5 bg-[#F5F5F5] border border-transparent rounded-lg text-xs focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all w-48"
+                      className="pl-8 pr-3 py-1.5 bg-[var(--surface-2)] border border-transparent rounded-lg text-xs focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all w-48"
                     />
                   </div>
                   <Button
@@ -1289,9 +1289,9 @@ export function CompetitorInsights() {
               </div>
 
               {benchmarkQuickFilter !== 'all' && (
-                <p className="mb-3 text-xs text-[#6B7280]">
+                <p className="mb-3 text-xs text-[var(--text-muted)]">
                   Εμφανίζονται μόνο προϊόντα{' '}
-                  <span className="font-medium text-[#111827]">
+                  <span className="font-medium text-[var(--text-primary)]">
                     {benchmarkQuickFilter === 'aboveMarket' ? 'πάνω από αγορά' : 'κάτω από αγορά'}
                   </span>
                   .
@@ -1303,26 +1303,26 @@ export function CompetitorInsights() {
                   <Spinner size="md" label="Φόρτωση benchmarks..." />
                 </div>
               ) : benchmarksQueryError ? (
-                <div className="text-center py-10 text-sm text-[#9CA3AF]">
+                <div className="text-center py-10 text-sm text-[var(--text-muted)]">
                   Δεν εμφανίζονται δεδομένα λόγω σφάλματος ανάγνωσης. Πατήστε «Επανάληψη» παραπάνω ή ανανεώστε τη σελίδα.
                 </div>
               ) : benchmarkCount === 0 ? (
                 <div className="text-center py-10">
-                  <ShoppingCart size={40} className="mx-auto text-[#D1D5DB] mb-3" />
-                  <p className="text-sm text-[#9CA3AF] mb-1">Δεν υπάρχουν προϊόντα με διαθέσιμο benchmark τιμής.</p>
-                  <p className="text-xs text-[#D1D5DB]">Πατήστε «Sync GMC» ή ελέγξτε στο Merchant Center αν υπάρχουν δεδομένα στο Growth › Price competitiveness.</p>
+                  <ShoppingCart size={40} className="mx-auto text-[var(--border-strong)] mb-3" />
+                  <p className="text-sm text-[var(--text-muted)] mb-1">Δεν υπάρχουν προϊόντα με διαθέσιμο benchmark τιμής.</p>
+                  <p className="text-xs text-[var(--border-strong)]">Πατήστε «Sync GMC» ή ελέγξτε στο Merchant Center αν υπάρχουν δεδομένα στο Growth › Price competitiveness.</p>
                 </div>
               ) : stockedBenchmarkCount === 0 ? (
                 <div className="text-center py-10">
-                  <ShoppingCart size={40} className="mx-auto text-[#D1D5DB] mb-3" />
-                  <p className="text-sm text-[#9CA3AF] mb-1">Υπάρχουν benchmarks, αλλά όχι για προϊόντα με διαθέσιμο stock.</p>
-                  <p className="text-xs text-[#D1D5DB]">Η προβολή κρατά μόνο benchmarked προϊόντα που αντιστοιχούν σε διαθέσιμο απόθεμα.</p>
+                  <ShoppingCart size={40} className="mx-auto text-[var(--border-strong)] mb-3" />
+                  <p className="text-sm text-[var(--text-muted)] mb-1">Υπάρχουν benchmarks, αλλά όχι για προϊόντα με διαθέσιμο stock.</p>
+                  <p className="text-xs text-[var(--border-strong)]">Η προβολή κρατά μόνο benchmarked προϊόντα που αντιστοιχούν σε διαθέσιμο απόθεμα.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">
                   <table className="w-full text-left">
-                    <thead className="sticky top-0 bg-[#F9FAFB] z-10">
-                      <tr className="text-xs text-[#6B7280] uppercase tracking-wider">
+                    <thead className="sticky top-0 bg-[var(--surface-1)] z-10">
+                      <tr className="text-xs text-[var(--text-muted)] uppercase tracking-wider">
                         <th className="px-3 py-2.5 font-medium whitespace-nowrap">
                           <HeaderFilter label="Προϊόν" col="title" kind="text" align="left"
                             textValue={colFilters.title ?? ''} onTextChange={(v) => updateColFilter('title', v || undefined)}
@@ -1387,7 +1387,7 @@ export function CompetitorInsights() {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#F3F4F6]">
+                    <tbody className="divide-y divide-[var(--surface-2)]">
                       {visibleBenchmarks.map((b) => (
                         <BenchmarkRow
                           key={b.productId}
@@ -1398,10 +1398,10 @@ export function CompetitorInsights() {
                     </tbody>
                   </table>
                   {filteredBenchmarks.length === 0 && benchmarkSearch && (
-                    <p className="text-sm text-[#9CA3AF] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
+                    <p className="text-sm text-[var(--text-muted)] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
                   )}
                   {hiddenBenchmarkRows > 0 && (
-                    <p className="px-3 py-3 text-center text-xs text-[#6B7280]">
+                    <p className="px-3 py-3 text-center text-xs text-[var(--text-muted)]">
                       Εμφανίζονται οι πρώτες {visibleBenchmarks.length.toLocaleString('el-GR')} γραμμές από{' '}
                       {filteredBenchmarks.length.toLocaleString('el-GR')} αποτελέσματα για ταχύτητα. Χρησιμοποιήστε αναζήτηση/φίλτρα ή export για πλήρη λίστα.
                     </p>
@@ -1427,8 +1427,8 @@ export function CompetitorInsights() {
             <div className="p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-base font-semibold text-[#1A1A1A]">Price Insights — Προτάσεις Τιμολόγησης</h3>
-                  <p className="text-xs text-[#9CA3AF] mt-0.5">Predicted impact αν εφαρμοστεί η προτεινόμενη τιμή (τελ. 7 ημέρες)</p>
+                  <h3 className="text-base font-semibold text-[var(--text-primary)]">Price Insights — Προτάσεις Τιμολόγησης</h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Predicted impact αν εφαρμοστεί η προτεινόμενη τιμή (τελ. 7 ημέρες)</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap justify-end">
                   {hasInsightActiveColumnFilters && (
@@ -1448,7 +1448,7 @@ export function CompetitorInsights() {
                         type="button"
                         disabled={filteredInsights.length === 0}
                         onClick={() => void handleExportInsights('csv')}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[#F9FAFB] disabled:opacity-40 disabled:pointer-events-none"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] bg-white border border-[var(--border)] rounded-lg hover:bg-[var(--surface-1)] disabled:opacity-40 disabled:pointer-events-none"
                         title="Όλες οι φιλτραρισμένες γραμμές (όχι μόνο οι 300 στην οθόνη). CSV UTF-8."
                       >
                         <FileText size={13} />
@@ -1458,7 +1458,7 @@ export function CompetitorInsights() {
                         type="button"
                         disabled={filteredInsights.length === 0}
                         onClick={() => void handleExportInsights('xlsx')}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[#F9FAFB] disabled:opacity-40 disabled:pointer-events-none"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] bg-white border border-[var(--border)] rounded-lg hover:bg-[var(--surface-1)] disabled:opacity-40 disabled:pointer-events-none"
                         title="Όλες οι φιλτραρισμένες γραμμές (όχι μόνο οι 300 στην οθόνη). Excel."
                       >
                         <FileSpreadsheet size={13} />
@@ -1467,13 +1467,13 @@ export function CompetitorInsights() {
                     </>
                   )}
                   <div className="relative">
-                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                     <input
                       type="text"
                       value={insightsSearch}
                       onChange={e => setInsightsSearch(e.target.value)}
                       placeholder="Αναζήτηση..."
-                      className="pl-8 pr-3 py-1.5 bg-[#F5F5F5] border border-transparent rounded-lg text-xs focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all w-48"
+                      className="pl-8 pr-3 py-1.5 bg-[var(--surface-2)] border border-transparent rounded-lg text-xs focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all w-48"
                     />
                   </div>
                   <Button variant="primary" size="sm" onClick={() => handleSync('merchant')} disabled={syncing !== null}>
@@ -1487,15 +1487,15 @@ export function CompetitorInsights() {
                 <div className="py-8 flex justify-center"><Spinner size="md" label="Φόρτωση insights..." /></div>
               ) : !hasInsightsData || insightsCount === 0 ? (
                 <div className="text-center py-10">
-                  <TrendingUp size={40} className="mx-auto text-[#D1D5DB] mb-3" />
-                  <p className="text-sm text-[#9CA3AF] mb-1">Δεν υπάρχουν Price Insights.</p>
-                  <p className="text-xs text-[#D1D5DB]">Πατήστε "Sync GMC" — τα insights φέρνονται αυτόματα μαζί με τα benchmarks.</p>
+                  <TrendingUp size={40} className="mx-auto text-[var(--border-strong)] mb-3" />
+                  <p className="text-sm text-[var(--text-muted)] mb-1">Δεν υπάρχουν Price Insights.</p>
+                  <p className="text-xs text-[var(--border-strong)]">Πατήστε "Sync GMC" — τα insights φέρνονται αυτόματα μαζί με τα benchmarks.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">
                   <table className="w-full text-left">
-                    <thead className="sticky top-0 bg-[#F9FAFB] z-10">
-                      <tr className="text-xs text-[#6B7280] uppercase tracking-wider">
+                    <thead className="sticky top-0 bg-[var(--surface-1)] z-10">
+                      <tr className="text-xs text-[var(--text-muted)] uppercase tracking-wider">
                         <th className="px-3 py-2.5 font-medium whitespace-nowrap">
                           <HeaderFilter
                             label="Προϊόν"
@@ -1661,7 +1661,7 @@ export function CompetitorInsights() {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#F3F4F6]">
+                    <tbody className="divide-y divide-[var(--surface-2)]">
                       {filteredInsights.slice(0, 300).map((item) => (
                         <InsightRow
                           key={item.productId}
@@ -1673,10 +1673,10 @@ export function CompetitorInsights() {
                     </tbody>
                   </table>
                   {filteredInsights.length === 0 && (insightsSearch || hasInsightActiveColumnFilters) && (
-                    <p className="text-sm text-[#9CA3AF] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
+                    <p className="text-sm text-[var(--text-muted)] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
                   )}
                   {filteredInsights.length > 300 && (
-                    <p className="text-xs text-[#9CA3AF] text-center py-3">Εμφανίζονται τα πρώτα 300 από {filteredInsights.length}</p>
+                    <p className="text-xs text-[var(--text-muted)] text-center py-3">Εμφανίζονται τα πρώτα 300 από {filteredInsights.length}</p>
                   )}
                 </div>
               )}
@@ -1768,7 +1768,7 @@ export function CompetitorInsights() {
             <div className="p-5">
               <div className="flex flex-col sm:flex-row sm:items-end gap-3">
                 <div className="flex-1 min-w-0">
-                  <label className="flex items-center gap-1 text-xs font-medium text-[#374151] mb-1">
+                  <label className="flex items-center gap-1 text-xs font-medium text-[var(--text-secondary)] mb-1">
                     Φίλτρο χωρών (reach)
                     <Tooltip
                       content="Φιλτράρει κατά χώρα που η Meta καταγράφει ως «reached». Με μία μόνο χώρα (π.χ. GR) πολλές καμπάνιες εμφανίζονται ως 0 — άδειασε το πεδίο και Αποθήκευση για πλήρη λίστα (GR, EU, US…). Έλεγξε το ίδιο Page ID στο facebook.com/ads/library."
@@ -1780,7 +1780,7 @@ export function CompetitorInsights() {
                     value={reachCountriesInput}
                     onChange={(e) => setReachCountriesInput(e.target.value)}
                     placeholder="Κενό = προεπιλογή (GR+EU+US…). Μόνο GR συχνά → 0 ads· άδειασμα πεδίου + Αποθήκευση"
-                    className="w-full px-3 py-2 border border-[#D1D5DB] rounded-lg text-sm focus:ring-2 focus:ring-[var(--nts-accent)] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg text-sm focus:ring-2 focus:ring-[var(--nts-accent)] focus:border-transparent"
                   />
                 </div>
                 <Button
@@ -1800,7 +1800,7 @@ export function CompetitorInsights() {
           <Card>
             <div className="p-5">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-semibold text-[#1A1A1A]">Ανταγωνιστές υπό παρακολούθηση</h3>
+                <h3 className="text-base font-semibold text-[var(--text-primary)]">Ανταγωνιστές υπό παρακολούθηση</h3>
                 <div className="flex items-center gap-2">
                   <Button variant="secondary" size="sm" onClick={() => setShowAddForm(!showAddForm)}>
                     <Plus size={14} className="mr-1" />
@@ -1826,19 +1826,19 @@ export function CompetitorInsights() {
                     exit={{ opacity: 0, height: 0 }}
                     className="overflow-hidden"
                   >
-                    <div className="flex items-end gap-3 mb-4 p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
+                    <div className="flex items-end gap-3 mb-4 p-4 bg-[var(--surface-1)] rounded-lg border border-[var(--border)]">
                       <div className="flex-1">
-                        <label className="block text-xs font-medium text-[#374151] mb-1">Όνομα ανταγωνιστή</label>
+                        <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Όνομα ανταγωνιστή</label>
                         <input
                           type="text"
                           value={newName}
                           onChange={(e) => setNewName(e.target.value)}
                           placeholder="π.χ. Competitor Brand"
-                          className="w-full px-3 py-2 border border-[#D1D5DB] rounded-lg text-sm focus:ring-2 focus:ring-[var(--nts-accent)] focus:border-transparent"
+                          className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg text-sm focus:ring-2 focus:ring-[var(--nts-accent)] focus:border-transparent"
                         />
                       </div>
                       <div className="flex-1">
-                        <label className="block text-xs font-medium text-[#374151] mb-1">
+                        <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
                           Facebook Page ID
                           <Tooltip content="Αριθμητικό ID σελίδας. Βρείτε το μέσω facebook.com/page_name → About → Page transparency → Page ID, ή μέσω lookup-id.com." size={12} />
                         </label>
@@ -1847,7 +1847,7 @@ export function CompetitorInsights() {
                           value={newPageId}
                           onChange={(e) => setNewPageId(e.target.value)}
                           placeholder="π.χ. 123456789012345"
-                          className="w-full px-3 py-2 border border-[#D1D5DB] rounded-lg text-sm focus:ring-2 focus:ring-[var(--nts-accent)] focus:border-transparent"
+                          className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg text-sm focus:ring-2 focus:ring-[var(--nts-accent)] focus:border-transparent"
                         />
                       </div>
                       <Button
@@ -1864,7 +1864,7 @@ export function CompetitorInsights() {
               </AnimatePresence>
 
               {competitors.length === 0 ? (
-                <p className="text-sm text-[#9CA3AF] text-center py-6">
+                <p className="text-sm text-[var(--text-muted)] text-center py-6">
                   Δεν έχετε προσθέσει ανταγωνιστές. Πατήστε "Προσθήκη" για να ξεκινήσετε.
                 </p>
               ) : (
@@ -1872,22 +1872,22 @@ export function CompetitorInsights() {
                   {competitors.map((c) => (
                     <div
                       key={c.pageId}
-                      className="flex items-center justify-between px-4 py-3 bg-white border border-[#E5E7EB] rounded-lg hover:border-[var(--nts-accent)] transition-colors"
+                      className="flex items-center justify-between px-4 py-3 bg-white border border-[var(--border)] rounded-lg hover:border-[var(--nts-accent)] transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-lg">📘</span>
                         <div>
-                          <p className="text-sm font-medium text-[#111827]">{c.name}</p>
-                          <p className="text-xs text-[#9CA3AF]">Page ID: {c.pageId}</p>
+                          <p className="text-sm font-medium text-[var(--text-primary)]">{c.name}</p>
+                          <p className="text-xs text-[var(--text-muted)]">Page ID: {c.pageId}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-[#6B7280]">
+                        <span className="text-xs text-[var(--text-muted)]">
                           {ads.filter((a) => a.competitorPageId === c.pageId).length} ads
                         </span>
                         <button
                           onClick={() => removeCompetitor(c.pageId)}
-                          className="p-1.5 hover:bg-red-50 rounded-md text-[#9CA3AF] hover:text-red-500 transition-colors"
+                          className="p-1.5 hover:bg-red-50 rounded-md text-[var(--text-muted)] hover:text-red-500 transition-colors"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -1903,15 +1903,15 @@ export function CompetitorInsights() {
           <Card>
             <div className="p-5">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-semibold text-[#1A1A1A]">Διαφημιστική δραστηριότητα</h3>
+                <h3 className="text-base font-semibold text-[var(--text-primary)]">Διαφημιστική δραστηριότητα</h3>
                 <div className="relative w-64">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Αναζήτηση..."
-                    className="w-full pl-9 pr-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
+                    className="w-full pl-9 pr-3 py-2 bg-[var(--surface-2)] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
                   />
                 </div>
               </div>
@@ -1921,7 +1921,7 @@ export function CompetitorInsights() {
                   <Spinner size="md" label="Φόρτωση ads..." />
                 </div>
               ) : ads.length === 0 ? (
-                <p className="text-sm text-[#9CA3AF] text-center py-8">Δεν υπάρχουν δεδομένα. Προσθέστε ανταγωνιστές και πατήστε "Scan τώρα".</p>
+                <p className="text-sm text-[var(--text-muted)] text-center py-8">Δεν υπάρχουν δεδομένα. Προσθέστε ανταγωνιστές και πατήστε "Scan τώρα".</p>
               ) : (
                 <div className="space-y-3 max-h-[60vh] overflow-y-auto">
                   {filteredAds
@@ -1930,7 +1930,7 @@ export function CompetitorInsights() {
                       <AdCard key={ad.adId} ad={ad} />
                     ))}
                   {filteredAds.length === 0 && (
-                    <p className="text-sm text-[#9CA3AF] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
+                    <p className="text-sm text-[var(--text-muted)] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
                   )}
                 </div>
               )}
@@ -1980,12 +1980,12 @@ function KpiBox({
           <span style={{ color }}>{icon}</span>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-[#6B7280] flex items-center gap-1 leading-tight">
+          <p className="text-xs text-[var(--text-muted)] flex items-center gap-1 leading-tight">
             {label}
             <Tooltip content={tooltip} size={11} />
           </p>
           <p
-            className="text-base sm:text-lg font-bold text-[#1A1A1A] font-mono leading-tight whitespace-normal break-words [overflow-wrap:anywhere]"
+            className="text-base sm:text-lg font-bold text-[var(--text-primary)] font-mono leading-tight whitespace-normal break-words [overflow-wrap:anywhere]"
             title={value}
           >
             {value}
@@ -2006,8 +2006,8 @@ function BenchmarkRow({
   item: { productId: string; title: string; brand?: string; gtin: string; yourPrice: number; benchmarkPrice: number; priceDiff: number; currency: string };
   inventory?: SkuInventoryRow | null;
 }) {
-  const diffColor = item.priceDiff > 5 ? '#EF4444' : item.priceDiff < -5 ? '#22C55E' : '#6B7280';
-  const diffBg = item.priceDiff > 5 ? '#FEF2F2' : item.priceDiff < -5 ? '#F0FDF4' : '#F9FAFB';
+  const diffColor = item.priceDiff > 5 ? '#EF4444' : item.priceDiff < -5 ? '#22C55E' : 'var(--text-muted)';
+  const diffBg = item.priceDiff > 5 ? '#FEF2F2' : item.priceDiff < -5 ? '#F0FDF4' : 'var(--surface-1)';
   const stock = inventory?.stock;
   const sold = inventory?.sold;
   const canCompareStockSold =
@@ -2017,55 +2017,55 @@ function BenchmarkRow({
   const ratio = salesStockRatio(inventory);
 
   return (
-    <tr className="hover:bg-[#FAFAFA] transition-colors">
+    <tr className="hover:bg-[var(--surface-1)] transition-colors">
       <td className="px-3 py-2.5">
-        <p className="text-sm font-medium text-[#111827] line-clamp-1 max-w-xs">{item.title || item.productId}</p>
-        <p className="text-[10px] text-[#9CA3AF] font-mono mt-0.5">{item.productId}</p>
+        <p className="text-sm font-medium text-[var(--text-primary)] line-clamp-1 max-w-xs">{item.title || item.productId}</p>
+        <p className="text-[10px] text-[var(--text-muted)] font-mono mt-0.5">{item.productId}</p>
       </td>
       <td className="px-3 py-2.5 hidden md:table-cell">
-        <span className="text-xs text-[#374151]">{item.brand || '—'}</span>
+        <span className="text-xs text-[var(--text-secondary)]">{item.brand || '—'}</span>
       </td>
       <td className="px-3 py-2.5 text-right">
         {typeof stock === 'number' ? (
           <span
-            className={`text-sm font-mono ${stockOverSold ? 'text-[#EF4444] font-semibold' : 'text-[#111827]'}`}
+            className={`text-sm font-mono ${stockOverSold ? 'text-[#EF4444] font-semibold' : 'text-[var(--text-primary)]'}`}
             title={stockOverSold ? 'Στοκ μεγαλύτερο από πωλήσεις περιόδου' : undefined}
           >
             {stock}
           </span>
         ) : (
-          <span className="text-[10px] text-[#D1D5DB]">—</span>
+          <span className="text-[10px] text-[var(--border-strong)]">—</span>
         )}
       </td>
       <td className="px-3 py-2.5 text-right">
         {typeof sold === 'number' ? (
           <span
-            className={`text-sm font-mono ${soldOverStock ? 'text-[#22C55E] font-semibold' : 'text-[#111827]'}`}
+            className={`text-sm font-mono ${soldOverStock ? 'text-[#22C55E] font-semibold' : 'text-[var(--text-primary)]'}`}
             title={soldOverStock ? 'Πωλήσεις μεγαλύτερες από τρέχον στοκ' : undefined}
           >
             {sold}
           </span>
         ) : (
-          <span className="text-[10px] text-[#D1D5DB]">—</span>
+          <span className="text-[10px] text-[var(--border-strong)]">—</span>
         )}
       </td>
       <td className="px-3 py-2.5 text-right">
         {typeof ratio === 'number' ? (
           <span
-            className={`text-sm font-mono ${ratio > 1 ? 'text-[#22C55E] font-semibold' : ratio < 0.25 ? 'text-[#EF4444] font-semibold' : 'text-[#111827]'}`}
+            className={`text-sm font-mono ${ratio > 1 ? 'text-[#22C55E] font-semibold' : ratio < 0.25 ? 'text-[#EF4444] font-semibold' : 'text-[var(--text-primary)]'}`}
             title="Πωλήσεις / τρέχον στοκ"
           >
             {ratio.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x
           </span>
         ) : (
-          <span className="text-[10px] text-[#D1D5DB]">—</span>
+          <span className="text-[10px] text-[var(--border-strong)]">—</span>
         )}
       </td>
       <td className="px-3 py-2.5 text-right">
-        <span className="text-sm font-mono text-[#1A1A1A]">{fmtEur(item.yourPrice)}</span>
+        <span className="text-sm font-mono text-[var(--text-primary)]">{fmtEur(item.yourPrice)}</span>
       </td>
       <td className="px-3 py-2.5 text-right">
-        <span className="text-sm font-mono text-[#6B7280]">
+        <span className="text-sm font-mono text-[var(--text-muted)]">
           {item.benchmarkPrice > 0 ? fmtEur(item.benchmarkPrice) : '—'}
         </span>
       </td>
@@ -2079,11 +2079,11 @@ function BenchmarkRow({
             {item.priceDiff > 0 ? '+' : ''}{item.priceDiff}%
           </span>
         ) : (
-          <span className="text-[10px] text-[#9CA3AF]">—</span>
+          <span className="text-[10px] text-[var(--text-muted)]">—</span>
         )}
       </td>
       <td className="px-3 py-2.5 hidden lg:table-cell">
-        <span className="text-[11px] font-mono text-[#9CA3AF]">{item.gtin || '—'}</span>
+        <span className="text-[11px] font-mono text-[var(--text-muted)]">{item.gtin || '—'}</span>
       </td>
     </tr>
   );
@@ -2103,7 +2103,7 @@ function InsightRow({
 
   const fmtPct = (v: number) => {
     const pct = Math.round(v * 100);
-    if (pct === 0) return <span className="text-[#9CA3AF]">—</span>;
+    if (pct === 0) return <span className="text-[var(--text-muted)]">—</span>;
     const color = pct > 0 ? '#22C55E' : '#EF4444';
     const bg = pct > 0 ? '#F0FDF4' : '#FEF2F2';
     return (
@@ -2122,45 +2122,45 @@ function InsightRow({
   const soldOverStock = canCompareStockSold && sold > stock;
 
   return (
-    <tr className="hover:bg-[#FAFAFA] transition-colors">
+    <tr className="hover:bg-[var(--surface-1)] transition-colors">
       <td className="px-3 py-2.5">
-        <p className="text-sm font-medium text-[#111827] line-clamp-1 max-w-xs">{item.title || item.productId}</p>
-        <p className="text-[10px] text-[#9CA3AF] font-mono mt-0.5">{item.productId}</p>
+        <p className="text-sm font-medium text-[var(--text-primary)] line-clamp-1 max-w-xs">{item.title || item.productId}</p>
+        <p className="text-[10px] text-[var(--text-muted)] font-mono mt-0.5">{item.productId}</p>
       </td>
       <td className="px-3 py-2.5 hidden md:table-cell">
-        <span className="text-xs text-[#374151] line-clamp-2 max-w-[10rem]" title={sellerLabel || undefined}>
+        <span className="text-xs text-[var(--text-secondary)] line-clamp-2 max-w-[10rem]" title={sellerLabel || undefined}>
           {sellerLabel || '—'}
         </span>
       </td>
       <td className="px-3 py-2.5 hidden md:table-cell">
-        <span className="text-xs text-[#374151]">{item.brand || '—'}</span>
+        <span className="text-xs text-[var(--text-secondary)]">{item.brand || '—'}</span>
       </td>
       <td className="px-3 py-2.5 text-right">
         {typeof stock === 'number' ? (
           <span
-            className={`text-sm font-mono ${stockOverSold ? 'text-[#EF4444] font-semibold' : 'text-[#111827]'}`}
+            className={`text-sm font-mono ${stockOverSold ? 'text-[#EF4444] font-semibold' : 'text-[var(--text-primary)]'}`}
             title={stockOverSold ? 'Στοκ μεγαλύτερο από πωλήσεις περιόδου' : undefined}
           >
             {stock}
           </span>
         ) : (
-          <span className="text-[10px] text-[#D1D5DB]">—</span>
+          <span className="text-[10px] text-[var(--border-strong)]">—</span>
         )}
       </td>
       <td className="px-3 py-2.5 text-right">
         {typeof sold === 'number' ? (
           <span
-            className={`text-sm font-mono ${soldOverStock ? 'text-[#22C55E] font-semibold' : 'text-[#111827]'}`}
+            className={`text-sm font-mono ${soldOverStock ? 'text-[#22C55E] font-semibold' : 'text-[var(--text-primary)]'}`}
             title={soldOverStock ? 'Πωλήσεις μεγαλύτερες από τρέχον στοκ' : undefined}
           >
             {sold}
           </span>
         ) : (
-          <span className="text-[10px] text-[#D1D5DB]">—</span>
+          <span className="text-[10px] text-[var(--border-strong)]">—</span>
         )}
       </td>
       <td className="px-3 py-2.5 text-right">
-        <span className="text-sm font-mono text-[#1A1A1A]">{fmtEur(item.currentPrice)}</span>
+        <span className="text-sm font-mono text-[var(--text-primary)]">{fmtEur(item.currentPrice)}</span>
       </td>
       <td className="px-3 py-2.5 text-right">
         {hasSuggestion ? (
@@ -2168,15 +2168,15 @@ function InsightRow({
             {fmtEur(item.suggestedPrice)}
           </span>
         ) : (
-          <span className="text-sm font-mono text-[#9CA3AF]">—</span>
+          <span className="text-sm font-mono text-[var(--text-muted)]">—</span>
         )}
       </td>
       <td className="px-3 py-2.5 text-right">
         {hasSuggestion ? (
-          <span className="text-xs font-mono text-[#6B7280]">
+          <span className="text-xs font-mono text-[var(--text-muted)]">
             {item.priceDiffPercent > 0 ? '+' : ''}{item.priceDiffPercent}%
           </span>
-        ) : <span className="text-[#9CA3AF]">—</span>}
+        ) : <span className="text-[var(--text-muted)]">—</span>}
       </td>
       <td className="px-3 py-2.5 text-right">{fmtPct(item.predictedImpressionsChange)}</td>
       <td className="px-3 py-2.5 text-right">{fmtPct(item.predictedClicksChange)}</td>
@@ -2273,7 +2273,7 @@ function HeaderFilter(props: HeaderFilterProps) {
         className={`inline-flex items-center justify-center p-0.5 rounded transition-colors ${
           isActive
             ? 'text-[var(--nts-accent-text)] bg-[var(--nts-accent)]/10'
-            : 'text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#E5E7EB]'
+            : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--border)]'
         }`}
         aria-label={`Φίλτρο ${label}`}
       >
@@ -2284,14 +2284,14 @@ function HeaderFilter(props: HeaderFilterProps) {
         <div
           ref={popRef}
           style={{ position: 'fixed', top: pos.top, left: pos.left, width: 260, zIndex: 60 }}
-          className="bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 normal-case tracking-normal"
+          className="bg-white border border-[var(--border)] rounded-lg shadow-xl p-3 normal-case tracking-normal"
         >
-          <div className="flex items-center gap-1 mb-2 pb-2 border-b border-[#F3F4F6]">
+          <div className="flex items-center gap-1 mb-2 pb-2 border-b border-[var(--surface-2)]">
             <button
               type="button"
               onClick={() => { setSort(col, 'asc'); setOpen(false); }}
-              className={`flex-1 inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-[#F5F5F5] ${
-                sortedHere && sortDir === 'asc' ? 'bg-[#F5F5F5] font-semibold text-[#111827]' : 'text-[#4B5563]'
+              className={`flex-1 inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-[var(--surface-2)] ${
+                sortedHere && sortDir === 'asc' ? 'bg-[var(--surface-2)] font-semibold text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'
               }`}
             >
               <ArrowUp size={11} /> Αύξουσα
@@ -2299,8 +2299,8 @@ function HeaderFilter(props: HeaderFilterProps) {
             <button
               type="button"
               onClick={() => { setSort(col, 'desc'); setOpen(false); }}
-              className={`flex-1 inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-[#F5F5F5] ${
-                sortedHere && sortDir === 'desc' ? 'bg-[#F5F5F5] font-semibold text-[#111827]' : 'text-[#4B5563]'
+              className={`flex-1 inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-[var(--surface-2)] ${
+                sortedHere && sortDir === 'desc' ? 'bg-[var(--surface-2)] font-semibold text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'
               }`}
             >
               <ArrowDown size={11} /> Φθίνουσα
@@ -2310,28 +2310,28 @@ function HeaderFilter(props: HeaderFilterProps) {
           {kind === 'categorical' ? (
             <div>
               <div className="relative mb-1.5">
-                <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
                   type="text"
                   autoFocus
                   value={catSearch}
                   onChange={(e) => setCatSearch(e.target.value)}
                   placeholder="Αναζήτηση τιμής…"
-                  className="w-full pl-7 pr-2 py-1.5 text-xs border border-[#E5E7EB] rounded focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+                  className="w-full pl-7 pr-2 py-1.5 text-xs border border-[var(--border)] rounded focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
                 />
               </div>
               <div className="flex items-center justify-between mb-1">
                 <button type="button" onClick={onSelectAll} className="text-[10px] text-[var(--nts-accent-text)] hover:underline">Επιλογή όλων</button>
-                <button type="button" onClick={onClearSelection} className="text-[10px] text-[#9CA3AF] hover:underline">Αποεπιλογή</button>
+                <button type="button" onClick={onClearSelection} className="text-[10px] text-[var(--text-muted)] hover:underline">Αποεπιλογή</button>
               </div>
-              <div className="max-h-44 overflow-y-auto border border-[#F3F4F6] rounded p-1.5 space-y-0.5">
+              <div className="max-h-44 overflow-y-auto border border-[var(--surface-2)] rounded p-1.5 space-y-0.5">
                 {filteredOptions.length === 0 && (
-                  <p className="text-[10px] text-[#9CA3AF] px-1 py-0.5">Χωρίς τιμές</p>
+                  <p className="text-[10px] text-[var(--text-muted)] px-1 py-0.5">Χωρίς τιμές</p>
                 )}
                 {filteredOptions.map((v) => {
                   const checked = selected ? selected.has(v) : true;
                   return (
-                    <label key={v} className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-[#F9FAFB] px-1 py-0.5 rounded">
+                    <label key={v} className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-[var(--surface-1)] px-1 py-0.5 rounded">
                       <input
                         type="checkbox"
                         checked={checked}
@@ -2349,7 +2349,7 @@ function HeaderFilter(props: HeaderFilterProps) {
               {kind === 'number' && (
                 <div className="mb-3 space-y-2">
                   <div>
-                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                       Προεπιλογές
                     </label>
                     <select
@@ -2359,7 +2359,7 @@ function HeaderFilter(props: HeaderFilterProps) {
                         onTextChange?.(e.target.value);
                         setOpen(false);
                       }}
-                      className="w-full rounded border border-[#E5E7EB] bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+                      className="w-full rounded border border-[var(--border)] bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
                     >
                       <option value="">Επιλέξτε preset…</option>
                       {numericPresets.map((preset) => (
@@ -2370,15 +2370,15 @@ function HeaderFilter(props: HeaderFilterProps) {
                     </select>
                   </div>
 
-                  <div className="rounded-md border border-[#F3F4F6] bg-[#FAFAFA] p-2">
-                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                  <div className="rounded-md border border-[var(--surface-2)] bg-[var(--surface-1)] p-2">
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                       Custom filter
                     </p>
                     <div className="grid grid-cols-[88px_1fr] gap-1.5">
                       <select
                         value={customOperator}
                         onChange={(e) => setCustomOperator(e.target.value)}
-                        className="rounded border border-[#E5E7EB] bg-white px-1.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+                        className="rounded border border-[var(--border)] bg-white px-1.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
                       >
                         <option value="=">Equals</option>
                         <option value="!=">Does not equal</option>
@@ -2394,7 +2394,7 @@ function HeaderFilter(props: HeaderFilterProps) {
                         value={customValue}
                         onChange={(e) => setCustomValue(e.target.value)}
                         placeholder="τιμή"
-                        className="rounded border border-[#E5E7EB] bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+                        className="rounded border border-[var(--border)] bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
                       />
                     </div>
                     {customOperator === 'between' && (
@@ -2404,7 +2404,7 @@ function HeaderFilter(props: HeaderFilterProps) {
                         value={customValueTo}
                         onChange={(e) => setCustomValueTo(e.target.value)}
                         placeholder="έως"
-                        className="mt-1.5 w-full rounded border border-[#E5E7EB] bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+                        className="mt-1.5 w-full rounded border border-[var(--border)] bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
                       />
                     )}
                     <button
@@ -2428,9 +2428,9 @@ function HeaderFilter(props: HeaderFilterProps) {
                 value={textValue ?? ''}
                 onChange={(e) => onTextChange?.(e.target.value)}
                 placeholder={kind === 'number' ? 'Γρήγορο φίλτρο: >10, <5, 5-20, =8' : 'περιέχει…'}
-                className="w-full px-2 py-1.5 text-xs border border-[#E5E7EB] rounded focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+                className="w-full px-2 py-1.5 text-xs border border-[var(--border)] rounded focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
               />
-              <p className="text-[10px] text-[#9CA3AF] mt-1 leading-tight">
+              <p className="text-[10px] text-[var(--text-muted)] mt-1 leading-tight">
                 {hint || (kind === 'number' ? 'Υποστηρίζεται: >, <, >=, <=, εύρος (5-10), ίσο (=8).' : 'Αναζήτηση που περιέχει το κείμενο.')}
               </p>
               {textValue && (
@@ -2453,20 +2453,20 @@ function HeaderFilter(props: HeaderFilterProps) {
 
 function AdCard({ ad }: { ad: CompetitorAd }) {
   return (
-    <div className="p-4 border border-[#E5E7EB] rounded-lg hover:border-[#D1D5DB] transition-colors">
+    <div className="p-4 border border-[var(--border)] rounded-lg hover:border-[var(--border-strong)] transition-colors">
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-[#111827]">{ad.competitorName}</span>
+          <span className="text-sm font-medium text-[var(--text-primary)]">{ad.competitorName}</span>
           <Badge variant={ad.isActive ? 'success' : 'default'} size="sm">
             {ad.isActive ? 'Ενεργή' : 'Ανενεργή'}
           </Badge>
         </div>
-        <span className="text-xs text-[#9CA3AF]">{ad.daysRunning} ημέρες</span>
+        <span className="text-xs text-[var(--text-muted)]">{ad.daysRunning} ημέρες</span>
       </div>
-      <p className="text-sm text-[#374151] line-clamp-3 mb-2">
-        {ad.adText || <span className="italic text-[#9CA3AF]">Χωρίς κείμενο</span>}
+      <p className="text-sm text-[var(--text-secondary)] line-clamp-3 mb-2">
+        {ad.adText || <span className="italic text-[var(--text-muted)]">Χωρίς κείμενο</span>}
       </p>
-      <div className="flex items-center gap-4 text-xs text-[#9CA3AF]">
+      <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
         <span>Έναρξη: {ad.startDate ? new Date(ad.startDate).toLocaleDateString('el-GR') : '—'}</span>
         {ad.endDate && <span>Λήξη: {new Date(ad.endDate).toLocaleDateString('el-GR')}</span>}
         {ad.platforms.length > 0 && <span>Platforms: {ad.platforms.join(', ')}</span>}

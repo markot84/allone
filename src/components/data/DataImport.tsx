@@ -511,9 +511,9 @@ export function DataImport({ initialType }: DataImportProps = {}) {
       case 'failed':
         return <XCircle size={16} className="text-[#cf222e]" />;
       case 'processing':
-        return <Clock size={16} className="text-[#4A4A4A]" />;
+        return <Clock size={16} className="text-[var(--text-secondary)]" />;
       default:
-        return <Clock size={16} className="text-[#57606a]" />;
+        return <Clock size={16} className="text-[var(--text-muted)]" />;
     }
   };
 
@@ -524,7 +524,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
       <PageHeader
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Data Import</h2>}
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Import από CSV/Excel ή URL. Υποστηρίζονται: Products, Segments, Campaigns, Analytics. Για προϊόντα: ERP export, Google Ads, Meta Catalog.
           </p>
         }
@@ -537,7 +537,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             importMode === 'standard'
               ? 'bg-[var(--nts-accent)] text-white shadow-sm'
-              : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[var(--nts-accent)]'
+              : 'bg-white text-[var(--text-secondary)] border border-[var(--border)] hover:border-[var(--nts-accent)]'
           }`}
         >
           Standard Import
@@ -547,7 +547,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             importMode === 'feed'
               ? 'bg-[var(--nts-accent)] text-white shadow-sm'
-              : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[var(--nts-accent)]'
+              : 'bg-white text-[var(--text-secondary)] border border-[var(--border)] hover:border-[var(--nts-accent)]'
           }`}
         >
           Feed Sources (ERP, Google Ads, Meta)
@@ -561,13 +561,13 @@ export function DataImport({ initialType }: DataImportProps = {}) {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg p-4"
+            className="bg-[var(--surface-2)] border border-[var(--border)] rounded-lg p-4"
           >
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <Spinner size="sm" />
-                  <span className="text-sm font-semibold text-[#4A4A4A]">
+                  <span className="text-sm font-semibold text-[var(--text-secondary)]">
                     {importProgress.fileProgress?.phase
                       ? importProgress.fileProgress.phase
                       : importProgress.fileProgress
@@ -575,7 +575,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                         : `Εισαγωγή αρχείου ${importProgress.current} από ${importProgress.total}`}
                   </span>
                 </div>
-                <span className="text-sm font-mono font-semibold text-[#4A4A4A] flex-shrink-0">
+                <span className="text-sm font-mono font-semibold text-[var(--text-secondary)] flex-shrink-0">
                   {importProgress.fileProgress
                     ? `${Math.round((importProgress.fileProgress.rowsProcessed / importProgress.fileProgress.totalRows) * 100)}%`
                     : `${Math.round(((importProgress.current || 0) / importProgress.total) * 100)}%`}
@@ -585,7 +585,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                 value={importProgress.fileProgress?.rowsProcessed ?? importProgress.current ?? 0}
                 max={importProgress.fileProgress?.totalRows ?? importProgress.total ?? 1}
                 size="lg"
-                color="#4A4A4A"
+                color="var(--text-secondary)"
               />
               <p className="text-xs text-gray-600 truncate" title={importProgress.fileName}>
                 {importProgress.fileName}
@@ -603,8 +603,8 @@ export function DataImport({ initialType }: DataImportProps = {}) {
         <div className="p-6 space-y-6">
           {/* Feed Source selector - when Feed mode */}
           {importMode === 'feed' && (
-            <div className="p-4 bg-[var(--nts-light-gray)] border border-[var(--borderColor-default,#d0d7de)] rounded-lg">
-              <p className="text-sm font-medium text-[#4A4A4A] mb-3">Πηγή Feed:</p>
+            <div className="p-4 bg-[var(--nts-light-gray)] border border-[var(--borderColor-default,var(--border))] rounded-lg">
+              <p className="text-sm font-medium text-[var(--text-secondary)] mb-3">Πηγή Feed:</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {FEED_SOURCE_OPTIONS.map((feed) => (
                   <button
@@ -613,12 +613,12 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                     className={`p-4 rounded-lg border text-left transition-all ${
                       selectedFeedSource === feed.id
                         ? 'border-[var(--nts-accent)] bg-white shadow-sm'
-                        : 'border-[#E5E5E5] bg-white hover:border-[var(--nts-accent)]/50'
+                        : 'border-[var(--border)] bg-white hover:border-[var(--nts-accent)]/50'
                     }`}
                   >
                     <span className="text-[var(--nts-medium-gray)]">{feed.icon}</span>
-                    <p className="font-semibold text-[#1A1A1A] mt-1">{feed.name}</p>
-                    <p className="text-xs text-[#6B7280] mt-0.5">{feed.description}</p>
+                    <p className="font-semibold text-[var(--text-primary)] mt-1">{feed.name}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">{feed.description}</p>
                   </button>
                 ))}
               </div>
@@ -628,7 +628,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           {/* Compact Type Selection - Tab-like buttons (hidden in Feed mode) */}
           {importMode === 'standard' && (
             <div>
-              <p className="text-sm font-medium text-[#4A4A4A] mb-3">Επιλέξτε τύπο δεδομένων:</p>
+              <p className="text-sm font-medium text-[var(--text-secondary)] mb-3">Επιλέξτε τύπο δεδομένων:</p>
               <div className="flex flex-wrap gap-2">
                 {importTypes.map((type) => {
                   const lastDate = lastImportDates[type.value];
@@ -642,7 +642,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex flex-col items-start ${
                       selectedType === type.value
                         ? 'bg-[var(--nts-accent)] text-white shadow-sm'
-                        : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent-text)]'
+                        : 'bg-white text-[var(--text-secondary)] border border-[var(--border)] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent-text)]'
                     }`}
                   >
                     <span className="flex items-center gap-2">
@@ -650,7 +650,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                       {type.label}
                     </span>
                     {lastDate && (
-                      <span className={`text-[10px] mt-0.5 ${selectedType === type.value ? 'text-white/80' : 'text-[#9CA3AF]'}`}>
+                      <span className={`text-[10px] mt-0.5 ${selectedType === type.value ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>
                         Τελευταίο: {lastDate.toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                       </span>
                     )}
@@ -662,7 +662,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           )}
           {importMode === 'feed' && (
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <p className="text-sm text-[#4A4A4A]">
+              <p className="text-sm text-[var(--text-secondary)]">
                 Εισαγωγή προϊόντων από <strong>{FEED_SOURCE_OPTIONS.find(f => f.id === selectedFeedSource)?.name}</strong>
               </p>
               {selectedFeedSource === 'google_ads' && (
@@ -685,7 +685,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
               isDragging
                 ? 'border-[var(--nts-accent)] bg-[var(--nts-light-gray)]'
-                : 'border-[#E5E5E5] bg-[#F9F9F9] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)]'
+                : 'border-[var(--border)] bg-[#F9F9F9] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)]'
             }`}
           >
             <input
@@ -707,15 +707,15 @@ export function DataImport({ initialType }: DataImportProps = {}) {
               className="cursor-pointer flex flex-col items-center gap-3"
             >
               <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${
-                isDragging ? 'bg-[var(--nts-accent)]' : 'bg-white border-2 border-[#E5E5E5]'
+                isDragging ? 'bg-[var(--nts-accent)]' : 'bg-white border-2 border-[var(--border)]'
               }`}>
                 <FileUp size={32} className={isDragging ? 'text-white' : 'text-[var(--nts-accent-text)]'} />
               </div>
               <div>
-                <p className="text-base font-semibold text-[#1A1A1A]">
+                <p className="text-base font-semibold text-[var(--text-primary)]">
                   {isDragging ? 'Αφήστε τα αρχεία εδώ' : 'Σύρετε αρχεία εδώ ή κάντε κλικ για επιλογή'}
                 </p>
-                <p className="text-sm text-[#9CA3AF] mt-1">
+                <p className="text-sm text-[var(--text-muted)] mt-1">
                   CSV, Excel (.xlsx) ή XML (Google Ads / Skroutz) · Πολλαπλά αρχεία υποστηρίζονται
                 </p>
               </div>
@@ -732,7 +732,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                 className="space-y-2"
               >
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-[#1A1A1A]">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">
                     {selectedFiles.length} {selectedFiles.length === 1 ? 'αρχείο επιλέχθηκε' : 'αρχεία επιλέχθηκαν'}
                   </p>
                   <div className="flex items-center gap-2">
@@ -750,7 +750,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                     )}
                     <button
                       onClick={clearFiles}
-                      className="text-xs text-[#9CA3AF] hover:text-[#EF4444] flex items-center gap-1"
+                      className="text-xs text-[var(--text-muted)] hover:text-[#EF4444] flex items-center gap-1"
                     >
                       <Trash2 size={14} />
                       Καθαρισμός όλων
@@ -765,14 +765,14 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: 20 }}
-                        className="flex items-center gap-3 p-3 bg-white border border-[#E5E5E5] rounded-lg hover:border-[var(--nts-accent)] transition-colors"
+                        className="flex items-center gap-3 p-3 bg-white border border-[var(--border)] rounded-lg hover:border-[var(--nts-accent)] transition-colors"
                       >
-                        <FileText size={20} className="text-[#9CA3AF] flex-shrink-0" />
+                        <FileText size={20} className="text-[var(--text-muted)] flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-[#1A1A1A] truncate" title={item.file.name}>
+                          <p className="text-sm font-medium text-[var(--text-primary)] truncate" title={item.file.name}>
                             {item.file.name}
                           </p>
-                          <p className="text-xs text-[#9CA3AF]">
+                          <p className="text-xs text-[var(--text-muted)]">
                             {(item.file.size / 1024).toFixed(1)} KB
                           </p>
                         </div>
@@ -781,7 +781,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                             <select
                               value={item.campaignChannel ?? ''}
                               onChange={(e) => setFileCampaignChannel(index, (e.target.value || null) as CampaignChannelOverride)}
-                              className="text-xs border border-[#E5E5E5] rounded px-2 py-1 bg-white text-[#1A1A1A] focus:outline-none focus:border-[var(--nts-accent)]"
+                              className="text-xs border border-[var(--border)] rounded px-2 py-1 bg-white text-[var(--text-primary)] focus:outline-none focus:border-[var(--nts-accent)]"
                               title="Campaign Channel"
                             >
                               <option value="">Αυτόματη</option>
@@ -792,10 +792,10 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                             <select
                               value={item.type}
                               onChange={(e) => setFileType(index, e.target.value as ImportType)}
-                              className={`text-xs border rounded px-2 py-1 bg-white text-[#1A1A1A] focus:outline-none focus:border-[var(--nts-accent)] ${
+                              className={`text-xs border rounded px-2 py-1 bg-white text-[var(--text-primary)] focus:outline-none focus:border-[var(--nts-accent)] ${
                                 (item.file.name.toLowerCase().includes('campaign') || item.file.name.toLowerCase().includes('google ads') || item.file.name.toLowerCase().includes('meta'))
                                   ? 'border-gray-400 bg-[var(--nts-light-gray)]'
-                                  : 'border-[#E5E5E5]'
+                                  : 'border-[var(--border)]'
                               }`}
                             >
                               {importTypes.map((t) => (
@@ -804,13 +804,13 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                             </select>
                           )
                         ) : (
-                          <span className="text-xs text-[#6B7280] px-2 py-1 bg-[#F5F5F5] rounded">
+                          <span className="text-xs text-[var(--text-muted)] px-2 py-1 bg-[var(--surface-2)] rounded">
                             Products
                           </span>
                         )}
                         <button
                           onClick={() => removeFile(index)}
-                          className="p-1 rounded text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-50 transition-colors"
+                          className="p-1 rounded text-[var(--text-muted)] hover:text-[#EF4444] hover:bg-red-50 transition-colors"
                           aria-label="Remove file"
                         >
                           <XCircle size={18} />
@@ -825,10 +825,10 @@ export function DataImport({ initialType }: DataImportProps = {}) {
 
           {/* Column Mapping Info & Download Template - Products only */}
           {(selectedType === 'products' || importMode === 'feed') && (
-            <div className="border-t border-[#E5E5E5] pt-4 space-y-3">
+            <div className="border-t border-[var(--border)] pt-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-[#1A1A1A]">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">
                     {importMode === 'feed' ? (
                       <>Για <strong>{FEED_SOURCE_OPTIONS.find(f => f.id === selectedFeedSource)?.name}</strong>: id→sku, title→name, price→price κλπ. Αυτόματη αντιστοίχιση.</>
                     ) : (
@@ -909,10 +909,10 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           )}
 
           {/* Collapsible URL Import */}
-          <div className="border-t border-[#E5E5E5] pt-4">
+          <div className="border-t border-[var(--border)] pt-4">
             <button
               onClick={() => setShowUrlImport(!showUrlImport)}
-              className="flex items-center gap-2 text-sm font-medium text-[#4A4A4A] hover:text-[var(--nts-accent-text)] transition-colors"
+              className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--nts-accent-text)] transition-colors"
             >
               <LinkIcon size={16} />
               Εισαγωγή από URL
@@ -936,7 +936,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                         handleLoadFromUrl();
                       }
                     }}
-                    className="flex-1 px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
+                    className="flex-1 px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
                   />
                   <Button
                     variant="primary"
@@ -959,7 +959,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
 
 
           {/* Import Button */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-4 border-t border-[#E5E5E5]">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-4 border-t border-[var(--border)]">
             <Button
               variant="primary"
               loading={isImporting}
@@ -1067,7 +1067,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           >
             <Card>
               <div className="p-6">
-                <h3 className="text-lg font-semibold text-[#1A1A1A] mb-4 flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                   <Clock size={20} />
                   Ιστορικό Εισαγωγών
                 </h3>
@@ -1084,13 +1084,13 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                     importHistory.map((job) => (
                       <div
                         key={job.id}
-                        className="p-4 border border-[#E5E5E5] rounded-lg bg-white hover:border-[var(--nts-accent)] transition-colors"
+                        className="p-4 border border-[var(--border)] rounded-lg bg-white hover:border-[var(--nts-accent)] transition-colors"
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               {getStatusIcon(job.status)}
-                              <div className="font-semibold text-[#1A1A1A]">{job.fileName}</div>
+                              <div className="font-semibold text-[var(--text-primary)]">{job.fileName}</div>
                               <Badge variant="default">{job.type}</Badge>
                             </div>
                             <div className="text-sm text-gray-500">

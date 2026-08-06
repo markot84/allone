@@ -101,21 +101,21 @@ export function StrategyPackage(props: StrategyPackageProps) {
   if (!scenarioId) return null;
 
   return (
-    <div className="rounded-xl border border-[#E5E5E5] bg-white overflow-hidden">
+    <div className="rounded-xl border border-[var(--border)] bg-white overflow-hidden">
       {/* Compact header */}
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-[#1A1A1A] flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-[var(--text-primary)] flex items-center justify-center flex-shrink-0">
             <Share2 size={14} className="text-white" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-[#1A1A1A] truncate">{strategyName}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#F5F5F5] text-[#4A4A4A] flex-shrink-0">
+              <span className="text-sm font-semibold text-[var(--text-primary)] truncate">{strategyName}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-2)] text-[var(--text-secondary)] flex-shrink-0">
                 {durText}
               </span>
             </div>
-            <p className="text-[11px] text-[#9CA3AF] mt-0.5">
+            <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
               {idealSegs.length > 0 && `${idealSegs.join(', ')}`}
               {channelRecommendation && ` · ${primaryCh.length + secondaryCh.length} κανάλια`}
             </p>
@@ -125,7 +125,7 @@ export function StrategyPackage(props: StrategyPackageProps) {
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <button
             onClick={handlePdf}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#4A4A4A] hover:bg-[#F5F5F5] transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-2)] transition-colors"
             title="Λήψη ως PDF"
           >
             <FileDown size={13} />
@@ -134,7 +134,7 @@ export function StrategyPackage(props: StrategyPackageProps) {
           <button
             onClick={handleShareLink}
             disabled={linkLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#1A1A1A] text-white hover:bg-[#333] transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--text-primary)] text-white hover:bg-[#333] transition-colors disabled:opacity-50"
             title="Δημιουργία & αντιγραφή link"
           >
             {linkLoading ? <Loader2 size={13} className="animate-spin" /> : linkCopied ? <Check size={13} /> : <Link2 size={13} />}
@@ -142,7 +142,7 @@ export function StrategyPackage(props: StrategyPackageProps) {
           </button>
           <button
             onClick={() => setExpanded(v => !v)}
-            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4A4A4A] hover:bg-[#F5F5F5] transition-colors"
+            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--surface-2)] transition-colors"
           >
             {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
@@ -159,57 +159,57 @@ export function StrategyPackage(props: StrategyPackageProps) {
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="px-4 pb-4 border-t border-[#F5F5F5]">
+            <div className="px-4 pb-4 border-t border-[var(--surface-2)]">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-                <div className="p-3 rounded-lg bg-[#FAFAFA]">
+                <div className="p-3 rounded-lg bg-[var(--surface-1)]">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <Target size={12} className="text-[var(--nts-accent-text)]" />
-                    <span className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">Στρατηγική</span>
+                    <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Στρατηγική</span>
                   </div>
-                  <p className="text-sm font-medium text-[#1A1A1A]">{strategyName}</p>
-                  <p className="text-[11px] text-[#9CA3AF] mt-0.5">{durText}</p>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">{strategyName}</p>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{durText}</p>
                 </div>
 
-                <div className="p-3 rounded-lg bg-[#FAFAFA]">
+                <div className="p-3 rounded-lg bg-[var(--surface-1)]">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <Users size={12} className="text-[#8B5CF6]" />
-                    <span className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">Τμήματα πελατών</span>
+                    <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Τμήματα πελατών</span>
                   </div>
                   {idealSegs.length > 0 && (
-                    <p className="text-sm text-[#1A1A1A]">{idealSegs.join(', ')}</p>
+                    <p className="text-sm text-[var(--text-primary)]">{idealSegs.join(', ')}</p>
                   )}
-                  <p className="text-[11px] text-[#9CA3AF] mt-0.5">
+                  <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
                     {rankedSegments.filter(rs => rs.fit === 'good').length} ακόμη κατάλληλα
                   </p>
                 </div>
 
-                <div className="p-3 rounded-lg bg-[#FAFAFA]">
+                <div className="p-3 rounded-lg bg-[var(--surface-1)]">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <BarChart3 size={12} className="text-[#22C55E]" />
-                    <span className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">Κανάλια</span>
+                    <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Κανάλια</span>
                   </div>
                   {channelRecommendation && (
                     <>
-                      <p className="text-sm text-[#1A1A1A]">
+                      <p className="text-sm text-[var(--text-primary)]">
                         {primaryCh.slice(0, 2).join(', ')}
                         {primaryCh.length > 2 && ` +${primaryCh.length - 2}`}
                       </p>
-                      <p className="text-[11px] text-[#9CA3AF] mt-0.5">
+                      <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
                         +{secondaryCh.length} δευτερεύοντα
                       </p>
                     </>
                   )}
                 </div>
 
-                <div className="p-3 rounded-lg bg-[#FAFAFA]">
+                <div className="p-3 rounded-lg bg-[var(--surface-1)]">
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <Sparkles size={12} className="text-[#1A1A1A]" />
-                    <span className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">AI ανάλυση</span>
+                    <Sparkles size={12} className="text-[var(--text-primary)]" />
+                    <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">AI ανάλυση</span>
                   </div>
-                  <p className="text-sm text-[#1A1A1A]">
+                  <p className="text-sm text-[var(--text-primary)]">
                     {channelRecommendation?.rationale ? 'Ολοκληρώθηκε' : 'Δεν είναι διαθέσιμη'}
                   </p>
-                  <p className="text-[11px] text-[#9CA3AF] mt-0.5">
+                  <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
                     {channelRecommendation?.rationale ? 'Περιλαμβάνεται στο package' : 'Ενεργοποίησε AI'}
                   </p>
                 </div>

@@ -3,13 +3,13 @@ import { AllOneLogo } from '../common';
 export function TermsOfService() {
   return (
     <div style={{ height: '100vh', overflowY: 'auto', background: '#fff' }}>
-      <main style={{ maxWidth: 820, margin: '0 auto', padding: '48px 24px', fontFamily: 'system-ui, sans-serif', color: '#1A1A1A', lineHeight: 1.7 }}>
+      <main style={{ maxWidth: 820, margin: '0 auto', padding: '48px 24px', fontFamily: 'system-ui, sans-serif', color: 'var(--text-primary)', lineHeight: 1.7 }}>
       <header style={{ marginBottom: 40, borderBottom: '2px solid #111', paddingBottom: 24 }}>
         <div style={{ marginBottom: 16 }}>
           <AllOneLogo height={40} />
         </div>
         <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0 }}>Όροι Χρήσης</h1>
-        <p style={{ color: '#6B7280', fontSize: 14, marginTop: 8 }}>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14, marginTop: 8 }}>
           Τελευταία ενημέρωση: 13 Μαρτίου 2026
         </p>
       </header>
@@ -213,11 +213,11 @@ export function TermsOfService() {
         </p>
       </Section>
 
-      <footer style={{ marginTop: 48, paddingTop: 24, borderTop: '1px solid #E5E7EB', color: '#9CA3AF', fontSize: 13 }}>
+      <footer style={{ marginTop: 48, paddingTop: 24, borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 13 }}>
         <p>© {new Date().getFullYear()} notthesame.ai — Performance+. Με επιφύλαξη παντός δικαιώματος.</p>
         <p>
-          <a href="/privacy" style={{ color: '#6B7280' }}>Πολιτική Απορρήτου</a> ·{' '}
-          <a href="/" style={{ color: '#6B7280' }}>Αρχική</a>
+          <a href="/privacy" style={{ color: 'var(--text-muted)' }}>Πολιτική Απορρήτου</a> ·{' '}
+          <a href="/" style={{ color: 'var(--text-muted)' }}>Αρχική</a>
         </p>
       </footer>
       </main>
@@ -225,13 +225,13 @@ export function TermsOfService() {
   );
 }
 
-const h4: React.CSSProperties = { fontSize: 15, fontWeight: 600, margin: '20px 0 8px', color: '#111827' };
+const h4: React.CSSProperties = { fontSize: 15, fontWeight: 600, margin: '20px 0 8px', color: 'var(--text-primary)' };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section style={{ marginBottom: 32 }}>
-      <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 12px', color: '#111827' }}>{title}</h2>
-      <div style={{ fontSize: 14, color: '#374151' }}>{children}</div>
+      <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 12px', color: 'var(--text-primary)' }}>{title}</h2>
+      <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>{children}</div>
     </section>
   );
 }

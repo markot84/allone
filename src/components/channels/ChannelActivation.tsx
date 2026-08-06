@@ -75,7 +75,7 @@ import { sanitizeSpreadsheetCell, sanitizeRow } from '../../utils/spreadsheetSaf
 import { useMagentoProductEnrichment } from '../../hooks/useMagentoProductEnrichment';
 import type { ChannelRecommendation, BudgetAction } from '../../types';
 
-const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
+const COLORS = ['var(--nts-accent)', 'var(--text-muted)', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
 type InventoryPlayContext = 'dead_stock' | null;
 
 function useInventoryPlayContext(): InventoryPlayContext {
@@ -184,7 +184,7 @@ function getBudgetForChannel(channel: string, allocation: Record<string, number>
 }
 
 const STATUS_CONFIG = {
-  pending: { label: 'Εκκρεμεί', icon: Circle, color: '#9CA3AF', bg: '#F5F5F5' },
+  pending: { label: 'Εκκρεμεί', icon: Circle, color: 'var(--text-muted)', bg: 'var(--surface-2)' },
   in_progress: { label: 'Σε εξέλιξη', icon: Clock, color: '#F97316', bg: '#FFF7ED' },
   done: { label: 'Ολοκληρώθηκε', icon: CheckCircle2, color: '#22C55E', bg: '#F0FDF4' },
 } as const;
@@ -193,8 +193,8 @@ const ACTION_TYPE_CONFIG = {
   increase: { label: 'Αύξηση', icon: ArrowUpRight, color: '#22C55E', bg: '#F0FDF4' },
   decrease: { label: 'Μείωση', icon: ArrowDownRight, color: '#EF4444', bg: '#FEF2F2' },
   push: { label: 'Push', icon: Zap, color: '#F97316', bg: '#FFF7ED' },
-  pause: { label: 'Παύση', icon: Pause, color: '#9CA3AF', bg: '#F5F5F5' },
-  maintain: { label: 'Διατήρηση', icon: Minus, color: '#6B7280', bg: '#F9FAFB' },
+  pause: { label: 'Παύση', icon: Pause, color: 'var(--text-muted)', bg: 'var(--surface-2)' },
+  maintain: { label: 'Διατήρηση', icon: Minus, color: 'var(--text-muted)', bg: 'var(--surface-1)' },
 } as const;
 
 type ChannelStatus = 'pending' | 'in_progress' | 'done';
@@ -203,7 +203,7 @@ type ChannelStatus = 'pending' | 'in_progress' | 'done';
 function Skeleton({ className = '', style }: { className?: string; style?: React.CSSProperties }) {
   return (
     <div
-      className={`animate-pulse rounded-md bg-gradient-to-r from-[#F0F0F0] via-[#F8F8F8] to-[#F0F0F0] ${className}`}
+      className={`animate-pulse rounded-md bg-gradient-to-r from-[var(--border)] via-[#F8F8F8] to-[var(--border)] ${className}`}
       style={style}
     />
   );
@@ -223,8 +223,8 @@ function PieSkeleton() {
 function ChannelCardSkeleton({ delay = 0 }: { delay?: number }) {
   return (
     <div
-      className="p-4 rounded-xl border border-[#E5E5E5]"
-      style={{ borderLeftWidth: 3, borderLeftColor: '#E5E5E5', animationDelay: `${delay}ms` }}
+      className="p-4 rounded-xl border border-[var(--border)]"
+      style={{ borderLeftWidth: 3, borderLeftColor: 'var(--border)', animationDelay: `${delay}ms` }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0 space-y-2">
@@ -871,7 +871,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <PageHeader
           title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">{pageTitle}</h2>}
           description={
-            <p className="text-sm text-[#4A4A4A] sm:text-base">Μίξη καναλιών με AI βάσει εμπορικής στρατηγικής</p>
+            <p className="text-sm text-[var(--text-secondary)] sm:text-base">Μίξη καναλιών με AI βάσει εμπορικής στρατηγικής</p>
           }
         />
         <Card padding="lg">
@@ -898,7 +898,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <PageHeader
           title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">{pageTitle}</h2>}
           description={
-            <p className="text-sm text-[#4A4A4A] sm:text-base">Μίξη καναλιών με AI βάσει εμπορικής στρατηγικής</p>
+            <p className="text-sm text-[var(--text-secondary)] sm:text-base">Μίξη καναλιών με AI βάσει εμπορικής στρατηγικής</p>
           }
         />
         <Card padding="lg">
@@ -927,24 +927,24 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         toolbarAriaLabel="Channel activation"
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">{pageTitle}</h2>}
         description={
-          <p className="text-[#4A4A4A]">
-            <span className="font-medium text-[#1A1A1A]">{strategyName}</span>
-            {durationLabel && <span className="text-[#9CA3AF]"> · {durationLabel}</span>}
+          <p className="text-[var(--text-secondary)]">
+            <span className="font-medium text-[var(--text-primary)]">{strategyName}</span>
+            {durationLabel && <span className="text-[var(--text-muted)]"> · {durationLabel}</span>}
           </p>
         }
         actions={
           <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-end sm:gap-3">
             <div className="flex min-w-0 items-center gap-2 sm:justify-end">
-              <Wallet size={16} className="shrink-0 text-[#9CA3AF]" />
+              <Wallet size={16} className="shrink-0 text-[var(--text-muted)]" />
               {editingBudget ? (
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 sm:flex-initial">
-                  <span className="text-sm text-[#4A4A4A]">€</span>
+                  <span className="text-sm text-[var(--text-secondary)]">€</span>
                   <input
                     type="text"
                     value={budgetInput}
                     onChange={e => setBudgetInput(e.target.value)}
                     placeholder="π.χ. 5000"
-                    className="min-w-0 flex-1 rounded-lg border border-[#E5E5E5] px-2 py-1.5 font-mono text-sm focus:border-[var(--nts-accent)] focus:outline-none sm:w-24 sm:flex-initial"
+                    className="min-w-0 flex-1 rounded-lg border border-[var(--border)] px-2 py-1.5 font-mono text-sm focus:border-[var(--nts-accent)] focus:outline-none sm:w-24 sm:flex-initial"
                     autoFocus
                     onKeyDown={e => {
                       if (e.key === 'Enter') handleBudgetSave();
@@ -955,7 +955,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     type="button"
                     onClick={handleBudgetSave}
                     disabled={isSavingBudget}
-                    className="rounded-lg bg-[#1A1A1A] px-3 py-1.5 text-xs text-white hover:bg-[#333] disabled:opacity-50"
+                    className="rounded-lg bg-[var(--text-primary)] px-3 py-1.5 text-xs text-white hover:bg-[#333] disabled:opacity-50"
                   >
                     OK
                   </button>
@@ -967,11 +967,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     setBudgetInput(monthlyBudget ? String(monthlyBudget) : '');
                     setEditingBudget(true);
                   }}
-                  className="min-h-[36px] rounded-lg border border-[#E5E5E5] px-3 py-1.5 text-left text-sm font-medium transition-colors hover:border-[var(--nts-accent)]"
+                  className="min-h-[36px] rounded-lg border border-[var(--border)] px-3 py-1.5 text-left text-sm font-medium transition-colors hover:border-[var(--nts-accent)]"
                 >
                   {monthlyBudget
-                    ? <span className="font-mono">€{monthlyBudget.toLocaleString('el-GR')}<span className="font-normal text-[#9CA3AF]">/μήνα</span></span>
-                    : <span className="text-[#9CA3AF]">Ορισμός budget</span>
+                    ? <span className="font-mono">€{monthlyBudget.toLocaleString('el-GR')}<span className="font-normal text-[var(--text-muted)]">/μήνα</span></span>
+                    : <span className="text-[var(--text-muted)]">Ορισμός budget</span>
                   }
                 </button>
               )}
@@ -1005,16 +1005,16 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
       {/* Progress bar */}
       {progressSummary && progressSummary.total > 0 && (
-        <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+        <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
           <div className="min-w-0 flex-1">
             <div className="mb-2 flex min-w-0 flex-col gap-0.5 min-[480px]:flex-row min-[480px]:items-center min-[480px]:gap-2">
-              <span className="text-xs font-medium text-[#4A4A4A]">Πρόοδος ενεργοποίησης</span>
-              <span className="text-xs text-[#9CA3AF]">
+              <span className="text-xs font-medium text-[var(--text-secondary)]">Πρόοδος ενεργοποίησης</span>
+              <span className="text-xs text-[var(--text-muted)]">
                 {progressSummary.done}/{progressSummary.total} κανάλια σε εξέλιξη
                 {progressSummary.excluded > 0 ? ` · ${progressSummary.excluded} εκτός` : ''}
               </span>
             </div>
-            <div className="h-1.5 bg-[#E5E5E5] rounded-full overflow-hidden flex">
+            <div className="h-1.5 bg-[var(--border)] rounded-full overflow-hidden flex">
               {progressSummary.done > 0 && (
                 <div className="h-full bg-[#22C55E] rounded-full" style={{ width: `${(progressSummary.done / progressSummary.total) * 100}%` }} />
               )}
@@ -1023,10 +1023,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               )}
             </div>
           </div>
-          <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#4A4A4A] sm:w-auto sm:justify-end">
+          <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-secondary)] sm:w-auto sm:justify-end">
             <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 shrink-0 rounded-full bg-[#22C55E]" />{progressSummary.done} ολοκληρώθηκαν</span>
             <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 shrink-0 rounded-full bg-[#F97316]" />{progressSummary.inProgress} σε εξέλιξη</span>
-            <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 shrink-0 rounded-full bg-[#9CA3AF]" />{progressSummary.pending} εκκρεμούν</span>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 shrink-0 rounded-full bg-[var(--text-muted)]" />{progressSummary.pending} εκκρεμούν</span>
           </div>
         </div>
       )}
@@ -1061,18 +1061,18 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               </div>
             }
           />
-          <p className="mb-4 text-xs leading-relaxed text-[#6B7280]">
+          <p className="mb-4 text-xs leading-relaxed text-[var(--text-muted)]">
             Η λίστα είναι decision-level: αποκλείει zero-stock / inactive ιστορικά SKUs και ομαδοποιεί sizes κάτω από parent/model ώστε η ομάδα να βλέπει τι πρέπει να ξεστοκάρει πραγματικά.
           </p>
           {decisionProductRows.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-amber-200 bg-white p-5 text-sm text-[#6B7280]">
+            <div className="rounded-xl border border-dashed border-amber-200 bg-white p-5 text-sm text-[var(--text-muted)]">
               Δεν βρέθηκαν ενεργά dead-stock προϊόντα με διαθέσιμο απόθεμα για αυτή την ενέργεια.
             </div>
           ) : (
             <div className="max-h-[520px] overflow-auto rounded-xl border border-amber-100 bg-white">
               <table className="min-w-[860px] w-full text-left text-xs">
                 <thead className="sticky top-0 z-10">
-                  <tr className="border-b border-amber-100 bg-amber-50/60 text-[#4A4A4A]">
+                  <tr className="border-b border-amber-100 bg-amber-50/60 text-[var(--text-secondary)]">
                     <th className="px-3 py-2 font-semibold w-12" aria-label="Εικόνα" />
                     <th className="px-3 py-2 font-semibold">Parent / Model</th>
                     <th className="px-3 py-2 font-semibold">SKU</th>
@@ -1087,16 +1087,16 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     const sku = row.representative.sku || '';
                     const thumb = getThumbnailUrl(sku, row.representative).url;
                     return (
-                    <tr key={row.key} className="border-b border-[#F3F4F6] last:border-0">
+                    <tr key={row.key} className="border-b border-[var(--surface-2)] last:border-0">
                       <td className="px-2 py-2">
                         <ProductThumbnail src={thumb || undefined} alt={row.representative.name || sku} size="sm" />
                       </td>
-                      <td className="px-3 py-2 font-mono text-[#1A1A1A]">{row.key}</td>
-                      <td className="px-3 py-2 font-mono text-[#4A4A4A]">{row.representative.sku || '—'}</td>
-                      <td className="max-w-[260px] truncate px-3 py-2 text-[#4A4A4A]" title={row.representative.name || ''}>{row.representative.name || '—'}</td>
-                      <td className="px-3 py-2 font-mono text-[#1A1A1A]">{formatNumber(row.totalStock)}</td>
-                      <td className="px-3 py-2 font-mono text-[#1A1A1A]">{formatCurrency(row.totalValue, 0)}</td>
-                      <td className="px-3 py-2 font-mono text-[#4A4A4A]">{row.variantCount}</td>
+                      <td className="px-3 py-2 font-mono text-[var(--text-primary)]">{row.key}</td>
+                      <td className="px-3 py-2 font-mono text-[var(--text-secondary)]">{row.representative.sku || '—'}</td>
+                      <td className="max-w-[260px] truncate px-3 py-2 text-[var(--text-secondary)]" title={row.representative.name || ''}>{row.representative.name || '—'}</td>
+                      <td className="px-3 py-2 font-mono text-[var(--text-primary)]">{formatNumber(row.totalStock)}</td>
+                      <td className="px-3 py-2 font-mono text-[var(--text-primary)]">{formatCurrency(row.totalValue, 0)}</td>
+                      <td className="px-3 py-2 font-mono text-[var(--text-secondary)]">{row.variantCount}</td>
                     </tr>
                     );
                   })}
@@ -1130,8 +1130,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   </span>
                 )}
                 {selectedSegmentName && (
-                  <span className="min-w-0 text-[11px] text-[#9CA3AF]">
-                    Ενεργό: <span className="font-semibold text-[#1A1A1A]">{selectedSegmentName}</span>
+                  <span className="min-w-0 text-[11px] text-[var(--text-muted)]">
+                    Ενεργό: <span className="font-semibold text-[var(--text-primary)]">{selectedSegmentName}</span>
                   </span>
                 )}
               </div>
@@ -1149,7 +1149,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   title={seg.rationale || undefined}
                   className="text-left rounded-xl border p-3 transition-all"
                   style={{
-                    borderColor: isActive ? seg.color : '#E5E5E5',
+                    borderColor: isActive ? seg.color : 'var(--border)',
                     background: isActive ? `${seg.color}10` : '#FFFFFF',
                     boxShadow: isActive ? `0 0 0 1px ${seg.color}` : 'none',
                   }}
@@ -1161,7 +1161,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     >
                       {seg.name.charAt(0)}
                     </span>
-                    <span className="text-sm font-semibold text-[#1A1A1A] flex-1 truncate">{seg.name}</span>
+                    <span className="text-sm font-semibold text-[var(--text-primary)] flex-1 truncate">{seg.name}</span>
                     {isIdeal && (
                       <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#22C55E]/10 text-[#22C55E]">
                         <Star size={10} fill="currentColor" /> Ideal
@@ -1173,7 +1173,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                       </span>
                     )}
                   </div>
-                  <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[#4A4A4A]">
+                  <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[var(--text-secondary)]">
                     {seg.count > 0 && (
                       <span><span className="font-mono font-semibold">{formatNumber(seg.count)}</span> πελάτες</span>
                     )}
@@ -1187,7 +1187,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   </div>
                   {seg.rationale && (
                     <p
-                      className="text-[11px] text-[#4A4A4A] leading-snug line-clamp-2"
+                      className="text-[11px] text-[var(--text-secondary)] leading-snug line-clamp-2"
                       title={seg.rationale}
                     >
                       {seg.rationale}
@@ -1254,7 +1254,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: '8px', padding: '8px 12px' }}
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 12px' }}
                     formatter={(value: number | string | undefined, name: string | undefined) => [
                       formatPercent(typeof value === 'number' ? value : 0, 1), name || 'Κανάλι'
                     ]}
@@ -1268,21 +1268,21 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     <div key={item.channel} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                        <span className="text-[#4A4A4A] truncate max-w-[120px]">{item.channel}</span>
+                        <span className="text-[var(--text-secondary)] truncate max-w-[120px]">{item.channel}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         {eurAmount !== null && (
-                          <span className="font-mono text-[11px] text-[#9CA3AF]">€{eurAmount.toLocaleString('el-GR')}</span>
+                          <span className="font-mono text-[11px] text-[var(--text-muted)]">€{eurAmount.toLocaleString('el-GR')}</span>
                         )}
-                        <span className="font-mono text-[#1A1A1A]">{formatPercent(item.percentage, 0)}</span>
+                        <span className="font-mono text-[var(--text-primary)]">{formatPercent(item.percentage, 0)}</span>
                       </div>
                     </div>
                   );
                 })}
                 {monthlyBudget && (
-                  <div className="flex items-center justify-between text-xs pt-2 border-t border-[#E5E5E5]">
-                    <span className="text-[#9CA3AF]">Μηνιαίο budget</span>
-                    <span className="font-mono font-semibold text-[#1A1A1A]">€{monthlyBudget.toLocaleString('el-GR')}</span>
+                  <div className="flex items-center justify-between text-xs pt-2 border-t border-[var(--border)]">
+                    <span className="text-[var(--text-muted)]">Μηνιαίο budget</span>
+                    <span className="font-mono font-semibold text-[var(--text-primary)]">€{monthlyBudget.toLocaleString('el-GR')}</span>
                   </div>
                 )}
               </div>
@@ -1290,8 +1290,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           ) : (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
-                <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν AI συστάσεις για αυτή τη στρατηγική</p>
-                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Πατήστε για δημιουργία συστάσεων AI</p>
+                <p className="text-sm text-[var(--text-secondary)]">Δεν υπάρχουν AI συστάσεις για αυτή τη στρατηγική</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1 mb-3">Πατήστε για δημιουργία συστάσεων AI</p>
                 <Button
                   variant="primary"
                   size="sm"
@@ -1353,12 +1353,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.04 }}
-                    className="p-4 rounded-xl border border-[#E5E5E5] hover:border-[#D4D4D4] transition-colors"
+                    className="p-4 rounded-xl border border-[var(--border)] hover:border-[#D4D4D4] transition-colors"
                     style={{
                       borderLeftWidth: 3,
-                      borderLeftColor: included ? funnel.color : '#D1D5DB',
+                      borderLeftColor: included ? funnel.color : 'var(--border-strong)',
                       opacity: included ? 1 : 0.6,
-                      background: included ? '#FFFFFF' : '#FAFAFA',
+                      background: included ? '#FFFFFF' : 'var(--surface-1)',
                     }}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -1372,14 +1372,14 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                             className="inline-flex items-center justify-center w-5 h-5 rounded border-2 transition-colors flex-shrink-0"
                             style={{
                               background: included ? '#22C55E' : '#FFFFFF',
-                              borderColor: included ? '#22C55E' : '#D1D5DB',
+                              borderColor: included ? '#22C55E' : 'var(--border-strong)',
                             }}
                             title={included ? 'Συμμετέχει στην ενέργεια' : 'Εκτός ενέργειας'}
                             aria-label={included ? 'Αφαίρεση από ενέργεια' : 'Προσθήκη στην ενέργεια'}
                           >
                             {included && <Check size={12} className="text-white" strokeWidth={3} />}
                           </button>
-                          <h4 className="font-semibold text-[#1A1A1A] text-sm">{ch.name}</h4>
+                          <h4 className="font-semibold text-[var(--text-primary)] text-sm">{ch.name}</h4>
                           <span
                             className="text-[10px] font-medium px-2 py-0.5 rounded-full"
                             style={{ backgroundColor: funnel.color + '18', color: funnel.color }}
@@ -1387,7 +1387,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                             {funnel.label}
                           </span>
                           {!ch.isPrimary && (
-                            <span className="text-[10px] text-[#9CA3AF] border border-[#E5E5E5] px-1.5 py-0.5 rounded">secondary</span>
+                            <span className="text-[10px] text-[var(--text-muted)] border border-[var(--border)] px-1.5 py-0.5 rounded">secondary</span>
                           )}
                           {action && (() => {
                             const cfg = ACTION_TYPE_CONFIG[action.type];
@@ -1406,10 +1406,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                         </div>
                         <div className="flex items-center gap-3 mt-1">
                           {ch.budget !== null && (
-                            <span className="text-xs text-[#4A4A4A]">
-                              Budget: <span className="font-semibold text-[#1A1A1A]">{ch.budget}%</span>
+                            <span className="text-xs text-[var(--text-secondary)]">
+                              Budget: <span className="font-semibold text-[var(--text-primary)]">{ch.budget}%</span>
                               {eurAmount !== null && (
-                                <span className="font-mono ml-1 text-[#1A1A1A] font-semibold">· €{eurAmount.toLocaleString('el-GR')}</span>
+                                <span className="font-mono ml-1 text-[var(--text-primary)] font-semibold">· €{eurAmount.toLocaleString('el-GR')}</span>
                               )}
                             </span>
                           )}
@@ -1423,7 +1423,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                               <div className="text-[10px] font-semibold uppercase tracking-wider text-[#7C3AED] mb-0.5">
                                 Campaign message · {selectedSegmentName}
                               </div>
-                              <p className="text-xs text-[#4A4A4A] leading-snug">{sanitizeCustomerMessage(playbook.message)}</p>
+                              <p className="text-xs text-[var(--text-secondary)] leading-snug">{sanitizeCustomerMessage(playbook.message)}</p>
                             </div>
                           </div>
                         )}
@@ -1436,25 +1436,25 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                               value={noteText}
                               onChange={e => setNoteText(e.target.value)}
                               placeholder="Σημείωση για την ομάδα..."
-                              className="flex-1 text-xs px-3 py-1.5 border border-[#E5E5E5] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
+                              className="flex-1 text-xs px-3 py-1.5 border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
                               autoFocus
                               onKeyDown={e => { if (e.key === 'Enter') handleNoteSave(ch.name); if (e.key === 'Escape') { setEditingNote(null); setNoteText(''); } }}
                             />
-                            <button onClick={() => handleNoteSave(ch.name)} disabled={isSaving} className="text-xs px-3 py-1.5 bg-[#1A1A1A] text-white rounded-lg hover:bg-[#333] disabled:opacity-50">
+                            <button onClick={() => handleNoteSave(ch.name)} disabled={isSaving} className="text-xs px-3 py-1.5 bg-[var(--text-primary)] text-white rounded-lg hover:bg-[#333] disabled:opacity-50">
                               Save
                             </button>
                           </div>
                         ) : note ? (
                           <button
                             onClick={() => { setEditingNote(ch.name); setNoteText(note); }}
-                            className="mt-1.5 text-xs text-[#4A4A4A] bg-[#FAFAFA] px-2.5 py-1 rounded-md hover:bg-[#F5F5F5] text-left w-full truncate"
+                            className="mt-1.5 text-xs text-[var(--text-secondary)] bg-[var(--surface-1)] px-2.5 py-1 rounded-md hover:bg-[var(--surface-2)] text-left w-full truncate"
                           >
                             {note}
                           </button>
                         ) : (
                           <button
                             onClick={() => { setEditingNote(ch.name); setNoteText(''); }}
-                            className="mt-1.5 text-[11px] text-[#9CA3AF] hover:text-[#4A4A4A]"
+                            className="mt-1.5 text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                           >
                             + Σημείωση
                           </button>
@@ -1473,7 +1473,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                           {statusCfg.label}
                           <ChevronDown size={11} />
                         </button>
-                        <div className="invisible absolute right-0 top-full z-10 mt-1 min-w-[140px] rounded-lg border border-[#E5E5E5] bg-white opacity-0 shadow-lg transition-all group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+                        <div className="invisible absolute right-0 top-full z-10 mt-1 min-w-[140px] rounded-lg border border-[var(--border)] bg-white opacity-0 shadow-lg transition-all group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
                           {(Object.entries(STATUS_CONFIG) as [ChannelStatus, typeof STATUS_CONFIG.pending][]).map(([key, cfg]) => {
                             const Icon = cfg.icon;
                             return (
@@ -1481,7 +1481,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                                 type="button"
                                 key={key}
                                 onClick={() => handleStatusChange(ch.name, key)}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-[#FAFAFA] focus:bg-[#FAFAFA] focus:outline-none first:rounded-t-lg last:rounded-b-lg"
+                                className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-[var(--surface-1)] focus:bg-[var(--surface-1)] focus:outline-none first:rounded-t-lg last:rounded-b-lg"
                                 style={{ color: cfg.color }}
                               >
                                 <Icon size={13} />
@@ -1500,8 +1500,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           ) : (
             <div className="flex items-center justify-center py-16">
               <div className="text-center">
-                <p className="text-sm text-[#4A4A4A]">Αναμονή AI συστάσεων...</p>
-                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Δημιουργήστε channel briefs βάσει της στρατηγικής σας</p>
+                <p className="text-sm text-[var(--text-secondary)]">Αναμονή AI συστάσεων...</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1 mb-3">Δημιουργήστε channel briefs βάσει της στρατηγικής σας</p>
                 <Button
                   variant="primary"
                   size="sm"
@@ -1583,17 +1583,17 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           <div className="space-y-4">
             {/* CAMPAIGN BRIEF — fully expanded, for management */}
             <Card padding="none">
-              <div className="px-5 py-3.5 flex items-center gap-2 border-b border-[#F0F0F0]">
+              <div className="px-5 py-3.5 flex items-center gap-2 border-b border-[var(--border)]">
                 <Sparkles size={13} className="text-[var(--nts-accent-text)]" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">Campaign Brief</span>
-                <span className="text-[10px] text-[#9CA3AF] font-normal">· σύντομο για τη διοίκηση</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Campaign Brief</span>
+                <span className="text-[10px] text-[var(--text-muted)] font-normal">· σύντομο για τη διοίκηση</span>
               </div>
               <div className="px-5 py-4">
                 <div className="flex items-start gap-3">
                   <div className="p-2 rounded-lg bg-[#7C3AED]/10 flex-shrink-0">
                     <Briefcase size={16} className="text-[#7C3AED]" />
                   </div>
-                  <p className="text-sm text-[#1A1A1A] leading-relaxed flex-1">
+                  <p className="text-sm text-[var(--text-primary)] leading-relaxed flex-1">
                     {campaignBriefText}
                   </p>
                 </div>
@@ -1603,12 +1603,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             {/* MARKETING BRIEF — 3 sections (Customers / Channels / Outcome) with expand/collapse */}
             {hasStructure && (
               <Card padding="none">
-                <div className="px-5 py-3.5 flex items-center gap-2 border-b border-[#F0F0F0]">
+                <div className="px-5 py-3.5 flex items-center gap-2 border-b border-[var(--border)]">
                   <TargetIcon size={13} className="text-[#3B82F6]" />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">Marketing Brief</span>
-                  <span className="text-[10px] text-[#9CA3AF] font-normal">· πελάτες · κανάλια · αποτέλεσμα</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Marketing Brief</span>
+                  <span className="text-[10px] text-[var(--text-muted)] font-normal">· πελάτες · κανάλια · αποτέλεσμα</span>
                 </div>
-                <div className="divide-y divide-[#F0F0F0]">
+                <div className="divide-y divide-[var(--border)]">
                   {sectionData.map((s) => {
                     const Icon = s.icon;
                     const isOpen = !!expandedBriefSections[s.key];
@@ -1627,9 +1627,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                               <span className="text-xs font-bold uppercase tracking-wide" style={{ color: s.color }}>
                                 {s.label}
                               </span>
-                              <span className="text-[10px] text-[#9CA3AF]">· {s.tagline}</span>
+                              <span className="text-[10px] text-[var(--text-muted)]">· {s.tagline}</span>
                             </div>
-                            <p className="text-sm text-[#1A1A1A] leading-relaxed">
+                            <p className="text-sm text-[var(--text-primary)] leading-relaxed">
                               {s.intro || s.full}
                             </p>
                             {hasDetails && (
@@ -1656,7 +1656,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                                       className="overflow-hidden mt-3 space-y-2 pl-1"
                                     >
                                       {s.bullets.map((b, idx) => (
-                                        <li key={idx} className="flex items-start gap-2 text-xs text-[#4A4A4A] leading-relaxed">
+                                        <li key={idx} className="flex items-start gap-2 text-xs text-[var(--text-secondary)] leading-relaxed">
                                           <span
                                             className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0"
                                             style={{ backgroundColor: s.color }}
@@ -1702,28 +1702,28 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {['Ads Feed', 'Email Feed'].map((feed, index) => (
-            <motion.div key={feed} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }} className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:shadow-md transition-all cursor-pointer">
+            <motion.div key={feed} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }} className="p-4 border border-[var(--border)] rounded-xl hover:border-[var(--nts-accent)] hover:shadow-md transition-all cursor-pointer">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="font-medium text-[#1A1A1A]">{feed}</h4>
+                <h4 className="font-medium text-[var(--text-primary)]">{feed}</h4>
                 <Badge variant="success" size="sm">Ενεργό</Badge>
               </div>
-              <div className="space-y-2 text-sm text-[#4A4A4A]">
+              <div className="space-y-2 text-sm text-[var(--text-secondary)]">
                 <div className="flex justify-between">
                   <span>{feed === 'Ads Feed' ? 'Active variants' : 'Parent/model rows'}</span>
                   <span className="font-mono">{formatNumber(feed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)}</span>
                 </div>
-                <div className="text-[11px] text-[#9CA3AF] leading-snug">
+                <div className="text-[11px] text-[var(--text-muted)] leading-snug">
                   Default export excludes zero-stock / inactive historical SKUs.
                 </div>
                 {feed === 'Ads Feed' && (
                   <>
                     <div className="flex justify-between">
                       <span>Magento enrichment</span>
-                      <span className={`font-mono ${magentoEnrichedCount > 0 ? 'text-emerald-600' : 'text-[#9CA3AF]'}`}>
+                      <span className={`font-mono ${magentoEnrichedCount > 0 ? 'text-emerald-600' : 'text-[var(--text-muted)]'}`}>
                         {magentoConnector.connected ? `${formatNumber(magentoEnrichedCount)} SKUs` : '— off'}
                       </span>
                     </div>
-                    <div className="text-[11px] text-[#9CA3AF] leading-snug pt-1">
+                    <div className="text-[11px] text-[var(--text-muted)] leading-snug pt-1">
                       Google-compatible columns + <span className="font-semibold text-[var(--nts-accent-text)]">custom_label_0..4</span> από την ενεργή στρατηγική.
                       {magentoConnector.connected
                         ? ' image_link / link / gtin / mpn / color / size / item_group_id έρχονται απευθείας από Magento.'
@@ -1750,23 +1750,23 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 toolbarAriaLabel="Κλείσιμο"
                 title={<h2 className="text-xl font-bold text-[var(--text-heading)]">Επιλογή Format</h2>}
                 actions={
-                  <button type="button" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
-                    <X size={20} className="text-[#4A4A4A]" />
+                  <button type="button" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }} className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]">
+                    <X size={20} className="text-[var(--text-secondary)]" />
                   </button>
                 }
               />
               <div className="p-6 space-y-3">
-                <p className="text-sm text-[#4A4A4A] mb-4">Επιλέξτε format για <strong>{selectedFeed}</strong></p>
-                <button onClick={() => { exportFeed(selectedFeed, 'xlsx'); setShowExportModal(false); setSelectedFeed(null); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
+                <p className="text-sm text-[var(--text-secondary)] mb-4">Επιλέξτε format για <strong>{selectedFeed}</strong></p>
+                <button onClick={() => { exportFeed(selectedFeed, 'xlsx'); setShowExportModal(false); setSelectedFeed(null); }} className="w-full p-4 border-2 border-[var(--border)] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
                   <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors"><FileSpreadsheet size={24} className="text-[#22C55E]" /></div>
-                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[#4A4A4A]">Λήψη ως αρχείο Excel</p></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[var(--text-primary)]">Excel (.xlsx)</h3><p className="text-xs text-[var(--text-secondary)]">Λήψη ως αρχείο Excel</p></div>
                 </button>
-                <button onClick={() => { exportFeed(selectedFeed, 'csv'); setShowExportModal(false); setSelectedFeed(null); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
-                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors"><FileText size={24} className="text-[#4A4A4A]" /></div>
-                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[#4A4A4A]">Λήψη ως αρχείο CSV</p></div>
+                <button onClick={() => { exportFeed(selectedFeed, 'csv'); setShowExportModal(false); setSelectedFeed(null); }} className="w-full p-4 border-2 border-[var(--border)] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
+                  <div className="p-3 bg-[var(--surface-2)] rounded-lg group-hover:bg-[var(--border)] transition-colors"><FileText size={24} className="text-[var(--text-secondary)]" /></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[var(--text-primary)]">CSV (.csv)</h3><p className="text-xs text-[var(--text-secondary)]">Λήψη ως αρχείο CSV</p></div>
                 </button>
               </div>
-              <div className="p-6 border-t border-[#E5E5E5] flex justify-end"><Button variant="ghost" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }}>Ακύρωση</Button></div>
+              <div className="p-6 border-t border-[var(--border)] flex justify-end"><Button variant="ghost" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }}>Ακύρωση</Button></div>
             </motion.div>
           </motion.div>
         )}
@@ -1794,29 +1794,29 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 toolbarAriaLabel="Κλείσιμο"
                 title={<h2 className="text-xl font-bold text-[var(--text-heading)]">Προεπισκόπηση feed</h2>}
                 description={
-                  <p className="text-sm text-[#4A4A4A]">
+                  <p className="text-sm text-[var(--text-secondary)]">
                     {previewFeed} · {formatNumber(previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} ενεργές γραμμές · δείγμα {Math.min(8, previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} γραμμών
                   </p>
                 }
                 actions={
-                  <button type="button" onClick={() => setPreviewFeed(null)} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]" aria-label="Κλείσιμο">
-                    <X size={20} className="text-[#4A4A4A]" />
+                  <button type="button" onClick={() => setPreviewFeed(null)} className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]" aria-label="Κλείσιμο">
+                    <X size={20} className="text-[var(--text-secondary)]" />
                   </button>
                 }
               />
               <div className="p-6 overflow-auto flex-1 min-h-0">
                 {feedProducts.length === 0 ? (
-                  <p className="text-sm text-[#4A4A4A] text-center py-8">Δεν υπάρχουν προϊόντα στο catalog για προεπισκόπηση.</p>
+                  <p className="text-sm text-[var(--text-secondary)] text-center py-8">Δεν υπάρχουν προϊόντα στο catalog για προεπισκόπηση.</p>
                 ) : (
                   (() => {
                     const { headers, rows } = getFeedPreviewTable(previewFeed);
                     return (
-                      <div className="overflow-x-auto border border-[#E5E5E5] rounded-xl">
+                      <div className="overflow-x-auto border border-[var(--border)] rounded-xl">
                         <table className="w-full text-xs text-left">
                           <thead>
-                            <tr className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
+                            <tr className="bg-[var(--surface-1)] border-b border-[var(--border)]">
                               {headers.map((h) => (
-                                <th key={h} className="px-3 py-2 font-semibold text-[#1A1A1A] whitespace-nowrap">
+                                <th key={h} className="px-3 py-2 font-semibold text-[var(--text-primary)] whitespace-nowrap">
                                   {h}
                                 </th>
                               ))}
@@ -1824,7 +1824,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                           </thead>
                           <tbody>
                             {rows.map((row, ri) => (
-                              <tr key={ri} className="border-b border-[#F0F0F0] last:border-0">
+                              <tr key={ri} className="border-b border-[var(--border)] last:border-0">
                                 {row.map((cell, ci) => {
                                   const header = headers[ci];
                                   if (header === 'thumb') {
@@ -1836,7 +1836,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                                     );
                                   }
                                   return (
-                                    <td key={ci} className="px-3 py-2 text-[#4A4A4A] max-w-[200px] truncate" title={String(cell)}>
+                                    <td key={ci} className="px-3 py-2 text-[var(--text-secondary)] max-w-[200px] truncate" title={String(cell)}>
                                       {String(cell)}
                                     </td>
                                   );
@@ -1850,7 +1850,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   })()
                 )}
               </div>
-              <div className="p-6 border-t border-[#E5E5E5] flex justify-end gap-2 flex-shrink-0">
+              <div className="p-6 border-t border-[var(--border)] flex justify-end gap-2 flex-shrink-0">
                 <Button variant="ghost" onClick={() => setPreviewFeed(null)}>Κλείσιμο</Button>
                 <Button
                   variant="secondary"
@@ -1878,22 +1878,22 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 toolbarAriaLabel="Κλείσιμο"
                 title={<h2 className="text-xl font-bold text-[var(--text-heading)]">Εξαγωγή όλων των feeds</h2>}
                 actions={
-                  <button type="button" onClick={() => setShowExportAllModal(false)} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
-                    <X size={20} className="text-[#4A4A4A]" />
+                  <button type="button" onClick={() => setShowExportAllModal(false)} className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]">
+                    <X size={20} className="text-[var(--text-secondary)]" />
                   </button>
                 }
               />
               <div className="p-6 space-y-3">
-                <button onClick={() => { ['Ads Feed', 'Email Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'xlsx'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
+                <button onClick={() => { ['Ads Feed', 'Email Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'xlsx'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[var(--border)] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
                   <div className="p-3 bg-[#22C55E]/10 rounded-lg"><FileSpreadsheet size={24} className="text-[#22C55E]" /></div>
-                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[#4A4A4A]">Εξαγωγή όλων των feeds ως Excel</p></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[var(--text-primary)]">Excel (.xlsx)</h3><p className="text-xs text-[var(--text-secondary)]">Εξαγωγή όλων των feeds ως Excel</p></div>
                 </button>
-                <button onClick={() => { ['Ads Feed', 'Email Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'csv'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
-                  <div className="p-3 bg-[#F5F5F5] rounded-lg"><FileText size={24} className="text-[#4A4A4A]" /></div>
-                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[#4A4A4A]">Εξαγωγή όλων των feeds ως CSV</p></div>
+                <button onClick={() => { ['Ads Feed', 'Email Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'csv'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[var(--border)] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
+                  <div className="p-3 bg-[var(--surface-2)] rounded-lg"><FileText size={24} className="text-[var(--text-secondary)]" /></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[var(--text-primary)]">CSV (.csv)</h3><p className="text-xs text-[var(--text-secondary)]">Εξαγωγή όλων των feeds ως CSV</p></div>
                 </button>
               </div>
-              <div className="p-6 border-t border-[#E5E5E5] flex justify-end"><Button variant="ghost" onClick={() => setShowExportAllModal(false)}>Ακύρωση</Button></div>
+              <div className="p-6 border-t border-[var(--border)] flex justify-end"><Button variant="ghost" onClick={() => setShowExportAllModal(false)}>Ακύρωση</Button></div>
             </motion.div>
           </motion.div>
         )}
@@ -1974,47 +1974,47 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
 
       {/* Quick exports row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2 mb-5">
-        <div className="p-4 border-2 border-[#E5E5E5] rounded-xl">
+        <div className="p-4 border-2 border-[var(--border)] rounded-xl">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-[var(--nts-accent)]/10 rounded-lg">
               <Users size={22} className="text-[var(--nts-accent-text)]" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-[#1A1A1A] text-sm">All Segments Action Pack</h3>
-              <p className="text-xs text-[#4A4A4A] mt-0.5">
+              <h3 className="font-semibold text-[var(--text-primary)] text-sm">All Segments Action Pack</h3>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {segments.length} segments · Profile, Channel Plan & Templates
               </p>
             </div>
           </div>
           <div className="flex gap-2 mt-3">
-            <button onClick={() => handleExportAllPacks('xlsx')} disabled={exporting === 'all-packs'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
+            <button onClick={() => handleExportAllPacks('xlsx')} disabled={exporting === 'all-packs'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--border)] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
               <FileSpreadsheet size={13} className="text-[#22C55E]" /> .xlsx
             </button>
-            <button onClick={() => handleExportAllPacks('csv')} disabled={exporting === 'all-packs'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
-              <FileText size={13} className="text-[#4A4A4A]" /> .csv
+            <button onClick={() => handleExportAllPacks('csv')} disabled={exporting === 'all-packs'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--border)] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
+              <FileText size={13} className="text-[var(--text-secondary)]" /> .csv
             </button>
           </div>
         </div>
 
         {scenarioId && activeStrategy && (
-          <div className="p-4 border-2 border-[#E5E5E5] rounded-xl">
+          <div className="p-4 border-2 border-[var(--border)] rounded-xl">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-[#3B82F6]/10 rounded-lg">
                 <Sparkles size={22} className="text-[#3B82F6]" />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-[#1A1A1A] text-sm">Strategy Execution Plan</h3>
-                <p className="text-xs text-[#4A4A4A] mt-0.5">
+                <h3 className="font-semibold text-[var(--text-primary)] text-sm">Strategy Execution Plan</h3>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                   Channel mix, budget & campaign templates
                 </p>
               </div>
             </div>
             <div className="flex gap-2 mt-3">
-              <button onClick={() => handleExportStrategy('xlsx')} disabled={exporting === 'strategy'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
+              <button onClick={() => handleExportStrategy('xlsx')} disabled={exporting === 'strategy'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--border)] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
                 <FileSpreadsheet size={13} className="text-[#22C55E]" /> .xlsx
               </button>
-              <button onClick={() => handleExportStrategy('csv')} disabled={exporting === 'strategy'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
-                <FileText size={13} className="text-[#4A4A4A]" /> .csv
+              <button onClick={() => handleExportStrategy('csv')} disabled={exporting === 'strategy'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--border)] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
+                <FileText size={13} className="text-[var(--text-secondary)]" /> .csv
               </button>
             </div>
           </div>
@@ -2029,8 +2029,8 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
               <Users size={22} className="text-[#10B981]" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-[#1A1A1A] text-sm">Customer Lists ανά Segment</h3>
-              <p className="text-xs text-[#4A4A4A] mt-0.5">
+              <h3 className="font-semibold text-[var(--text-primary)] text-sm">Customer Lists ανά Segment</h3>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 Customer IDs, emails, RFM scores — έτοιμα για Custom Audiences & email campaigns
               </p>
             </div>
@@ -2089,18 +2089,18 @@ function buildBriefData(
 function openBriefPdf(data: BriefData) {
   const channelRows = data.channels.map(ch => {
     const statusLabel = STATUS_CONFIG[ch.status as ChannelStatus]?.label || ch.status;
-    const statusColor = STATUS_CONFIG[ch.status as ChannelStatus]?.color || '#9CA3AF';
+    const statusColor = STATUS_CONFIG[ch.status as ChannelStatus]?.color || 'var(--text-muted)';
     const budgetDisplay = ch.budget !== null
       ? `${ch.budget}%${ch.budgetEur !== null ? ` · €${ch.budgetEur.toLocaleString('el-GR')}` : ''}`
       : '';
     return `
-      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:#FAFAFA;border-radius:10px;margin:4px 0;border-left:3px solid ${ch.funnelColor}">
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface-1);border-radius:10px;margin:4px 0;border-left:3px solid ${ch.funnelColor}">
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:#1A1A1A">${escapeHtml(ch.name)}</div>
-          <div style="font-size:11px;color:#4A4A4A;margin-top:2px">
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary)">${escapeHtml(ch.name)}</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:2px">
             ${ch.funnel}${budgetDisplay ? ` · ${budgetDisplay}` : ''}${!ch.isPrimary ? ' · secondary' : ''}
           </div>
-          ${ch.note ? `<div style="font-size:11px;color:#4A4A4A;margin-top:4px;font-style:italic">${escapeHtml(ch.note)}</div>` : ''}
+          ${ch.note ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;font-style:italic">${escapeHtml(ch.note)}</div>` : ''}
         </div>
         <span style="font-size:11px;font-weight:600;color:${statusColor}">${escapeHtml(statusLabel)}</span>
       </div>`;
@@ -2109,7 +2109,7 @@ function openBriefPdf(data: BriefData) {
   // Split into paragraphs first, then escape each segment before wrapping in our
   // own <p> tags — so user/AI-controlled rationale text can't inject markup.
   const rationaleHtml = data.rationale
-    ? data.rationale.split('||').map(p => `<p style="margin:6px 0;font-size:12px;color:#4A4A4A;line-height:1.6">${escapeHtml(p.trim())}</p>`).join('')
+    ? data.rationale.split('||').map(p => `<p style="margin:6px 0;font-size:12px;color:var(--text-secondary);line-height:1.6">${escapeHtml(p.trim())}</p>`).join('')
     : '';
 
   const html = `<!DOCTYPE html>
@@ -2119,19 +2119,19 @@ function openBriefPdf(data: BriefData) {
 <title>Channel Brief${data.brandName ? ` — ${escapeHtml(data.brandName)}` : ''}</title>
 <style>
   @media print { body { margin: 0; } .no-print { display: none !important; } }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1A1A1A; max-width: 700px; margin: 0 auto; padding: 40px 32px; background: #fff; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text-primary); max-width: 700px; margin: 0 auto; padding: 40px 32px; background: #fff; }
   .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #F97316; padding-bottom: 16px; margin-bottom: 24px; }
   .brand-name { font-size: 22px; font-weight: 700; }
-  .date { font-size: 12px; color: #9CA3AF; margin-top: 4px; }
+  .date { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
   .logo { font-size: 28px; font-weight: 800; color: #F97316; }
   .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
-  .meta-card { padding: 14px; background: #FAFAFA; border-radius: 10px; }
-  .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #9CA3AF; font-weight: 600; }
+  .meta-card { padding: 14px; background: var(--surface-1); border-radius: 10px; }
+  .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 600; }
   .meta-value { font-size: 15px; font-weight: 600; margin-top: 4px; }
   .section { margin-bottom: 20px; }
-  .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #9CA3AF; margin-bottom: 10px; padding-bottom: 4px; border-bottom: 1px solid #F5F5F5; }
-  .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #E5E5E5; display: flex; justify-content: space-between; align-items: center; }
-  .footer-text { font-size: 11px; color: #9CA3AF; }
+  .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 10px; padding-bottom: 4px; border-bottom: 1px solid var(--surface-2); }
+  .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .footer-text { font-size: 11px; color: var(--text-muted); }
   .footer-brand { font-size: 14px; font-weight: 700; color: #F97316; }
 </style>
 </head>
