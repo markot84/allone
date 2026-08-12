@@ -21,6 +21,8 @@ export { ToastProvider, useToast } from './Toast';
 export { Tooltip } from './Tooltip';
 export { KPICard } from './KPICard';
 export type { KPICardData } from './KPICard';
+export { HeroKPICard } from './HeroKPICard';
+export type { HeroKPICardProps } from './HeroKPICard';
 export { EnterpriseBadge } from './EnterpriseBadge';
 export { AlertsBanner, type AlertsBannerNavigateOptions } from './AlertsBanner';
 export { AllOneLogo } from './AllOneLogo';

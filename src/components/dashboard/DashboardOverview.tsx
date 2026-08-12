@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { getSegmentColor, compareSegmentsByHealth } from '../../utils/segmentColors';
 import { useChartTheme } from '../../theme/chartTheme';
 import {
@@ -35,6 +35,7 @@ import {
   Card,
   CardHeader,
   KPICard,
+  HeroKPICard,
   Tooltip,
   AlertsBanner,
   PageHeader,
@@ -1423,25 +1424,45 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
         return (
           <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
-              <KPICard
-                kpi={{
-                  label: isB2B ? 'Revenue baseline' : 'Σύνολο Εσόδων',
-                  value: formatCurrencyCompact(dashboardTotalRevenue),
-                  change: revenueMoM !== null ? Math.round(revenueMoM) : undefined,
-                  changeLabel: revenueMoM !== null ? 'vs προηγ. μήνα' : undefined,
-                  trend: revenueMoM !== null ? (revenueMoM >= 0 ? 'up' : 'down') : 'up',
-                  sparklineData: revenueSpark,
-                  refreshing:
-                    (hasEcommerceRevenue && ecomKpisRefreshing) || (hasErpBusinessRevenue && businessRevenue.isLoading),
-                  tooltip:
+            {/*
+              DIRECTION C — the bento. Three equally sized KPI cards said all three numbers matter
+              equally, which means none of them does: the eye had nowhere to land and the row got
+              read left to right like a table. Revenue is the figure this dashboard is about, so it
+              takes two columns and two rows and the other two sit beside it.
+
+              `.bento-enter` staggers the three on first paint. It is an opt-in class rather than
+              anything the card primitives do, because CLAUDE.md is explicit that motion spread
+              evenly across every module reads as a template — this is the screen that earns it.
+            */}
+            <div
+              className="bento-enter grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3 lg:grid-rows-2"
+              style={{ gridAutoRows: 'minmax(128px, 1fr)' }}
+            >
+              <div style={{ '--i': 0 } as CSSProperties} className="min-w-0 lg:col-span-2 lg:row-span-2">
+                <HeroKPICard
+                  className="h-full"
+                  label={isB2B ? 'Revenue baseline' : 'Σύνολο Εσόδων'}
+                  value={dashboardTotalRevenue}
+                  format={formatCurrencyCompact}
+                  // Keyed by the FIGURE, so the count replays when the brand or period changes and
+                  // not merely because the component remounted on a tab switch.
+                  countKey={`revenue:${currentBrand?.id ?? 'none'}:${dashPeriod}`}
+                  change={revenueMoM !== null ? Math.round(revenueMoM) : undefined}
+                  changeLabel={revenueMoM !== null ? 'vs προηγ. μήνα' : undefined}
+                  trend={revenueMoM !== null ? (revenueMoM >= 0 ? 'up' : 'down') : 'up'}
+                  sparklineData={revenueSpark}
+                  refreshing={
+                    (hasEcommerceRevenue && ecomKpisRefreshing) || (hasErpBusinessRevenue && businessRevenue.isLoading)
+                  }
+                  tooltip={
                     isB2B
                       ? 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.'
-                      : revenueTotalKpiTooltip,
-                }}
-                index={0}
-                onClick={sectionClick('finances')}
-              />
+                      : revenueTotalKpiTooltip
+                  }
+                  onClick={sectionClick('finances')}
+                />
+              </div>
+              <div style={{ '--i': 1 } as CSSProperties} className="min-w-0">
               <KPICard
                 kpi={{
                   label: isB2B ? 'Demand spend' : 'Marketing Expenses',
@@ -1476,6 +1497,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 index={1}
                 onClick={() => onSectionChange?.('campaigns')}
               />
+              </div>
+              <div style={{ '--i': 2 } as CSSProperties} className="min-w-0">
               <KPICard
                 kpi={{
                   label: isB2B ? 'Demand conversions' : 'Μέσο Καλάθι (AOV)',
@@ -1494,6 +1517,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 index={2}
                 onClick={() => onSectionChange?.(isB2B ? 'sales' : 'campaigns')}
               />
+              </div>
             </div>
             {/* Pointer to a deeper revenue page — dropped entirely when that page is hidden. */}
             {!isSectionHidden(isB2B ? 'finances' : 'roi') && (

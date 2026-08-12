@@ -294,6 +294,33 @@
   --btn-danger-bg-hover:    #A83027;            /* shade 30% of --danger — 6.74:1 */
   --btn-danger-fg:          #FFFFFF;
 
+  /* ---- DIRECTION C ----
+     PROPOSED PALETTE-RULE EXTENSION, NOT A SILENT BREAK.
+
+     colors.md §6 says: "Όχι navy ως φόντο μεγάλων επιφανειών σε αυτή την έκδοση" — navy is a text
+     and branding colour, never a large background. This direction puts a navy band behind the page
+     header, which is exactly that.
+
+     The argument for the exception: §6's reason is that a navy CANVAS tires the eye over a long
+     dashboard session, and that reason holds. A band is not a canvas — it is roughly 160px at the
+     top of one screen, it carries white text at 11.85:1, and the data below it stays on the light
+     surface §6 is protecting. It is the same distinction §2 already draws for navigation, where
+     navy arrives as the label and the active wash rather than as a navy sidebar.
+
+     Choosing direction C is what approves this. If C is not chosen, this block is deleted and
+     colors.md §6 stands unamended. */
+  --band-bg:        var(--navy-500);
+  --band-fg:        #FFFFFF;             /* on navy-500: 11.85:1 */
+  --band-fg-muted:  var(--navy-100);     /* on navy-500: 7.25:1 */
+  /* Gold measures 7.40:1 on navy against 1.60:1 on white. The band is the one place in this
+     palette where gold becomes legible as text — worth knowing, whether or not C is chosen. */
+  --band-accent:    var(--gold-500);
+  --band-height:    clamp(120px, 14vw, 180px);
+
+  /* The hero sparkline is texture behind a figure, not a chart. Above ~0.12 it starts competing
+     with the number for attention, which is the one thing it must not do. */
+  --hero-spark-opacity: 0.16;
+
   /* ---- FOCUS ----
      `focus:outline-none` appears 96 times, replaced by a ring at inconsistent
      widths and only on `focus:` (so it fires for the mouse too). Anything not
@@ -578,6 +605,72 @@
    only for its duration, so the 1px stays; that is a state, not an animation. */
 .btn:active:not(:disabled) {
   transform: translateY(1px);
+}
+
+/**
+ * DIRECTION C — the navy band behind a page header.
+ *
+ * Full-bleed by negative margin so it reaches the edges of AppShell's padded content column
+ * without that column having to know about it. See the --band-* block above for why this is a
+ * proposed amendment to colors.md §6 rather than a break of it.
+ */
+.page-band {
+  position: relative;
+  margin: calc(var(--space-6) * -1) calc(var(--space-6) * -1) var(--space-6);
+  padding: var(--space-8) var(--space-6) var(--space-10);
+  background: var(--band-bg);
+  color: var(--band-fg);
+}
+
+/* !important because the band inverts the page and call sites set their own text colour — often
+   inline, which no class can beat. Caught by measurement: the /styleguide specimen passes a
+   description with an inline `color: var(--text-secondary)`, which rendered #475467 on #003087 =
+   1.54:1, unreadable. Inside a band every colour has to come from the band's own family. */
+.page-band .page-title {
+  color: var(--band-fg) !important;
+}
+
+.page-band p,
+.page-band [class*='text-'] {
+  color: var(--band-fg-muted) !important;
+}
+
+/* Inside the band the secondary button has to sit on navy, not on white. */
+.page-band .btn[data-variant='secondary'] {
+  background: transparent !important;
+  color: var(--band-fg) !important;
+  border-color: var(--band-fg-muted) !important;
+}
+
+.page-band .btn[data-variant='secondary']:hover:not(:disabled) {
+  background: var(--navy-700) !important;
+}
+
+/**
+ * DIRECTION C — the bento entrance, on the signature screen only.
+ *
+ * CLAUDE.md is explicit that motion spread across every module reads as a template, so this is a
+ * class the dashboard opts into rather than anything a primitive does on its own. Custom property
+ * for the index so the stagger is one rule instead of six `.stagger-n` classes.
+ */
+.bento-enter > * {
+  opacity: 0;
+  animation: bento-rise var(--dur-reveal) var(--ease-out) forwards;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+@keyframes bento-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Reduced motion collapses the duration globally, but an element left at opacity:0 with a
+   0.01ms animation can flash. Removing the animation entirely is the honest still frame. */
+@media (prefers-reduced-motion: reduce) {
+  .bento-enter > * {
+    opacity: 1;
+    animation: none;
+  }
 }
 
 /**

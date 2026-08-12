@@ -16,6 +16,13 @@ export interface PageHeaderProps {
   actions?: ReactNode;
   toolbarAriaLabel?: string;
   className?: string;
+  /**
+   * DIRECTION C — renders the header inside a full-bleed navy band.
+   *
+   * Reserved for the signature screen. Putting it on every page would turn the band into the app's
+   * canvas, which is precisely what colors.md §6 rules out; see the --band-* block in tokens.css.
+   */
+  band?: boolean;
 }
 
 /** Standard page header (title + actions): stacks on mobile/tablet, single row at lg+. */
@@ -26,10 +33,11 @@ export function PageHeader({
   actions,
   toolbarAriaLabel = 'Ενέργειες σελίδας',
   className = '',
+  band = false,
 }: PageHeaderProps) {
   return (
     <div
-      className={`flex flex-col gap-3 min-w-0 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between lg:gap-x-6 lg:gap-y-3 ${className}`.trim()}
+      className={`${band ? 'page-band ' : ''}flex flex-col gap-3 min-w-0 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between lg:gap-x-6 lg:gap-y-3 ${className}`.trim()}
     >
       <div className="min-w-0 flex-1 space-y-1 lg:min-w-[240px]">
         {typeof title === 'string' ? <h1 className="page-title">{title}</h1> : title}

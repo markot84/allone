@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Card, CardHeader } from '../common/Card';
 import { Button } from '../common/Button';
 import { KPICard } from '../common/KPICard';
+import { HeroKPICard } from '../common/HeroKPICard';
 import { PageHeader } from '../common/PageHeader';
 import {
   Skeleton,
@@ -665,9 +666,10 @@ function LiveComponents() {
         `.page-title` rule and the prose measure exactly as an app screen would.
       */}
       <PageHeader
+        band
         title="Product Intelligence"
         description={
-          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
+          <p style={{ margin: 0 }}>
             Παρακολούθηση αποθέματος και απόδοσης προϊόντων. Αυτή η παράγραφος υπάρχει για να φανεί
             πού σταματάει η γραμμή κειμένου και πόσο αέρα αφήνει η κατεύθυνση πάνω από τον τίτλο —
             δύο αποφάσεις που δεν φαίνονται σε κανένα swatch.
@@ -680,6 +682,38 @@ function LiveComponents() {
           </>
         }
       />
+
+      {/*
+        DIRECTION C — the bento. Deliberately unequal tiles: the hero occupies two columns and two
+        rows, so the eye lands on one figure instead of scanning three of equal weight. This is the
+        composition the direction is actually proposing, and it cannot be judged from a swatch.
+      */}
+      <div
+        className="bento-enter grid gap-4 lg:grid-cols-3 lg:grid-rows-2"
+        // Rows are capped rather than content-sized: left to grow with the KPI cards, the hero
+        // became ~360px of mostly empty white above a number pinned to the bottom.
+        style={{ gridAutoRows: 'minmax(128px, 1fr)' }}
+      >
+        <div style={{ '--i': 0 } as React.CSSProperties} className="lg:col-span-2 lg:row-span-2">
+          <HeroKPICard
+            className="h-full"
+            label="Σύνολο Εσόδων"
+            value={148320}
+            format={(v) => `€ ${Math.round(v).toLocaleString('el-GR')}`}
+            countKey="styleguide:revenue"
+            change={12}
+            changeLabel="vs προηγούμενο μήνα"
+            trend="up"
+            sparklineData={kpi.sparklineData}
+          />
+        </div>
+        <div style={{ '--i': 1 } as React.CSSProperties}>
+          <KPICard kpi={{ ...kpi, label: 'Παραγγελίες', value: '1.284', change: -4, trend: 'down', sparklineData: undefined }} index={0} />
+        </div>
+        <div style={{ '--i': 2 } as React.CSSProperties}>
+          <KPICard kpi={{ ...kpi, label: 'Μέση αξία', value: '€ 115,5', change: 6, trend: 'up', sparklineData: undefined }} index={0} />
+        </div>
+      </div>
 
       <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <KPICard kpi={kpi} index={0} />
