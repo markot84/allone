@@ -598,19 +598,19 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     return (
       <div className="space-y-6">
         <PageHeader
-          title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Campaigns</h2>}
+          title="Campaigns"
           description={
-            <p className="text-sm text-[#4A4A4A] sm:text-base">Επισκόπηση και ανάλυση των καμπανιών σας</p>
+            <p className="text-sm text-[var(--text-secondary)] sm:text-base">Επισκόπηση και ανάλυση των καμπανιών σας</p>
           }
         />
         <Card padding="lg" className="text-center py-12 space-y-3">
-          <p className="text-[#4A4A4A]">
+          <p className="text-[var(--text-secondary)]">
             Δεν υπάρχουν ακόμα imported campaigns.
           </p>
           {connectorsStatusPending ? (
             <p className="text-sm text-[#6B7280]">Έλεγχος κατάστασης συνδέσεων…</p>
           ) : hasConnectedAdsOrMeta ? (
-            <p className="text-sm text-[#4A4A4A] max-w-xl mx-auto">
+            <p className="text-sm text-[var(--text-secondary)] max-w-xl mx-auto">
               Τα Google Ads / Meta είναι συνδεδεμένα αλλά δεν εμφανίζονται ακόμα campaigns. Ανοίξτε τις{' '}
               <button
                 type="button"
@@ -624,7 +624,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               campaigns από τον τελευταίο συγχρονισμό.
             </p>
           ) : (
-            <p className="text-sm text-[#4A4A4A]">
+            <p className="text-sm text-[var(--text-secondary)]">
               Συνδέστε Google Ads ή Meta από τις{' '}
               <button
                 type="button"
@@ -646,7 +646,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       <PageHeader
         className="!gap-2 lg:!gap-4 lg:!items-center"
         toolbarAriaLabel="Export and delete campaigns"
-        title={<h2 className="text-lg font-bold text-[var(--text-heading)] sm:text-xl">Campaigns</h2>}
+        title="Campaigns"
         description={
           <p className="text-xs text-[#6B7280] sm:text-sm">
             Imported campaigns: {summaryStats.total}
@@ -704,7 +704,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           <Card padding="sm">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
                   Διαθέσιμο budget{' '}
                   <Tooltip
                     content="Άθροισμα (δηλωμένο budget − δαπάνη) ανά καμπάνια όπου υπάρχει budget στο import. Η δαπάνη ακολουθεί το επιλεγμένο εύρος ημερομηνιών· αν δεν εμφανίζεται τιμή, τα campaigns δεν έχουν πεδίο budget."
@@ -724,7 +724,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           <Card padding="sm">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">Total spend <Tooltip content="Συνολική διαφημιστική δαπάνη για τα τρέχοντα φίλτρα (ημερομηνίες, κανάλι, αναζήτηση κ.λπ.)." size={13} /></p>
+                <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">Total spend <Tooltip content="Συνολική διαφημιστική δαπάνη για τα τρέχοντα φίλτρα (ημερομηνίες, κανάλι, αναζήτηση κ.λπ.)." size={13} /></p>
                 <p className="text-xl font-bold text-[#1A1A1A] font-mono mt-0.5 tabular-nums">
                   {EUR}{formatCurrency(summaryStats.totalSpent, 2)}
                 </p>
@@ -738,7 +738,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           <Card padding="sm">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
                   {showPurchaseSalesHeadlines ? 'Sales' : 'Conversions'}{' '}
                   <Tooltip
                     content={
@@ -764,7 +764,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           <Card padding="sm">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
                   {showPurchaseSalesHeadlines ? 'Sales value' : 'Conversion value'}{' '}
                   <Tooltip
                     content={
@@ -782,7 +782,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 </p>
               </div>
               <div className="w-10 h-10 shrink-0 bg-[#F5F5F5] rounded-lg flex items-center justify-center">
-                <TrendingUp size={20} className="text-[#4A4A4A]" />
+                <TrendingUp size={20} className="text-[var(--text-secondary)]" />
               </div>
             </div>
           </Card>
@@ -790,7 +790,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           <Card padding="sm">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
                   Platform ROAS{' '}
                   <Tooltip
                     content={
@@ -886,7 +886,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
           <div className="min-w-0 lg:min-w-[180px] lg:flex-1">
             <div className="relative">
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4A4A4A]" />
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
               <input
                 type="text"
                 placeholder="Search campaigns…"
@@ -898,7 +898,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           </div>
 
           <div className="flex min-w-0 flex-col gap-2 sm:col-span-2 sm:flex-row sm:items-center lg:col-span-1">
-            <Filter size={18} className="text-[#4A4A4A]" />
+            <Filter size={18} className="text-[var(--text-secondary)]" />
             <select
               value={channelFilter}
               onChange={(e) => setChannelFilter(e.target.value)}
@@ -931,7 +931,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-all ${
                     convActionFilter.length > 0
                       ? 'bg-[var(--nts-accent)] text-white'
-                      : 'bg-[#F5F5F5] text-[#4A4A4A] hover:bg-[#E5E5E5]'
+                      : 'bg-[#F5F5F5] text-[var(--text-secondary)] hover:bg-[#E5E5E5]'
                   }`}
                 >
                   <Filter size={14} />
@@ -996,17 +996,17 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
         {filteredCampaigns.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-[#4A4A4A]">Δεν υπάρχουν campaigns που να ταιριάζουν με τα φίλτρα.</p>
+            <p className="text-[var(--text-secondary)]">Δεν υπάρχουν campaigns που να ταιριάζουν με τα φίλτρα.</p>
           </div>
         ) : convFilterActive && sortedCampaigns.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-[#4A4A4A]">Κανένα campaign δεν έχει τις επιλεγμένες conversions. Δοκιμάστε άλλα φίλτρα (π.χ. αφαιρέστε την ενέργεια Purchase αν δεν υπάρχουν πραγματικές αγορές).</p>
+            <p className="text-[var(--text-secondary)]">Κανένα campaign δεν έχει τις επιλεγμένες conversions. Δοκιμάστε άλλα φίλτρα (π.χ. αφαιρέστε την ενέργεια Purchase αν δεν υπάρχουν πραγματικές αγορές).</p>
           </div>
         ) : (
           <div className="overflow-x-auto mt-3">
             <table className="w-full">
               <thead>
-                <tr className="text-left text-[11px] text-[#4A4A4A] border-b border-[#E5E5E5]">
+                <tr className="text-left text-[11px] text-[var(--text-secondary)] border-b border-[#E5E5E5]">
                   <SortableHeader col="name" label="Campaign" current={sortColumn} dir={sortDirection} onSort={handleSort} className="" />
                   <SortableHeader col="channel" label="Channel" current={sortColumn} dir={sortDirection} onSort={handleSort} className="whitespace-nowrap" />
                   <SortableHeader col="status" label="Status" current={sortColumn} dir={sortDirection} onSort={handleSort} className="whitespace-nowrap hidden md:table-cell" />

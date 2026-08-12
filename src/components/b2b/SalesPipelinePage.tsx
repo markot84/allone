@@ -42,9 +42,9 @@ export function SalesPipelinePage({ onSectionChange }: SalesPipelinePageProps = 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Sales Pipeline</h2>}
+        title="Sales Pipeline"
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             B2B workspace για account coverage, next-step discipline και εμπορική εκτέλεση.
           </p>
         }

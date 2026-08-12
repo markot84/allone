@@ -52,10 +52,18 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
       transition={{ delay: index * 0.05 }}
       className="h-full min-w-0"
     >
+      {/*
+        The `border-l-4 border-l-transparent hover:border-l-[var(--nts-accent)]` that used to be
+        here never rendered: Card put className on its animation wrapper, an element with no
+        background and no radius. Now that className reaches the card, it still would not render —
+        `.surface` sets the `border` shorthand and wins on source order — so it is dropped rather
+        than left as a class that looks like it does something. Each visual direction decides its
+        own hover accent deliberately.
+      */}
       <Card
         padding="lg"
         hover={!!onClick}
-        className={`border-l-4 border-l-transparent hover:border-l-[var(--nts-accent)] h-full ${className || ''}`}
+        className={`h-full ${className || ''}`.trim()}
         onClick={onClick}
       >
         <div className="flex items-start justify-between mb-3">

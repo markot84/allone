@@ -274,12 +274,12 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     return (
       <div className="space-y-6">
         <PageHeader
-          title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Οικονομικά Επιχείρησης</h2>}
-          description={<p className="text-sm text-[#4A4A4A] sm:text-base">Τζίρος και οργανικά έσοδα (χωρίς campaigns)</p>}
+          title="Οικονομικά Επιχείρησης"
+          description={<p className="text-sm text-[var(--text-secondary)] sm:text-base">Τζίρος και οργανικά έσοδα (χωρίς campaigns)</p>}
         />
         <Card padding="lg" className="text-center py-12">
-          <p className="text-[#4A4A4A] mb-4">Δεν υπάρχουν ακόμα δεδομένα (e-shop, campaigns ή οργανικά).</p>
-          <p className="text-sm text-[#4A4A4A]">
+          <p className="text-[var(--text-secondary)] mb-4">Δεν υπάρχουν ακόμα δεδομένα (e-shop, campaigns ή οργανικά).</p>
+          <p className="text-sm text-[var(--text-secondary)]">
             Συνδέστε κανάλια από τις Συνδέσεις ή εισάγετε οργανικό τζίρο από την{' '}
             <button
               type="button"
@@ -300,9 +300,9 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Οικονομικά Επιχείρησης</h2>}
+        title="Οικονομικά Επιχείρησης"
         description={
-          <p className="text-sm text-[#4A4A4A]">
+          <p className="text-sm text-[var(--text-secondary)]">
             Πλήρης εικόνα τζίρου για την επιλεγμένη περίοδο
           </p>
         }
@@ -531,7 +531,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="text-left text-xs text-[#4A4A4A] border-b border-[#E5E5E5]">
+                <tr className="text-left text-xs text-[var(--text-secondary)] border-b border-[#E5E5E5]">
                   <th className="pb-3 font-medium">Περίοδος</th>
                   <th className="pb-3 font-medium text-right">Οργανικά Έσοδα</th>
                 </tr>

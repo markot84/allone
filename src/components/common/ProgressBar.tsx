@@ -28,7 +28,7 @@ export function ProgressBar({
   return (
     <div className={className}>
       {showLabel && (
-        <div className="flex justify-between text-xs text-[#4A4A4A] mb-1">
+        <div className="flex justify-between text-xs text-[var(--text-secondary)] mb-1">
           <span>{value}</span>
           <span>{max}</span>
         </div>

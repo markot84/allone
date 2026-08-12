@@ -120,7 +120,7 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
     <div className="space-y-6">
       <PageHeader
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">{editingOffer ? 'Επεξεργασία Προσφοράς' : 'Νέα Εμπορική Προσφορά'}</h2>}
-        description={<p className="text-sm text-[#4A4A4A]">Δημιουργία B2B εμπορικής προσφοράς με ανάλυση margin και export.</p>}
+        description={<p className="text-sm text-[var(--text-secondary)]">Δημιουργία B2B εμπορικής προσφοράς με ανάλυση margin και export.</p>}
         actions={<Button variant="secondary" onClick={() => setView('list')}>← Πίσω</Button>}
       />
 
@@ -225,8 +225,8 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Commercial Offers</h2>}
-        description={<p className="text-sm text-[#4A4A4A]">Δημιουργία και παρακολούθηση B2B εμπορικών προσφορών με ανάλυση margin ανά γραμμή.</p>}
+        title="Commercial Offers"
+        description={<p className="text-sm text-[var(--text-secondary)]">Δημιουργία και παρακολούθηση B2B εμπορικών προσφορών με ανάλυση margin ανά γραμμή.</p>}
         actions={<Button variant="primary" onClick={openNew}><Plus size={15} className="mr-1" /> Νέα Προσφορά</Button>}
       />
 

@@ -109,9 +109,9 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
     <div className="space-y-6">
       <PageHeader
         toolbarAriaLabel="Brand"
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Τα Brands μου</h2>}
+        title="Τα Brands μου"
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Επιλέξτε brand για να δείτε τα δεδομένα και την ανάλυσή του
           </p>
         }
@@ -201,7 +201,7 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
                   <div className="min-w-0">
                     <h3 className="font-semibold text-[#1A1A1A] truncate">{brand.name}</h3>
                     {brand.type && (
-                      <p className="text-sm text-[#4A4A4A]">{brand.type}</p>
+                      <p className="text-sm text-[var(--text-secondary)]">{brand.type}</p>
                     )}
                   </div>
                 </div>
@@ -306,8 +306,8 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
       {!loading && brands.length === 0 && !showAddForm && (
         <Card padding="lg" className="text-center py-12">
           <Building2 size={48} className="mx-auto text-[#9CA3AF] mb-4" />
-          <p className="text-[#4A4A4A] font-medium">Δεν έχετε brands ακόμη</p>
-          <p className="text-sm text-[#4A4A4A] mt-1">
+          <p className="text-[var(--text-secondary)] font-medium">Δεν έχετε brands ακόμη</p>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
             Δημιουργήστε το πρώτο σας brand ή περίμενε πρόσκληση από άλλον χρήστη
           </p>
           <Button

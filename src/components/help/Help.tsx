@@ -101,7 +101,7 @@ export function Help() {
             onClick={handleBack}
             className="shrink-0 self-start rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
           >
-            <ArrowLeft size={20} className="text-[#4A4A4A]" />
+            <ArrowLeft size={20} className="text-[var(--text-secondary)]" />
           </button>
           <div className="min-w-0">
             <div className="mb-1 flex flex-wrap items-center gap-2 text-sm text-[#9CA3AF]">
@@ -109,7 +109,7 @@ export function Help() {
               <span>{category?.title}</span>
             </div>
             <h1 className="break-words text-xl font-bold text-[#1A1A1A] sm:text-2xl">{currentArticle.title}</h1>
-            <p className="mt-1 text-sm text-[#4A4A4A]">{currentArticle.description}</p>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">{currentArticle.description}</p>
           </div>
         </div>
 
@@ -125,7 +125,7 @@ export function Help() {
                   <CheckCircle2 size={18} className="text-[#22C55E]" />
                   Βήματα:
                 </h4>
-                <ol className="list-decimal list-inside space-y-2 text-[#4A4A4A]">
+                <ol className="list-decimal list-inside space-y-2 text-[var(--text-secondary)]">
                   {currentArticle.steps.map((step, i) => (
                     <li key={i}>{step}</li>
                   ))}
@@ -140,7 +140,7 @@ export function Help() {
                   <Lightbulb size={18} className="text-[var(--nts-accent-text)]" />
                   Συμβουλές:
                 </h4>
-                <ul className="list-disc list-inside space-y-2 text-[#4A4A4A]">
+                <ul className="list-disc list-inside space-y-2 text-[var(--text-secondary)]">
                   {currentArticle.tips.map((tip, i) => (
                     <li key={i}>{tip}</li>
                   ))}
@@ -152,14 +152,14 @@ export function Help() {
             {currentArticle.faq && currentArticle.faq.length > 0 && (
               <div className="mt-6">
                 <h4 className="font-semibold text-[#1A1A1A] mb-3 flex items-center gap-2">
-                  <HelpCircle size={18} className="text-[#4A4A4A]" />
+                  <HelpCircle size={18} className="text-[var(--text-secondary)]" />
                   Συχνές Ερωτήσεις:
                 </h4>
                 <div className="space-y-3">
                   {currentArticle.faq.map((item, i) => (
                     <div key={i} className="p-3 bg-white border border-[#E5E5E5] rounded-lg">
                       <p className="font-medium text-[#1A1A1A] mb-1">{item.question}</p>
-                      <p className="text-sm text-[#4A4A4A]">{item.answer}</p>
+                      <p className="text-sm text-[var(--text-secondary)]">{item.answer}</p>
                     </div>
                   ))}
                 </div>
@@ -206,14 +206,14 @@ export function Help() {
             onClick={handleBack}
             className="shrink-0 self-start rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
           >
-            <ArrowLeft size={20} className="text-[#4A4A4A]" />
+            <ArrowLeft size={20} className="text-[var(--text-secondary)]" />
           </button>
           <div className="min-w-0">
             <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold text-[#1A1A1A] sm:text-2xl">
               <span>{category?.icon}</span>
               {category?.title}
             </h1>
-            <p className="text-sm text-[#4A4A4A] mt-1">{category?.description}</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">{category?.description}</p>
           </div>
         </div>
 
@@ -230,7 +230,7 @@ export function Help() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <h3 className="font-semibold text-[#1A1A1A] mb-1">{article.title}</h3>
-                    <p className="text-sm text-[#4A4A4A]">{article.description}</p>
+                    <p className="text-sm text-[var(--text-secondary)]">{article.description}</p>
                     {article.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {article.tags.slice(0, 3).map((tag) => (
@@ -260,7 +260,7 @@ export function Help() {
       {/* Header */}
       <div className="text-center py-8">
         <h2 className="text-3xl font-bold text-[#1A1A1A]">Βιβλιοθήκη γνώσης</h2>
-        <p className="text-[#4A4A4A] mt-2 max-w-md mx-auto">
+        <p className="text-[var(--text-secondary)] mt-2 max-w-md mx-auto">
           Βρείτε απαντήσεις και οδηγούς για τη χρήση του allone
         </p>
 
@@ -302,7 +302,7 @@ export function Help() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <h3 className="font-semibold text-[#1A1A1A] mb-1">{article.title}</h3>
-                    <p className="text-sm text-[#4A4A4A]">{article.description}</p>
+                    <p className="text-sm text-[var(--text-secondary)]">{article.description}</p>
                   </div>
                   <ChevronRight size={18} className="text-[#9CA3AF]" />
                 </div>
@@ -315,7 +315,7 @@ export function Help() {
       {searchQuery && filteredArticles.length === 0 && (
         <Card padding="lg">
           <div className="text-center py-8">
-            <p className="text-[#4A4A4A]">Δεν βρέθηκαν άρθρα για "{searchQuery}"</p>
+            <p className="text-[var(--text-secondary)]">Δεν βρέθηκαν άρθρα για "{searchQuery}"</p>
             <p className="text-sm text-[#9CA3AF] mt-2">Δοκιμάστε διαφορετικούς όρους αναζήτησης</p>
           </div>
         </Card>
@@ -347,7 +347,7 @@ export function Help() {
                       </div>
                       <div className="flex-1">
                         <h3 className="font-semibold text-[#1A1A1A]">{category.title}</h3>
-                        <p className="text-sm text-[#4A4A4A] mt-1">{category.description}</p>
+                        <p className="text-sm text-[var(--text-secondary)] mt-1">{category.description}</p>
                         <p className="text-xs mt-2 text-[var(--nts-medium-gray)]">
                           {articlesCount} άρθρα
                         </p>
@@ -418,11 +418,11 @@ export function Help() {
               <div className="p-4 border border-[#E5E5E5] rounded-xl">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 bg-[#F5F5F5] rounded-lg flex items-center justify-center">
-                    <Mail size={20} className="text-[#4A4A4A]" />
+                    <Mail size={20} className="text-[var(--text-secondary)]" />
                   </div>
                   <div>
                     <h4 className="font-medium text-[#1A1A1A]">Email Support</h4>
-                    <p className="text-xs text-[#4A4A4A]">noreply@performanceplus.gr</p>
+                    <p className="text-xs text-[var(--text-secondary)]">noreply@performanceplus.gr</p>
                   </div>
                 </div>
                 <Button
@@ -442,7 +442,7 @@ export function Help() {
 
       {/* Footer */}
       <div className="text-center py-8 border-t border-[#E5E5E5]">
-        <p className="text-[#4A4A4A]">
+        <p className="text-[var(--text-secondary)]">
           Δεν βρίσκετε αυτό που ψάχνετε;{' '}
           <a href={`mailto:${SUPPORT_MAIL}`} className="text-[var(--nts-accent-text)] hover:underline">
             Επικοινωνήστε με την ομάδα μας

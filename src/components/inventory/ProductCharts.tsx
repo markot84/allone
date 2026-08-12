@@ -194,13 +194,13 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
               <BarChart3 size={24} className="shrink-0 text-[var(--nts-accent-text)]" />
               <div className="min-w-0">
                 <h2 className="text-xl font-bold text-[#1A1A1A]">Οπτικοποίηση δεδομένων προϊόντων</h2>
-                <p className="text-sm text-[#4A4A4A]">{aggregateCharts ? `${totalProducts ?? products.length} προϊόντα σε full-inventory ανάλυση` : `${products.length} προϊόντα σε ανάλυση`}</p>
+                <p className="text-sm text-[var(--text-secondary)]">{aggregateCharts ? `${totalProducts ?? products.length} προϊόντα σε full-inventory ανάλυση` : `${products.length} προϊόντα σε ανάλυση`}</p>
               </div>
             </div>
           }
           actions={
             <button type="button" onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
-              <X size={20} className="text-[#4A4A4A]" />
+              <X size={20} className="text-[var(--text-secondary)]" />
             </button>
           }
         />
@@ -230,7 +230,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-[300px] text-[#4A4A4A]">
+                <div className="flex flex-col items-center justify-center h-[300px] text-[var(--text-secondary)]">
                   <p>Δεν υπάρχουν δεδομένα για κατανομή margin</p>
                   <p className="text-xs mt-2">Προϊόντα: {products.length}</p>
                   {products.length > 0 && (
@@ -264,7 +264,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
+              <div className="flex items-center justify-center h-[300px] text-[var(--text-secondary)]">
                 <p>Δεν υπάρχουν δεδομένα για ηλικία αποθέματος</p>
               </div>
             )}
@@ -299,7 +299,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
+              <div className="flex items-center justify-center h-[300px] text-[var(--text-secondary)]">
                 <p>Δεν υπάρχουν δεδομένα για κατάσταση αποθέματος</p>
               </div>
             )}
@@ -325,7 +325,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
+              <div className="flex items-center justify-center h-[300px] text-[var(--text-secondary)]">
                 <p>Δεν υπάρχουν δεδομένα για κατηγορίες</p>
               </div>
             )}
@@ -352,7 +352,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
+              <div className="flex items-center justify-center h-[300px] text-[var(--text-secondary)]">
                 <p>Δεν υπάρχουν δεδομένα για κορυφαία προϊόντα</p>
               </div>
             )}
@@ -380,7 +380,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
+              <div className="flex items-center justify-center h-[300px] text-[var(--text-secondary)]">
                 <p>Δεν υπάρχουν δεδομένα για ηλικία vs επίπεδο αποθέματος</p>
               </div>
             )}

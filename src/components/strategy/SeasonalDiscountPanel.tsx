@@ -108,7 +108,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
         {onClose && (
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-[#F5F5F5] text-[#9CA3AF] hover:text-[#4A4A4A] transition-colors"
+            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-[#F5F5F5] text-[#9CA3AF] hover:text-[var(--text-secondary)] transition-colors"
             title="Κλείσιμο"
           >
             <X size={18} />
@@ -116,7 +116,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
         )}
         {/* Period Name + Suggested */}
         <div>
-          <label className="text-xs font-semibold text-[#4A4A4A] block mb-2">Όνομα περιόδου</label>
+          <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-2">Όνομα περιόδου</label>
           <input
             type="text"
             value={periodName}
@@ -145,7 +145,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
 
         {/* Discount % */}
         <div>
-          <label className="text-xs font-semibold text-[#4A4A4A] block mb-2">
+          <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-2">
             <Percent size={12} className="inline mr-1" />
             Ποσοστό έκπτωσης
           </label>
@@ -157,7 +157,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   discountPercent === pct
                     ? 'bg-[var(--nts-accent)] text-white'
-                    : 'bg-[#F5F5F5] text-[#4A4A4A] hover:bg-[#E5E5E5]'
+                    : 'bg-[#F5F5F5] text-[var(--text-secondary)] hover:bg-[#E5E5E5]'
                 }`}
               >
                 {pct}%
@@ -179,7 +179,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
 
         {/* Scope */}
         <div>
-          <label className="text-xs font-semibold text-[#4A4A4A] block mb-2">Εφαρμογή σε</label>
+          <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-2">Εφαρμογή σε</label>
           <div className="flex gap-2">
             {([
               { id: 'all' as const, label: 'Όλα τα προϊόντα', icon: Package },
@@ -192,7 +192,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all flex-1 justify-center ${
                   scope === opt.id
                     ? 'bg-[#1A1A1A] text-white'
-                    : 'bg-[#F5F5F5] text-[#4A4A4A] hover:bg-[#E5E5E5]'
+                    : 'bg-[#F5F5F5] text-[var(--text-secondary)] hover:bg-[#E5E5E5]'
                 }`}
               >
                 <opt.icon size={13} />
@@ -205,7 +205,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
         {/* Category Selector */}
         {scope === 'categories' && (
           <div>
-            <label className="text-xs font-semibold text-[#4A4A4A] block mb-2">
+            <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-2">
               Επιλογή κατηγοριών ({selectedCategories.size} επιλεγμένες)
             </label>
             <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
@@ -216,7 +216,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
                   className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs transition-all ${
                     selectedCategories.has(cat)
                       ? 'bg-[var(--nts-accent)] text-white'
-                      : 'bg-[#F5F5F5] text-[#4A4A4A] hover:bg-[#E5E5E5]'
+                      : 'bg-[#F5F5F5] text-[var(--text-secondary)] hover:bg-[#E5E5E5]'
                   }`}
                 >
                   {selectedCategories.has(cat) && <Check size={10} />}
@@ -233,7 +233,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
         {/* Product Selector */}
         {scope === 'products' && (
           <div>
-            <label className="text-xs font-semibold text-[#4A4A4A] block mb-2">
+            <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-2">
               Επιλογή προϊόντων ({selectedProductIds.size} επιλεγμένα)
             </label>
             <div className="space-y-1 max-h-40 overflow-y-auto">
@@ -244,7 +244,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
                   className={`flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-xs text-left transition-all ${
                     selectedProductIds.has(p.id)
                       ? 'bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] border border-[var(--nts-accent)]/30'
-                      : 'bg-[#F5F5F5] text-[#4A4A4A] hover:bg-[#E5E5E5] border border-transparent'
+                      : 'bg-[#F5F5F5] text-[var(--text-secondary)] hover:bg-[#E5E5E5] border border-transparent'
                   }`}
                 >
                   {selectedProductIds.has(p.id) ? <Check size={11} /> : <X size={11} className="opacity-0" />}
@@ -264,7 +264,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
 
         {/* Summary + Apply */}
         <div className="flex items-center justify-between pt-3 border-t border-[#E5E5E5]">
-          <span className="text-xs text-[#4A4A4A]">
+          <span className="text-xs text-[var(--text-secondary)]">
             <span className="font-semibold">{affectedCount}</span> προϊόντα · <span className="font-semibold text-[#EF4444]">-{discountPercent}%</span>
           </span>
           <button

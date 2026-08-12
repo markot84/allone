@@ -113,7 +113,7 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
         {onClose && (
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-[#F5F5F5] text-[#9CA3AF] hover:text-[#4A4A4A] transition-colors"
+            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-[#F5F5F5] text-[#9CA3AF] hover:text-[var(--text-secondary)] transition-colors"
             title="Κλείσιμο"
           >
             <X size={18} />
@@ -123,7 +123,7 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-start">
           {/* Strategy A */}
           <div>
-            <p className="text-xs font-semibold text-[#4A4A4A] mb-2">
+            <p className="text-xs font-semibold text-[var(--text-secondary)] mb-2">
               Στρατηγική Α
             </p>
             <div className="space-y-2">
@@ -186,7 +186,7 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
 
           {/* Strategy B */}
           <div>
-            <p className="text-xs font-semibold text-[#4A4A4A] mb-2">
+            <p className="text-xs font-semibold text-[var(--text-secondary)] mb-2">
               Στρατηγική Β
             </p>
             <div className="space-y-2">
@@ -232,7 +232,7 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
               exit={{ opacity: 0, y: 8 }}
               className="mt-4 pt-4 border-t border-[#E5E5E5]"
             >
-              <p className="text-xs font-medium text-[#4A4A4A] mb-2">
+              <p className="text-xs font-medium text-[var(--text-secondary)] mb-2">
                 Συνδυασμένα βάρη
               </p>
               <div className="flex gap-1 mb-1 h-2 rounded-full overflow-hidden">

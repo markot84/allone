@@ -4,6 +4,7 @@ import { BaseStyles, ThemeProvider } from '@primer/react';
 import './index.css';
 import App from './App.tsx';
 import { AuthProvider } from './contexts/AuthContext';
+import { VariantBadge } from './components/common/VariantBadge';
 import { bootstrapAccent } from './theme/accentTheme';
 import { installGlobalErrorHandlers } from './utils/globalErrorHandlers';
 
@@ -24,6 +25,8 @@ createRoot(document.getElementById('root')!).render(
       <BaseStyles>
         <AuthProvider>
           <App />
+          {/* Outside App so it survives every route, including /styleguide and the login screen. */}
+          <VariantBadge />
         </AuthProvider>
       </BaseStyles>
     </ThemeProvider>

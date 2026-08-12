@@ -33,9 +33,9 @@ export function AccountIntelligencePage({ onSectionChange }: AccountIntelligence
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Account Intelligence</h2>}
+        title="Account Intelligence"
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Το B2B replacement του retail RFM: health, priority και growth potential ανά πελάτη ή account cluster.
           </p>
         }

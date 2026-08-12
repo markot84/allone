@@ -38,7 +38,7 @@ function CompareBriefColumn({
       <h5 className="text-base font-bold text-[#1A1A1A]">
         {row.countryName} <span className="text-[#9CA3AF]">({row.countryCode})</span>
       </h5>
-      <p className="text-sm leading-relaxed text-[#4A4A4A] line-clamp-6">{b.executive_summary}</p>
+      <p className="text-sm leading-relaxed text-[var(--text-secondary)] line-clamp-6">{b.executive_summary}</p>
       <div className="text-xs text-[#6B7280]">
         <span className="font-semibold text-[#1A1A1A]">Route:</span> {b.route_to_market.recommended}
       </div>
@@ -62,7 +62,7 @@ function CompareBriefColumn({
           </tbody>
         </table>
       </div>
-      <ul className="list-disc space-y-1 pl-4 text-xs text-[#4A4A4A]">
+      <ul className="list-disc space-y-1 pl-4 text-xs text-[var(--text-secondary)]">
         {b.risks_barriers.slice(0, 5).map((x) => (
           <li key={x}>{x}</li>
         ))}
@@ -86,18 +86,18 @@ function BriefPanel({ title, brief }: { title: string; brief: MarketBrief }) {
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">{brief.disclaimer}</div>
       <div>
         <p className="text-sm font-semibold text-[#1A1A1A]">Σύνοψη</p>
-        <p className="mt-1 text-sm leading-relaxed text-[#4A4A4A] whitespace-pre-wrap">{brief.executive_summary}</p>
+        <p className="mt-1 text-sm leading-relaxed text-[var(--text-secondary)] whitespace-pre-wrap">{brief.executive_summary}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg border border-[#E5E5E5] p-3">
           <p className="text-xs font-semibold text-[#6B7280]">Αγορά</p>
           <p className="mt-1 text-sm text-[#1A1A1A]">{brief.market_snapshot.size_signal}</p>
-          <p className="mt-2 text-sm text-[#4A4A4A]">{brief.market_snapshot.growth_outlook}</p>
-          <p className="mt-2 text-sm text-[#4A4A4A]">{brief.market_snapshot.maturity}</p>
+          <p className="mt-2 text-sm text-[var(--text-secondary)]">{brief.market_snapshot.growth_outlook}</p>
+          <p className="mt-2 text-sm text-[var(--text-secondary)]">{brief.market_snapshot.maturity}</p>
         </div>
         <div className="rounded-lg border border-[#E5E5E5] p-3">
           <p className="text-xs font-semibold text-[#6B7280]">Κανάλια</p>
-          <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-[#4A4A4A]">
+          <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-[var(--text-secondary)]">
             {brief.market_snapshot.key_channels.map((c) => (
               <li key={c}>{c}</li>
             ))}
@@ -106,7 +106,7 @@ function BriefPanel({ title, brief }: { title: string; brief: MarketBrief }) {
       </div>
       <div>
         <p className="text-sm font-semibold text-[#1A1A1A]">Drivers ζήτησης</p>
-        <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-[#4A4A4A]">
+        <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-[var(--text-secondary)]">
           {brief.demand_drivers.map((d) => (
             <li key={d}>{d}</li>
           ))}
@@ -119,7 +119,7 @@ function BriefPanel({ title, brief }: { title: string; brief: MarketBrief }) {
             <div key={c.name} className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-sm">
               <span className="font-medium text-[#1A1A1A]">{c.name}</span>
               <span className="text-[#6B7280]"> · {c.position}</span>
-              <p className="mt-1 text-xs text-[#4A4A4A]">{c.notes}</p>
+              <p className="mt-1 text-xs text-[var(--text-secondary)]">{c.notes}</p>
             </div>
           ))}
         </div>
@@ -152,8 +152,8 @@ function BriefPanel({ title, brief }: { title: string; brief: MarketBrief }) {
               {brief.price_benchmarking.map((row) => (
                 <tr key={row.category} className="border-b border-[#F3F4F6]">
                   <td className="py-2 pr-4 font-medium text-[#1A1A1A]">{row.category}</td>
-                  <td className="py-2 pr-4 text-[#4A4A4A]">{row.indicative_low ?? '—'}</td>
-                  <td className="py-2 pr-4 text-[#4A4A4A]">{row.indicative_high ?? '—'}</td>
+                  <td className="py-2 pr-4 text-[var(--text-secondary)]">{row.indicative_low ?? '—'}</td>
+                  <td className="py-2 pr-4 text-[var(--text-secondary)]">{row.indicative_high ?? '—'}</td>
                   <td className="py-2 text-xs text-[#6B7280]">{row.notes}</td>
                 </tr>
               ))}
@@ -164,12 +164,12 @@ function BriefPanel({ title, brief }: { title: string; brief: MarketBrief }) {
       <div className="rounded-lg border border-[#E5E5E5] p-3">
         <p className="text-xs font-semibold text-[#6B7280]">Route to market</p>
         <p className="mt-1 text-sm font-medium text-[#1A1A1A]">{brief.route_to_market.recommended}</p>
-        <p className="mt-1 text-sm text-[#4A4A4A]">{brief.route_to_market.rationale}</p>
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">{brief.route_to_market.rationale}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <p className="text-sm font-semibold text-[#1A1A1A]">Ρίσκα / εμπόδια</p>
-          <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-[#4A4A4A]">
+          <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-[var(--text-secondary)]">
             {brief.risks_barriers.map((r) => (
               <li key={r}>{r}</li>
             ))}
@@ -177,7 +177,7 @@ function BriefPanel({ title, brief }: { title: string; brief: MarketBrief }) {
         </div>
         <div>
           <p className="text-sm font-semibold text-[#1A1A1A]">Επόμενα validation steps</p>
-          <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-[#4A4A4A]">
+          <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-[var(--text-secondary)]">
             {brief.next_validation_steps.map((r) => (
               <li key={r}>{r}</li>
             ))}
@@ -364,7 +364,7 @@ export function MarketBriefExplorer() {
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <label className="inline-flex items-center gap-2 text-xs text-[#4A4A4A]">
+                    <label className="inline-flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                       <input
                         type="checkbox"
                         checked={compareIds.includes(row.id)}

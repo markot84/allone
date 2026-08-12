@@ -29,6 +29,12 @@
   --navy-50:  #E6EAF3;   /* tint 90% — subtle section backgrounds */
 
   /* ============ ORANGE scale ============ */
+  /* The button hover had nowhere to go. colors.md §4 names --orange-600 (#D8540A) the button hover,
+     but that pairs with white at 4.04:1 — a hover that DROPS a compliant button below AA. Since
+     --orange-700 is the button background, its hover has to be darker than 700, and no such step
+     existed. Computed the same way as the rest of the ramp (base multiplied toward black, here at
+     45% where 700 is 30%), so it is the family's own next step, not a new hue. White on it: 7.94:1. */
+  --orange-800: #8C3607; /* shade 45% — hover for a white-on-orange button */
   --orange-700: #B24508; /* shade 30% — AA-safe orange text on white (5.61:1) */
   --orange-600: #D8540A; /* shade 15% — button hover */
   --orange-500: #FE630C; /* base — button background, icons, large headings */
@@ -69,6 +75,10 @@
   --success: #12B76A;
   --warning: #F79009;
   --danger:  #F04438;
+  /* --danger is a status colour, sized for a dot or a border, and white on it is 3.76:1. A destructive
+     BUTTON carries white text, so it needs its own step: same shade method as the ramps above at 15%.
+     White on it: 4.98:1. (Button.tsx previously used Tailwind's bg-red-600, off-palette entirely.) */
+  --danger-600: #CC3A30;
   --info:    var(--sky-500);
 
   /* ============ RFM SEGMENTS ============ */
@@ -115,6 +125,117 @@
   --dur-reorder: 300ms;  /* list and table reordering */
   --dur-reveal:  450ms;  /* scroll reveal — once only */
   --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ========================================================================
+     THE SLOTS BELOW ARE THE PARTS OF THE SYSTEM THAT WERE NEVER DECLARED.
+
+     Colour was tokenised; type, space, depth and radius were not, so they got
+     decided again at every call site. The audit counted the result: 16 distinct
+     font sizes (2.012 uses between 10px and 14px against 169 above 20px), 15
+     distinct border radii, and one hardcoded box-shadow repeated on every card.
+
+     Every value here is set to WHAT THE APP ALREADY RENDERS. This block changes
+     nothing on its own — it exists so a visual direction can be expressed as a
+     change of values rather than a sweep through 300 components.
+     ======================================================================== */
+
+  /* ---- TYPE ----
+     Plus Jakarta Sans is already downloaded by index.css at four weights and is
+     currently used only by /styleguide; the app is Inter everywhere, headings
+     included. --font-display starts as Inter so the foundation looks unchanged,
+     and is the single line a direction flips to start using what we already pay
+     to load. */
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+  /* The ramp the app actually uses today: page titles are text-xl rising to
+     text-2xl at sm, section titles text-lg, body text-sm, dense labels 10-11px. */
+  --type-display:  clamp(1.5rem, 1.25rem + 1.2vw, 1.875rem); /* hero figures / display */
+  --type-h1:       clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);   /* page title */
+  --type-h2:       1.125rem;  /* section / card title */
+  --type-h3:       1rem;
+  --type-body:     0.875rem;  /* 14px — matches body in index.css */
+  --type-small:    0.8125rem;
+  --type-micro:    0.6875rem; /* dense table labels */
+
+  --leading-tight: 1.15;
+  --leading-snug:  1.35;
+  --leading-body:  1.5;
+  --tracking-tight: 0;        /* directions tighten large headings from here */
+  --measure:       none;      /* max line length for long-form prose */
+
+  /* ---- SPACE — 4px base ----
+     Named so a direction can open up the page without every component being
+     re-spaced by hand. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-page-top: var(--space-4);   /* band above a page title */
+  --space-section:  var(--space-6);   /* between major blocks */
+
+  /* ---- RADIUS ----
+     Namespaced `--ui-radius-*` and NOT `--radius-*`, which is Tailwind 4's own theme namespace:
+     `rounded-lg` compiles to `border-radius: var(--ui-radius-lg)`. Because tokens.css is imported
+     after tailwindcss, plain `--radius-lg` here won on source order and silently moved 469
+     `rounded-lg` elements from 8px to 12px, 124 `rounded-md` from 6px to 8px and `rounded-sm`
+     from 4px to 6px — an app-wide change inside a commit that claims to change nothing.
+
+     Overriding Tailwind's scale is a legitimate way to collapse the 15 radii the audit found, but
+     it is a visual decision that belongs to a direction and has to be visible in its diff. */
+  --ui-radius-sm:   6px;
+  --ui-radius-md:   8px;   /* Card.tsx's current value */
+  --ui-radius-lg:   12px;
+  --ui-radius-pill: 999px;
+
+  /* ---- SURFACE & DEPTH ----
+     The canvas and the card currently measure 1.04:1 against each other and the
+     border 1.24:1 on white, so the only thing separating a card from the page is
+     the shadow below. Naming the three lets a direction fix that by re-valuing
+     them rather than by editing Card.tsx. */
+  --canvas-bg:   var(--surface-1);
+  --card-bg:     var(--surface-0);
+  --card-border: var(--borderColor-default, #d0d7de);
+  --card-radius: var(--ui-radius-md);
+  --edge-highlight: transparent;  /* inset top hairline; off by default */
+
+  --elev-1: 0 2px 6px rgba(0, 0, 0, 0.10), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --elev-2: 0 6px 20px rgba(0, 0, 0, 0.14), 0 3px 8px rgba(0, 0, 0, 0.10);
+  --elev-3: 0 24px 60px rgba(16, 24, 40, 0.12);  /* overlays, modals, popovers */
+
+  /* ---- BUTTON ----
+     The primary button rendered white on --nts-accent (#FE630C) = 3.00:1, which colors.md §3 and
+     CLAUDE.md both rule out in as many words: "white on --orange-700 for buttons". The one element
+     in the app whose whole job is to be clicked was the one missing AA. Naming the pair here means
+     a direction restyles buttons without reopening the contrast question. */
+  --btn-radius:            var(--ui-radius-md);
+  --btn-primary-bg:        var(--orange-700);   /* white on it: 5.60:1 */
+  --btn-primary-bg-hover:  var(--orange-800);   /* white on it: 7.94:1 */
+  --btn-primary-fg:        #FFFFFF;
+  --btn-secondary-bg:       var(--surface-0);
+  --btn-secondary-bg-hover: var(--surface-2);
+  --btn-secondary-fg:       var(--text-primary);
+  --btn-secondary-border:   var(--border);
+  --btn-ghost-bg-hover:     var(--surface-2);
+  --btn-ghost-fg:           var(--text-secondary);
+  --btn-danger-bg:          var(--danger-600);  /* white on it: 4.98:1 */
+  --btn-danger-bg-hover:    #A83027;            /* shade 30% of --danger — 6.74:1 */
+  --btn-danger-fg:          #FFFFFF;
+
+  /* ---- FOCUS ----
+     `focus:outline-none` appears 96 times, replaced by a ring at inconsistent
+     widths and only on `focus:` (so it fires for the mouse too). Anything not
+     explicitly styled had no fallback at all. See the global rule below. */
+  --focus-ring:        var(--brand-sky);
+  --focus-ring-width:  2px;
+  --focus-ring-offset: 2px;
 }
 
 /**
@@ -168,6 +289,165 @@
   --potential: var(--seg-potential);
   --at-risk:   var(--seg-at-risk);
   --lost:      var(--seg-lost);
+}
+
+/**
+ * The card, as one rule instead of an inline style object.
+ *
+ * Card.tsx used to carry its background, border, radius and both shadow states as inline styles,
+ * with the hover written by hand through onMouseEnter/onMouseLeave assigning to element.style.
+ * That put the look of every surface in the app inside a React event handler, where CSS cannot
+ * reach it — so no visual direction could restyle a card without editing the component.
+ *
+ * Everything below resolves through the slots above, which is what makes a direction a change of
+ * values. `data-interactive` marks the cards that respond to the pointer; a static card must not
+ * lift, or the lift stops meaning "this is clickable".
+ */
+.surface {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--elev-1), inset 0 1px 0 var(--edge-highlight);
+  transition:
+    background-color var(--dur-state) var(--ease-out),
+    border-color var(--dur-state) var(--ease-out),
+    box-shadow var(--dur-state) var(--ease-out),
+    transform var(--dur-state) var(--ease-out);
+}
+
+.surface[data-interactive='true']:hover,
+.surface[data-interactive='true']:focus-visible {
+  border-color: var(--border-strong, var(--card-border));
+  box-shadow: var(--elev-2), inset 0 1px 0 var(--edge-highlight);
+}
+
+/**
+ * Skeleton shimmer.
+ *
+ * A sweep rather than an opacity pulse: the pulse reads as something broken blinking, the sweep
+ * reads as something arriving. It animates `background-position`, which does not touch layout.
+ * The global reduced-motion rule at the end of this file collapses it to a flat block, which is
+ * the correct still frame.
+ */
+.skeleton {
+  display: block;
+  background-color: var(--surface-2);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--surface-0) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-sweep 1.4s var(--ease-out) infinite;
+}
+
+@keyframes skeleton-sweep {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/**
+ * The page title, once.
+ *
+ * Set to what the 33 hand-typed headings already rendered (text-xl rising to text-2xl at sm, bold,
+ * navy). It looks identical today; it is now one rule, so a direction can change the page title of
+ * the whole app by changing --type-h1 and --font-display.
+ */
+.page-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h1);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-heading);
+  text-wrap: balance;
+}
+
+/**
+ * Scrollbars were #CBD5E1 / #94A3B8 — off-palette greys hardcoded in index.css, the only two
+ * colours in the app that answered to nothing. Routed through the neutral ramp instead.
+ */
+::-webkit-scrollbar-thumb {
+  background: var(--navy-100);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+* {
+  scrollbar-color: var(--navy-100) var(--surface-2);
+}
+
+::selection {
+  background: var(--sky-100);
+  color: var(--text-primary);
+}
+
+/**
+ * Button shape and states. The per-variant colours arrive as inline styles from Button.tsx (they
+ * are a prop); the hover and press states have to live here because a pseudo-class cannot.
+ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--btn-radius);
+  font-family: inherit;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-state) var(--ease-out),
+    border-color var(--dur-state) var(--ease-out),
+    box-shadow var(--dur-state) var(--ease-out),
+    transform var(--dur-state) var(--ease-out);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* !important is needed only because the variant colour arrives inline, and inline beats a class.
+   Confined to the hover/active states so the base stays overridable from the call site. */
+.btn[data-variant='primary']:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover) !important;
+  border-color: var(--btn-primary-bg-hover) !important;
+}
+.btn[data-variant='secondary']:hover:not(:disabled) {
+  background: var(--btn-secondary-bg-hover) !important;
+}
+.btn[data-variant='ghost']:hover:not(:disabled) {
+  background: var(--btn-ghost-bg-hover) !important;
+}
+.btn[data-variant='danger']:hover:not(:disabled) {
+  background: var(--btn-danger-bg-hover) !important;
+  border-color: var(--btn-danger-bg-hover) !important;
+}
+
+/* Press feedback. Transform only — it cannot trigger layout, so it is safe on every button in a
+   dense toolbar. Suppressed under prefers-reduced-motion by the global rule at the end of this file
+   only for its duration, so the 1px stays; that is a state, not an animation. */
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/**
+ * One focus ring for the whole app.
+ *
+ * `:where()` keeps this at zero specificity, so any component that already styles its own focus
+ * still wins — this is the floor for the majority that styled nothing and fell through to whatever
+ * the browser or Primer happened to do.
+ */
+:where(a, button, [role='button'], input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /**

@@ -352,7 +352,7 @@ export function CampaignImpactPanel({
                     >
                       {row.name}
                     </td>
-                    <td className="px-3 py-2 text-[#4A4A4A]" style={{ height: `${ROW_HEIGHT_REM}rem` }}>
+                    <td className="px-3 py-2 text-[var(--text-secondary)]" style={{ height: `${ROW_HEIGHT_REM}rem` }}>
                       {row.channel}
                     </td>
                     <td className="px-3 py-2 text-right font-mono tabular-nums">{formatCurrency(row.spend, 0)}</td>

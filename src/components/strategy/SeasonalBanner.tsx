@@ -12,7 +12,7 @@ function SeasonalIcon({ name }: { name: string }) {
   const Icon = ICON_MAP[name] ?? Calendar;
   return (
     <div className="w-8 h-8 rounded-lg bg-[#F5F5F5] flex items-center justify-center flex-shrink-0">
-      <Icon size={16} className="text-[#4A4A4A]" />
+      <Icon size={16} className="text-[var(--text-secondary)]" />
     </div>
   );
 }
@@ -71,21 +71,21 @@ export function SeasonalBanner({
                 {isActive ? 'Ενεργή εποχιακή πρόταση' : 'Εποχιακή πρόταση'}
               </span>
             </div>
-            <p className="text-xs text-[#4A4A4A] mb-2 leading-relaxed">{season.description}</p>
+            <p className="text-xs text-[var(--text-secondary)] mb-2 leading-relaxed">{season.description}</p>
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-xs text-[#9CA3AF]">
                 Προτεινόμενη: {nameA} {pctA}% / {nameB} {pctB}%
               </span>
               <button
                 onClick={() => onApplySeason(season)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#4A4A4A] border border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] border border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
               >
                 <Zap size={12} />
                 {isActive ? 'Ενημέρωση' : 'Εφαρμογή'}
               </button>
               <button
                 onClick={onManageSeasons}
-                className="flex items-center gap-1 text-[11px] text-[#9CA3AF] hover:text-[#4A4A4A] transition-colors"
+                className="flex items-center gap-1 text-[11px] text-[#9CA3AF] hover:text-[var(--text-secondary)] transition-colors"
               >
                 <Calendar size={11} />
                 Διαχείριση περιόδων
@@ -94,7 +94,7 @@ export function SeasonalBanner({
           </div>
           <button
             onClick={() => setDismissed(prev => new Set(prev).add(season.id))}
-            className="p-1 rounded hover:bg-[#F5F5F5] text-[#9CA3AF] hover:text-[#4A4A4A] transition-colors flex-shrink-0"
+            className="p-1 rounded hover:bg-[#F5F5F5] text-[#9CA3AF] hover:text-[var(--text-secondary)] transition-colors flex-shrink-0"
           >
             <X size={14} />
           </button>

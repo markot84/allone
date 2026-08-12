@@ -997,7 +997,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
 
       <PageHeader
         toolbarAriaLabel="Κατάσταση procurement"
-        title={<h2 className="text-xl font-bold tracking-tight text-[var(--text-heading)] sm:text-2xl">Procurement</h2>}
+        title="Procurement"
         description={
           <p className="text-[14px] text-[var(--nts-medium-gray)]">
             Δεδομένα από 7 αναλύσεις (PROCUREMENT_TEMPLATE.xlsx). Εισαγωγή από την καρτέλα Procurement.

@@ -178,7 +178,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
   return (
     <div className="space-y-8">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Policy Impact</h2>}
+        title="Policy Impact"
         description={null}
         actions={
           <div className="flex flex-wrap gap-2">

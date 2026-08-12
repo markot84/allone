@@ -111,7 +111,7 @@ export function StrategyPackage(props: StrategyPackageProps) {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-[#1A1A1A] truncate">{strategyName}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#F5F5F5] text-[#4A4A4A] flex-shrink-0">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#F5F5F5] text-[var(--text-secondary)] flex-shrink-0">
                 {durText}
               </span>
             </div>
@@ -125,7 +125,7 @@ export function StrategyPackage(props: StrategyPackageProps) {
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <button
             onClick={handlePdf}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#4A4A4A] hover:bg-[#F5F5F5] transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:bg-[#F5F5F5] transition-colors"
             title="Λήψη ως PDF"
           >
             <FileDown size={13} />
@@ -142,7 +142,7 @@ export function StrategyPackage(props: StrategyPackageProps) {
           </button>
           <button
             onClick={() => setExpanded(v => !v)}
-            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4A4A4A] hover:bg-[#F5F5F5] transition-colors"
+            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[var(--text-secondary)] hover:bg-[#F5F5F5] transition-colors"
           >
             {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>

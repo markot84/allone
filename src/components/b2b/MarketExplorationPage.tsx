@@ -60,9 +60,9 @@ export function MarketExplorationPage({ onSectionChange }: MarketExplorationPage
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Market Exploration</h2>}
+        title="Market Exploration"
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Workspace για νέα markets, νέα verticals και channel rollouts με έμφαση σε margin, stock risk και sales readiness.
           </p>
         }

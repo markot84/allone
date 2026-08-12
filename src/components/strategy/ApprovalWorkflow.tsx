@@ -149,7 +149,7 @@ export function ApprovalWorkflow({ status, onStatusChange }: ApprovalWorkflowPro
           }}
           className="p-2 rounded-lg hover:bg-[#F5F5F5] transition-colors"
         >
-          <ChevronDown size={16} className="text-[#4A4A4A]" />
+          <ChevronDown size={16} className="text-[var(--text-secondary)]" />
         </button>
 
         {showDropdown && dropdownStyle &&

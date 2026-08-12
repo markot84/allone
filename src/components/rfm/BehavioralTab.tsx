@@ -107,7 +107,7 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
               i === selectedIdx
                 ? 'text-white shadow-sm'
-                : 'bg-[var(--nts-light-gray)] text-[#4A4A4A] hover:bg-[#E5E5E5]'
+                : 'bg-[var(--nts-light-gray)] text-[var(--text-secondary)] hover:bg-[#E5E5E5]'
             }`}
             style={i === selectedIdx ? { backgroundColor: item.segment.color } : undefined}
           >
@@ -290,7 +290,7 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
                 <Mail size={14} style={{ color: segment.color }} />
                 <span className="text-sm font-semibold text-[#1A1A1A]">{pref.channel}</span>
               </div>
-              <div className="space-y-1 text-xs text-[#4A4A4A]">
+              <div className="space-y-1 text-xs text-[var(--text-secondary)]">
                 <p>Συχνότητα: <span className="font-medium text-[#1A1A1A]">{pref.frequency}</span></p>
                 <p>Καλύτερη ώρα: <span className="font-medium text-[#1A1A1A]">{pref.best_time}</span></p>
               </div>
@@ -306,7 +306,7 @@ function ScoreBar({ label, value, color, tooltip }: { label: string; value: numb
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-[#4A4A4A]">
+        <span className="text-xs text-[var(--text-secondary)]">
           <Tooltip content={tooltip} size={12}>{label}</Tooltip>
         </span>
         <span className="text-xs font-bold font-mono" style={{ color }}>{value}%</span>
@@ -333,7 +333,7 @@ function DetailRow({ icon, label, value, badge, badgeVariant }: {
 }) {
   return (
     <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2 text-[#4A4A4A]">
+      <div className="flex items-center gap-2 text-[var(--text-secondary)]">
         {icon}
         <span className="text-xs">{label}</span>
       </div>

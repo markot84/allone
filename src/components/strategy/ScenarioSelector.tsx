@@ -88,7 +88,7 @@ export function ScenarioSelector({
               <h3 className="font-semibold text-[#1A1A1A] mt-3 text-sm">
                 {scenario.name}
               </h3>
-              <p className="text-xs text-[#4A4A4A] mt-1">
+              <p className="text-xs text-[var(--text-secondary)] mt-1">
                 {scenario.description}
               </p>
               {erpHints?.[scenario.id] && (

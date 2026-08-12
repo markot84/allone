@@ -146,7 +146,7 @@ function PlayDescription({
 
   if (play === 'cross_sell') {
     return (
-      <p className="text-xs text-[#4A4A4A] leading-relaxed">
+      <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
         Ανάλυση cross-sell ευκαιριών για{' '}
         <strong>{segments.length} segments</strong> ({segNames}). Κάθε πρόταση
         περιλαμβάνει τις κατηγορίες προϊόντων που αξίζουν ενεργοποίηση, campaign
@@ -156,7 +156,7 @@ function PlayDescription({
   }
   if (play === 'upsell') {
     return (
-      <p className="text-xs text-[#4A4A4A] leading-relaxed">
+      <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
         Upsell πρόταση για{' '}
         <strong>{topSeg?.name ?? 'κορυφαίο'} segment</strong>
         {topSeg?.revenueShare > 0
@@ -167,7 +167,7 @@ function PlayDescription({
     );
   }
   return (
-    <p className="text-xs text-[#4A4A4A] leading-relaxed">
+    <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
       Win-back καμπάνια για <strong>{segNames}</strong>. Στόχος η επανενεργοποίηση
       πελατών με στοχευμένες προσφορές και εξατομικευμένη επικοινωνία.
     </p>
@@ -377,7 +377,7 @@ function CampaignBriefCard({
       {entry.message && (
         <div className="mx-3 mb-2.5 flex items-start gap-2 p-2.5 rounded-lg bg-[#F5F3FF] border border-[#E9D5FF]">
           <Megaphone size={12} className="text-[#7C3AED] flex-shrink-0 mt-0.5" />
-          <p className="text-[11px] text-[#4A4A4A] leading-snug italic">"{entry.message}"</p>
+          <p className="text-[11px] text-[var(--text-secondary)] leading-snug italic">"{entry.message}"</p>
         </div>
       )}
 

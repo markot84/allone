@@ -111,7 +111,7 @@ function IcpEditor({
               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 icp.priceSensitivity === level
                   ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]'
-                  : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
+                  : 'border-[#E5E7EB] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]'
               }`}
             >
               {PRICE_LABEL[level]}
@@ -191,9 +191,9 @@ export function BrandProfilePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Brand Profile</h2>}
+        title="Brand Profile"
         description={
-          <p className="text-sm text-[#4A4A4A]">
+          <p className="text-sm text-[var(--text-secondary)]">
             Ταυτότητα, archetype, tone of voice και ICPs που καθοδηγούν Mark, Marketing Plan και μελλοντικά διαφημιστικά μηνύματα.
           </p>
         }
@@ -248,7 +248,7 @@ export function BrandProfilePage() {
                       className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                         profile.archetype === item.id
                           ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
-                          : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
+                          : 'border-[#E5E7EB] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]'
                       }`}
                     >
                       Βασικό
@@ -260,7 +260,7 @@ export function BrandProfilePage() {
                       className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                         profile.secondaryArchetype === item.id
                           ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]'
-                          : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
+                          : 'border-[#E5E7EB] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]'
                       }`}
                     >
                       Συμπληρωματικό
@@ -274,7 +274,7 @@ export function BrandProfilePage() {
             {(primaryArchetype || secondaryArchetype) && (
               <div className="rounded-xl border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/5 p-3">
                 <p className="text-xs font-semibold uppercase text-[var(--nts-accent-text)]">Tone starter</p>
-                <p className="mt-1 text-sm text-[#4A4A4A]">
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
                   {[
                     primaryArchetype ? `Βασικό (${primaryArchetype.label}): ${primaryArchetype.toneHint}` : '',
                     secondaryArchetype ? `Συμπληρωματικό (${secondaryArchetype.label}): ${secondaryArchetype.toneHint}` : '',

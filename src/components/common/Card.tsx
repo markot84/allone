@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { motion } from 'framer-motion';
 import { Heading, Text } from '@primer/react';
 
 interface CardProps {
@@ -17,48 +16,46 @@ const paddingPx: Record<NonNullable<CardProps['padding']>, number> = {
   lg: 24
 };
 
-export function Card({ 
-  children, 
-  className = '', 
-  padding = 'md', 
+/**
+ * The card. One element, not two.
+ *
+ * It used to render a `motion.div` wrapper around the card, and `className` went to the WRAPPER —
+ * which is why `KPICard`'s `border-l-4 hover:border-l-[var(--nts-accent)]` drew a square orange bar
+ * beside a rounded card: it was painting an element that had neither background nor radius. Every
+ * other appearance class call sites passed (`overflow-hidden`, `border-…`, `bg-…`) was landing in
+ * the same place and doing nothing, or drawing a second border around the real one. Dropping the
+ * wrapper puts those classes on the card, and grid placement (`lg:col-span-2`, `h-full`) still
+ * works because the card is now the direct grid child.
+ *
+ * The wrapper also animated: every card in the app faded up on mount, unconditionally, and KPICard
+ * added a second `motion.div` on top so each KPI played two at once. CLAUDE.md is explicit that
+ * motion spread evenly across every module reads as a template — so entrance motion belongs to the
+ * screens that earn it, not to the primitive.
+ *
+ * Appearance now lives in the `.surface` rule in tokens.css. Padding stays inline because it is the
+ * one thing the call site chooses per instance.
+ */
+export function Card({
+  children,
+  className = '',
+  padding = 'md',
   hover = false,
-  onClick 
+  onClick
 }: CardProps) {
+  const interactive = hover || onClick;
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className={className}
+    <div
+      className={`card-primer surface ${className}`.trim()}
+      data-interactive={interactive ? 'true' : undefined}
+      style={{
+        padding: paddingPx[padding],
+        cursor: interactive ? 'pointer' : 'default'
+      }}
+      onClick={onClick}
     >
-      <div
-        className={`card-primer ${className.includes('h-full') ? 'h-full' : ''}`}
-        style={{
-          background: 'var(--nts-bg-pure)',
-          border: '1px solid var(--borderColor-default, #d0d7de)',
-          borderRadius: 8,
-          padding: paddingPx[padding],
-          cursor: (hover || onClick) ? 'pointer' : 'default',
-          transition: 'background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08)'
-        }}
-        onClick={onClick}
-        onMouseEnter={(e) => {
-          if (!hover && !onClick) return;
-          (e.currentTarget as HTMLDivElement).style.background = 'var(--nts-bg-subtle)';
-          (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--borderColor-muted, #d8dee4)';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.14), 0 3px 8px rgba(0,0,0,0.10)';
-        }}
-        onMouseLeave={(e) => {
-          if (!hover && !onClick) return;
-          (e.currentTarget as HTMLDivElement).style.background = 'var(--nts-bg-pure)';
-          (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--borderColor-default, #d0d7de)';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 6px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08)';
-        }}
-      >
-        {children}
-      </div>
-    </motion.div>
+      {children}
+    </div>
   );
 }
 

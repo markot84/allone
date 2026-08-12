@@ -527,16 +527,16 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     return (
       <div className="space-y-6">
         <PageHeader
-          title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Product Intelligence</h2>}
+          title="Product Intelligence"
           description={
-            <p className="text-sm text-[#4A4A4A] sm:text-base">Παρακολούθηση αποθέματος και απόδοσης προϊόντων</p>
+            <p className="text-sm text-[var(--text-secondary)] sm:text-base">Παρακολούθηση αποθέματος και απόδοσης προϊόντων</p>
           }
         />
         <Card padding="lg" className="text-center py-12">
-          <p className="text-[#4A4A4A] mb-4">
+          <p className="text-[var(--text-secondary)] mb-4">
             Δεν υπάρχουν imported προϊόντα ακόμα.
           </p>
-          <p className="text-sm text-[#4A4A4A]">
+          <p className="text-sm text-[var(--text-secondary)]">
             Ανεβάστε αρχείο ή συνδέστε πλατφόρμα από την{' '}
             <button
               type="button"
@@ -562,9 +562,9 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     <div className="space-y-6">
       <PageHeader
         toolbarAriaLabel="Εξαγωγή και διαγραφή προϊόντων"
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Product Intelligence</h2>}
+        title="Product Intelligence"
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Παρακολούθηση αποθέματος και απόδοσης προϊόντων
           </p>
         }
@@ -900,7 +900,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               />
             </div>
             <div className="flex flex-wrap items-end gap-2 sm:ml-auto">
-              <div className="text-sm text-[#4A4A4A] min-w-[120px]">
+              <div className="text-sm text-[var(--text-secondary)] min-w-[120px]">
                 {formatNumber(serverFilteredTotal)} γραμμές
               </div>
               <Button
@@ -934,7 +934,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           <table className="w-full">
             <thead className="sticky top-0 z-10">
               <tr className="bg-[#F5F5F5]">
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A]">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)]">
                   <button
                     onClick={() => handleSort('name')}
                     className="flex items-center gap-1 hover:text-[#1A1A1A]"
@@ -943,13 +943,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     <SortIcon field="name" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden lg:table-cell">
                   <span className="inline-flex items-center gap-1">
                     Category
                     <Tooltip content="Κατηγορία προϊόντος (π.χ. από DSS: Προμηθευτής)." size={12} />
                   </span>
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A]">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)]">
                   <button
                     onClick={() => handleSort('margin_percentage')}
                     className="flex items-center gap-1 hover:text-[#1A1A1A]"
@@ -958,7 +958,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     <SortIcon field="margin_percentage" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden sm:table-cell">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden sm:table-cell">
                   <button
                     onClick={() => handleSort('stock_level')}
                     className="flex items-center gap-1 hover:text-[#1A1A1A]"
@@ -969,7 +969,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     <SortIcon field="stock_level" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden md:table-cell">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden md:table-cell">
                   <Tooltip content="Εκτιμώμενες ημέρες αποθέματος βάσει ρυθμού πωλήσεων (Days of Stock)." size={12}>
                     <button
                       onClick={() => handleSort('stock_age_days')}
@@ -980,10 +980,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     </button>
                   </Tooltip>
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden lg:table-cell">
                   Tag
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden sm:table-cell">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden sm:table-cell">
                   <button
                     onClick={() => handleSort('price')}
                     className="flex items-center gap-1 hover:text-[#1A1A1A]"
@@ -993,14 +993,14 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                   </button>
                 </th>
                 {showVelocity && (
-                  <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden md:table-cell">
+                  <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden md:table-cell">
                     <Tooltip content="Μέσος ρυθμός πωλήσεων ανά ημέρα σε 90 / 30 / 7 ημέρες — δείχνει επιτάχυνση ή επιβράδυνση, όχι ημερήσιο ιστορικό." size={12}>
                       Trend
                     </Tooltip>
                   </th>
                 )}
                 {benchmarkCount > 0 && (
-                  <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
+                  <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden lg:table-cell">
                     <Tooltip content="Απόκλιση τιμής σε σχέση με τη μέση τιμή αγοράς (Google Merchant Center)." size={12}>
                       vs Market
                     </Tooltip>
@@ -1048,7 +1048,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
         {/* Pagination */}
         <div className="p-4 border-t border-[#E5E5E5] flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-[#4A4A4A]">
+          <p className="text-sm text-[var(--text-secondary)]">
             {serverFilteredTotal === 0
               ? 'Δεν βρέθηκαν προϊόντα'
               : `Εμφανίζονται ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, serverFilteredTotal)} από ${formatNumber(serverFilteredTotal)} προϊόντα`}
@@ -1063,7 +1063,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             >
               Προηγούμενα
             </Button>
-            <span className="text-sm text-[#4A4A4A] px-2">
+            <span className="text-sm text-[var(--text-secondary)] px-2">
               Σελίδα {currentPage} από {totalPages}
             </span>
             <Button
@@ -1133,7 +1133,7 @@ function SummaryCard({ label, value, subValue, icon, color, tooltip, active, onC
           <span style={{ color }}>{icon}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-[#4A4A4A]">
+          <p className="text-sm text-[var(--text-secondary)]">
             {tooltip ? <Tooltip content={tooltip}>{label}</Tooltip> : label}
           </p>
           <p className="text-xl font-bold text-[#1A1A1A] font-mono">{value}</p>
@@ -1203,7 +1203,7 @@ function ProductRow({
         </div>
       </td>
       <td className="px-3 py-2 hidden lg:table-cell">
-        <span className="text-xs text-[#4A4A4A] truncate block max-w-[120px]">{product.category}</span>
+        <span className="text-xs text-[var(--text-secondary)] truncate block max-w-[120px]">{product.category}</span>
       </td>
       <td className="px-3 py-2">
         <Badge

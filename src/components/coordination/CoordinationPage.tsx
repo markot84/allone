@@ -142,7 +142,7 @@ export function CoordinationPage() {
     <div className="space-y-5">
       <PageHeader
         toolbarAriaLabel="Ενέργειες συντονισμού"
-        title={<h1 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Συντονισμός Τμημάτων</h1>}
+        title="Συντονισμός Τμημάτων"
         description={
           <p className="text-sm text-[#6B7280]">
             Ειδοποιήστε τα τμήματα από την εμπορική πολιτική σε ένα βήμα — οι λεπτομερείς εργασίες είναι προαιρετικές.

@@ -154,7 +154,7 @@ export function FormattedProse({ content, variant = 'default', className = '' }:
             <span className="text-xs font-semibold uppercase tracking-wide text-[var(--nts-accent-text)] shrink-0 min-w-[7rem]">
               <Inline segments={kind.label} />:
             </span>
-            <p className="text-sm text-[#4A4A4A] leading-relaxed flex-1 m-0">
+            <p className="text-sm text-[var(--text-secondary)] leading-relaxed flex-1 m-0">
               <Inline segments={kind.value} />
             </p>
           </div>
@@ -170,7 +170,7 @@ export function FormattedProse({ content, variant = 'default', className = '' }:
           <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nts-accent)]" />
           <p
             className={`leading-relaxed ${
-              variant === 'article' ? 'text-[#4A4A4A]' : 'text-sm text-[#4A4A4A]'
+              variant === 'article' ? 'text-[var(--text-secondary)]' : 'text-sm text-[var(--text-secondary)]'
             }`}
           >
             <Inline segments={kind.segments} />
@@ -185,7 +185,7 @@ export function FormattedProse({ content, variant = 'default', className = '' }:
       <p
         key={`b-${i}`}
         className={`leading-relaxed ${
-          variant === 'article' ? 'text-[#4A4A4A] mb-0' : 'text-sm text-[#1A1A1A]'
+          variant === 'article' ? 'text-[var(--text-secondary)] mb-0' : 'text-sm text-[#1A1A1A]'
         }`}
       >
         <Inline segments={kind.segments} />

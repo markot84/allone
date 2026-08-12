@@ -43,9 +43,9 @@ export function HRPage({ totalRevenue }: HRPageProps = {}) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">People & HR</h2>}
+        title="People & HR"
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Διαχείριση ομάδας, μισθοδοσία, αδειοδότηση και παρακολούθηση απόδοσης.
           </p>
         }

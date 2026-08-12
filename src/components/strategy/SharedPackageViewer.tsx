@@ -11,7 +11,7 @@ interface SharedPackageViewerProps {
 function weightBar(label: string, value: number) {
   return (
     <div key={label} className="flex items-center gap-2 my-1">
-      <span className="w-24 text-xs text-[#4A4A4A]">{label}</span>
+      <span className="w-24 text-xs text-[var(--text-secondary)]">{label}</span>
       <div className="flex-1 h-1.5 bg-[#F5F5F5] rounded-full overflow-hidden">
         <div className="h-full bg-[var(--nts-accent)] rounded-full" style={{ width: `${value}%` }} />
       </div>
@@ -91,7 +91,7 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
             <span key={s} className="px-2.5 py-1 rounded-full text-xs bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">{s}</span>
           ))}
           {data.goodSegments.map(s => (
-            <span key={s} className="px-2.5 py-1 rounded-full text-xs bg-[#F5F5F5] text-[#4A4A4A] border border-dashed border-[#D1D5DB]">{s}</span>
+            <span key={s} className="px-2.5 py-1 rounded-full text-xs bg-[#F5F5F5] text-[var(--text-secondary)] border border-dashed border-[#D1D5DB]">{s}</span>
           ))}
         </div>
       </div>
@@ -112,7 +112,7 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
             </div>
           ))}
           {data.secondaryChannels.map((ch, i) => (
-            <div key={ch} className="flex justify-between items-center p-2 text-sm text-[#4A4A4A]">
+            <div key={ch} className="flex justify-between items-center p-2 text-sm text-[var(--text-secondary)]">
               {data.primaryChannels.length + i + 1}. {ch}
             </div>
           ))}
@@ -123,7 +123,7 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
       {data.rationale && (
         <div className="mb-6">
           <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2 pb-1 border-b border-[#F5F5F5]">AI ανάλυση</p>
-          <div className="text-sm text-[#4A4A4A] leading-relaxed">
+          <div className="text-sm text-[var(--text-secondary)] leading-relaxed">
             <FormattedProse
               content={data.rationale.replace(/\|\|/g, '\n\n').replace(/—/g, ',')}
               variant="compact"

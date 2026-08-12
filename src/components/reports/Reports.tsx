@@ -177,9 +177,9 @@ export function Reports() {
     <div className="space-y-6">
       <PageHeader
         toolbarAriaLabel="Αναφορές"
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Reports & Analytics</h2>}
+        title="Reports & Analytics"
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Generate, schedule, and export performance reports
           </p>
         }
@@ -213,12 +213,12 @@ export function Reports() {
                 </div>
                 <div className="flex-1">
                   <h3 className="font-semibold text-[#1A1A1A]">{report.name}</h3>
-                  <p className="text-sm text-[#4A4A4A] mt-1">{report.description}</p>
+                  <p className="text-sm text-[var(--text-secondary)] mt-1">{report.description}</p>
                   
                   <div className="flex items-center gap-3 mt-3">
                     <Badge variant="default" size="sm">{report.format}</Badge>
                     {reportDataCounts[report.id] !== undefined && (
-                      <span className="text-xs text-[#4A4A4A]">
+                      <span className="text-xs text-[var(--text-secondary)]">
                         Data: {typeof reportDataCounts[report.id] === 'number'
                           ? reportDataCounts[report.id].toLocaleString()
                           : reportDataCounts[report.id]}
@@ -306,11 +306,11 @@ export function Reports() {
                   <div>
                     <h4 className="font-medium text-[#1A1A1A]">{report.name}</h4>
                     <div className="flex items-center gap-4 mt-1">
-                      <span className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                      <span className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
                         <Clock size={12} />
                         {report.frequency}
                       </span>
-                      <span className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                      <span className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
                         <Mail size={12} />
                         {report.recipients?.length ?? 0} recipients
                       </span>
@@ -323,7 +323,7 @@ export function Reports() {
                     className="p-2 hover:bg-white rounded-lg transition-colors"
                     onClick={() => setExpandedScheduleId(expandedScheduleId === report.id ? null : report.id)}
                   >
-                    <ChevronRight size={16} className={`text-[#4A4A4A] transition-transform ${expandedScheduleId === report.id ? 'rotate-90' : ''}`} />
+                    <ChevronRight size={16} className={`text-[var(--text-secondary)] transition-transform ${expandedScheduleId === report.id ? 'rotate-90' : ''}`} />
                   </button>
                 </div>
               </div>
@@ -365,36 +365,36 @@ export function Reports() {
         <Card padding="md">
           <div className="text-center">
             <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{productsCount}</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">Products</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">Products</p>
             <p className="text-xs text-[#22C55E]">In catalog</p>
           </div>
         </Card>
         <Card padding="md">
           <div className="text-center">
             <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{segmentsCount}</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">Segments</p>
-            <p className="text-xs text-[#4A4A4A]">RFM</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">Segments</p>
+            <p className="text-xs text-[var(--text-secondary)]">RFM</p>
           </div>
         </Card>
         <Card padding="md">
           <div className="text-center">
             <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{campaignsTyped.length}</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">Campaigns</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">Campaigns</p>
             <p className="text-xs text-[#8B5CF6]">Ενεργό</p>
           </div>
         </Card>
         <Card padding="md">
           <div className="text-center">
             <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{hasOrganic ? '✓' : '—'}</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">Οργανικά Έσοδα</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">Οργανικά Έσοδα</p>
             <p className="text-xs text-[#22C55E]">{hasOrganic ? 'Εισαγόμενα' : 'Χωρίς δεδομένα'}</p>
           </div>
         </Card>
         <Card padding="md">
           <div className="text-center">
             <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{ecomm.hasData ? formatNumber(ecomm.orderCount) : '—'}</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">E-shop Orders</p>
-            <p className="text-xs text-[#4A4A4A]">{ecomm.hasData ? formatCurrencyCompact(ecomm.totalRevenue) : 'Χωρίς δεδομένα'}</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">E-shop Orders</p>
+            <p className="text-xs text-[var(--text-secondary)]">{ecomm.hasData ? formatCurrencyCompact(ecomm.totalRevenue) : 'Χωρίς δεδομένα'}</p>
           </div>
         </Card>
       </div>
@@ -470,16 +470,16 @@ function ScheduleModal({
       >
         <ModalHeader
           toolbarAriaLabel="Κλείσιμο"
-          title={<h3 className="text-lg font-bold text-[var(--text-heading)]">Νέος Προγραμματισμός Report</h3>}
+          title="Νέος Προγραμματισμός Report"
           actions={
             <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
-              <X size={20} className="text-[#4A4A4A]" />
+              <X size={20} className="text-[var(--text-secondary)]" />
             </button>
           }
         />
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[#4A4A4A] mb-1">Όνομα</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Όνομα</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -489,7 +489,7 @@ function ScheduleModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-[#4A4A4A] mb-1">Τύπος Report</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Τύπος Report</label>
             <select
               value={reportType}
               onChange={(e) => setReportType(e.target.value)}
@@ -501,7 +501,7 @@ function ScheduleModal({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-[#4A4A4A] mb-1">Συχνότητα</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Συχνότητα</label>
             <select
               value={frequency}
               onChange={(e) => setFrequency(e.target.value)}
@@ -514,7 +514,7 @@ function ScheduleModal({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-[#4A4A4A] mb-1">Email recipients (χωρισμένα με κόμμα)</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Email recipients (χωρισμένα με κόμμα)</label>
             <input
               value={recipientsStr}
               onChange={(e) => setRecipientsStr(e.target.value)}
@@ -563,16 +563,16 @@ function CustomReportModal({
       >
         <ModalHeader
           toolbarAriaLabel="Κλείσιμο"
-          title={<h3 className="text-lg font-bold text-[var(--text-heading)]">Προσαρμοσμένη αναφορά</h3>}
+          title="Προσαρμοσμένη αναφορά"
           actions={
             <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
-              <X size={20} className="text-[#4A4A4A]" />
+              <X size={20} className="text-[var(--text-secondary)]" />
             </button>
           }
         />
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[#4A4A4A] mb-2">Επιλέξτε τύπο report</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Επιλέξτε τύπο report</label>
             <select
               value={selectedId}
               onChange={(e) => {
@@ -588,7 +588,7 @@ function CustomReportModal({
           </div>
           {isPdfSupported(selectedId) && (
             <div>
-              <label className="block text-sm font-medium text-[#4A4A4A] mb-2">Μορφή</label>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Μορφή</label>
               <select
                 value={format}
                 onChange={(e) => setFormat(e.target.value as ReportFormat)}

@@ -594,9 +594,9 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Marketing Plan</h2>}
+        title="Marketing Plan"
         description={
-          <p className="text-sm text-[#4A4A4A]">
+          <p className="text-sm text-[var(--text-secondary)]">
             Εμπορικό πλάνο δράσης από περσινές πωλήσεις, τρέχον απόθεμα, καμπάνιες, κοινό και ανταγωνισμό.
           </p>
         }
@@ -650,7 +650,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                   </p>
                 )}
                 {info.markContext?.summaryBullets && info.markContext.summaryBullets.length > 0 && (
-                  <ul className="mt-2 space-y-1 text-xs text-[#4A4A4A]">
+                  <ul className="mt-2 space-y-1 text-xs text-[var(--text-secondary)]">
                     {info.markContext.summaryBullets.map((bullet, idx) => (
                       <li key={`${info.id}-${idx}`} className="flex gap-2">
                         <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nts-accent)]" />
@@ -682,7 +682,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
               className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${
                 preset === p.id
                   ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]'
-                  : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
+                  : 'border-[#E5E7EB] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]'
               }`}
             >
               {p.label}
@@ -951,7 +951,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             badge={draft.coreMessage.source === 'ai' ? 'Gemini AI' : 'Fallback'}
           >
             <p className="text-base font-semibold text-[#1A1A1A]">{draft.coreMessage.headline}</p>
-            <p className="mt-2 text-sm leading-relaxed text-[#4A4A4A]">{draft.coreMessage.campaignAngle}</p>
+            <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">{draft.coreMessage.campaignAngle}</p>
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
               <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
                 <p className="text-xs font-semibold uppercase text-[#9CA3AF]">Proof points</p>

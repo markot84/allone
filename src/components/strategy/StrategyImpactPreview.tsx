@@ -226,7 +226,7 @@ export function StrategyImpactSummary({
             <span className="font-medium text-[#1A1A1A] truncate">{toName}</span>
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-[#4A4A4A] flex-wrap">
+          <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)] flex-wrap">
             {impacts.up > 0 && (
               <span className="flex items-center gap-1 text-[#22C55E] font-medium">
                 <ArrowUp size={12} /> {impacts.up} προϊόντα ανεβαίνουν
@@ -274,7 +274,7 @@ export function StrategyImpactSummary({
                 className={`px-2 py-0.5 text-[11px] font-medium rounded border transition-all ${
                   duration === d
                     ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
-                    : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+                    : 'border-[#E5E5E5] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]/50'
                 }`}
               >
                 {d}ημ
@@ -285,7 +285,7 @@ export function StrategyImpactSummary({
               className={`px-2 py-0.5 text-[11px] font-medium rounded border transition-all ${
                 duration === 'ongoing'
                   ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
-                  : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+                  : 'border-[#E5E5E5] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]/50'
               }`}
             >
               <Infinity size={11} />
@@ -305,7 +305,7 @@ export function StrategyImpactSummary({
           <button
             type="button"
             onClick={onDetails}
-            className="px-3 py-1.5 text-xs font-medium text-[#4A4A4A] hover:text-[var(--nts-accent-text)] transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--nts-accent-text)] transition-colors"
           >
             <ChevronDown size={12} className="inline mr-1" />
             Λεπτομέρειες
@@ -465,7 +465,7 @@ export function StrategyImpactModal({
                 {weightDiffs.map(d => (
                   <span key={d.key} className="inline-flex items-center gap-1.5 text-xs bg-[#F5F5F5] rounded-md px-2 py-1">
                     <span style={{ color: WEIGHT_COLORS[d.key] }}>●</span>
-                    <span className="text-[#4A4A4A]">{WEIGHT_LABELS[d.key]}</span>
+                    <span className="text-[var(--text-secondary)]">{WEIGHT_LABELS[d.key]}</span>
                     <span className="text-[#9CA3AF]">{d.from}%</span>
                     <span className="text-[#9CA3AF]">→</span>
                     <span className={d.diff > 0 ? 'text-[#22C55E] font-medium' : 'text-[#EF4444] font-medium'}>
@@ -483,7 +483,7 @@ export function StrategyImpactModal({
               onClick={() => setShowProducts(!showProducts)}
               className="flex items-center gap-2 w-full text-left"
             >
-              <Package size={15} className="text-[#4A4A4A]" />
+              <Package size={15} className="text-[var(--text-secondary)]" />
               <h3 className="text-sm font-semibold text-[#1A1A1A] flex-1">Προϊόντα</h3>
               <div className="flex items-center gap-3 text-xs">
                 {impacts.up > 0 && <span className="text-[#22C55E] font-medium">↑{impacts.up}</span>}
@@ -535,7 +535,7 @@ export function StrategyImpactModal({
 
           {/* Content */}
           <div className="flex items-center gap-2">
-            <FileText size={15} className="text-[#4A4A4A]" />
+            <FileText size={15} className="text-[var(--text-secondary)]" />
             <h3 className="text-sm font-semibold text-[#1A1A1A] flex-1">Περιεχόμενο</h3>
             {hasContent && contentStats ? (
               <div className="flex items-center gap-3 text-xs">
@@ -551,7 +551,7 @@ export function StrategyImpactModal({
 
           {/* Campaigns */}
           <div className="flex items-center gap-2">
-            <Megaphone size={15} className="text-[#4A4A4A]" />
+            <Megaphone size={15} className="text-[var(--text-secondary)]" />
             <h3 className="text-sm font-semibold text-[#1A1A1A] flex-1">Καμπάνιες</h3>
             {hasCampaigns && campaignStats ? (
               <span className="text-xs text-[#78716C] font-medium">{campaignStats.active} ενεργά</span>
@@ -562,7 +562,7 @@ export function StrategyImpactModal({
 
           {/* Duration — must be visible before applying (same UX as the summary layer). */}
           <div className="flex flex-col gap-2 pt-2 border-t border-[#F5F5F5]">
-            <div className="flex items-center gap-2 text-xs text-[#4A4A4A]">
+            <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
               <Clock size={14} className="text-[#9CA3AF] flex-shrink-0" aria-hidden />
               <span className="font-medium text-[#1A1A1A]">Διάρκεια νέας πολιτικής</span>
             </div>
@@ -578,7 +578,7 @@ export function StrategyImpactModal({
                   className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-all ${
                     confirmDuration === d
                       ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
-                      : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+                      : 'border-[#E5E5E5] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]/50'
                   }`}
                 >
                   {d} ημ.
@@ -590,7 +590,7 @@ export function StrategyImpactModal({
                 className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-all ${
                   confirmDuration === 'ongoing'
                     ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
-                    : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+                    : 'border-[#E5E5E5] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]/50'
                 }`}
                 title="Συνεχής — χωρίς αυτόματη λήξη"
               >

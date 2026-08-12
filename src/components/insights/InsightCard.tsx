@@ -65,7 +65,7 @@ export function InsightCard({ insight, index, onAction, canNavigate }: InsightCa
                 {impactLabel}
               </Badge>
             </div>
-            <div className="mt-2 text-sm text-[#4A5568] [&_p]:text-sm [&_strong]:font-semibold [&_strong]:text-[#1A1A1A] leading-relaxed">
+            <div className="mt-2 text-sm text-[var(--text-secondary)] [&_p]:text-sm [&_strong]:font-semibold [&_strong]:text-[#1A1A1A] leading-relaxed">
               <FormattedProse content={insight.insight} variant="compact" />
             </div>
             <button

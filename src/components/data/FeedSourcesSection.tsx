@@ -171,7 +171,7 @@ export function FeedSourcesSection() {
             <h4 className="font-medium text-[#1A1A1A] mb-3">{editingId ? 'Επεξεργασία' : 'Νέο Feed Source'}</h4>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-[#4A4A4A] block mb-1">Όνομα</label>
+                <label className="text-xs text-[var(--text-secondary)] block mb-1">Όνομα</label>
                 <input
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
@@ -181,7 +181,7 @@ export function FeedSourcesSection() {
                 />
               </div>
               <div>
-                <label className="text-xs text-[#4A4A4A] block mb-1">Τύπος</label>
+                <label className="text-xs text-[var(--text-secondary)] block mb-1">Τύπος</label>
                 <select
                   value={formType}
                   onChange={(e) => setFormType(e.target.value as FeedSource['type'])}
@@ -193,7 +193,7 @@ export function FeedSourcesSection() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-[#4A4A4A] block mb-1">URL</label>
+                <label className="text-xs text-[var(--text-secondary)] block mb-1">URL</label>
                 <input
                   type="url"
                   value={formUrl}

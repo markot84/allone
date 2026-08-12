@@ -123,7 +123,7 @@ export function SeasonalPeriodsModal({
           }
           actions={
             <button type="button" onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
-              <X size={20} className="text-[#4A4A4A]" />
+              <X size={20} className="text-[var(--text-secondary)]" />
             </button>
           }
         />
@@ -163,7 +163,7 @@ export function SeasonalPeriodsModal({
                       <p className="text-[11px] text-[#9CA3AF] mt-0.5">
                         {formatDateRange(period.dateRange)} · {nameA} {period.suggestedMix.percentA}% / {nameB} {100 - period.suggestedMix.percentA}%
                       </p>
-                      <p className="text-xs text-[#4A4A4A] mt-1">{period.description}</p>
+                      <p className="text-xs text-[var(--text-secondary)] mt-1">{period.description}</p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button
@@ -199,7 +199,7 @@ export function SeasonalPeriodsModal({
                   className="overflow-hidden"
                 >
                   <div className="p-4 border-2 border-dashed border-[var(--nts-accent)]/30 rounded-xl space-y-3">
-                    <p className="text-xs font-semibold text-[#4A4A4A]">Νέα εποχιακή περίοδος</p>
+                    <p className="text-xs font-semibold text-[var(--text-secondary)]">Νέα εποχιακή περίοδος</p>
 
                     <input
                       type="text"

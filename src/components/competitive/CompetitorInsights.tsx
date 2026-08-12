@@ -1115,7 +1115,7 @@ export function CompetitorInsights() {
           </h2>
         }
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[var(--text-secondary)] sm:text-base">
             Price benchmarking (Google Merchant Center) & Ad monitoring (Meta Ad Library)
           </p>
         }

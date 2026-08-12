@@ -116,7 +116,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
         <button
           onClick={() => setView('overview')}
           className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-            view === 'overview' ? 'bg-[#1A1A2E] text-white' : 'bg-[var(--nts-light-gray)] text-[#4A4A4A] hover:bg-[#E5E5E5]'
+            view === 'overview' ? 'bg-[#1A1A2E] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--text-secondary)] hover:bg-[#E5E5E5]'
           }`}
         >
           Overview
@@ -124,7 +124,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
         <button
           onClick={() => setView('detail')}
           className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-            view === 'detail' ? 'bg-[#1A1A2E] text-white' : 'bg-[var(--nts-light-gray)] text-[#4A4A4A] hover:bg-[#E5E5E5]'
+            view === 'detail' ? 'bg-[#1A1A2E] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--text-secondary)] hover:bg-[#E5E5E5]'
           }`}
         >
           Segment Detail
@@ -242,15 +242,15 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
                         return (
                           <div className="rounded-md border border-[#E5E5E5] bg-white px-3 py-2 text-xs shadow-sm">
                             <p className="mb-1.5 font-semibold text-[#1A1A1A]">{row.name}</p>
-                            <p className="text-[#4A4A4A]">
+                            <p className="text-[var(--text-secondary)]">
                               <span className="text-[#9CA3AF]">Churn Risk: </span>
                               {formatNumber(row.x, 0)}%
                             </p>
-                            <p className="text-[#4A4A4A]">
+                            <p className="text-[var(--text-secondary)]">
                               <span className="text-[#9CA3AF]">LTV: </span>
                               {formatCurrencyCompact(row.y)}
                             </p>
-                            <p className="text-[#4A4A4A]">
+                            <p className="text-[var(--text-secondary)]">
                               <span className="text-[#9CA3AF]">Πελάτες: </span>
                               {formatNumber(row.z)}
                             </p>
@@ -318,11 +318,11 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
                 </div>
 
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#E5E5E5]">
-                  <div className="flex items-center gap-2 text-xs text-[#4A4A4A]">
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                     <Shield size={12} />
                     <span>Retention: <span className="font-bold font-mono">{metrics.retention_score}%</span></span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-[#4A4A4A]">
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
                     {TREND_ICONS[metrics.demand_trend]}
                     <span>{TREND_LABELS[metrics.demand_trend]}</span>
                   </div>
@@ -359,7 +359,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
                   <p className="text-sm font-medium text-[#1A1A1A]">
                     {segment.name}: Υψηλός κίνδυνος churn ({metrics.churn_risk}%)
                   </p>
-                  <p className="text-xs text-[#4A4A4A]">
+                  <p className="text-xs text-[var(--text-secondary)]">
                     {formatNumber(segment.count)} πελάτες με LTV {formatCurrencyCompact(metrics.estimated_ltv)} σε κίνδυνο. Πιθανή απώλεια εσόδων {formatCurrencyCompact(metrics.revenue_forecast_30d)}/μήνα.
                   </p>
                 </div>
@@ -378,7 +378,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
                   <p className="text-sm font-medium text-[#1A1A1A]">
                     {segment.name}: Αυξητική ζήτηση
                   </p>
-                  <p className="text-xs text-[#4A4A4A]">
+                  <p className="text-xs text-[var(--text-secondary)]">
                     LTV {formatCurrencyCompact(metrics.estimated_ltv)} με forecast {formatCurrencyCompact(metrics.revenue_forecast_90d)} (90d). Ευκαιρία για upsell/cross-sell campaigns.
                   </p>
                 </div>

@@ -1,7 +1,12 @@
 import type { ReactNode } from 'react';
 
 export interface PageHeaderProps {
-  /** Main title (e.g. h2) */
+  /**
+   * A string renders as the app's one page title — a real `h1` styled by `.page-title`, so the
+   * type scale is set in one place rather than retyped per page. Passing a ReactNode still works
+   * for the handful of titles that carry an icon or an interpolated brand name, but it opts out of
+   * the scale, so prefer the string.
+   */
   title: ReactNode;
   /** Subtitle / description */
   description?: ReactNode;
@@ -27,7 +32,7 @@ export function PageHeader({
       className={`flex flex-col gap-3 min-w-0 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between lg:gap-x-6 lg:gap-y-3 ${className}`.trim()}
     >
       <div className="min-w-0 flex-1 space-y-1 lg:min-w-[240px]">
-        {title}
+        {typeof title === 'string' ? <h1 className="page-title">{title}</h1> : title}
         {description}
         {meta}
       </div>

@@ -1767,7 +1767,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             <div className="w-full h-[288px] flex items-center justify-center bg-[#F5F5F5] rounded-lg">
               <div className="text-center">
                 <TrendingUp size={32} className="text-[#9CA3AF] mx-auto mb-2" />
-                <p className="text-sm text-[#4A4A4A] font-medium">Δεν υπάρχουν δεδομένα</p>
+                <p className="text-sm text-[var(--text-secondary)] font-medium">Δεν υπάρχουν δεδομένα</p>
                 <p className="text-xs text-[#9CA3AF] mt-1">Συνδέστε Analytics ή Campaigns για να εμφανιστεί η εικόνα απόδοσης εσόδων.</p>
               </div>
             </div>
@@ -1842,7 +1842,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <div className="w-full h-full flex items-center justify-center bg-[#F5F5F5] rounded-lg">
                   <div className="text-center px-4">
                     <Users size={32} className="text-[#9CA3AF] mx-auto mb-2" />
-                    <p className="text-sm text-[#4A4A4A] font-medium">Δεν υπάρχει πρόσφατη μηνιαία ανάλυση πελατών</p>
+                    <p className="text-sm text-[var(--text-secondary)] font-medium">Δεν υπάρχει πρόσφατη μηνιαία ανάλυση πελατών</p>
                     <p className="text-xs text-[#9CA3AF] mt-1">
                       {aggregateStatus === 'running'
                         ? 'Η μηνιαία ανάλυση εκτελείται αυτή τη στιγμή…'
@@ -1892,7 +1892,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                         className="w-2.5 h-2.5 rounded-full"
                         style={{ backgroundColor: segment.color }}
                       />
-                      <span className="text-[#4A4A4A]">{segment.name}</span>
+                      <span className="text-[var(--text-secondary)]">{segment.name}</span>
                     </div>
                     <span className="font-medium text-[#1A1A1A] font-mono" title="Μερίδιο επί του συνόλου πελατών RFM">
                       {formatPercent(segment.percentage ?? 0, 1)}
@@ -2070,7 +2070,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     e.stopPropagation();
                     onOpenInsights?.();
                   }}
-                  className="text-xs font-medium text-[#9CA3AF] hover:text-[#4A4A4A] transition-colors"
+                  className="text-xs font-medium text-[#9CA3AF] hover:text-[var(--text-secondary)] transition-colors"
                 >
                   Όλα ({aiInsights.length})
                 </button>
@@ -2103,7 +2103,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                         e.stopPropagation();
                         handleInsightAction(insight);
                       }}
-                      className="text-[11px] font-medium text-[#4A4A4A] whitespace-nowrap px-2 py-1 rounded-md border border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors cursor-pointer flex-shrink-0 mt-0.5"
+                      className="text-[11px] font-medium text-[var(--text-secondary)] whitespace-nowrap px-2 py-1 rounded-md border border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors cursor-pointer flex-shrink-0 mt-0.5"
                     >
                       {insight.action}
                     </button>

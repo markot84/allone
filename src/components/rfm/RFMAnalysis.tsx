@@ -302,7 +302,7 @@ export function RFMAnalysis() {
     return (
       <div className="space-y-6">
         <PageHeader
-          title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Data Analysis</h2>}
+          title="Data Analysis"
           actions={
             <Button
               variant="secondary"
@@ -317,7 +317,7 @@ export function RFMAnalysis() {
             </Button>
           }
           description={
-            <p className="text-sm text-[#4A4A4A] sm:text-base leading-snug">
+            <p className="text-sm text-[var(--text-secondary)] sm:text-base leading-snug">
               Ανάλυση τμημάτων πελατών (RFM, behavioral, firmographic) από e-shop orders ή ERP/other data
             </p>
           }
@@ -331,7 +331,7 @@ export function RFMAnalysis() {
           ) : ordersError ? (
             <div className="text-center py-8">
               <p className="text-sm font-semibold text-[#B91C1C] mb-2">Αδυναμία ανάγνωσης παραγγελιών</p>
-              <p className="text-xs text-[#4A4A4A] mb-4 max-w-md mx-auto">
+              <p className="text-xs text-[var(--text-secondary)] mb-4 max-w-md mx-auto">
                 {ordersError.message || 'Άγνωστο σφάλμα από Firestore. Δοκιμάστε refresh ή ξανά sync τους connectors.'}
               </p>
               <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
@@ -340,12 +340,12 @@ export function RFMAnalysis() {
             </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-[#4A4A4A] mb-4">
+              <p className="text-[var(--text-secondary)] mb-4">
                 {hasEcomm && !canComputeFromOrders
                   ? 'Δεν υπάρχει ακόμη αποθηκευμένη Data Analysis για αυτό το brand.'
                   : 'Δεν υπάρχει ακόμη αποθηκευμένη Data Analysis.'}
               </p>
-              <p className="text-sm text-[#4A4A4A]">
+              <p className="text-sm text-[var(--text-secondary)]">
                 Πατήστε <span className="font-semibold text-[#1A1A1A]">Ανανέωση ανάλυσης</span> για να δημιουργηθεί snapshot που θα μείνει ορατό έως την επόμενη μηνιαία ή χειροκίνητη ανάλυση.
               </p>
             </div>
@@ -366,7 +366,7 @@ export function RFMAnalysis() {
       <PageHeader
         className="gap-2 lg:gap-4 [&_.space-y-1]:space-y-0"
         toolbarAriaLabel="Εξαγωγή και διαγραφή segments"
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl leading-tight">Data Analysis</h2>}
+        title="Data Analysis"
         actions={
           <>
           <Button
@@ -586,7 +586,7 @@ export function RFMAnalysis() {
               <Users size={18} className="text-[var(--nts-accent-text)]" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-[11px] text-[#4A4A4A]">
+              <p className="truncate text-[11px] text-[var(--text-secondary)]">
                 <InfoTooltip content="Συνολικός αριθμός πελατών στη βάση RFM.">Πελάτες</InfoTooltip>
               </p>
               <p className="font-mono text-lg font-bold text-[#1A1A1A]">{formatNumber(totalCustomersDisplay)}</p>
@@ -599,7 +599,7 @@ export function RFMAnalysis() {
               <TrendingUp size={18} className="text-[#22C55E]" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-[11px] text-[#4A4A4A]">
+              <p className="truncate text-[11px] text-[var(--text-secondary)]">
                 <InfoTooltip content="Αριθμός RFM segments.">Segments</InfoTooltip>
               </p>
               <p className="text-lg font-bold text-[#1A1A1A]">{rfmSegments.length}</p>
@@ -609,10 +609,10 @@ export function RFMAnalysis() {
         <Card padding="sm" hover>
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F5F5F5]">
-              <Zap size={18} className="text-[#4A4A4A]" />
+              <Zap size={18} className="text-[var(--text-secondary)]" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-[11px] text-[#4A4A4A]">
+              <p className="truncate text-[11px] text-[var(--text-secondary)]">
                 <InfoTooltip content="Μέσος RFM score (1–5).">Μέσος score</InfoTooltip>
               </p>
               <p className="font-mono text-lg font-bold text-[#1A1A1A]">
@@ -634,7 +634,7 @@ export function RFMAnalysis() {
               <TrendingDown size={18} className="text-[#F59E0B]" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-[11px] text-[#4A4A4A]">
+              <p className="truncate text-[11px] text-[var(--text-secondary)]">
                 <InfoTooltip content="Ποσοστό πελατών At Risk.">At Risk</InfoTooltip>
               </p>
               <p className="font-mono text-lg font-bold text-[#F59E0B]">
@@ -777,7 +777,7 @@ export function RFMAnalysis() {
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex min-w-0 items-center gap-2 text-sm">
                             <span className="min-w-0 truncate font-semibold" style={{ color }}>{row.name}</span>
-                            <span className="rounded-full bg-[#F5F5F5] px-2 py-0.5 font-mono text-xs text-[#4A4A4A]">
+                            <span className="rounded-full bg-[#F5F5F5] px-2 py-0.5 font-mono text-xs text-[var(--text-secondary)]">
                               {formatNumber(row.previousCount)} → {formatNumber(row.currentCount)} πελάτες
                             </span>
                           </div>
@@ -785,7 +785,7 @@ export function RFMAnalysis() {
                             <span className="font-bold" style={{ color: deltaColor }}>
                               {row.countDelta > 0 ? '+' : ''}{formatNumber(row.countDelta, 0)} πελάτες
                             </span>
-                            <span className="rounded-full bg-[#F5F5F5] px-2 py-0.5 text-[#4A4A4A]">
+                            <span className="rounded-full bg-[#F5F5F5] px-2 py-0.5 text-[var(--text-secondary)]">
                               {row.shareDelta > 0 ? '+' : ''}{formatNumber(row.shareDelta, 1)}pp
                             </span>
                             <span className="text-[#6B7280]">
@@ -834,7 +834,7 @@ export function RFMAnalysis() {
                           </div>
                           <div className="flex shrink-0 items-center gap-3 font-mono text-xs">
                             <span className="font-bold text-[#1A1A1A]">{formatNumber(flow.count)} πελάτες</span>
-                            <span className="rounded-full bg-[#F5F5F5] px-2 py-0.5 text-[#4A4A4A]">{formatNumber(flow.percentage, 1)}%</span>
+                            <span className="rounded-full bg-[#F5F5F5] px-2 py-0.5 text-[var(--text-secondary)]">{formatNumber(flow.percentage, 1)}%</span>
                           </div>
                         </div>
                       </div>
@@ -843,13 +843,13 @@ export function RFMAnalysis() {
                 </div>
               </>
             ) : (
-              <p className="text-sm text-[#4A4A4A] py-4 text-center">
+              <p className="text-sm text-[var(--text-secondary)] py-4 text-center">
                 Δεν υπάρχει ακόμα αρκετό συγκρίσιμο ιστορικό για τρέχουσα vs προηγούμενη περίοδο {segmentPeriodComparison?.periodDays ?? segmentMigration?.periodDays ?? 90} ημερών.
                 Η ένδειξη ανανεώνεται με τη μηνιαία Data Analysis ή χειροκίνητα από την ανανέωση ανάλυσης.
               </p>
             )
           ) : (
-            <p className="text-sm text-[#4A4A4A] py-4">
+            <p className="text-sm text-[var(--text-secondary)] py-4">
               Φόρτωσε RFM δεδομένα για να δεις την μετακίνηση μεταξύ segments.
             </p>
           )}
@@ -884,7 +884,7 @@ function DataAnalysisSkeleton() {
     <div className="space-y-3" aria-busy="true" aria-label="Φόρτωση Data Analysis">
       <PageHeader
         className="gap-2 lg:gap-4 [&_.space-y-1]:space-y-0"
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl leading-tight">Data Analysis</h2>}
+        title="Data Analysis"
         actions={
           <>
             <div className="h-9 w-28 animate-pulse rounded-lg bg-[#F3F4F6]" />
@@ -951,7 +951,7 @@ function TabButton({ active, onClick, icon, label, tooltipTitle, tooltipBody, to
         className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
           active
             ? 'bg-white text-[#1A1A1A] shadow-sm'
-            : 'text-[#4A4A4A] hover:text-[#1A1A1A]'
+            : 'text-[var(--text-secondary)] hover:text-[#1A1A1A]'
         }`}
       >
         {icon}
@@ -971,14 +971,14 @@ function TabButton({ active, onClick, icon, label, tooltipTitle, tooltipBody, to
               <p className="text-[13px] font-semibold text-[#1A1A1A]">{tooltipTitle}</p>
             )}
             {tooltipBody && (
-              <p className="mt-1 text-xs leading-snug text-[#4A4A4A]">{tooltipBody}</p>
+              <p className="mt-1 text-xs leading-snug text-[var(--text-secondary)]">{tooltipBody}</p>
             )}
             {tooltipBullets && tooltipBullets.length > 0 && (
               <ul className="mt-2 space-y-1">
                 {tooltipBullets.map((b) => (
                   <li
                     key={b}
-                    className="flex items-start gap-1.5 text-[11.5px] leading-snug text-[#4A4A4A]"
+                    className="flex items-start gap-1.5 text-[11.5px] leading-snug text-[var(--text-secondary)]"
                   >
                     <span
                       aria-hidden="true"
@@ -1030,7 +1030,7 @@ function SegmentCard({ segment, index, isSelected, onSelect, onExport }: Segment
             </div>
             <div>
               <h3 className="font-semibold text-[#1A1A1A]">{segment.name}</h3>
-              <p className="text-xs text-[#4A4A4A]">{segment.rfm_score}</p>
+              <p className="text-xs text-[var(--text-secondary)]">{segment.rfm_score}</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -1055,23 +1055,23 @@ function SegmentCard({ segment, index, isSelected, onSelect, onExport }: Segment
           </div>
         </div>
 
-        <p className="text-sm text-[#4A4A4A] mt-3">{segment.description}</p>
+        <p className="text-sm text-[var(--text-secondary)] mt-3">{segment.description}</p>
 
         <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-[#E5E5E5]">
           <div>
-            <p className="text-xs text-[#4A4A4A]">Πελάτες</p>
+            <p className="text-xs text-[var(--text-secondary)]">Πελάτες</p>
             <p className="font-bold text-[#1A1A1A] font-mono">
               {formatNumber(segment.count)}
             </p>
           </div>
           <div>
-            <p className="text-xs text-[#4A4A4A]">% πελατών</p>
+            <p className="text-xs text-[var(--text-secondary)]">% πελατών</p>
             <p className="font-bold font-mono" style={{ color: segment.color }}>
               {fmtPct(segment.percentage ?? 0)}%
             </p>
           </div>
           <div>
-            <p className="text-xs text-[#4A4A4A]">% τζίρου</p>
+            <p className="text-xs text-[var(--text-secondary)]">% τζίρου</p>
             <p className="font-bold text-[#1A1A1A] font-mono">
               {fmtPct(segment.revenue_share ?? 0)}%
             </p>
@@ -1248,7 +1248,7 @@ function SegmentDetail({
           </div>
           <div>
             <h3 className="text-xl font-bold text-[#1A1A1A]">{segment.name}</h3>
-            <p className="text-[#4A4A4A]">{segment.description}</p>
+            <p className="text-[var(--text-secondary)]">{segment.description}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-[#E5E7EB] bg-white px-2.5 py-1 text-xs font-medium text-[#374151]">
                 Πελάτες: <span className="font-mono font-bold text-[#111827]">{formatNumber(segment.count ?? 0)}</span>
@@ -1377,7 +1377,7 @@ function SegmentDetail({
                 Δεν εντοπίστηκε brand στο catalog για τις γραμμές του segment (ή όλα ως «Λοιπά»).
               </p>
             ) : (
-              <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
+              <p className="text-xs text-[var(--text-secondary)]">Δεν υπάρχουν δεδομένα</p>
             )}
           </div>
 
@@ -1394,7 +1394,7 @@ function SegmentDetail({
                 Δεν υπάρχουν υποκατηγορίες στο catalog (π.χ. δεύτερο επίπεδο Woo ή ERP subcategory).
               </p>
             ) : (
-              <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
+              <p className="text-xs text-[var(--text-secondary)]">Δεν υπάρχουν δεδομένα</p>
             )}
           </div>
 
@@ -1411,7 +1411,7 @@ function SegmentDetail({
                 {priceSens.toUpperCase()}
               </Badge>
             ) : (
-              <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
+              <p className="text-xs text-[var(--text-secondary)]">Δεν υπάρχουν δεδομένα</p>
             )}
           </div>
 
@@ -1423,7 +1423,7 @@ function SegmentDetail({
                   <Badge key={channel} variant="info">{channel}</Badge>
                 ))
               ) : (
-                <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
+                <p className="text-xs text-[var(--text-secondary)]">Δεν υπάρχουν δεδομένα</p>
               )}
             </div>
           </div>

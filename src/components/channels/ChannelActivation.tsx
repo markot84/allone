@@ -871,7 +871,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <PageHeader
           title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">{pageTitle}</h2>}
           description={
-            <p className="text-sm text-[#4A4A4A] sm:text-base">Μίξη καναλιών με AI βάσει εμπορικής στρατηγικής</p>
+            <p className="text-sm text-[var(--text-secondary)] sm:text-base">Μίξη καναλιών με AI βάσει εμπορικής στρατηγικής</p>
           }
         />
         <Card padding="lg">
@@ -898,7 +898,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <PageHeader
           title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">{pageTitle}</h2>}
           description={
-            <p className="text-sm text-[#4A4A4A] sm:text-base">Μίξη καναλιών με AI βάσει εμπορικής στρατηγικής</p>
+            <p className="text-sm text-[var(--text-secondary)] sm:text-base">Μίξη καναλιών με AI βάσει εμπορικής στρατηγικής</p>
           }
         />
         <Card padding="lg">
@@ -927,7 +927,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         toolbarAriaLabel="Channel activation"
         title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">{pageTitle}</h2>}
         description={
-          <p className="text-[#4A4A4A]">
+          <p className="text-[var(--text-secondary)]">
             <span className="font-medium text-[#1A1A1A]">{strategyName}</span>
             {durationLabel && <span className="text-[#9CA3AF]"> · {durationLabel}</span>}
           </p>
@@ -938,7 +938,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               <Wallet size={16} className="shrink-0 text-[#9CA3AF]" />
               {editingBudget ? (
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 sm:flex-initial">
-                  <span className="text-sm text-[#4A4A4A]">€</span>
+                  <span className="text-sm text-[var(--text-secondary)]">€</span>
                   <input
                     type="text"
                     value={budgetInput}
@@ -1008,7 +1008,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
           <div className="min-w-0 flex-1">
             <div className="mb-2 flex min-w-0 flex-col gap-0.5 min-[480px]:flex-row min-[480px]:items-center min-[480px]:gap-2">
-              <span className="text-xs font-medium text-[#4A4A4A]">Πρόοδος ενεργοποίησης</span>
+              <span className="text-xs font-medium text-[var(--text-secondary)]">Πρόοδος ενεργοποίησης</span>
               <span className="text-xs text-[#9CA3AF]">
                 {progressSummary.done}/{progressSummary.total} κανάλια σε εξέλιξη
                 {progressSummary.excluded > 0 ? ` · ${progressSummary.excluded} εκτός` : ''}
@@ -1023,7 +1023,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               )}
             </div>
           </div>
-          <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#4A4A4A] sm:w-auto sm:justify-end">
+          <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-secondary)] sm:w-auto sm:justify-end">
             <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 shrink-0 rounded-full bg-[#22C55E]" />{progressSummary.done} ολοκληρώθηκαν</span>
             <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 shrink-0 rounded-full bg-[#F97316]" />{progressSummary.inProgress} σε εξέλιξη</span>
             <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 shrink-0 rounded-full bg-[#9CA3AF]" />{progressSummary.pending} εκκρεμούν</span>
@@ -1072,7 +1072,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             <div className="max-h-[520px] overflow-auto rounded-xl border border-amber-100 bg-white">
               <table className="min-w-[860px] w-full text-left text-xs">
                 <thead className="sticky top-0 z-10">
-                  <tr className="border-b border-amber-100 bg-amber-50/60 text-[#4A4A4A]">
+                  <tr className="border-b border-amber-100 bg-amber-50/60 text-[var(--text-secondary)]">
                     <th className="px-3 py-2 font-semibold w-12" aria-label="Εικόνα" />
                     <th className="px-3 py-2 font-semibold">Parent / Model</th>
                     <th className="px-3 py-2 font-semibold">SKU</th>
@@ -1092,11 +1092,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                         <ProductThumbnail src={thumb || undefined} alt={row.representative.name || sku} size="sm" />
                       </td>
                       <td className="px-3 py-2 font-mono text-[#1A1A1A]">{row.key}</td>
-                      <td className="px-3 py-2 font-mono text-[#4A4A4A]">{row.representative.sku || '—'}</td>
-                      <td className="max-w-[260px] truncate px-3 py-2 text-[#4A4A4A]" title={row.representative.name || ''}>{row.representative.name || '—'}</td>
+                      <td className="px-3 py-2 font-mono text-[var(--text-secondary)]">{row.representative.sku || '—'}</td>
+                      <td className="max-w-[260px] truncate px-3 py-2 text-[var(--text-secondary)]" title={row.representative.name || ''}>{row.representative.name || '—'}</td>
                       <td className="px-3 py-2 font-mono text-[#1A1A1A]">{formatNumber(row.totalStock)}</td>
                       <td className="px-3 py-2 font-mono text-[#1A1A1A]">{formatCurrency(row.totalValue, 0)}</td>
-                      <td className="px-3 py-2 font-mono text-[#4A4A4A]">{row.variantCount}</td>
+                      <td className="px-3 py-2 font-mono text-[var(--text-secondary)]">{row.variantCount}</td>
                     </tr>
                     );
                   })}
@@ -1173,7 +1173,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                       </span>
                     )}
                   </div>
-                  <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[#4A4A4A]">
+                  <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[var(--text-secondary)]">
                     {seg.count > 0 && (
                       <span><span className="font-mono font-semibold">{formatNumber(seg.count)}</span> πελάτες</span>
                     )}
@@ -1187,7 +1187,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   </div>
                   {seg.rationale && (
                     <p
-                      className="text-[11px] text-[#4A4A4A] leading-snug line-clamp-2"
+                      className="text-[11px] text-[var(--text-secondary)] leading-snug line-clamp-2"
                       title={seg.rationale}
                     >
                       {seg.rationale}
@@ -1268,7 +1268,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     <div key={item.channel} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                        <span className="text-[#4A4A4A] truncate max-w-[120px]">{item.channel}</span>
+                        <span className="text-[var(--text-secondary)] truncate max-w-[120px]">{item.channel}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         {eurAmount !== null && (
@@ -1290,7 +1290,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           ) : (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
-                <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν AI συστάσεις για αυτή τη στρατηγική</p>
+                <p className="text-sm text-[var(--text-secondary)]">Δεν υπάρχουν AI συστάσεις για αυτή τη στρατηγική</p>
                 <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Πατήστε για δημιουργία συστάσεων AI</p>
                 <Button
                   variant="primary"
@@ -1406,7 +1406,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                         </div>
                         <div className="flex items-center gap-3 mt-1">
                           {ch.budget !== null && (
-                            <span className="text-xs text-[#4A4A4A]">
+                            <span className="text-xs text-[var(--text-secondary)]">
                               Budget: <span className="font-semibold text-[#1A1A1A]">{ch.budget}%</span>
                               {eurAmount !== null && (
                                 <span className="font-mono ml-1 text-[#1A1A1A] font-semibold">· €{eurAmount.toLocaleString('el-GR')}</span>
@@ -1423,7 +1423,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                               <div className="text-[10px] font-semibold uppercase tracking-wider text-[#7C3AED] mb-0.5">
                                 Campaign message · {selectedSegmentName}
                               </div>
-                              <p className="text-xs text-[#4A4A4A] leading-snug">{sanitizeCustomerMessage(playbook.message)}</p>
+                              <p className="text-xs text-[var(--text-secondary)] leading-snug">{sanitizeCustomerMessage(playbook.message)}</p>
                             </div>
                           </div>
                         )}
@@ -1447,14 +1447,14 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                         ) : note ? (
                           <button
                             onClick={() => { setEditingNote(ch.name); setNoteText(note); }}
-                            className="mt-1.5 text-xs text-[#4A4A4A] bg-[#FAFAFA] px-2.5 py-1 rounded-md hover:bg-[#F5F5F5] text-left w-full truncate"
+                            className="mt-1.5 text-xs text-[var(--text-secondary)] bg-[#FAFAFA] px-2.5 py-1 rounded-md hover:bg-[#F5F5F5] text-left w-full truncate"
                           >
                             {note}
                           </button>
                         ) : (
                           <button
                             onClick={() => { setEditingNote(ch.name); setNoteText(''); }}
-                            className="mt-1.5 text-[11px] text-[#9CA3AF] hover:text-[#4A4A4A]"
+                            className="mt-1.5 text-[11px] text-[#9CA3AF] hover:text-[var(--text-secondary)]"
                           >
                             + Σημείωση
                           </button>
@@ -1500,7 +1500,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           ) : (
             <div className="flex items-center justify-center py-16">
               <div className="text-center">
-                <p className="text-sm text-[#4A4A4A]">Αναμονή AI συστάσεων...</p>
+                <p className="text-sm text-[var(--text-secondary)]">Αναμονή AI συστάσεων...</p>
                 <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Δημιουργήστε channel briefs βάσει της στρατηγικής σας</p>
                 <Button
                   variant="primary"
@@ -1656,7 +1656,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                                       className="overflow-hidden mt-3 space-y-2 pl-1"
                                     >
                                       {s.bullets.map((b, idx) => (
-                                        <li key={idx} className="flex items-start gap-2 text-xs text-[#4A4A4A] leading-relaxed">
+                                        <li key={idx} className="flex items-start gap-2 text-xs text-[var(--text-secondary)] leading-relaxed">
                                           <span
                                             className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0"
                                             style={{ backgroundColor: s.color }}
@@ -1707,7 +1707,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 <h4 className="font-medium text-[#1A1A1A]">{feed}</h4>
                 <Badge variant="success" size="sm">Ενεργό</Badge>
               </div>
-              <div className="space-y-2 text-sm text-[#4A4A4A]">
+              <div className="space-y-2 text-sm text-[var(--text-secondary)]">
                 <div className="flex justify-between">
                   <span>{feed === 'Ads Feed' ? 'Active variants' : 'Parent/model rows'}</span>
                   <span className="font-mono">{formatNumber(feed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)}</span>
@@ -1748,22 +1748,22 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
               <ModalHeader
                 toolbarAriaLabel="Κλείσιμο"
-                title={<h2 className="text-xl font-bold text-[var(--text-heading)]">Επιλογή Format</h2>}
+                title="Επιλογή Format"
                 actions={
                   <button type="button" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
-                    <X size={20} className="text-[#4A4A4A]" />
+                    <X size={20} className="text-[var(--text-secondary)]" />
                   </button>
                 }
               />
               <div className="p-6 space-y-3">
-                <p className="text-sm text-[#4A4A4A] mb-4">Επιλέξτε format για <strong>{selectedFeed}</strong></p>
+                <p className="text-sm text-[var(--text-secondary)] mb-4">Επιλέξτε format για <strong>{selectedFeed}</strong></p>
                 <button onClick={() => { exportFeed(selectedFeed, 'xlsx'); setShowExportModal(false); setSelectedFeed(null); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
                   <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors"><FileSpreadsheet size={24} className="text-[#22C55E]" /></div>
-                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[#4A4A4A]">Λήψη ως αρχείο Excel</p></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[var(--text-secondary)]">Λήψη ως αρχείο Excel</p></div>
                 </button>
                 <button onClick={() => { exportFeed(selectedFeed, 'csv'); setShowExportModal(false); setSelectedFeed(null); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
-                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors"><FileText size={24} className="text-[#4A4A4A]" /></div>
-                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[#4A4A4A]">Λήψη ως αρχείο CSV</p></div>
+                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors"><FileText size={24} className="text-[var(--text-secondary)]" /></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[var(--text-secondary)]">Λήψη ως αρχείο CSV</p></div>
                 </button>
               </div>
               <div className="p-6 border-t border-[#E5E5E5] flex justify-end"><Button variant="ghost" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }}>Ακύρωση</Button></div>
@@ -1792,21 +1792,21 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               <ModalHeader
                 className="flex-shrink-0"
                 toolbarAriaLabel="Κλείσιμο"
-                title={<h2 className="text-xl font-bold text-[var(--text-heading)]">Προεπισκόπηση feed</h2>}
+                title="Προεπισκόπηση feed"
                 description={
-                  <p className="text-sm text-[#4A4A4A]">
+                  <p className="text-sm text-[var(--text-secondary)]">
                     {previewFeed} · {formatNumber(previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} ενεργές γραμμές · δείγμα {Math.min(8, previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} γραμμών
                   </p>
                 }
                 actions={
                   <button type="button" onClick={() => setPreviewFeed(null)} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]" aria-label="Κλείσιμο">
-                    <X size={20} className="text-[#4A4A4A]" />
+                    <X size={20} className="text-[var(--text-secondary)]" />
                   </button>
                 }
               />
               <div className="p-6 overflow-auto flex-1 min-h-0">
                 {feedProducts.length === 0 ? (
-                  <p className="text-sm text-[#4A4A4A] text-center py-8">Δεν υπάρχουν προϊόντα στο catalog για προεπισκόπηση.</p>
+                  <p className="text-sm text-[var(--text-secondary)] text-center py-8">Δεν υπάρχουν προϊόντα στο catalog για προεπισκόπηση.</p>
                 ) : (
                   (() => {
                     const { headers, rows } = getFeedPreviewTable(previewFeed);
@@ -1836,7 +1836,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                                     );
                                   }
                                   return (
-                                    <td key={ci} className="px-3 py-2 text-[#4A4A4A] max-w-[200px] truncate" title={String(cell)}>
+                                    <td key={ci} className="px-3 py-2 text-[var(--text-secondary)] max-w-[200px] truncate" title={String(cell)}>
                                       {String(cell)}
                                     </td>
                                   );
@@ -1876,21 +1876,21 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
               <ModalHeader
                 toolbarAriaLabel="Κλείσιμο"
-                title={<h2 className="text-xl font-bold text-[var(--text-heading)]">Εξαγωγή όλων των feeds</h2>}
+                title="Εξαγωγή όλων των feeds"
                 actions={
                   <button type="button" onClick={() => setShowExportAllModal(false)} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
-                    <X size={20} className="text-[#4A4A4A]" />
+                    <X size={20} className="text-[var(--text-secondary)]" />
                   </button>
                 }
               />
               <div className="p-6 space-y-3">
                 <button onClick={() => { ['Ads Feed', 'Email Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'xlsx'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
                   <div className="p-3 bg-[#22C55E]/10 rounded-lg"><FileSpreadsheet size={24} className="text-[#22C55E]" /></div>
-                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[#4A4A4A]">Εξαγωγή όλων των feeds ως Excel</p></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[var(--text-secondary)]">Εξαγωγή όλων των feeds ως Excel</p></div>
                 </button>
                 <button onClick={() => { ['Ads Feed', 'Email Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'csv'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
-                  <div className="p-3 bg-[#F5F5F5] rounded-lg"><FileText size={24} className="text-[#4A4A4A]" /></div>
-                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[#4A4A4A]">Εξαγωγή όλων των feeds ως CSV</p></div>
+                  <div className="p-3 bg-[#F5F5F5] rounded-lg"><FileText size={24} className="text-[var(--text-secondary)]" /></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[var(--text-secondary)]">Εξαγωγή όλων των feeds ως CSV</p></div>
                 </button>
               </div>
               <div className="p-6 border-t border-[#E5E5E5] flex justify-end"><Button variant="ghost" onClick={() => setShowExportAllModal(false)}>Ακύρωση</Button></div>
@@ -1981,7 +1981,7 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
             </div>
             <div className="flex-1">
               <h3 className="font-semibold text-[#1A1A1A] text-sm">All Segments Action Pack</h3>
-              <p className="text-xs text-[#4A4A4A] mt-0.5">
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {segments.length} segments · Profile, Channel Plan & Templates
               </p>
             </div>
@@ -1991,7 +1991,7 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
               <FileSpreadsheet size={13} className="text-[#22C55E]" /> .xlsx
             </button>
             <button onClick={() => handleExportAllPacks('csv')} disabled={exporting === 'all-packs'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
-              <FileText size={13} className="text-[#4A4A4A]" /> .csv
+              <FileText size={13} className="text-[var(--text-secondary)]" /> .csv
             </button>
           </div>
         </div>
@@ -2004,7 +2004,7 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
               </div>
               <div className="flex-1">
                 <h3 className="font-semibold text-[#1A1A1A] text-sm">Strategy Execution Plan</h3>
-                <p className="text-xs text-[#4A4A4A] mt-0.5">
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                   Channel mix, budget & campaign templates
                 </p>
               </div>
@@ -2014,7 +2014,7 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
                 <FileSpreadsheet size={13} className="text-[#22C55E]" /> .xlsx
               </button>
               <button onClick={() => handleExportStrategy('csv')} disabled={exporting === 'strategy'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
-                <FileText size={13} className="text-[#4A4A4A]" /> .csv
+                <FileText size={13} className="text-[var(--text-secondary)]" /> .csv
               </button>
             </div>
           </div>
@@ -2030,7 +2030,7 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
             </div>
             <div className="flex-1">
               <h3 className="font-semibold text-[#1A1A1A] text-sm">Customer Lists ανά Segment</h3>
-              <p className="text-xs text-[#4A4A4A] mt-0.5">
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 Customer IDs, emails, RFM scores — έτοιμα για Custom Audiences & email campaigns
               </p>
             </div>

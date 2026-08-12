@@ -101,11 +101,11 @@ export function FeedPreviewModal({
                   <p className="text-xl font-bold text-[#DC2626]">{preview.errorCount}</p>
                 </div>
                 <div className="p-3 bg-[#F5F5F5] rounded-lg">
-                  <p className="text-xs text-[#4A4A4A]">Σύνολο γραμμών</p>
+                  <p className="text-xs text-[var(--text-secondary)]">Σύνολο γραμμών</p>
                   <p className="text-xl font-bold text-[#1A1A1A]">{preview.totalRows}</p>
                 </div>
                 <div className="p-3 bg-[#F5F5F5] rounded-lg">
-                  <p className="text-xs text-[#4A4A4A]">Στήλες</p>
+                  <p className="text-xs text-[var(--text-secondary)]">Στήλες</p>
                   <p className="text-xl font-bold text-[#1A1A1A]">{preview.headers.length}</p>
                 </div>
               </div>
@@ -117,7 +117,7 @@ export function FeedPreviewModal({
                 <div className="border border-[#E5E5E5] rounded-lg overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-[#F5F5F5] text-left text-xs text-[#4A4A4A]">
+                      <tr className="bg-[#F5F5F5] text-left text-xs text-[var(--text-secondary)]">
                         <th className="px-3 py-2">Feed column</th>
                         <th className="px-3 py-2"><ArrowRight size={14} className="inline" /></th>
                         <th className="px-3 py-2">App field</th>
@@ -152,7 +152,7 @@ export function FeedPreviewModal({
               )}
               {!config && preview.headers.length > 0 && (
                 <div className="p-3 bg-[#F5F5F5] rounded-lg">
-                  <p className="text-sm font-medium text-[#4A4A4A]">Ανιχνευμένες στήλες:</p>
+                  <p className="text-sm font-medium text-[var(--text-secondary)]">Ανιχνευμένες στήλες:</p>
                   <p className="text-xs text-[#6B7280] mt-1">{preview.headers.join(', ')}</p>
                 </div>
               )}
@@ -164,7 +164,7 @@ export function FeedPreviewModal({
                   <div className="border border-[#E5E5E5] rounded-lg overflow-x-auto max-h-48 overflow-y-auto">
                     <table className="w-full text-sm">
                       <thead className="sticky top-0 bg-[#F5F5F5]">
-                        <tr className="text-left text-xs text-[#4A4A4A]">
+                        <tr className="text-left text-xs text-[var(--text-secondary)]">
                           {['sku', 'name', 'price', 'stock_level', 'category'].map((k) => (
                             <th key={k} className="px-3 py-2">{APP_FIELD_LABELS[k] ?? k}</th>
                           ))}
