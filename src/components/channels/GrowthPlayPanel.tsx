@@ -222,7 +222,7 @@ function SegmentProposalCard({
       {/* Card header */}
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[#F9FAFB] transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[var(--surface-2)] transition-colors"
       >
         <div className="flex items-center gap-3 min-w-0">
           <div
@@ -514,7 +514,7 @@ function ExportButton({
     <button
       onClick={handleExport}
       disabled={exporting}
-      className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB] transition-all disabled:opacity-50"
+      className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[var(--surface-2)] transition-all disabled:opacity-50"
     >
       <Download size={12} />
       {exporting ? 'Εξαγωγή...' : 'Export XLSX'}

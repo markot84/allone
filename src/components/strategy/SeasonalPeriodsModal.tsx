@@ -122,7 +122,7 @@ export function SeasonalPeriodsModal({
             </div>
           }
           actions={
-            <button type="button" onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
+            <button type="button" onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]">
               <X size={20} className="text-[var(--text-secondary)]" />
             </button>
           }

@@ -493,7 +493,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
             <button
               type="button"
               onClick={toggleCollapsed}
-              className="shrink-0 p-2 rounded-lg hover:bg-[#F3F4F6] text-[var(--nts-medium-gray)] transition-colors"
+              className="shrink-0 p-2 rounded-lg hover:bg-[var(--surface-2)] text-[var(--nts-medium-gray)] transition-colors"
               aria-expanded={!collapsed}
               title={collapsed ? 'Ανάπτυξη' : 'Σύμπτυξη'}
             >

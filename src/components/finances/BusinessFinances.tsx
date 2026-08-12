@@ -529,7 +529,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             Λεπτομέρειες organic ανά περίοδο (import)
           </h3>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="data-table w-full">
               <thead>
                 <tr className="text-left text-xs text-[var(--text-secondary)] border-b border-[#E5E5E5]">
                   <th className="pb-3 font-medium">Περίοδος</th>
@@ -540,7 +540,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
                 {([...records] as OrganicRevenue[])
                   .sort((a, b) => (b.period || '').localeCompare(a.period || ''))
                   .map((r) => (
-                    <tr key={r.id} className="border-b border-[#E5E5E5] last:border-0 hover:bg-[#F5F5F5]">
+                    <tr key={r.id} className="border-b border-[#E5E5E5] last:border-0 hover:bg-[var(--surface-2)]">
                       <td className="py-3 font-medium text-[#1A1A1A]">{r.period}</td>
                       <td className="py-3 text-right font-mono">€{formatCurrency(r.organic_revenue || 0)}</td>
                     </tr>

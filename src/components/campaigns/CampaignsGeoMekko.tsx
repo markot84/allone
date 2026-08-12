@@ -237,10 +237,10 @@ export function CampaignsGeoMekko({ columns, level, metric, onMetricChange }: Pr
                 margin={{ top: 4, right: 12, left: 12, bottom: 4 }}
                 barCategoryGap={10}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
+                <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" horizontal={false} />
                 <XAxis
                   type="number"
-                  tick={{ fontSize: 11, fill: '#6B7280' }}
+                  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
                   tickFormatter={(value) => METRIC_META[metric].tick(Number(value))}
                   stroke="#D1D5DB"
                 />
@@ -248,7 +248,7 @@ export function CampaignsGeoMekko({ columns, level, metric, onMetricChange }: Pr
                   type="category"
                   dataKey="label"
                   width={130}
-                  tick={{ fontSize: 11, fill: '#374151' }}
+                  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
                   stroke="#D1D5DB"
                 />
                 <RechartsTooltip content={<ChartTooltip metric={metric} />} cursor={{ fill: 'rgba(249, 115, 22, 0.08)' }} />

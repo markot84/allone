@@ -147,7 +147,7 @@ export function ApprovalWorkflow({ status, onStatusChange }: ApprovalWorkflowPro
             e.stopPropagation();
             setShowDropdown((v) => !v);
           }}
-          className="p-2 rounded-lg hover:bg-[#F5F5F5] transition-colors"
+          className="p-2 rounded-lg hover:bg-[var(--surface-2)] transition-colors"
         >
           <ChevronDown size={16} className="text-[var(--text-secondary)]" />
         </button>
@@ -174,7 +174,7 @@ export function ApprovalWorkflow({ status, onStatusChange }: ApprovalWorkflowPro
                     setShowDropdown(false);
                   }}
                   className={`
-                    w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-[#F5F5F5]
+                    w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-[var(--surface-2)]
                     ${key === status ? 'bg-[var(--nts-light-gray)] text-[var(--nts-accent-text)]' : 'text-[#1A1A1A]'}
                   `}
                 >

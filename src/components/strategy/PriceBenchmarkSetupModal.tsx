@@ -145,7 +145,7 @@ export function PriceBenchmarkSetupModal({
         <span className="text-[10px] text-[#9CA3AF] ml-auto">{totalGroups} ομάδες</span>
       </div>
       <div className="max-h-[220px] overflow-auto">
-        <table className="w-full text-left text-[11px]">
+        <table className="data-table w-full text-left text-[11px]">
           <thead className="sticky top-0 bg-white border-b border-[#F3F4F6] z-[1]">
             <tr className="text-[#9CA3AF]">
               <th className="px-3 py-2 font-medium">Ομάδα</th>
@@ -213,7 +213,7 @@ export function PriceBenchmarkSetupModal({
                 Παρακάτω εμφανίζεται συνοπτική εικόνα ανά μάρκα και κατηγορία, χωρίς αναλυτική λίστα SKU.
               </p>
             </div>
-            <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#F5F5F5] text-[#9CA3AF]">
+            <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[#9CA3AF]">
               <X size={18} />
             </button>
           </div>

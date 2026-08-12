@@ -167,10 +167,10 @@ export function ChannelPerformanceHistoryCard({
       <div ref={historyChartRef} className="relative w-full min-w-0 max-w-full" style={{ height: 288, minHeight: 288 }}>
         {realPerformanceHistory && realPerformanceHistory.rows.length > 0 ? (
           <LineChart width={historyChartSize.width} height={historyChartSize.height} data={realPerformanceHistory.rows} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
-            <XAxis dataKey="label" tick={{ fill: '#4A4A4A', fontSize: 12 }} axisLine={{ stroke: '#E5E5E5' }} />
+            <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" />
+            <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} axisLine={{ stroke: '#E5E5E5' }} />
             <YAxis
-              tick={{ fill: '#4A4A4A', fontSize: 12 }}
+              tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
               axisLine={{ stroke: '#E5E5E5' }}
               tickFormatter={(v) => `${v.toFixed(1)}x`}
               domain={[0, 'auto']}

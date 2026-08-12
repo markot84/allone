@@ -147,7 +147,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
                   className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all border ${
                     filter === type
                       ? 'bg-[var(--nts-accent)] text-white border-[var(--nts-accent)] shadow-sm'
-                      : 'bg-white text-[var(--text-secondary)] border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F9FAFB]'
+                      : 'bg-white text-[var(--text-secondary)] border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[var(--surface-2)]'
                   }`}
                 >
                   {type === 'opportunity' && <Lightbulb size={15} className="opacity-80" />}
@@ -256,7 +256,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
             <button
               type="button"
               onClick={() => onSectionChange?.('help')}
-              className="w-full flex items-center justify-between rounded-xl border border-[#E8E8ED] bg-white px-4 py-3 text-sm font-medium text-[var(--text-secondary)] hover:bg-[#FAFAFA] transition-colors"
+              className="w-full flex items-center justify-between rounded-xl border border-[#E8E8ED] bg-white px-4 py-3 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-2)] transition-colors"
             >
               Μετάβαση στο Help
               <ArrowRight size={16} className="text-[#9CA3AF]" />

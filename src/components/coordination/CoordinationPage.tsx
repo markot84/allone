@@ -249,7 +249,7 @@ export function CoordinationPage() {
             ))}
             {olderActiveDecisions.length > 0 && (
               <details className="group rounded-xl border border-[#E5E7EB] bg-[#FAFAFA] overflow-hidden">
-                <summary className="cursor-pointer list-none px-3.5 py-2.5 flex items-center gap-2 text-xs font-medium text-[#6B7280] hover:bg-[#F3F4F6] transition-colors [&::-webkit-details-marker]:hidden">
+                <summary className="cursor-pointer list-none px-3.5 py-2.5 flex items-center gap-2 text-xs font-medium text-[#6B7280] hover:bg-[var(--surface-2)] transition-colors [&::-webkit-details-marker]:hidden">
                   <History size={14} className="text-[#9CA3AF] shrink-0" />
                   <span>
                     {olderActiveDecisions.length === 1
@@ -398,7 +398,7 @@ export function CoordinationPage() {
           <div className="relative w-full max-w-sm bg-white shadow-2xl flex flex-col h-full animate-in slide-in-from-right">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#F3F4F6]">
               <h2 className="font-semibold text-[#111827] text-sm">Ροή Ενεργειών</h2>
-              <button onClick={() => setShowActivityDrawer(false)} className="p-1 hover:bg-[#F3F4F6] rounded-lg transition-colors">
+              <button onClick={() => setShowActivityDrawer(false)} className="p-1 hover:bg-[var(--surface-2)] rounded-lg transition-colors">
                 <X size={18} className="text-[#6B7280]" />
               </button>
             </div>
@@ -807,7 +807,7 @@ function DetailPanel({ title, onClose, children, entityType, entityId, entityTit
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#F3F4F6]">
           <h2 className="font-semibold text-[#111827] text-sm truncate">{title}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-[#F3F4F6] rounded-lg transition-colors">
+          <button onClick={onClose} className="p-1 hover:bg-[var(--surface-2)] rounded-lg transition-colors">
             <X size={18} className="text-[#6B7280]" />
           </button>
         </div>
@@ -889,7 +889,7 @@ function DecisionFormModal({ onClose, isProposal = false }: { onClose: () => voi
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b border-[#F3F4F6]">
           <h2 className="font-semibold text-[#111827]">{isProposal ? 'Νέα πρόταση τμήματος' : 'Νέα εμπορική πολιτική'}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-[#F3F4F6] rounded-lg">
+          <button onClick={onClose} className="p-1 hover:bg-[var(--surface-2)] rounded-lg">
             <X size={18} className="text-[#6B7280]" />
           </button>
         </div>
@@ -1036,7 +1036,7 @@ function TaskFormModal({ linkedDecision, onClose }: { linkedDecision: Decision |
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b border-[#F3F4F6]">
           <h2 className="font-semibold text-[#111827]">Νέα εργασία</h2>
-          <button onClick={onClose} className="p-1 hover:bg-[#F3F4F6] rounded-lg">
+          <button onClick={onClose} className="p-1 hover:bg-[var(--surface-2)] rounded-lg">
             <X size={18} className="text-[#6B7280]" />
           </button>
         </div>

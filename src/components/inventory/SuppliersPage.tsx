@@ -470,7 +470,7 @@ export function SuppliersPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm table-fixed">
+            <table className="data-table w-full text-sm table-fixed">
               <thead>
                 <tr className="bg-[#F9F9F9] border-b border-[#E5E5E5]">
                   <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('name')}>
@@ -499,7 +499,7 @@ export function SuppliersPage() {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ delay: i * 0.02 }}
-                      className="border-b border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
+                      className="border-b border-[#E5E5E5] hover:bg-[var(--surface-2)] transition-colors"
                     >
                       <td className="px-3 py-2 font-medium text-xs text-[var(--nts-charcoal)] truncate">{s.name}</td>
                       <td className="px-3 py-2 text-center">

@@ -255,7 +255,7 @@ export function LoginPage({
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isLoading}
-                className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-[#E5E7EB] bg-white text-[#1A1A1A] hover:bg-[#F9FAFB] transition-colors disabled:opacity-50 text-sm font-medium"
+                className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-[#E5E7EB] bg-white text-[#1A1A1A] hover:bg-[var(--surface-2)] transition-colors disabled:opacity-50 text-sm font-medium"
               >
                 <GoogleIcon />
                 Σύνδεση με Google

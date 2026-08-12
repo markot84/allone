@@ -338,8 +338,8 @@ export function CampaignsGeoTab({ campaigns }: Props) {
       <>
       <CampaignsGeoMekko columns={mekkoColumns} level={level} metric={chartMetric} onMetricChange={setChartMetric} />
       <div className="overflow-x-auto max-h-[min(78vh,920px)] overflow-y-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="sticky top-0 bg-[#F9FAFB] z-10 text-xs text-[#6B7280] uppercase tracking-wider">
+        <table className="data-table w-full text-left text-sm">
+          <thead className="sticky top-0 bg-[var(--card-bg)] z-10 text-xs text-[#6B7280] uppercase tracking-wider">
             <tr>
               <th
                 className="px-3 py-2.5 font-medium cursor-pointer hover:text-[#111827]"
@@ -425,7 +425,7 @@ export function CampaignsGeoTab({ campaigns }: Props) {
           <tbody className="divide-y divide-[#F3F4F6]">
             {visibleRows.map((r) =>
               r.kind === 'country' ? (
-                <tr key={r.country} className="hover:bg-[#FAFAFA] transition-colors">
+                <tr key={r.country} className="hover:bg-[var(--surface-2)] transition-colors">
                   <td className="px-3 py-2.5">
                     <span className="inline-flex items-center gap-2 text-sm text-[#111827] font-medium">
                       {formatCountryLabel(r.country)}
@@ -453,7 +453,7 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                   </td>
                 </tr>
               ) : (
-                <tr key={r.key} className="hover:bg-[#FAFAFA] transition-colors">
+                <tr key={r.key} className="hover:bg-[var(--surface-2)] transition-colors">
                   <td className="px-3 py-2.5">
                     <span className="inline-flex items-center gap-2 text-sm text-[#111827] font-medium">
                       {formatCountryLabel(r.country)}
@@ -513,7 +513,7 @@ export function CampaignsGeoTab({ campaigns }: Props) {
             <button
               type="button"
               onClick={() => setShowAllRows((v) => !v)}
-              className="rounded-md border border-[#E5E7EB] px-3 py-1.5 text-xs font-medium text-[#374151] transition-colors hover:bg-[#F9FAFB]"
+              className="rounded-md border border-[#E5E7EB] px-3 py-1.5 text-xs font-medium text-[#374151] transition-colors hover:bg-[var(--surface-2)]"
             >
               {showAllRows
                 ? 'Εμφάνιση μόνο top 5 βάσει impressions'
@@ -543,7 +543,7 @@ function LevelToggle(props: {
         type="button"
         onClick={() => onChange('country')}
         className={`px-2.5 py-1.5 font-medium transition-colors ${
-          level === 'country' ? 'bg-[var(--nts-orange)] text-white' : 'bg-white text-[#6B7280] hover:bg-[#F9FAFB]'
+          level === 'country' ? 'bg-[var(--nts-orange)] text-white' : 'bg-white text-[#6B7280] hover:bg-[var(--surface-2)]'
         }`}
       >
         Χώρα
@@ -552,7 +552,7 @@ function LevelToggle(props: {
         type="button"
         onClick={() => onChange('city')}
         className={`px-2.5 py-1.5 font-medium transition-colors border-l border-[#E5E7EB] ${
-          level === 'city' ? 'bg-[var(--nts-orange)] text-white' : 'bg-white text-[#6B7280] hover:bg-[#F9FAFB]'
+          level === 'city' ? 'bg-[var(--nts-orange)] text-white' : 'bg-white text-[#6B7280] hover:bg-[var(--surface-2)]'
         }`}
         title={!hasCity ? 'Θα εμφανιστεί μετά από sync με ενημερωμένους connectors' : undefined}
       >

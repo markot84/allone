@@ -1960,18 +1960,18 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     <stop offset="100%" stopColor={ADS_CONV_COLOR} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
+                <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" vertical={false} />
                 <XAxis
                   dataKey="dateKey"
                   tickFormatter={(v) => formatDashChartDateKeyTick(String(v))}
-                  tick={{ fill: '#57606a', fontSize: 11 }}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                   axisLine={{ stroke: '#d0d7de' }}
                   tickLine={{ stroke: '#d0d7de' }}
                 />
                 <YAxis
                   yAxisId="currency"
                   width={52}
-                  tick={{ fill: '#57606a', fontSize: 11 }}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                   axisLine={{ stroke: '#d0d7de' }}
                   tickLine={{ stroke: '#d0d7de' }}
                   tickFormatter={formatRevenueChartYAxisTick}
@@ -2115,7 +2115,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                         e.stopPropagation();
                         handleInsightAction(insight);
                       }}
-                      className="text-[11px] font-medium text-[var(--text-secondary)] whitespace-nowrap px-2 py-1 rounded-md border border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors cursor-pointer flex-shrink-0 mt-0.5"
+                      className="text-[11px] font-medium text-[var(--text-secondary)] whitespace-nowrap px-2 py-1 rounded-md border border-[#E5E5E5] hover:bg-[var(--surface-2)] transition-colors cursor-pointer flex-shrink-0 mt-0.5"
                     >
                       {insight.action}
                     </button>

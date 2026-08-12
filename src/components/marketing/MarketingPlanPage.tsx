@@ -781,8 +781,8 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                   <div className="mt-5">
                     <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">SKU opportunities ({draft.skuSuggestions.length})</p>
                     <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
-                      <table className="w-full text-sm">
-                        <thead className="bg-[#F9FAFB] text-xs text-[#6B7280]">
+                      <table className="data-table w-full text-sm">
+                        <thead className="bg-[var(--card-bg)] text-xs text-[#6B7280]">
                           <tr>
                             <th className="px-3 py-2 text-left">SKU</th>
                             <th className="px-3 py-2 text-left">Προϊόν</th>
@@ -858,8 +858,8 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
               <div className="mb-4">
                 <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">Κανάλια επισκεψιμότητας</p>
                 <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
-                  <table className="w-full text-sm">
-                    <thead className="bg-[#F9FAFB] text-xs text-[#6B7280]">
+                  <table className="data-table w-full text-sm">
+                    <thead className="bg-[var(--card-bg)] text-xs text-[#6B7280]">
                       <tr>
                         <th className="px-3 py-2 text-left">Κανάλι</th>
                         <th className="px-3 py-2 text-right">Sessions</th>
@@ -1287,8 +1287,8 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
       )}
       {expanded && canExpand && (
         <div className="mt-2 overflow-hidden rounded-lg border border-[#E5E7EB]">
-          <table className="w-full text-left text-[11px]">
-            <thead className="bg-[#F9FAFB] text-[10px] uppercase tracking-wide text-[#9CA3AF]">
+          <table className="data-table w-full text-left text-[11px]">
+            <thead className="bg-[var(--card-bg)] text-[10px] uppercase tracking-wide text-[#9CA3AF]">
               <tr>
                 <th className="px-2 py-1.5 font-medium">SKU</th>
                 <th className="px-2 py-1.5 font-medium">Προϊόν</th>
@@ -1300,7 +1300,7 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
             </thead>
             <tbody>
               {skus.map((s) => (
-                <tr key={s.sku} className="border-t border-[#F0F0F0] hover:bg-[#FAFAFA]">
+                <tr key={s.sku} className="border-t border-[#F0F0F0] hover:bg-[var(--surface-2)]">
                   <td className="px-2 py-1.5 font-mono text-[#6B7280]">{s.sku}</td>
                   <td className="px-2 py-1.5">
                     <p className="truncate font-medium text-[#1A1A1A]" title={s.name}>{s.name}</p>
@@ -1326,7 +1326,7 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
 
 function SkuRow({ row }: { row: MarketingPlanSkuSuggestion }) {
   return (
-    <tr className="border-t border-[#E5E7EB] hover:bg-[#FAFAFA]">
+    <tr className="border-t border-[#E5E7EB] hover:bg-[var(--surface-2)]">
       <td className="px-3 py-2 font-mono text-xs text-[#1A1A1A]">{row.sku}</td>
       <td className="px-3 py-2">
         <p className="font-medium text-[#1A1A1A]">{row.name}</p>

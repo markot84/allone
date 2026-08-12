@@ -90,7 +90,7 @@ export function PayrollOverview({ totalRevenue }: PayrollOverviewProps) {
           <div className="mt-4 h-48">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={byDepartment} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eef0f3" />
+                <CartesianGrid strokeDasharray="2 4" horizontal={false} stroke="var(--border)" />
                 <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
                 <YAxis type="category" dataKey="dept" tick={{ fontSize: 12 }} width={80} />
                 <ReTooltip formatter={(v) => [`€${Number(v).toLocaleString('el-GR')}`, 'Κόστος']} />

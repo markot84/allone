@@ -113,7 +113,7 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
         {onClose && (
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-[#F5F5F5] text-[#9CA3AF] hover:text-[var(--text-secondary)] transition-colors"
+            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[#9CA3AF] hover:text-[var(--text-secondary)] transition-colors"
             title="Κλείσιμο"
           >
             <X size={18} />

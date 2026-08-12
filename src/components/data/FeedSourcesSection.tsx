@@ -258,7 +258,7 @@ export function FeedSourcesSection() {
                   </Button>
                   <button
                     onClick={() => handleEdit(s)}
-                    className="p-2 rounded-lg hover:bg-[#F5F5F5] text-[#6B7280]"
+                    className="p-2 rounded-lg hover:bg-[var(--surface-2)] text-[#6B7280]"
                     title="Επεξεργασία"
                   >
                     <Pencil size={16} />

@@ -908,7 +908,7 @@ function AllBucketProductsModal({
         </div>
 
         <div className="max-h-[70vh] overflow-auto">
-          <table className="w-full text-[12px]">
+          <table className="data-table w-full text-[12px]">
             <thead className="sticky top-0 bg-gray-50">
               <tr className="text-[10px] uppercase tracking-wide text-gray-500">
                 <th className="text-left font-semibold px-3 py-2">SKU / Προϊόν</th>
@@ -1067,7 +1067,7 @@ function ExpandedPanel({
       {/* SKU Table */}
       {assignments.length > 0 ? (
         <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
+          <table className="data-table w-full text-[12px]">
             <thead>
               <tr className="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-500">
                 <th className="text-left font-semibold px-3 py-2">SKU / Προϊόν</th>

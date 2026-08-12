@@ -129,7 +129,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
               <h2 className="text-xl font-bold text-[#1A1A1A]">Επιλογές εξαγωγής</h2>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"
+                className="p-2 hover:bg-[var(--surface-2)] rounded-lg transition-colors"
               >
                 <X size={20} className="text-[var(--text-secondary)]" />
               </button>
@@ -158,7 +158,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
                 onClick={exportToCSV}
                 className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
               >
-                <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors">
+                <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[var(--surface-2)] transition-colors">
                   <FileText size={24} className="text-[var(--text-secondary)]" />
                 </div>
                 <div className="flex-1">
@@ -248,7 +248,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
                       setShowGoogleSheetsModal(false);
                       onClose();
                     }}
-                    className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
+                    className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]"
                   >
                     <X size={20} className="text-[var(--text-secondary)]" />
                   </button>

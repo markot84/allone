@@ -116,7 +116,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
         <button
           onClick={() => setView('overview')}
           className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-            view === 'overview' ? 'bg-[#1A1A2E] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--text-secondary)] hover:bg-[#E5E5E5]'
+            view === 'overview' ? 'bg-[#1A1A2E] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--text-secondary)] hover:bg-[var(--surface-2)]'
           }`}
         >
           Overview
@@ -124,7 +124,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
         <button
           onClick={() => setView('detail')}
           className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-            view === 'detail' ? 'bg-[#1A1A2E] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--text-secondary)] hover:bg-[#E5E5E5]'
+            view === 'detail' ? 'bg-[#1A1A2E] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--text-secondary)] hover:bg-[var(--surface-2)]'
           }`}
         >
           Segment Detail
@@ -184,9 +184,9 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
               <div style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={ltvChartData} margin={{ left: 10, right: 10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fill: '#4A4A4A', fontSize: 11 }} />
-                    <YAxis tickFormatter={(v) => `€${(v / 1000).toFixed(0)}K`} tick={{ fill: '#9CA3AF', fontSize: 11 }} />
+                    <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
+                    <YAxis tickFormatter={(v) => `€${(v / 1000).toFixed(0)}K`} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
                     <RechartsTooltip
                       contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: 6, fontSize: 12 }}
                       formatter={(v: number | undefined) => [formatCurrencyCompact((v as number) || 0), 'LTV']}
@@ -211,13 +211,13 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
               <div style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <ScatterChart margin={{ left: 10, right: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
+                    <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" />
                     <XAxis
                       type="number"
                       dataKey="x"
                       name="Churn Risk"
                       domain={[0, 100]}
-                      tick={{ fill: '#9CA3AF', fontSize: 11 }}
+                      tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                       label={{ value: 'Churn Risk %', position: 'bottom', fontSize: 11, fill: '#9CA3AF' }}
                     />
                     <YAxis
@@ -225,7 +225,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
                       dataKey="y"
                       name="LTV"
                       tickFormatter={(v) => `€${(v / 1000).toFixed(0)}K`}
-                      tick={{ fill: '#9CA3AF', fontSize: 11 }}
+                      tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                     />
                     <ZAxis type="number" dataKey="z" name="Πελάτες" range={[100, 800]} />
                     <RechartsTooltip

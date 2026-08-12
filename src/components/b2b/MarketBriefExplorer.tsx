@@ -43,7 +43,7 @@ function CompareBriefColumn({
         <span className="font-semibold text-[#1A1A1A]">Route:</span> {b.route_to_market.recommended}
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-full text-left text-xs">
+        <table className="data-table min-w-full text-left text-xs">
           <thead>
             <tr className="border-b border-[#E5E5E5] text-[#6B7280]">
               <th className="py-1 pr-2">Κατηγορία</th>
@@ -139,7 +139,7 @@ function BriefPanel({ title, brief }: { title: string; brief: MarketBrief }) {
       <div>
         <p className="text-sm font-semibold text-[#1A1A1A]">Τιμολόγηση (ενδεικτικά)</p>
         <div className="mt-2 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+          <table className="data-table min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-[#E5E5E5] text-xs text-[#6B7280]">
                 <th className="py-2 pr-4">Κατηγορία</th>

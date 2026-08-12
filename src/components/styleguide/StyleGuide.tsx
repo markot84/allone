@@ -157,7 +157,7 @@ function ContrastTable() {
   const values = useTokenValues(TEXT_ON_WHITE);
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 520 }}>
+      <table className="data-table" style={{ borderCollapse: 'collapse', width: '100%', minWidth: 520 }}>
         <thead>
           <tr>
             {['Token', 'Value', 'On white', 'Permitted for'].map((h) => (

@@ -71,7 +71,7 @@ export function FeedPreviewModal({
             </h3>
           }
           actions={
-            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
+            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[var(--surface-2)]">
               <X size={20} />
             </button>
           }
@@ -115,7 +115,7 @@ export function FeedPreviewModal({
               <div>
                 <h4 className="font-semibold text-[#1A1A1A] mb-2">Αντιστοίχιση στηλών ({config.name})</h4>
                 <div className="border border-[#E5E5E5] rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
+                  <table className="data-table w-full text-sm">
                     <thead>
                       <tr className="bg-[#F5F5F5] text-left text-xs text-[var(--text-secondary)]">
                         <th className="px-3 py-2">Feed column</th>
@@ -162,7 +162,7 @@ export function FeedPreviewModal({
                 <div>
                   <h4 className="font-semibold text-[#1A1A1A] mb-2">Δείγμα (πρώτες {preview.mappedSample.length} γραμμές)</h4>
                   <div className="border border-[#E5E5E5] rounded-lg overflow-x-auto max-h-48 overflow-y-auto">
-                    <table className="w-full text-sm">
+                    <table className="data-table w-full text-sm">
                       <thead className="sticky top-0 bg-[#F5F5F5]">
                         <tr className="text-left text-xs text-[var(--text-secondary)]">
                           {['sku', 'name', 'price', 'stock_level', 'category'].map((k) => (

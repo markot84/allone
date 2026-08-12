@@ -95,7 +95,7 @@ export function LeaveTracker() {
           <div className="p-10 text-center text-sm text-[var(--nts-medium-gray)]">Δεν υπάρχουν αιτήσεις αδείας.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="data-table w-full text-sm">
               <thead>
                 <tr className="border-b border-[#eef0f3] bg-[#f9fafb]">
                   {['Εργαζόμενος', 'Τύπος', 'Από', 'Έως', 'Ημέρες', 'Κατάσταση', 'Ενέργειες'].map((h) => (
@@ -105,7 +105,7 @@ export function LeaveTracker() {
               </thead>
               <tbody>
                 {leaves.map((lv) => (
-                  <tr key={lv.id} className="border-b border-[#eef0f3] hover:bg-[#f9fafb]/60">
+                  <tr key={lv.id} className="border-b border-[#eef0f3] hover:bg-[var(--surface-2)]/60">
                     <td className="px-4 py-3 font-medium text-[var(--nts-charcoal)]">{lv.employeeName}</td>
                     <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{leaveTypeLabel[lv.type]}</td>
                     <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{lv.startDate}</td>

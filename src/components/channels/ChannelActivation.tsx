@@ -1070,7 +1070,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             </div>
           ) : (
             <div className="max-h-[520px] overflow-auto rounded-xl border border-amber-100 bg-white">
-              <table className="min-w-[860px] w-full text-left text-xs">
+              <table className="data-table min-w-[860px] w-full text-left text-xs">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-amber-100 bg-amber-50/60 text-[var(--text-secondary)]">
                     <th className="px-3 py-2 font-semibold w-12" aria-label="Εικόνα" />
@@ -1447,7 +1447,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                         ) : note ? (
                           <button
                             onClick={() => { setEditingNote(ch.name); setNoteText(note); }}
-                            className="mt-1.5 text-xs text-[var(--text-secondary)] bg-[#FAFAFA] px-2.5 py-1 rounded-md hover:bg-[#F5F5F5] text-left w-full truncate"
+                            className="mt-1.5 text-xs text-[var(--text-secondary)] bg-[#FAFAFA] px-2.5 py-1 rounded-md hover:bg-[var(--surface-2)] text-left w-full truncate"
                           >
                             {note}
                           </button>
@@ -1481,7 +1481,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                                 type="button"
                                 key={key}
                                 onClick={() => handleStatusChange(ch.name, key)}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-[#FAFAFA] focus:bg-[#FAFAFA] focus:outline-none first:rounded-t-lg last:rounded-b-lg"
+                                className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-[var(--surface-2)] focus:bg-[#FAFAFA] focus:outline-none first:rounded-t-lg last:rounded-b-lg"
                                 style={{ color: cfg.color }}
                               >
                                 <Icon size={13} />
@@ -1750,7 +1750,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 toolbarAriaLabel="Κλείσιμο"
                 title="Επιλογή Format"
                 actions={
-                  <button type="button" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
+                  <button type="button" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }} className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]">
                     <X size={20} className="text-[var(--text-secondary)]" />
                   </button>
                 }
@@ -1762,7 +1762,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[var(--text-secondary)]">Λήψη ως αρχείο Excel</p></div>
                 </button>
                 <button onClick={() => { exportFeed(selectedFeed, 'csv'); setShowExportModal(false); setSelectedFeed(null); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
-                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors"><FileText size={24} className="text-[var(--text-secondary)]" /></div>
+                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[var(--surface-2)] transition-colors"><FileText size={24} className="text-[var(--text-secondary)]" /></div>
                   <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[var(--text-secondary)]">Λήψη ως αρχείο CSV</p></div>
                 </button>
               </div>
@@ -1799,7 +1799,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   </p>
                 }
                 actions={
-                  <button type="button" onClick={() => setPreviewFeed(null)} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]" aria-label="Κλείσιμο">
+                  <button type="button" onClick={() => setPreviewFeed(null)} className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]" aria-label="Κλείσιμο">
                     <X size={20} className="text-[var(--text-secondary)]" />
                   </button>
                 }
@@ -1812,7 +1812,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     const { headers, rows } = getFeedPreviewTable(previewFeed);
                     return (
                       <div className="overflow-x-auto border border-[#E5E5E5] rounded-xl">
-                        <table className="w-full text-xs text-left">
+                        <table className="data-table w-full text-xs text-left">
                           <thead>
                             <tr className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
                               {headers.map((h) => (
@@ -1878,7 +1878,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 toolbarAriaLabel="Κλείσιμο"
                 title="Εξαγωγή όλων των feeds"
                 actions={
-                  <button type="button" onClick={() => setShowExportAllModal(false)} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
+                  <button type="button" onClick={() => setShowExportAllModal(false)} className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]">
                     <X size={20} className="text-[var(--text-secondary)]" />
                   </button>
                 }

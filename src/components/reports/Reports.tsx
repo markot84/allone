@@ -472,7 +472,7 @@ function ScheduleModal({
           toolbarAriaLabel="Κλείσιμο"
           title="Νέος Προγραμματισμός Report"
           actions={
-            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
+            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[var(--surface-2)]">
               <X size={20} className="text-[var(--text-secondary)]" />
             </button>
           }
@@ -565,7 +565,7 @@ function CustomReportModal({
           toolbarAriaLabel="Κλείσιμο"
           title="Προσαρμοσμένη αναφορά"
           actions={
-            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
+            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[var(--surface-2)]">
               <X size={20} className="text-[var(--text-secondary)]" />
             </button>
           }

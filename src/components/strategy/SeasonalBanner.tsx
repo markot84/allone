@@ -78,7 +78,7 @@ export function SeasonalBanner({
               </span>
               <button
                 onClick={() => onApplySeason(season)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] border border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] border border-[#E5E5E5] hover:bg-[var(--surface-2)] transition-colors"
               >
                 <Zap size={12} />
                 {isActive ? 'Ενημέρωση' : 'Εφαρμογή'}
@@ -94,7 +94,7 @@ export function SeasonalBanner({
           </div>
           <button
             onClick={() => setDismissed(prev => new Set(prev).add(season.id))}
-            className="p-1 rounded hover:bg-[#F5F5F5] text-[#9CA3AF] hover:text-[var(--text-secondary)] transition-colors flex-shrink-0"
+            className="p-1 rounded hover:bg-[var(--surface-2)] text-[#9CA3AF] hover:text-[var(--text-secondary)] transition-colors flex-shrink-0"
           >
             <X size={14} />
           </button>

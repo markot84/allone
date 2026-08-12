@@ -260,7 +260,7 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="data-table w-full text-sm">
               <thead>
                 <tr className="border-b border-[#eef0f3] bg-[#f9fafb]">
                   {['Account', 'Ημ/νία', 'Ισχύς έως', 'Σύνολο', 'Γραμμές', 'Κατάσταση', ''].map((h) => (
@@ -272,7 +272,7 @@ export function OfferBuilderPage({ onSectionChange: _onSectionChange }: OfferBui
                 {offers.map((offer) => {
                   const total = offer.lines.reduce((s, l) => s + l.quantity * l.unitPrice * (1 - l.discount / 100), 0);
                   return (
-                    <tr key={offer.id} className="border-b border-[#eef0f3] hover:bg-[#f9fafb]/60">
+                    <tr key={offer.id} className="border-b border-[#eef0f3] hover:bg-[var(--surface-2)]/60">
                       <td className="px-4 py-3 font-medium text-[var(--nts-charcoal)]">{offer.accountName}</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{offer.date}</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{offer.validUntil ?? '—'}</td>

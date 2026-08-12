@@ -597,7 +597,7 @@ function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceC
   const totMarB = rows.reduce((s, r) => s + r.before.margin, 0);
   const totMarA = rows.reduce((s, r) => s + r.after.margin, 0);
   return (
-    <table className="min-w-full text-left text-sm">
+    <table className="data-table min-w-full text-left text-sm">
       <colgroup>
         <col className="w-[35%]" />
         <col className="w-[18%]" />
@@ -606,7 +606,7 @@ function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceC
         {showMargin && <col className="w-[12%]" />}
         <col className="w-[10%]" />
       </colgroup>
-      <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
+      <thead className="bg-[var(--card-bg)] text-xs uppercase text-[#9CA3AF]">
         <tr>
           <th className="px-3 py-2 text-left">SKU</th>
           <th className="px-3 py-2 text-left">Τιμή</th>
@@ -624,7 +624,7 @@ function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceC
         {visibleRows.map((row, idx) => (
           // The same SKU can appear across multiple month-windows → unique key (otherwise duplicate
           // keys make React reuse stale rows when the filter changes).
-          <tr key={`${row.sku}__${row.changeDate}__${idx}`} className="hover:bg-[#FAFAFA]">
+          <tr key={`${row.sku}__${row.changeDate}__${idx}`} className="hover:bg-[var(--surface-2)]">
             <td className="px-3 py-2">
               <SkuCell sku={row.sku} productName={row.productName} getThumbnailUrl={getThumbnailUrl} />
             </td>
@@ -718,8 +718,8 @@ function MarketingTable({ rows, limit }: { rows: MarketingSpendImpactRow[]; limi
   const totConv = rows.reduce((s, r) => s + r.conversions, 0);
   const totRoas = totSpend > 0 ? Math.round((totRevenue / totSpend) * 100) / 100 : null;
   return (
-    <table className="min-w-full text-left text-sm">
-      <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
+    <table className="data-table min-w-full text-left text-sm">
+      <thead className="bg-[var(--card-bg)] text-xs uppercase text-[#9CA3AF]">
         <tr>
           <th className="px-3 py-2">Καμπάνια</th>
           <th className="px-3 py-2">
@@ -739,7 +739,7 @@ function MarketingTable({ rows, limit }: { rows: MarketingSpendImpactRow[]; limi
       </thead>
       <tbody className="divide-y divide-[#E5E7EB]">
         {visibleRows.map((row, idx) => (
-          <tr key={`${row.id}__${idx}`} className="hover:bg-[#FAFAFA] align-top">
+          <tr key={`${row.id}__${idx}`} className="hover:bg-[var(--surface-2)] align-top">
             <td className={`px-3 py-2 ${verdictAccent(row.verdict)}`}>
               <p className="font-semibold">{row.title}</p>
               <p className="text-xs text-[#6B7280]">{row.channel}</p>

@@ -383,6 +383,62 @@
 }
 
 /**
+ * The data table.
+ *
+ * The audit found 34 tables, their headers styled eight different ways across four greys
+ * (#F9FAFB, #FAFAFA, #FAFBFC, plus 23 with no styling at all), and row hover in five
+ * (#F5F5F5, #F9FAFB, #FAFAFA, #F3F4F6, #E5E5E5). Tables are where a user of this app spends
+ * most of its time, and none of it was decided.
+ *
+ * Only the things every table agrees on live here — header treatment, row separation, hover,
+ * numeric alignment. Padding and column widths stay at the call site, because those genuinely
+ * differ per table and a shared value would be wrong everywhere.
+ */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card-bg);
+  /* A rule under the header rather than a filled bar: the fill reads as another card layer and
+     competes with the rows, and it breaks the moment the table scrolls under a real card. */
+  box-shadow: inset 0 -1px 0 var(--border);
+  font-size: var(--type-micro);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.data-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background-color var(--dur-state) var(--ease-out);
+}
+
+.data-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.data-table tbody tr:hover {
+  background: var(--surface-2);
+}
+
+/* Figures right-align and use tabular digits so columns line up as values change. Applies to any
+   cell the app already marks as numeric — no call site has to be edited for this to take effect. */
+.data-table td[data-numeric],
+.data-table th[data-numeric] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/**
  * The page title, once.
  *
  * Set to what the 33 hand-typed headings already rendered (text-xl rising to text-2xl at sm, bold,

@@ -158,7 +158,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
             <div className="p-10 text-center text-sm text-[var(--nts-medium-gray)]">Δεν υπάρχουν reps. Προσθέστε τον πρώτο.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="data-table w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#eef0f3] bg-[#f9fafb]">
                     {['Ονοματεπώνυμο', 'Περιοχή', 'Email', 'Τηλέφωνο', 'Target Accounts', ''].map((h) => (
@@ -168,7 +168,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
                 </thead>
                 <tbody>
                   {reps.map((rep) => (
-                    <tr key={rep.id} className="border-b border-[#eef0f3] hover:bg-[#f9fafb]/60">
+                    <tr key={rep.id} className="border-b border-[#eef0f3] hover:bg-[var(--surface-2)]/60">
                       <td className="px-4 py-3 font-medium text-[var(--nts-charcoal)]">{rep.name}</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{rep.region}</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{rep.email ?? '—'}</td>
@@ -204,7 +204,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
             <div className="p-10 text-center text-sm text-[var(--nts-medium-gray)]">Δεν υπάρχουν αναθέσεις.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="data-table w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#eef0f3] bg-[#f9fafb]">
                     {['Account', 'Rep', 'Περιοχή', 'Ανατέθηκε'].map((h) => (
@@ -214,7 +214,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
                 </thead>
                 <tbody>
                   {assignments.map((a, i) => (
-                    <tr key={i} className="border-b border-[#eef0f3] hover:bg-[#f9fafb]/60">
+                    <tr key={i} className="border-b border-[#eef0f3] hover:bg-[var(--surface-2)]/60">
                       <td className="px-4 py-3 font-medium text-[var(--nts-charcoal)]">{a.accountName}</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{a.repName}</td>
                       <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{a.region}</td>
@@ -245,7 +245,7 @@ export function TerritoryPage({ onSectionChange }: TerritoryPageProps = {}) {
 
           <Card padding="none">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="data-table w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#eef0f3] bg-[#f9fafb]">
                     {['Account', 'Mean interval', 'Τελευταία αγορά', 'Αναμένεται', 'Ημέρες καθυστ.', 'Κατάσταση'].map((h) => (

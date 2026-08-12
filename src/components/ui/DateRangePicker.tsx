@@ -111,7 +111,7 @@ function MonthCalendar({ year, month, pendingFrom, pendingTo, hoverDate, onDayCl
       <div className="flex items-center justify-between mb-3 h-8">
         <button
           onClick={onPrev}
-          className={`w-7 h-7 flex items-center justify-center rounded hover:bg-[#F3F4F6] transition-colors ${!showPrev ? 'invisible' : ''}`}
+          className={`w-7 h-7 flex items-center justify-center rounded hover:bg-[var(--surface-2)] transition-colors ${!showPrev ? 'invisible' : ''}`}
         >
           <ChevronLeft size={15} className="text-[#6B7280]" />
         </button>
@@ -120,7 +120,7 @@ function MonthCalendar({ year, month, pendingFrom, pendingTo, hoverDate, onDayCl
         </span>
         <button
           onClick={onNext}
-          className={`w-7 h-7 flex items-center justify-center rounded hover:bg-[#F3F4F6] transition-colors ${!showNext ? 'invisible' : ''}`}
+          className={`w-7 h-7 flex items-center justify-center rounded hover:bg-[var(--surface-2)] transition-colors ${!showNext ? 'invisible' : ''}`}
         >
           <ChevronRight size={15} className="text-[#6B7280]" />
         </button>
@@ -323,7 +323,7 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
         {(from || to) && onClear && (
           <button
             onClick={onClear}
-            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[#F3F4F6] text-[#9CA3AF] hover:text-[#374151] transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[var(--surface-2)] text-[#9CA3AF] hover:text-[#374151] transition-colors"
             title="Καθαρισμός"
           >
             <X size={13} />
@@ -356,7 +356,7 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
                 className={`text-left px-3 py-1.5 text-sm transition-colors
                   ${isPresetActive(p)
                     ? 'bg-[var(--nts-accent)] text-white font-medium'
-                    : 'text-[#374151] hover:bg-[#F9FAFB]'}
+                    : 'text-[#374151] hover:bg-[var(--surface-2)]'}
                 `}
               >
                 {p.label}
@@ -420,7 +420,7 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
               <div className="flex gap-2">
                 <button
                   onClick={() => setOpen(false)}
-                  className="px-4 py-1.5 text-sm rounded-lg border border-[#E5E7EB] text-[#374151] hover:bg-[#F9FAFB] transition-colors"
+                  className="px-4 py-1.5 text-sm rounded-lg border border-[#E5E7EB] text-[#374151] hover:bg-[var(--surface-2)] transition-colors"
                 >
                   Ακύρωση
                 </button>

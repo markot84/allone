@@ -1248,7 +1248,7 @@ export function CompetitorInsights() {
                         type="button"
                         disabled={filteredBenchmarks.length === 0}
                         onClick={() => void handleExportBenchmarks('csv')}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[#F9FAFB] disabled:opacity-40 disabled:pointer-events-none"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[var(--surface-2)] disabled:opacity-40 disabled:pointer-events-none"
                         title="Φιλτραρισμένα αποτελέσματα πίνακα. CSV UTF-8."
                       >
                         <FileText size={13} />
@@ -1258,7 +1258,7 @@ export function CompetitorInsights() {
                         type="button"
                         disabled={filteredBenchmarks.length === 0}
                         onClick={() => void handleExportBenchmarks('xlsx')}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[#F9FAFB] disabled:opacity-40 disabled:pointer-events-none"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[var(--surface-2)] disabled:opacity-40 disabled:pointer-events-none"
                         title="Φιλτραρισμένα αποτελέσματα πίνακα. Excel."
                       >
                         <FileSpreadsheet size={13} />
@@ -1320,8 +1320,8 @@ export function CompetitorInsights() {
                 </div>
               ) : (
                 <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">
-                  <table className="w-full text-left">
-                    <thead className="sticky top-0 bg-[#F9FAFB] z-10">
+                  <table className="data-table w-full text-left">
+                    <thead className="sticky top-0 bg-[var(--card-bg)] z-10">
                       <tr className="text-xs text-[#6B7280] uppercase tracking-wider">
                         <th className="px-3 py-2.5 font-medium whitespace-nowrap">
                           <HeaderFilter label="Προϊόν" col="title" kind="text" align="left"
@@ -1448,7 +1448,7 @@ export function CompetitorInsights() {
                         type="button"
                         disabled={filteredInsights.length === 0}
                         onClick={() => void handleExportInsights('csv')}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[#F9FAFB] disabled:opacity-40 disabled:pointer-events-none"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[var(--surface-2)] disabled:opacity-40 disabled:pointer-events-none"
                         title="Όλες οι φιλτραρισμένες γραμμές (όχι μόνο οι 300 στην οθόνη). CSV UTF-8."
                       >
                         <FileText size={13} />
@@ -1458,7 +1458,7 @@ export function CompetitorInsights() {
                         type="button"
                         disabled={filteredInsights.length === 0}
                         onClick={() => void handleExportInsights('xlsx')}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[#F9FAFB] disabled:opacity-40 disabled:pointer-events-none"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[var(--surface-2)] disabled:opacity-40 disabled:pointer-events-none"
                         title="Όλες οι φιλτραρισμένες γραμμές (όχι μόνο οι 300 στην οθόνη). Excel."
                       >
                         <FileSpreadsheet size={13} />
@@ -1493,8 +1493,8 @@ export function CompetitorInsights() {
                 </div>
               ) : (
                 <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">
-                  <table className="w-full text-left">
-                    <thead className="sticky top-0 bg-[#F9FAFB] z-10">
+                  <table className="data-table w-full text-left">
+                    <thead className="sticky top-0 bg-[var(--card-bg)] z-10">
                       <tr className="text-xs text-[#6B7280] uppercase tracking-wider">
                         <th className="px-3 py-2.5 font-medium whitespace-nowrap">
                           <HeaderFilter
@@ -2017,7 +2017,7 @@ function BenchmarkRow({
   const ratio = salesStockRatio(inventory);
 
   return (
-    <tr className="hover:bg-[#FAFAFA] transition-colors">
+    <tr className="hover:bg-[var(--surface-2)] transition-colors">
       <td className="px-3 py-2.5">
         <p className="text-sm font-medium text-[#111827] line-clamp-1 max-w-xs">{item.title || item.productId}</p>
         <p className="text-[10px] text-[#9CA3AF] font-mono mt-0.5">{item.productId}</p>
@@ -2122,7 +2122,7 @@ function InsightRow({
   const soldOverStock = canCompareStockSold && sold > stock;
 
   return (
-    <tr className="hover:bg-[#FAFAFA] transition-colors">
+    <tr className="hover:bg-[var(--surface-2)] transition-colors">
       <td className="px-3 py-2.5">
         <p className="text-sm font-medium text-[#111827] line-clamp-1 max-w-xs">{item.title || item.productId}</p>
         <p className="text-[10px] text-[#9CA3AF] font-mono mt-0.5">{item.productId}</p>
@@ -2290,7 +2290,7 @@ function HeaderFilter(props: HeaderFilterProps) {
             <button
               type="button"
               onClick={() => { setSort(col, 'asc'); setOpen(false); }}
-              className={`flex-1 inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-[#F5F5F5] ${
+              className={`flex-1 inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-[var(--surface-2)] ${
                 sortedHere && sortDir === 'asc' ? 'bg-[#F5F5F5] font-semibold text-[#111827]' : 'text-[#4B5563]'
               }`}
             >
@@ -2299,7 +2299,7 @@ function HeaderFilter(props: HeaderFilterProps) {
             <button
               type="button"
               onClick={() => { setSort(col, 'desc'); setOpen(false); }}
-              className={`flex-1 inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-[#F5F5F5] ${
+              className={`flex-1 inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-[var(--surface-2)] ${
                 sortedHere && sortDir === 'desc' ? 'bg-[#F5F5F5] font-semibold text-[#111827]' : 'text-[#4B5563]'
               }`}
             >
@@ -2331,7 +2331,7 @@ function HeaderFilter(props: HeaderFilterProps) {
                 {filteredOptions.map((v) => {
                   const checked = selected ? selected.has(v) : true;
                   return (
-                    <label key={v} className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-[#F9FAFB] px-1 py-0.5 rounded">
+                    <label key={v} className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-[var(--surface-2)] px-1 py-0.5 rounded">
                       <input
                         type="checkbox"
                         checked={checked}

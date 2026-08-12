@@ -159,7 +159,7 @@ export function BriefingDrawer({ strategyName, initialTitle, onClose, onSent }: 
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 self-end p-1.5 transition-colors hover:bg-[#F3F4F6] rounded-lg sm:self-start"
+              className="shrink-0 self-end p-1.5 transition-colors hover:bg-[var(--surface-2)] rounded-lg sm:self-start"
             >
               <X size={17} className="text-[#6B7280]" />
             </button>

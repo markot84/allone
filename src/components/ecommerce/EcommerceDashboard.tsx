@@ -834,16 +834,16 @@ export function EcommerceDashboard() {
                       <stop offset="95%" stopColor="var(--nts-accent)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                  <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" />
                   <XAxis
                     dataKey="date"
-                    tick={{ fill: '#57606a', fontSize: 10 }}
+                    tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
                     tickFormatter={(v: string) => v.slice(5)}
                     axisLine={{ stroke: '#d0d7de' }}
                     tickLine={{ stroke: '#d0d7de' }}
                   />
                   <YAxis
-                    tick={{ fill: '#57606a', fontSize: 10 }}
+                    tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
                     tickFormatter={(v: number) => `€${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
                     axisLine={{ stroke: '#d0d7de' }}
                     tickLine={{ stroke: '#d0d7de' }}
@@ -873,11 +873,11 @@ export function EcommerceDashboard() {
               <>
                 <ResponsiveContainer width="100%" height={160}>
                   <BarChart data={displayPlatformBreakdown} layout="vertical">
-                    <XAxis type="number" tick={{ fill: '#57606a', fontSize: 10 }} tickFormatter={(v: number) => `€${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`} />
+                    <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickFormatter={(v: number) => `€${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`} />
                     <YAxis
                       type="category"
                       dataKey="platform"
-                      tick={{ fill: '#374151', fontSize: 11 }}
+                      tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                       tickFormatter={(v: string) => PLATFORM_LABELS[v] || v}
                       width={90}
                     />
@@ -1112,7 +1112,7 @@ export function EcommerceDashboard() {
             </div>
             {pagedProducts.length > 0 ? (
               <div className="overflow-x-auto -mx-5 px-5">
-                <table className="w-full text-left text-xs" style={{ minWidth: 340 }}>
+                <table className="data-table w-full text-left text-xs" style={{ minWidth: 340 }}>
                   <thead>
                     <tr className="border-b border-[#E5E7EB]">
                       <th className="pb-2.5 font-medium text-[#6B7280] pr-4">Προϊόν</th>
@@ -1141,7 +1141,7 @@ export function EcommerceDashboard() {
                       return (
                         <tr
                           key={p.sku + i}
-                          className="border-b border-[#F9FAFB] last:border-0 hover:bg-[#F9FAFB] transition-colors"
+                          className="border-b border-[#F9FAFB] last:border-0 hover:bg-[var(--surface-2)] transition-colors"
                         >
                           <td className="py-2.5 pr-4">
                             <p className="text-[#111827] font-medium truncate max-w-[220px]">{p.name || p.sku}</p>
@@ -1259,7 +1259,7 @@ export function EcommerceDashboard() {
             </div>
             {pagedOrders.length > 0 ? (
               <div className="overflow-x-auto -mx-5 px-5">
-                <table className="w-full text-left text-xs" style={{ minWidth: 580 }}>
+                <table className="data-table w-full text-left text-xs" style={{ minWidth: 580 }}>
                   <thead>
                     <tr className="border-b border-[#E5E7EB]">
                       <th
@@ -1295,7 +1295,7 @@ export function EcommerceDashboard() {
                     {pagedOrders.map((o, i) => (
                       <tr
                         key={o.orderId + i}
-                        className="border-b border-[#F9FAFB] last:border-0 hover:bg-[#F9FAFB] transition-colors"
+                        className="border-b border-[#F9FAFB] last:border-0 hover:bg-[var(--surface-2)] transition-colors"
                       >
                         <td className="py-2.5 text-[#6B7280] whitespace-nowrap tabular-nums">
                           {o.createdAt

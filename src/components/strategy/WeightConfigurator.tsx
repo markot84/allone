@@ -1858,7 +1858,7 @@ export function WeightConfigurator({
             icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           />
           <div className="-mx-2">
-            <table className="w-full table-fixed">
+            <table className="data-table w-full table-fixed">
               <thead>
                 <tr className="text-left text-[11px] text-[var(--text-secondary)] border-b border-[#E5E5E5]">
                   {previewConfig.columns.map((col) => {
@@ -2108,7 +2108,7 @@ export function WeightConfigurator({
                   <button
                     type="button"
                     onClick={() => setShowFeedFormatModal(false)}
-                    className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
+                    className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]"
                   >
                     <X size={20} className="text-[var(--text-secondary)]" />
                   </button>
@@ -2138,7 +2138,7 @@ export function WeightConfigurator({
                   onClick={() => generateProductFeed('csv')}
                   className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
                 >
-                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors">
+                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[var(--surface-2)] transition-colors">
                     <FileText size={24} className="text-[var(--text-secondary)]" />
                   </div>
                   <div className="flex-1">

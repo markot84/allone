@@ -247,7 +247,7 @@ export function StrategyImpactSummary({
           <button
             type="button"
             onClick={onCancel}
-            className="shrink-0 p-2 rounded-lg hover:bg-[#F3F4F6] text-[#6B7280] hover:text-[#111827] transition-colors"
+            className="shrink-0 p-2 rounded-lg hover:bg-[var(--surface-2)] text-[#6B7280] hover:text-[#111827] transition-colors"
             aria-label="Ακύρωση (κλείσιμο)"
           >
             <X size={18} />
@@ -297,7 +297,7 @@ export function StrategyImpactSummary({
           <button
             type="button"
             onClick={onCancel}
-            className="w-full sm:w-auto px-4 py-2 text-xs font-medium rounded-lg border border-[#D1D5DB] text-[#374151] bg-white hover:bg-[#F9FAFB] transition-colors"
+            className="w-full sm:w-auto px-4 py-2 text-xs font-medium rounded-lg border border-[#D1D5DB] text-[#374151] bg-white hover:bg-[var(--surface-2)] transition-colors"
           >
             Ακύρωση
           </button>
@@ -438,7 +438,7 @@ export function StrategyImpactModal({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-lg hover:bg-[#F3F4F6] text-[#6B7280] hover:text-[#111827]"
+              className="p-2 rounded-lg hover:bg-[var(--surface-2)] text-[#6B7280] hover:text-[#111827]"
               aria-label="Ακύρωση (κλείσιμο)"
             >
               <X size={18} />

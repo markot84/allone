@@ -560,7 +560,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <BarChart layout="vertical" width={W} height={H} data={chartData} margin={marginH}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
+          <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" horizontal={false} />
           <XAxis type="number" tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => Number(v).toLocaleString('el-GR')} />
           <YAxis type="category" dataKey="name" width={Y_AXIS_WIDTH} tick={axisStyle} tickLine={false} axisLine={false} />
           <RechartsTooltip formatter={(v: number | undefined) => [Number(v ?? 0).toLocaleString('el-GR'), 'Απόθεμα']} />
@@ -579,7 +579,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <BarChart layout="vertical" width={W} height={H} data={chartData} margin={marginH}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
+          <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" horizontal={false} />
           <XAxis type="number" tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => `€${v}`} />
           <YAxis type="category" dataKey="name" width={Y_AXIS_WIDTH} tick={axisStyle} tickLine={false} axisLine={false} />
           <RechartsTooltip formatter={(v: number | undefined, name: string | undefined) => [`€${(v ?? 0).toFixed(2)}`, name === 'primary' ? 'Πρωτογενές κόστος' : 'Δευτερογενές κόστος']} />
@@ -596,7 +596,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <BarChart width={W} height={220} data={chartData} margin={marginV}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
+          <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="name" tick={axisStyle} tickLine={false} axisLine={false} />
           <YAxis tick={axisStyle} tickLine={false} axisLine={false} allowDecimals={false} />
           <RechartsTooltip formatter={(v: number | undefined) => [v ?? 0, 'Αριθμός ειδών']} />
@@ -614,7 +614,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <BarChart width={W} height={220} data={chartData} margin={marginV}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
+          <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="name" tick={axisStyle} tickLine={false} axisLine={false} />
           <YAxis tick={axisStyle} tickLine={false} axisLine={false} allowDecimals={false} />
           <RechartsTooltip formatter={(v: number | undefined) => [v ?? 0, 'Αριθμός πελατών']} />
@@ -633,7 +633,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <BarChart layout="vertical" width={W} height={H} data={chartData} margin={marginH}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
+          <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" horizontal={false} />
           <XAxis type="number" tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => `€${v}`} />
           <YAxis type="category" dataKey="name" width={Y_AXIS_WIDTH} tick={axisStyle} tickLine={false} axisLine={false} />
           <RechartsTooltip formatter={(v: number | undefined, name: string | undefined) => [`€${(v ?? 0).toFixed(2)}`, name === 'cost' ? 'Συνολικό κόστος' : 'Μέση τιμή πώλησης']} />
@@ -650,7 +650,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <BarChart layout="vertical" width={W} height={H} data={chartData} margin={marginH}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
+          <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" horizontal={false} />
           <XAxis type="number" tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => `€${Number(v).toLocaleString('el-GR', { maximumFractionDigits: 0 })}`} />
           <YAxis type="category" dataKey="name" width={Y_AXIS_WIDTH} tick={axisStyle} tickLine={false} axisLine={false} />
           <RechartsTooltip formatter={(v: number | undefined, name: string | undefined) => [`€${Number(v ?? 0).toLocaleString('el-GR')}`, name === 'turnover' ? 'Τζίρος' : 'Κέρδος']} />
@@ -669,7 +669,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
         <LineChart width={W} height={240} data={chartData} margin={marginV}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
+          <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="period" tick={axisStyle} tickLine={false} axisLine={false} />
           <YAxis tick={axisStyle} tickLine={false} axisLine={false} />
           <RechartsTooltip wrapperStyle={{ fontSize: 11 }} />
@@ -1209,7 +1209,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                   <div className="p-8 text-center text-[var(--nts-medium-gray)]">Καμία εγγραφή σε αυτή την καρτέλα.</div>
                 )
               ) : (
-                <table className="text-sm">
+                <table className="data-table text-sm">
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr className="border-b border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)]">
                       {headers.map(h => {

@@ -28,7 +28,7 @@ function SuggestionCard({ s, defaultOpen }: { s: BudgetOpportunitySuggestion; de
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-[#FAFAFA] transition-colors"
+        className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-[var(--surface-2)] transition-colors"
       >
         <div
           className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"

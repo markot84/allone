@@ -451,7 +451,7 @@ export function RFMAnalysis() {
                 className={`rounded-md px-2.5 py-1 text-[12px] font-semibold transition-colors ${
                   effectiveSourceChoice === 'orders'
                     ? 'bg-[var(--nts-accent)] text-white'
-                    : 'text-[#6B7280] hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-45'
+                    : 'text-[#6B7280] hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-45'
                 }`}
                 disabled={ordersOptionUnavailable}
                 title={
@@ -470,7 +470,7 @@ export function RFMAnalysis() {
                 className={`rounded-md px-2.5 py-1 text-[12px] font-semibold transition-colors ${
                   effectiveSourceChoice === 'external'
                     ? 'bg-[var(--nts-accent)] text-white'
-                    : 'text-[#6B7280] hover:bg-[#F9FAFB]'
+                    : 'text-[#6B7280] hover:bg-[var(--surface-2)]'
                 }`}
                 onClick={() => setDataSourcePreference('external')}
               >
@@ -630,14 +630,21 @@ export function RFMAnalysis() {
         </Card>
         <Card padding="sm" hover>
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#FEF3C7]">
-              <TrendingDown size={18} className="text-[#F59E0B]" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--warning-light)]">
+              {/* --gold-700 is 3.24:1, which clears the 3:1 an icon needs. #F59E0B was 2.15:1. */}
+              <TrendingDown size={18} className="text-[var(--gold-700)]" />
             </div>
             <div className="min-w-0">
               <p className="truncate text-[11px] text-[var(--text-secondary)]">
                 <InfoTooltip content="Ποσοστό πελατών At Risk.">At Risk</InfoTooltip>
               </p>
-              <p className="font-mono text-lg font-bold text-[#F59E0B]">
+              {/*
+                The figure was `text-[#F59E0B]` — amber at 2.15:1 on white, on 18px bold text, which
+                is under the 18.66px WCAG counts as large, so it needed 4.5:1 and had a third of it.
+                It is also the only one of the four KPIs on this row that was not dark, for no reason
+                the other three do not share: the severity is already carried by the icon beside it.
+              */}
+              <p className="font-mono text-lg font-bold text-[var(--text-primary)]">
                 {fmtPct(rfmSegments.find((s) => s.id === 'at_risk')?.percentage ?? 0)}%
               </p>
             </div>
@@ -677,7 +684,7 @@ export function RFMAnalysis() {
               type="button"
               onClick={() => setSelectedSegmentId(segment.id)}
               className={`flex min-w-0 items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors duration-[var(--dur-state)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FDBA74]/50 ${
-                selectedSegment?.id === segment.id ? 'bg-[#FFF7ED] ring-1 ring-[#FED7AA]' : 'hover:bg-[#F9FAFB]'
+                selectedSegment?.id === segment.id ? 'bg-[#FFF7ED] ring-1 ring-[#FED7AA]' : 'hover:bg-[var(--surface-2)]'
               }`}
             >
               <span className="flex min-w-0 items-center gap-1.5">
@@ -1311,11 +1318,11 @@ function SegmentDetail({
             <div className="w-full min-h-[220px] rounded-xl border border-[#F3F4F6] bg-gradient-to-b from-white to-[#FAFAFA] px-2 py-3" style={{ height: chartHeight }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartRows} layout="vertical" margin={{ left: 8, right: 18, top: 6, bottom: 6 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6" />
+                  <CartesianGrid strokeDasharray="2 4" horizontal={false} stroke="var(--border)" />
                   <XAxis
                     type="number"
                     domain={[0, 'dataMax']}
-                    tick={{ fontSize: 11, fill: '#4A4A4A' }}
+                    tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
                     tickFormatter={(v) => `${formatNumber(Number(v), Number(v) >= 10 ? 0 : 1)}%`}
                     axisLine={false}
                     tickLine={false}
@@ -1324,7 +1331,7 @@ function SegmentDetail({
                     type="category"
                     dataKey="label"
                     width={136}
-                    tick={{ fontSize: 11, fill: '#374151' }}
+                    tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
                     tickLine={false}
                     axisLine={false}
                     interval={0}

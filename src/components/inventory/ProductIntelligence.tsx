@@ -123,7 +123,7 @@ function ProductIntelligenceSkeleton() {
           <div className="h-10 w-36 bg-[#F3F4F6] rounded-lg animate-pulse hidden md:block" />
         </div>
         <div className="overflow-x-auto max-h-[min(52vh,480px)]">
-          <table className="w-full">
+          <table className="data-table w-full">
             <thead>
               <tr className="bg-[#F5F5F5]">
                 {['Προϊόν', 'Margin', 'Stock', 'DOS', 'Τιμή'].map((label, i) => (
@@ -931,7 +931,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
         {/* Table */}
         <div ref={tableScrollRef} className="overflow-x-auto max-h-[60vh] overflow-y-auto">
-          <table className="w-full">
+          <table className="data-table w-full">
             <thead className="sticky top-0 z-10">
               <tr className="bg-[#F5F5F5]">
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)]">
@@ -1191,7 +1191,7 @@ function ProductRow({
   return (
     <tr
       style={{ height }}
-      className="border-b border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors duration-[var(--dur-state)]"
+      className="border-b border-[#E5E5E5] hover:bg-[var(--surface-2)] transition-colors duration-[var(--dur-state)]"
     >
       <td className="px-3 py-2">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -1363,7 +1363,7 @@ function DropdownFilter({ value, onChange, options }: DropdownFilterProps) {
               key={o.value}
               type="button"
               onClick={() => { onChange(o.value); setOpen(false); }}
-              className={`w-full text-left px-4 py-2 text-sm hover:bg-[#F5F5F5] transition-colors ${
+              className={`w-full text-left px-4 py-2 text-sm hover:bg-[var(--surface-2)] transition-colors ${
                 o.value === value ? 'text-[var(--nts-accent-text)] font-medium bg-[#FFF7ED]' : 'text-[#1A1A1A]'
               }`}
             >

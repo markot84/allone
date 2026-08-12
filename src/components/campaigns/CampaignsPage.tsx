@@ -931,7 +931,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-all ${
                     convActionFilter.length > 0
                       ? 'bg-[var(--nts-accent)] text-white'
-                      : 'bg-[#F5F5F5] text-[var(--text-secondary)] hover:bg-[#E5E5E5]'
+                      : 'bg-[#F5F5F5] text-[var(--text-secondary)] hover:bg-[var(--surface-2)]'
                   }`}
                 >
                   <Filter size={14} />
@@ -952,7 +952,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                       {allConversionActions.map(action => (
                         <label
                           key={action}
-                          className="flex items-center gap-2.5 px-3 py-2 hover:bg-[#F5F5F5] cursor-pointer"
+                          className="flex items-center gap-2.5 px-3 py-2 hover:bg-[var(--surface-2)] cursor-pointer"
                         >
                           <input
                             type="checkbox"
@@ -1004,7 +1004,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           </div>
         ) : (
           <div className="overflow-x-auto mt-3">
-            <table className="w-full">
+            <table className="data-table w-full">
               <thead>
                 <tr className="text-left text-[11px] text-[var(--text-secondary)] border-b border-[#E5E5E5]">
                   <SortableHeader col="name" label="Campaign" current={sortColumn} dir={sortDirection} onSort={handleSort} className="" />
@@ -1044,7 +1044,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.02 }}
-                    className="border-b border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
+                    className="border-b border-[#E5E5E5] hover:bg-[var(--surface-2)] transition-colors"
                   >
                     <td className="py-2 px-3 max-w-[200px] lg:max-w-[280px]">
                       <div className="font-medium text-xs text-[#1A1A1A] truncate">{campaign.name}</div>
@@ -1174,8 +1174,8 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
       </div>
 
       <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
-        <table className="w-full text-left">
-          <thead className="sticky top-0 bg-[#F9FAFB] z-10">
+        <table className="data-table w-full text-left">
+          <thead className="sticky top-0 bg-[var(--card-bg)] z-10">
             <tr className="text-[11px] text-[#6B7280] uppercase tracking-wider border-b border-[#E5E7EB]">
               <th className="pb-2 px-2 font-medium">{type === 'search_terms' ? 'Search Term' : 'Keyword'}</th>
               {type === 'keywords' && <th className="pb-2 px-2 font-medium">Match</th>}
@@ -1197,7 +1197,7 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
               const qsColor = item.qualityScore >= 7 ? '#166534' : item.qualityScore >= 4 ? '#854D0E' : item.qualityScore ? '#991B1B' : '#9CA3AF';
 
               return (
-                <tr key={`${text}-${i}`} className="hover:bg-[#FAFAFA] transition-colors text-sm">
+                <tr key={`${text}-${i}`} className="hover:bg-[var(--surface-2)] transition-colors text-sm">
                   <td className="py-2 px-2 font-medium text-[#111827] max-w-xs truncate">{text}</td>
                   {type === 'keywords' && (
                     <td className="py-2 px-2">

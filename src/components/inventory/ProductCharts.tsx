@@ -199,7 +199,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
             </div>
           }
           actions={
-            <button type="button" onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
+            <button type="button" onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]">
               <X size={20} className="text-[var(--text-secondary)]" />
             </button>
           }
@@ -220,7 +220,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
                 <div style={{ width: '100%', height: '300px', minHeight: '300px' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={marginDistribution} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
+                      <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" />
                       <XAxis dataKey="name" stroke="#4A4A4A" />
                       <YAxis stroke="#4A4A4A" />
                       <Tooltip />
@@ -254,7 +254,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
               <div style={{ width: '100%', height: '300px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={stockAgeDistribution} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" />
                     <XAxis dataKey="name" />
                     <YAxis />
                     <Tooltip />
@@ -315,7 +315,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
               <div style={{ width: '100%', height: '300px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={categoryBreakdown} layout="vertical" margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" />
                     <XAxis type="number" />
                     <YAxis dataKey="name" type="category" width={100} />
                     <Tooltip />
@@ -341,7 +341,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
               <div style={{ width: '100%', height: '300px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={topProductsByMargin} margin={{ top: 5, right: 5, left: 5, bottom: 80 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" />
                     <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
                     <YAxis />
                     <Tooltip />
@@ -368,7 +368,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
               <div style={{ width: '100%', height: '300px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={stockAgeVsLevel} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" />
                     <XAxis dataKey="age" name="Ημέρες" />
                     <YAxis yAxisId="left" />
                     <YAxis yAxisId="right" orientation="right" />

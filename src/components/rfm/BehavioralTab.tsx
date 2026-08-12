@@ -107,7 +107,7 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
               i === selectedIdx
                 ? 'text-white shadow-sm'
-                : 'bg-[var(--nts-light-gray)] text-[var(--text-secondary)] hover:bg-[#E5E5E5]'
+                : 'bg-[var(--nts-light-gray)] text-[var(--text-secondary)] hover:bg-[var(--surface-2)]'
             }`}
             style={i === selectedIdx ? { backgroundColor: item.segment.color } : undefined}
           >
@@ -188,11 +188,11 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
                 <PolarGrid stroke="#E5E5E5" />
                 <PolarAngleAxis
                   dataKey="metric"
-                  tick={{ fill: '#4A4A4A', fontSize: 11 }}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                 />
                 <PolarRadiusAxis
                   domain={[0, 100]}
-                  tick={{ fill: '#9CA3AF', fontSize: 10 }}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
                   axisLine={false}
                 />
                 <Radar
@@ -217,9 +217,9 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={channelData} layout="vertical" margin={{ left: 10, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
-                <XAxis type="number" domain={[0, 100]} tick={{ fill: '#9CA3AF', fontSize: 11 }} />
-                <YAxis type="category" dataKey="channel" tick={{ fill: '#4A4A4A', fontSize: 11 }} width={120} />
+                <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" horizontal={false} />
+                <XAxis type="number" domain={[0, 100]} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
+                <YAxis type="category" dataKey="channel" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} width={120} />
                 <RechartsTooltip
                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: 6, fontSize: 12 }}
                   formatter={(v: number | undefined) => [`${(v as number) || 0}%`, 'Score']}

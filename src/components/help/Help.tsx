@@ -99,7 +99,7 @@ export function Help() {
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
           <button
             onClick={handleBack}
-            className="shrink-0 self-start rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
+            className="shrink-0 self-start rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]"
           >
             <ArrowLeft size={20} className="text-[var(--text-secondary)]" />
           </button>
@@ -204,7 +204,7 @@ export function Help() {
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <button
             onClick={handleBack}
-            className="shrink-0 self-start rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
+            className="shrink-0 self-start rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]"
           >
             <ArrowLeft size={20} className="text-[var(--text-secondary)]" />
           </button>
@@ -277,7 +277,7 @@ export function Help() {
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-[#F5F5F5] rounded"
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-[var(--surface-2)] rounded"
             >
               <X size={16} className="text-[#9CA3AF]" />
             </button>

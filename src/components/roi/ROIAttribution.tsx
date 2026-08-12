@@ -882,7 +882,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                   <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
+              <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" vertical={false} />
               <XAxis
                 dataKey="date"
                 tickFormatter={(d) => (typeof d === 'string' ? formatTrendDayLabel(d) : String(d))}
@@ -891,7 +891,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 angle={trendData.length > 14 ? -35 : 0}
                 textAnchor={trendData.length > 14 ? 'end' : 'middle'}
                 height={trendData.length > 14 ? 56 : 32}
-                tick={{ fill: '#57606a', fontSize: 11 }}
+                tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                 axisLine={{ stroke: '#d0d7de' }}
                 tickLine={{ stroke: '#d0d7de' }}
               />
@@ -899,7 +899,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 tickFormatter={(v) =>
                   Math.abs(v) >= 1000 ? `€${(v / 1000).toFixed(v >= 10_000 ? 0 : 1)}K` : `€${Math.round(v)}`
                 }
-                tick={{ fill: '#57606a', fontSize: 12 }}
+                tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
                 axisLine={{ stroke: '#d0d7de' }}
                 tickLine={{ stroke: '#d0d7de' }}
               />

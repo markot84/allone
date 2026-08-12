@@ -228,7 +228,7 @@ export function BrandMembersNotificationTable({ members, loadingMembers }: Props
         <p className="text-sm text-[var(--nts-medium-gray)] py-4">Δεν υπάρχουν ακόμα μέλη σε αυτό το brand.</p>
       ) : (
         <div className="overflow-x-auto -mx-1">
-          <table className="w-full min-w-[820px] text-sm border-collapse">
+          <table className="data-table w-full min-w-[820px] text-sm border-collapse">
             <thead>
               <tr className="border-b border-[var(--nts-border-gray)] text-left">
                 <th className="py-2.5 pr-3 font-medium text-[var(--nts-medium-gray)]">Email</th>

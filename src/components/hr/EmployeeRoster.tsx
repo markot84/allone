@@ -80,7 +80,7 @@ export function EmployeeRoster() {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="data-table w-full text-sm">
             <thead>
               <tr className="border-b border-[#eef0f3] bg-[#f9fafb]">
                 {['Ονοματεπώνυμο', 'Ρόλος', 'Τμήμα', 'Μηνιαίο κόστος', 'Από', 'Κατάσταση', ''].map((h) => (
@@ -90,7 +90,7 @@ export function EmployeeRoster() {
             </thead>
             <tbody>
               {employees.map((emp) => (
-                <tr key={emp.id} className="border-b border-[#eef0f3] hover:bg-[#f9fafb]/60 transition-colors">
+                <tr key={emp.id} className="border-b border-[#eef0f3] hover:bg-[var(--surface-2)]/60 transition-colors">
                   <td className="px-4 py-3 font-medium text-[var(--nts-charcoal)]">{emp.name}</td>
                   <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{emp.role}</td>
                   <td className="px-4 py-3 text-[var(--nts-medium-gray)]">{emp.department}</td>

@@ -161,7 +161,7 @@ export function ColumnExcelFilter({
         {filteredOpts.map((o) => (
           <label
             key={o.id}
-            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-[#374151] hover:bg-[#F9FAFB]"
+            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-[#374151] hover:bg-[var(--surface-2)]"
           >
             <input
               type="checkbox"

@@ -246,8 +246,8 @@ export function CampaignImpactPanel({
         className="mt-4 overflow-x-auto overflow-y-auto rounded-xl border border-[#E5E7EB]"
         style={tableExpanded ? undefined : { maxHeight: `calc(${VISIBLE_ROW_COUNT} * ${ROW_HEIGHT_REM}rem + 3.5rem)` }}
       >
-        <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-[#FAFAFA] shadow-[0_1px_0_#E5E7EB]">
+        <table className="data-table w-full min-w-[720px] text-left text-sm">
+          <thead className="sticky top-0 z-10 bg-[var(--card-bg)] shadow-[0_1px_0_#E5E7EB]">
             <tr className="border-b border-[#E5E7EB]">
               <ThLabel
                 label="Καμπάνια"
@@ -344,7 +344,7 @@ export function CampaignImpactPanel({
                 </tr>
               ) : (
                 filteredRows.map((row) => (
-                  <tr key={row.id} className="border-b border-[#F3F4F6] last:border-0 hover:bg-[#FAFAFA]">
+                  <tr key={row.id} className="border-b border-[#F3F4F6] last:border-0 hover:bg-[var(--surface-2)]">
                     <td
                       className="max-w-[220px] truncate px-3 py-2 font-medium text-[#1A1A1A]"
                       style={{ height: `${ROW_HEIGHT_REM}rem` }}
@@ -420,7 +420,7 @@ export function CampaignImpactPanel({
           <div className="h-[280px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={timelineData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" />
+                <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" />
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                 <YAxis
                   yAxisId="spend"

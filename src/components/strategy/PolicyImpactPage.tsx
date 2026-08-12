@@ -562,7 +562,7 @@ function DecisionListItem({
         type="button"
         onClick={onSelect}
         className={`w-full px-4 py-4 text-left transition-colors ${
-          selected ? 'bg-[var(--nts-accent)]/10' : 'hover:bg-[#F9FAFB]'
+          selected ? 'bg-[var(--nts-accent)]/10' : 'hover:bg-[var(--surface-2)]'
         }`}
       >
         <div className="flex items-start justify-between gap-3">
@@ -779,7 +779,7 @@ function PlaybookPanel({ items, onSelect }: { items: DecisionMemoryItem[]; onSel
             key={event.id}
             type="button"
             onClick={() => onSelect(event.id)}
-            className="rounded-xl border border-[#E5E7EB] p-3 text-left transition-colors hover:bg-[#FAFAFA]"
+            className="rounded-xl border border-[#E5E7EB] p-3 text-left transition-colors hover:bg-[var(--surface-2)]"
           >
             <div className="flex items-center justify-between gap-2">
               <Badge variant={VERDICT_BADGE[impact.verdict]}>{VERDICT_LABELS[impact.verdict]}</Badge>

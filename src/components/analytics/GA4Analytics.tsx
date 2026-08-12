@@ -712,7 +712,7 @@ export function GA4Analytics() {
                     <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <RechartsTooltip
@@ -867,7 +867,7 @@ export function GA4Analytics() {
                 Δοκιμάστε <strong>Sync τώρα</strong> από τη σελίδα Συνδέσεις.</p>
             </div>
           ) : (
-          <table className="w-full text-sm">
+          <table className="data-table w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-[#6B7280] border-b border-[#F3F4F6]">
                 <th className="pb-2 font-medium">GA4 attribution group</th>
@@ -888,7 +888,7 @@ export function GA4Analytics() {
                 const share = totalSessions > 0 ? (s.sessions / totalSessions) * 100 : 0;
                 const convRate = s.sessions > 0 ? (s.conversions / s.sessions) * 100 : 0;
                 return (
-                  <tr key={s.channel} className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA]">
+                  <tr key={s.channel} className="border-b border-[#F9FAFB] hover:bg-[var(--surface-2)]">
                     <td className="py-2 flex items-center gap-2">
                       <span
                         className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -980,7 +980,7 @@ export function GA4Analytics() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="data-table w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-[#6B7280] border-b border-[#F3F4F6]">
                       <th className="pb-2 font-medium">{organicSearchSource === 'gsc' ? 'Query' : 'Landing page'}</th>
@@ -1035,7 +1035,7 @@ export function GA4Analytics() {
                   </thead>
                   <tbody>
                     {filteredOrganicRows.map((row) => (
-                      <tr key={row.label} className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA]">
+                      <tr key={row.label} className="border-b border-[#F9FAFB] hover:bg-[var(--surface-2)]">
                         <td className={`py-2 ${organicSearchSource === 'ga4_fallback' ? 'font-mono text-xs text-[#374151]' : 'text-[#111827]'}`} title={row.label}>
                           <div className="max-w-[460px] truncate">{row.label}</div>
                         </td>
@@ -1118,7 +1118,7 @@ export function GA4Analytics() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="data-table w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-[#6B7280] border-b border-[#F3F4F6]">
                   <th className="pb-2 font-medium">Διαδρομή σελίδας</th>
@@ -1145,7 +1145,7 @@ export function GA4Analytics() {
               </thead>
               <tbody>
                 {filteredPages.map((p) => (
-                  <tr key={p.path} className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA]">
+                  <tr key={p.path} className="border-b border-[#F9FAFB] hover:bg-[var(--surface-2)]">
                     <td className="py-2 font-mono text-xs text-[#374151] max-w-[400px] truncate" title={p.path}>
                       {p.path}
                     </td>
