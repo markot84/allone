@@ -23,6 +23,38 @@ withdraws the dark canvas in favour of a white background.
 - Before adding any colour: is there already a tint or shade in `src/styles/tokens.css` that
   covers it? If yes, use it. A new hex needs a reason.
 
+### Scales (type, space, depth, radius)
+
+Colour was tokenised from the start; these four were not, so they got decided again at every call
+site — 16 distinct font sizes, 15 distinct border radii, one hardcoded box-shadow on every card.
+They are now declared in `src/styles/tokens.css` alongside the palette.
+
+- **Type** — `--font-display` / `--font-body` / `--font-mono`, and `--type-display` → `--type-micro`.
+  Never write a raw `text-[13px]`; if the size you need is not on the scale, the scale is wrong.
+  `--font-display` is the single line that changes the display face app-wide.
+- **Space** — `--space-1` … `--space-16` on a 4px base, plus `--space-page-top` and
+  `--space-section` for the two rhythm decisions that actually differ between designs.
+- **Depth** — `--elev-1` / `--elev-2` / `--elev-3`, with `--canvas-bg`, `--card-bg`, `--card-border`
+  and `--card-radius` naming the surface relationship. `--elev-3` is for things that genuinely float
+  (modals, popovers, command palette) and nothing else.
+- **Radius** — `--ui-radius-sm/md/lg/pill`. **Do not name these `--radius-*`**: that is Tailwind 4's
+  own theme namespace (`rounded-lg` compiles to `var(--radius-lg)`), and because `tokens.css` is
+  imported after `tailwindcss`, a plain `--radius-lg` here silently moves 469 existing `rounded-lg`
+  elements. Overriding Tailwind's scale deliberately is fine; doing it by accident is not.
+- **Button** — `--btn-*`. The primary is white on `--orange-700`, never on `--orange-500` (3.00:1).
+  `--orange-800` and `--danger-600` exist because a hover has to darken, and `--danger` with white
+  is 3.76:1.
+
+Components carry `.surface`, `.btn`, `.page-title` and `.kpi-value` rather than restating any of
+this inline. A rule in `tokens.css` can be restyled by a direction; a value inside a React event
+handler cannot.
+
+### Loading states
+
+`Skeleton` / `SkeletonText` / `SkeletonKPI` in `src/components/common/Skeleton.tsx`. Dimensions are
+required by the caller — a skeleton that sizes itself has not solved the problem it exists for.
+Prefer these over `Spinner` on anything backed by a Firestore aggregate.
+
 ### Tokens
 
 - Every colour comes from `src/styles/tokens.css`. **No hex values inside components.**
