@@ -185,7 +185,9 @@
 
   /* The ramp the app actually uses today: page titles are text-xl rising to
      text-2xl at sm, section titles text-lg, body text-sm, dense labels 10-11px. */
-  --type-display:  clamp(1.5rem, 1.25rem + 1.2vw, 1.875rem); /* hero figures / display */
+  /* DIRECTION B — the figure is the instrument's readout, so it gets the room to be one. The app
+     rendered KPI values at a flat text-3xl (30px); this scales 28px → 40px with the viewport. */
+  --type-display:  clamp(1.75rem, 1.4rem + 1.6vw, 2.5rem);   /* hero figures / display */
   --type-h1:       clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);   /* page title */
   --type-h2:       1.125rem;  /* section / card title */
   --type-h3:       1rem;
@@ -225,24 +227,53 @@
      Overriding Tailwind's scale is a legitimate way to collapse the 15 radii the audit found, but
      it is a visual decision that belongs to a direction and has to be visible in its diff. */
   --ui-radius-sm:   6px;
-  --ui-radius-md:   8px;   /* Card.tsx's current value */
-  --ui-radius-lg:   12px;
+  --ui-radius-md:   10px;
+  --ui-radius-lg:   16px;
   --ui-radius-pill: 999px;
+
+  /* DIRECTION B — the radius scale collapses from 15 values to 3.
+     The audit counted rounded-lg 469, rounded-full 224, rounded-xl 207, rounded-md 124,
+     rounded-2xl 74, rounded-3xl 10, plus one-offs at 40/34/32/28/24/22/20/18/14px. Nothing in a
+     data tool needs nine corner sizes; it just makes adjacent elements look mismatched.
+
+     Overriding Tailwind's own theme namespace is the only way to reach 1.100 existing utility
+     classes without editing them. It is deliberate here and it is why this belongs to a direction
+     rather than the foundation, where the same three lines were an accident. */
+  --radius-sm:  6px;
+  --radius-md:  6px;
+  --radius-lg:  10px;
+  --radius-xl:  10px;
+  --radius-2xl: 16px;
+  --radius-3xl: 16px;
 
   /* ---- SURFACE & DEPTH ----
      The canvas and the card currently measure 1.04:1 against each other and the
      border 1.24:1 on white, so the only thing separating a card from the page is
      the shadow below. Naming the three lets a direction fix that by re-valuing
      them rather than by editing Card.tsx. */
-  --canvas-bg:   var(--surface-1);
-  --card-bg:     var(--surface-0);
-  --card-border: var(--borderColor-default, #d0d7de);
-  --card-radius: var(--ui-radius-md);
-  --edge-highlight: transparent;  /* inset top hairline; off by default */
+  /* DIRECTION B — the canvas recedes so the cards can rise.
+     The app painted #FFFFFF cards on a #FAFBFC body: 1.04:1, which is no separation at all, so a
+     card existed only by virtue of a generic black shadow under it. Dropping the canvas to
+     --surface-2 takes that to 1.10:1 — still subtle, but now the shadow is confirming a real
+     luminance step instead of inventing one. The border moves from #E4E7EC (1.24:1) to --navy-100
+     (1.63:1), which is also what colors.md §4 nominates for borders and dividers.
 
-  --elev-1: 0 2px 6px rgba(0, 0, 0, 0.10), 0 1px 3px rgba(0, 0, 0, 0.08);
-  --elev-2: 0 6px 20px rgba(0, 0, 0, 0.14), 0 3px 8px rgba(0, 0, 0, 0.10);
-  --elev-3: 0 24px 60px rgba(16, 24, 40, 0.12);  /* overlays, modals, popovers */
+     Checked before committing to it: every text token still clears AA on the recessed canvas —
+     text-primary 16.11, navy-500 10.75, text-secondary 6.98, sky-500 5.47, orange-700 5.09,
+     text-muted 4.51. text-muted is the tight one and it passes; it is also almost always inside a
+     white card rather than on the canvas. */
+  --canvas-bg:   var(--surface-2);
+  --card-bg:     var(--surface-0);
+  --card-border: var(--navy-100);
+  --card-radius: var(--ui-radius-md);
+  --edge-highlight: transparent;  /* a white inset line does nothing on a white card */
+
+  /* Shadows tinted with --text-primary (16,24,40) rather than pure black, and layered: a tight
+     contact shadow plus a wide soft one, which is how a real object sits on a surface. A single
+     black blur is the single clearest "default box-shadow" tell. */
+  --elev-1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --elev-2: 0 4px 8px -2px rgba(16, 24, 40, 0.08), 0 12px 24px -4px rgba(16, 24, 40, 0.10);
+  --elev-3: 0 8px 16px -4px rgba(16, 24, 40, 0.10), 0 24px 48px -8px rgba(16, 24, 40, 0.16);
 
   /* ---- BUTTON ----
      The primary button rendered white on --nts-accent (#FE630C) = 3.00:1, which colors.md §3 and
@@ -308,7 +339,10 @@
   --nts-orange-light: var(--sky-50);
 
   --app-chrome-bg: var(--chrome-bg);
-  --app-canvas-bg: var(--surface-0);
+  /* DIRECTION B — AppShell paints the scrolling content area from this, separately from `body`.
+     Leaving it on --surface-0 would have kept the actual app canvas pure white while only the
+     margins around it receded, so the cards would still have had nothing to lift off. */
+  --app-canvas-bg: var(--canvas-bg);
 
   --success-light: #D3F8E6;
   --warning-light: #FEF0C7;
@@ -349,10 +383,14 @@
     transform var(--dur-state) var(--ease-out);
 }
 
+/* DIRECTION B — the lift carries the hover, not a colour change.
+   A 1px rise plus the next elevation reads as the card coming toward you, which is what "you can
+   click this" should feel like on an instrument. transform and box-shadow only, so it composites
+   and never triggers layout — safe on a dashboard showing twenty of these at once. */
 .surface[data-interactive='true']:hover,
 .surface[data-interactive='true']:focus-visible {
-  border-color: var(--border-strong, var(--card-border));
   box-shadow: var(--elev-2), inset 0 1px 0 var(--edge-highlight);
+  transform: translateY(-1px);
 }
 
 /**
@@ -564,6 +602,19 @@ td[data-numeric],
 [data-numeric] {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
+}
+
+/* DIRECTION B — the KPI figure, sized once.
+   KPICard carried `text-3xl font-bold font-mono tracking-tight` and, despite the comment above
+   claiming every numeric field is covered, none of the three classes that apply tabular figures.
+   It got away with it because JetBrains Mono is monospaced anyway; the class is right regardless. */
+.kpi-value {
+  font-family: var(--font-mono);
+  font-size: var(--type-display);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
 }
 
 /**
