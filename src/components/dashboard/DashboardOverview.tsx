@@ -31,7 +31,7 @@ import {
   Cell,
   ResponsiveContainer,
 } from 'recharts';
-import { Card, CardHeader, KPICard, Tooltip, AlertsBanner, PageHeader, Spinner, Button } from '../common';
+import { Card, CardHeader, KPICard, Tooltip, AlertsBanner, PageHeader, Spinner, Button, ChartTooltip } from '../common';
 import { useSegments } from '../../hooks/useSegments';
 import { useOrganic } from '../../hooks/useOrganic';
 import { useCampaigns } from '../../hooks/useCampaigns';
@@ -1639,7 +1639,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                       strokeWidth={1.5}
                       fill="url(#ga4SessionsDashSparkGrad)"
                       dot={false}
-                      isAnimationActive={false}
+                      {...chartTheme.animation}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -1735,25 +1735,27 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   tickCount={6}
                 />
                 <RechartsTooltip
-                  contentStyle={chartTheme.tooltipStyle.contentStyle}
-                  labelStyle={chartTheme.tooltipStyle.labelStyle}
-                  itemStyle={chartTheme.tooltipStyle.itemStyle}
                   cursor={{ stroke: chartTheme.textMuted, strokeWidth: 1, strokeDasharray: '3 3' }}
-                  labelFormatter={(label) => formatDashChartDateKeyTick(String(label))}
-                  formatter={(value: unknown) => [
-                    formatCurrencyCompact(Number(value) || 0),
-                    revenuePerformanceChartLabel,
-                  ]}
+                  content={
+                    <ChartTooltip
+                      formatLabel={(label) => formatDashChartDateKeyTick(String(label))}
+                      format={(value) => formatCurrencyCompact(Number(value) || 0)}
+                    />
+                  }
                 />
                 <Area
-                  type="linear"
+                  type="monotone"
                   dataKey="total"
                   stroke={REV_CHART_ESHOP}
                   strokeWidth={2.5}
                   fillOpacity={1}
                   fill="url(#totalGradient)"
                   name="total"
-                  isAnimationActive={false}
+                  // `type="linear"` drew the revenue curve as a polyline of hard corners. A revenue
+                  // series is continuous; monotone keeps every data point exact while rounding the
+                  // path between them, which is the difference between a plotted array and a shape.
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: chartTheme.surface }}
+                  {...chartTheme.animation}
                 />
               </AreaChart>
             </div>
@@ -1866,6 +1868,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     dataKey="percentage"
                     nameKey="name"
                     labelLine={false}
+                    {...chartTheme.animation}
                   >
                     {/*
                       `fill={segment.color}` used to read a hex out of the Firestore document —
@@ -2016,7 +2019,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   opacity={0.65}
                   radius={[4, 4, 0, 0]}
                   maxBarSize={18}
-                  isAnimationActive={false}
+                  {...chartTheme.animation}
                 />
                 <Area
                   yAxisId="currency"
@@ -2028,7 +2031,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   fill="url(#adsConvGradient)"
                   fillOpacity={1}
                   dot={false}
-                  isAnimationActive={false}
+                  {...chartTheme.animation}
                 />
                 <Line
                   yAxisId="roas"
@@ -2040,7 +2043,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   strokeDasharray="4 4"
                   dot={false}
                   connectNulls={false}
-                  isAnimationActive={false}
+                  {...chartTheme.animation}
                 />
               </ComposedChart>
             </ResponsiveContainer>

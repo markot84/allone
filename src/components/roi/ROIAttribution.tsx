@@ -1,3 +1,4 @@
+import { useChartTheme } from '../../theme/chartTheme';
 import { useMemo, useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -164,6 +165,7 @@ const ROI_HERO_ORDER: KpiTabId[] = ['storeEfficiency', 'campaignEfficiency'];
 const EXPENSES_ORDER: ExpenseKpiId[] = ['campaignsSpend', 'marketingExpenses', 'totalMarketingCost'];
 
 export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
+  const chartTheme = useChartTheme();
   const { byMonth: organicByMonth, hasOrganicRevenue: hasOrganic } = useOrganic();
   const { campaigns, hasImported: hasCampaigns } = useCampaigns();
   const campaignsAll = campaigns as Campaign[];
@@ -940,7 +942,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 fillOpacity={1}
                 fill="url(#organicGrad)"
                 name="organic"
-                isAnimationActive={false}
+                {...chartTheme.animation}
               />
               <Area
                 type="linear"
@@ -950,7 +952,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 fillOpacity={1}
                 fill="url(#campaignGrad)"
                 name="campaigns"
-                isAnimationActive={false}
+                {...chartTheme.animation}
               />
               {ecomm.hasData && (
                 <Area
@@ -961,7 +963,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                   fillOpacity={1}
                   fill="url(#storeRevGrad)"
                   name="storeRevenue"
-                  isAnimationActive={false}
+                  {...chartTheme.animation}
                 />
               )}
             </AreaChart>

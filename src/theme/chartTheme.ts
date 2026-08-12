@@ -31,6 +31,18 @@ export interface ChartTheme {
     itemStyle: React.CSSProperties;
     cursor: { fill: string } | { stroke: string; strokeWidth: number };
   };
+  /**
+   * Draw-on animation. Spread onto a Line/Area/Bar/Pie.
+   *
+   * Every chart in the app carried `isAnimationActive={false}` — nine of them, and not one with it
+   * on. Charts simply appeared, fully formed, which is the difference between a screen that feels
+   * alive and one that feels like a screenshot. A chart drawing itself once, in the reveal duration
+   * the design system already defines, is the cheapest perceived-quality change available here.
+   *
+   * Recharts animates in JS, so the global prefers-reduced-motion rule in tokens.css cannot reach
+   * it — the query is checked here instead.
+   */
+  animation: { isAnimationActive: boolean; animationDuration: number; animationEasing: 'ease-out' };
   /** The default series colour and its area gradient partner. */
   series: string;
   /** Ordered categorical scale for multi-series charts, drawn from the brand palette. */
@@ -43,6 +55,8 @@ export interface ChartTheme {
 
 export function useChartTheme(): ChartTheme {
   return useMemo(() => {
+    const reducedMotion =
+      typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const textMuted = readTokenColor('--text-muted', '#667085');
     const border = readTokenColor('--border', '#E4E7EC');
     const surface = readTokenColor('--card-bg', '#FFFFFF');
@@ -69,6 +83,12 @@ export function useChartTheme(): ChartTheme {
         itemStyle: { color: text, fontSize: 13, fontWeight: 600, padding: 0 },
         // A faint wash rather than Recharts' default grey block, which lands on top of the series.
         cursor: { fill: readTokenColor('--surface-2', '#F2F4F7') }
+      },
+      animation: {
+        isAnimationActive: !reducedMotion,
+        // --dur-reveal. Read as a number because Recharts wants milliseconds, not a CSS string.
+        animationDuration: 450,
+        animationEasing: 'ease-out'
       },
       series: readTokenColor('--brand-orange', '#FE630C'),
       /*

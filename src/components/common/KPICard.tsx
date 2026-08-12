@@ -5,6 +5,7 @@ import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
 import { Card } from './Card';
 import { Tooltip } from './Tooltip';
 import { useAccentColor } from '../../hooks/useAccentColor';
+import { useChartTheme } from '../../theme/chartTheme';
 
 export interface KPICardData {
   label: string;
@@ -30,6 +31,7 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
   // Literal hex from the active profile; var(--nts-accent) does not resolve reliably
   // inside SVG gradient stops / url(#id).
   const { accent: accentColor } = useAccentColor();
+  const chartTheme = useChartTheme();
 
   const isPlainLabel =
     kpi.changeLabel === 'active' ||
@@ -63,10 +65,55 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
       <Card
         padding="lg"
         hover={!!onClick}
-        className={`h-full ${className || ''}`.trim()}
+        className={`relative h-full overflow-hidden ${className || ''}`.trim()}
         onClick={onClick}
       >
-        <div className="flex items-start justify-between mb-3">
+        {/*
+          The sparkline is the card's BACKGROUND, not a 32px strip wedged under the number.
+
+          As a strip it was a decoration nobody read: too short to show a shape, and it pushed the
+          figure and the delta apart so the card had no centre. Full-bleed and faint, it stops being
+          a chart to inspect and becomes the texture of the period — the eye registers the direction
+          before it reads anything, which is the only job a sparkline this size can actually do.
+
+          aria-hidden and pointer-events-none: it carries no information a screen reader can use and
+          the number above it is already labelled.
+        */}
+        {kpi.sparklineData && kpi.sparklineData.length > 1 && (
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-[70%] opacity-[0.14]"
+            aria-hidden="true"
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={kpi.sparklineData.map((v, i) => ({ v, i }))} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                {/*
+                  Without this, Recharts anchors the domain at zero, and a series that moves between
+                  €48K and €53K renders as a flat line a few pixels tall — which is what every
+                  sparkline on the dashboard was. A sparkline shows SHAPE; the magnitude is the
+                  figure printed over it.
+                */}
+                <YAxis hide domain={['dataMin', 'dataMax']} />
+                <defs>
+                  <linearGradient id={sparkGradientId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={accentColor} stopOpacity={0.95} />
+                    <stop offset="100%" stopColor={accentColor} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area
+                  type="monotone"
+                  dataKey="v"
+                  stroke={accentColor}
+                  fill={`url(#${sparkGradientId})`}
+                  strokeWidth={2}
+                  dot={false}
+                  {...chartTheme.animation}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        <div className="relative flex items-start justify-between mb-3">
           <div className="flex items-center gap-1.5">
             <p className="text-[13px] font-medium text-[var(--nts-medium-gray)]">{kpi.label}</p>
             {kpi.tooltip && <Tooltip content={kpi.tooltip} size={13} />}
@@ -89,43 +136,12 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
           ) : null}
         </div>
 
-        <p className="text-3xl font-bold text-[var(--nts-charcoal)] mb-1 font-mono tracking-tight">
+        <p className="kpi-value relative text-3xl font-bold text-[var(--nts-charcoal)] mb-1 font-mono tracking-tight">
           {kpi.value}
         </p>
 
-        {kpi.sparklineData && kpi.sparklineData.length > 0 && (
-          <div className="my-1 h-[32px] w-full min-w-0 -mx-1">
-            <ResponsiveContainer width="100%" height={32}>
-              <AreaChart data={kpi.sparklineData.map((v, i) => ({ v, i }))} margin={{ top: 2, right: 4, left: 4, bottom: 2 }}>
-                {/*
-                  Without this, Recharts anchors the domain at zero, and a series that moves between
-                  €48K and €53K renders as a flat line five pixels tall — which is what every
-                  sparkline on the dashboard looked like. A sparkline shows SHAPE, not magnitude;
-                  the magnitude is the figure printed above it. Domain runs edge to edge.
-                */}
-                <YAxis hide domain={['dataMin', 'dataMax']} />
-                <defs>
-                  <linearGradient id={sparkGradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={accentColor} stopOpacity={0.2} />
-                    <stop offset="95%" stopColor={accentColor} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <Area
-                  type="monotone"
-                  dataKey="v"
-                  stroke={accentColor}
-                  fill={`url(#${sparkGradientId})`}
-                  strokeWidth={1.5}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
         {(kpi.change != null || kpi.changeLabel) && (
-          <div className="flex items-center gap-2 mt-2">
+          <div className="relative flex items-center gap-2 mt-2">
             {kpi.change != null && (
               <span className="text-[14px] font-semibold px-2 py-0.5 rounded-lg text-[var(--nts-medium-gray)] bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)]">
                 {formatChange()}
