@@ -1541,6 +1541,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <div className="col-span-full hidden pt-2 sm:block">
                   <ResponsiveContainer width="100%" height={52}>
                     <AreaChart data={periodDaily}>
+                      {/* Domain to the data, not to zero — see the note in KPICard. */}
+                      <YAxis hide domain={['dataMin', 'dataMax']} />
                       <defs>
                         <linearGradient id="ecommDashSparkGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="var(--nts-accent)" stopOpacity={0.2} />
@@ -1614,6 +1616,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <div className="mt-4 hidden pt-2 sm:block">
                 <ResponsiveContainer width="100%" height={52}>
                   <AreaChart data={ga4SessionsTrend}>
+                    {/* Domain to the data, not to zero — see the note in KPICard. */}
+                    <YAxis hide domain={['dataMin', 'dataMax']} />
                     <defs>
                       <linearGradient id="ga4SessionsDashSparkGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="var(--nts-accent)" stopOpacity={0.18} />
@@ -1621,18 +1625,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                       </linearGradient>
                     </defs>
                     <RechartsTooltip
-                      cursor={{ stroke: '#FDBA74', strokeWidth: 1 }}
-                      contentStyle={{
-                        backgroundColor: '#fff',
-                        border: '1px solid #E8EAED',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                        padding: '8px 10px',
-                        boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
-                      }}
+                      cursor={{ stroke: chartTheme.textMuted, strokeWidth: 1, strokeDasharray: '3 3' }}
+                      contentStyle={chartTheme.tooltipStyle.contentStyle}
+                      labelStyle={chartTheme.tooltipStyle.labelStyle}
+                      itemStyle={chartTheme.tooltipStyle.itemStyle}
                       labelFormatter={(label) => formatDashChartDateKeyTick(String(label))}
                       formatter={(value: unknown) => [formatNumber(Number(value) || 0), 'Sessions']}
-                      labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                     />
                     <Area
                       type="monotone"

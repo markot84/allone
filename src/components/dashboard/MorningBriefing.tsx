@@ -405,13 +405,21 @@ export function MorningBriefing(props: MorningBriefingProps) {
 
   const isUpdated = briefing?.urgency === 'updated';
 
-  const borderClass = isUpdated
-    ? 'border-amber-300/60'
-    : 'border-[var(--nts-accent)]/20';
+  const borderClass = isUpdated ? 'border-[var(--gold-700)]/40' : 'border-[var(--nts-accent)]/20';
 
+  /*
+   * This 3px line was `from-[var(--nts-accent)] via-[#8B5CF6] to-[#06B6D4]` — orange into purple
+   * into cyan, two hues the brand does not own, running the full width at the top of the first card
+   * on the dashboard. It was the single most eye-catching thing on the screen and nobody chose it.
+   *
+   * colors.md §6 does allow a gradient, but only "σε μικρά, σκόπιμα σημεία (π.χ. ένα badge
+   * 'AI-generated insight')" — which is exactly this component's job. So the gradient survives, on
+   * the palette: orange into gold, the two warm brand colours, which reads as generated without
+   * introducing a hue. The updated state warms further rather than switching to a different scheme.
+   */
   const gradientLine = isUpdated
-    ? 'bg-gradient-to-r from-amber-400 via-orange-400 to-red-400'
-    : 'bg-gradient-to-r from-[var(--nts-accent)] via-[#8B5CF6] to-[#06B6D4]';
+    ? 'bg-gradient-to-r from-[var(--gold-500)] to-[var(--brand-orange)]'
+    : 'bg-gradient-to-r from-[var(--brand-orange)] to-[var(--gold-500)]';
 
   return (
     <motion.div
@@ -426,7 +434,9 @@ export function MorningBriefing(props: MorningBriefingProps) {
           {/* Header */}
           <div className={`flex items-start justify-between gap-2 ${collapsed ? 'mb-0' : 'mb-4'}`}>
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--nts-accent)] to-[#8B5CF6] flex items-center justify-center shadow-sm shrink-0">
+              {/* Same reasoning as the line above: the small deliberate spot §6 permits, on the
+                  palette. Orange to gold, not orange to purple. */}
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--brand-orange)] to-[var(--gold-500)] flex items-center justify-center shadow-sm shrink-0">
                 <Sparkles size={18} className="text-white" />
               </div>
               <div className="min-w-0">

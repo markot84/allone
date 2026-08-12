@@ -18,23 +18,39 @@ const SEVERITY_CONFIG: Record<
     bar: string;
   }
 > = {
+  /*
+   * Severity comes from the semantic tokens, not from Tailwind's red/amber/sky.
+   *
+   * These three cards sit at the very top of the dashboard, so they set the tone of the whole
+   * screen — and they were painting it in six colours the brand does not own, over a gradient.
+   *
+   * The card itself is now a normal white surface. Tinting the whole card was the first attempt and
+   * it was worse: swapping a gradient that faded to white for a flat --warning-light across 700px
+   * made the alerts shout louder than before, and three of them stacked turned the top of the
+   * dashboard into a block of amber. colors.md §6 warns about exactly this ("όχι πλήρως κορεσμένο
+   * orange ή gold σε μεγάλες επιφάνειες φόντου").
+   *
+   * Severity lives in the 4px bar and the icon instead. That is enough to scan by, it keeps the
+   * alerts consistent with every other card on the page, and it stops them competing with the data
+   * they are pointing at.
+   */
   critical: {
     icon: AlertTriangle,
-    iconWrap: 'bg-red-100 text-red-700 ring-red-200/60',
-    card: 'border-red-200/90 bg-gradient-to-br from-red-50/95 via-white to-white shadow-sm shadow-red-900/5',
-    bar: 'bg-red-500',
+    iconWrap: 'bg-[var(--danger-light)] text-[var(--danger-600)] ring-[var(--danger-600)]/25',
+    card: 'border-[var(--border)] bg-[var(--card-bg)]',
+    bar: 'bg-[var(--danger-600)]',
   },
   warning: {
     icon: AlertTriangle,
-    iconWrap: 'bg-amber-100 text-amber-800 ring-amber-200/70',
-    card: 'border-amber-200/90 bg-gradient-to-br from-amber-50/90 via-white to-white shadow-sm shadow-amber-900/5',
-    bar: 'bg-amber-500',
+    iconWrap: 'bg-[var(--warning-light)] text-[var(--gold-700)] ring-[var(--gold-700)]/25',
+    card: 'border-[var(--border)] bg-[var(--card-bg)]',
+    bar: 'bg-[var(--gold-700)]',
   },
   info: {
     icon: Info,
-    iconWrap: 'bg-sky-100 text-sky-700 ring-sky-200/70',
-    card: 'border-sky-200/90 bg-gradient-to-br from-sky-50/90 via-white to-white shadow-sm shadow-sky-900/5',
-    bar: 'bg-sky-500',
+    iconWrap: 'bg-[var(--sky-50)] text-[var(--sky-700)] ring-[var(--sky-500)]/25',
+    card: 'border-[var(--border)] bg-[var(--card-bg)]',
+    bar: 'bg-[var(--sky-500)]',
   },
 };
 

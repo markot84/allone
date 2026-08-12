@@ -1,7 +1,7 @@
 import { useId } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { AreaChart, Area, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
 import { Card } from './Card';
 import { Tooltip } from './Tooltip';
 import { useAccentColor } from '../../hooks/useAccentColor';
@@ -97,6 +97,13 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
           <div className="my-1 h-[32px] w-full min-w-0 -mx-1">
             <ResponsiveContainer width="100%" height={32}>
               <AreaChart data={kpi.sparklineData.map((v, i) => ({ v, i }))} margin={{ top: 2, right: 4, left: 4, bottom: 2 }}>
+                {/*
+                  Without this, Recharts anchors the domain at zero, and a series that moves between
+                  €48K and €53K renders as a flat line five pixels tall — which is what every
+                  sparkline on the dashboard looked like. A sparkline shows SHAPE, not magnitude;
+                  the magnitude is the figure printed above it. Domain runs edge to edge.
+                */}
+                <YAxis hide domain={['dataMin', 'dataMax']} />
                 <defs>
                   <linearGradient id={sparkGradientId} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={accentColor} stopOpacity={0.2} />
