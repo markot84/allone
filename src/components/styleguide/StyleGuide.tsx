@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Card, CardHeader } from '../common/Card';
 import { Button } from '../common/Button';
 import { KPICard } from '../common/KPICard';
+import { PageHeader } from '../common/PageHeader';
 import { Skeleton, SkeletonKPI, SkeletonText } from '../common/Skeleton';
 import { WeightsRadar } from '../strategy/WeightsRadar';
 import { VelocitySpark } from '../common/VelocitySpark';
@@ -651,6 +652,28 @@ function LiveComponents() {
         gap: 20
       }}
     >
+      {/*
+        A real PageHeader, because the page title is where a visual direction is most visible and
+        the swatch sections cannot show it: they hardcode their own type inline. This renders the
+        `.page-title` rule and the prose measure exactly as an app screen would.
+      */}
+      <PageHeader
+        title="Product Intelligence"
+        description={
+          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
+            Παρακολούθηση αποθέματος και απόδοσης προϊόντων. Αυτή η παράγραφος υπάρχει για να φανεί
+            πού σταματάει η γραμμή κειμένου και πόσο αέρα αφήνει η κατεύθυνση πάνω από τον τίτλο —
+            δύο αποφάσεις που δεν φαίνονται σε κανένα swatch.
+          </p>
+        }
+        actions={
+          <>
+            <Button variant="secondary" size="sm">Εξαγωγή</Button>
+            <Button variant="primary" size="sm">Ανανέωση</Button>
+          </>
+        }
+      />
+
       <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <KPICard kpi={kpi} index={0} />
         <KPICard kpi={{ ...kpi, label: 'Παραγγελίες', value: '1.284', change: -4, trend: 'down', sparklineData: undefined }} index={1} />
