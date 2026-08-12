@@ -73,6 +73,11 @@
   /* ============ SEMANTIC — deliberately distinct from the brand accents ============ */
   /* Kept away from orange/gold so a red error is never mistaken for an active CTA. */
   --success: #12B76A;
+  /* --success is sized for a status dot or a badge border, where it sits beside text that carries
+     the meaning. As a filled chart mark it has to stand on its own against the card, and it
+     measures 2.62:1 on white — under the 3:1 WCAG 1.4.11 asks of graphical objects. Same shade
+     method as the other ramps (base toward black at 30%). Measures 5.00:1. */
+  --success-700: #0D804A;
   --warning: #F79009;
   --danger:  #F04438;
   /* --danger is a status colour, sized for a dot or a border, and white on it is 3.76:1. A destructive
@@ -82,11 +87,40 @@
   --info:    var(--sky-500);
 
   /* ============ RFM SEGMENTS ============ */
-  --seg-champions: #12B76A;       /* success green — unambiguously positive */
-  --seg-loyal:     var(--sky-500);
-  --seg-potential: #7A5AF8;       /* unique purple — separates it from the 4 brand colours */
-  --seg-at-risk:   var(--gold-700);
-  --seg-lost:      var(--text-muted);
+  /* RFM segments are ORDINAL, not categorical — champions → loyal → potential → new → at risk →
+     lost is a health ranking, and colouring it as a rainbow throws that ordering away. Read in
+     order, this goes cool and confident (green, blue, purple, navy) then warns (gold) then fades
+     out (grey), so the shape of the donut carries meaning before any label is read.
+
+     Every value is an existing token or a shade of one. What was rendering instead came from the
+     DATABASE: seed-demo-brand.mjs writes a `color` field per segment (#22C55E, #3B82F6, #8B5CF6,
+     #06B6D4, #F59E0B, #EF4444 — Tailwind defaults, none of them ours) and the chart read it
+     straight off the document, bypassing both these tokens and getSegmentColor(). Colour is a
+     design decision, so it belongs here and not in a Firestore field. */
+  /* HOW MANY COLOURS THIS PALETTE CAN ACTUALLY CARRY: eight, measured.
+
+     The live data has TEN segments (champions, loyal, potential, recent, new, can't-lose-them,
+     at risk, needing attention, hibernating, lost). Ten distinguishable fills cannot be drawn from
+     four fixed brand hues without inventing new ones, and every arrangement tried either dropped a
+     slice under the 3:1 WCAG 1.4.11 asks of graphical objects or put two indistinguishable colours
+     next to each other in the ring.
+
+     What works: a second lightness step only where the base is dark enough to afford one. Navy at
+     11.85:1 lightens to 3.63:1 and stays 3.27:1 clear of its own base. Gold (3.24:1) and muted
+     grey (4.97:1) have no such room — tinting them lands at 2.10:1 and 2.79:1, so they keep one
+     value each and cover their whole band.
+
+     So at-risk covers three segments and lost covers two. Those slices are separated by the 2px
+     card-coloured stroke and identified by name and exact share in the legend beside them. The
+     real fix is grouping ten segments into bands, which is a product decision, not a styling one. */
+  --seg-champions: var(--success-700); /* 5.00:1 on white */
+  --seg-loyal:     var(--sky-500);     /* 6.03:1 */
+  --seg-potential: #7A5AF8;            /* 4.52:1 — unique purple, separate from the 4 brand hues */
+  --seg-new:       var(--navy-500);    /* 11.85:1 */
+  --seg-recent:    #6B87B9;            /*  3.63:1 — navy lightened 42%, still 3.27:1 clear of navy */
+  --seg-urgent:    var(--orange-700);  /*  5.60:1 — can't-lose-them: high value AND leaving */
+  --seg-at-risk:   var(--gold-700);    /*  3.24:1 */
+  --seg-lost:      var(--text-muted);  /*  4.97:1 */
 
   /* ============ APP CHROME — header and sidebar ============ */
   /* The chrome used to be a dark bar with white text at a dozen different opacities. Those are

@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { getSegmentColor, compareSegmentsByHealth } from '../../utils/segmentColors';
+import { useChartTheme } from '../../theme/chartTheme';
 import {
   TrendingUp,
   Users,
@@ -238,10 +240,19 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     lastGoodRfmSegmentsRef.current = { brandId: currentBrand.id, segments: rfmSegments };
   }, [currentBrand?.id, rfmSegments]);
 
+  const chartTheme = useChartTheme();
+
   const dashboardRfmSegments = useMemo(() => {
-    if (rfmSegments.length > 0) return rfmSegments;
-    if (!segmentsLoading || lastGoodRfmSegmentsRef.current.brandId !== currentBrand?.id) return rfmSegments;
-    return lastGoodRfmSegmentsRef.current.segments;
+    const source =
+      rfmSegments.length > 0
+        ? rfmSegments
+        : !segmentsLoading || lastGoodRfmSegmentsRef.current.brandId !== currentBrand?.id
+          ? rfmSegments
+          : lastGoodRfmSegmentsRef.current.segments;
+    // Health order, not whatever order the aggregate happened to store. The colour ramp is ordinal
+    // (see the --seg-* block in tokens.css), so the donut only reads as a ranking if the slices run
+    // in that order — otherwise the gradient is scrambled and looks categorical again.
+    return [...source].sort(compareSegmentsByHealth);
   }, [currentBrand?.id, rfmSegments, segmentsLoading]);
 
   const dashboardHasSegments =
@@ -1709,37 +1720,32 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     <stop offset="100%" stopColor={REV_CHART_ESHOP} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
+                {/* Grid, axes and tooltip all come from the shared chart theme now. They were
+                    #F0F0F0 / #57606a / #d0d7de written here by hand, which is one of five grey
+                    combinations the app used across its 25 charts. Axis lines are off: the gridline
+                    already marks the value, and a boxed axis competes with the series. */}
+                <CartesianGrid {...chartTheme.grid} />
                 <XAxis
                   dataKey="dateKey"
-                  tick={{ fill: '#57606a', fontSize: 12 }}
+                  {...chartTheme.axis}
                   tickFormatter={(v) => formatDashChartDateKeyTick(String(v))}
-                  axisLine={{ stroke: '#d0d7de' }}
-                  tickLine={{ stroke: '#d0d7de' }}
                 />
                 <YAxis
                   width={52}
-                  tick={{ fill: '#57606a', fontSize: 12 }}
-                  axisLine={{ stroke: '#d0d7de' }}
-                  tickLine={{ stroke: '#d0d7de' }}
+                  {...chartTheme.axis}
                   tickFormatter={formatRevenueChartYAxisTick}
                   tickCount={6}
                 />
                 <RechartsTooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #E8EAED',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    padding: '10px 14px',
-                    boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
-                  }}
+                  contentStyle={chartTheme.tooltipStyle.contentStyle}
+                  labelStyle={chartTheme.tooltipStyle.labelStyle}
+                  itemStyle={chartTheme.tooltipStyle.itemStyle}
+                  cursor={{ stroke: chartTheme.textMuted, strokeWidth: 1, strokeDasharray: '3 3' }}
                   labelFormatter={(label) => formatDashChartDateKeyTick(String(label))}
                   formatter={(value: unknown) => [
                     formatCurrencyCompact(Number(value) || 0),
                     revenuePerformanceChartLabel,
                   ]}
-                  labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                 />
                 <Area
                   type="linear"
@@ -1863,18 +1869,26 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     nameKey="name"
                     labelLine={false}
                   >
+                    {/*
+                      `fill={segment.color}` used to read a hex out of the Firestore document —
+                      Tailwind defaults written by the seeding and import paths, which is why this
+                      donut rendered in colours belonging to no palette. The colour now comes from
+                      the segment's ROLE via the --seg-* tokens. The stroke matches the card rather
+                      than being literal white, since that is what separates adjacent slices.
+                    */}
                     {dashboardRfmSegments.map((segment) => (
-                      <Cell key={segment.id} fill={segment.color ?? '#6B7280'} stroke="#fff" strokeWidth={2} />
+                      <Cell
+                        key={segment.id}
+                        fill={getSegmentColor(segment)}
+                        stroke={chartTheme.surface}
+                        strokeWidth={2}
+                      />
                     ))}
                   </Pie>
                   <RechartsTooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #d0d7de',
-                      borderRadius: '6px',
-                      fontSize: '12px',
-                      padding: '8px 12px'
-                    }}
+                    contentStyle={chartTheme.tooltipStyle.contentStyle}
+                    labelStyle={chartTheme.tooltipStyle.labelStyle}
+                    itemStyle={chartTheme.tooltipStyle.itemStyle}
                     formatter={(value: any, _name?: string, props?: any) => [
                       `${formatPercent((value as number) || 0, 1)} πελάτες`,
                       props?.payload?.name || ''
@@ -1890,7 +1904,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     <div className="flex items-center gap-2">
                       <div
                         className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: segment.color }}
+                        style={{ backgroundColor: getSegmentColor(segment) }}
                       />
                       <span className="text-[var(--text-secondary)]">{segment.name}</span>
                     </div>
