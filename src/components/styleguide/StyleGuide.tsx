@@ -1,4 +1,8 @@
 import { useMemo, useState } from 'react';
+import { Card, CardHeader } from '../common/Card';
+import { Button } from '../common/Button';
+import { KPICard } from '../common/KPICard';
+import { Skeleton, SkeletonKPI, SkeletonText } from '../common/Skeleton';
 import { WeightsRadar } from '../strategy/WeightsRadar';
 import { VelocitySpark } from '../common/VelocitySpark';
 import { SegmentTreemap } from '../rfm/SegmentTreemap';
@@ -615,6 +619,83 @@ function RadarDemo() {
   );
 }
 
+/**
+ * The real components, on the real canvas.
+ *
+ * Every other section on this page draws its own swatches with inline styles, which is right for
+ * proving a token resolves and useless for judging how the app looks: the page's own background is
+ * --surface-0, so a card rendered here sits on white no matter what the app's canvas is set to.
+ *
+ * This block deliberately paints --canvas-bg behind actual Card, KPICard, Button and Skeleton
+ * instances. It is the only place a visual direction can be assessed without logging in — which
+ * makes it the surface the three preview channels are meant to be compared on.
+ */
+function LiveComponents() {
+  const kpi = {
+    label: 'Σύνολο Εσόδων',
+    value: '€ 148.320',
+    change: 12,
+    changeLabel: 'vs προηγ. μήνα',
+    trend: 'up' as const,
+    sparklineData: [42, 48, 45, 61, 58, 72, 69, 84, 91, 88, 104, 118]
+  };
+
+  return (
+    <div
+      style={{
+        background: 'var(--canvas-bg)',
+        borderRadius: 'var(--ui-radius-lg)',
+        border: '1px solid var(--border)',
+        padding: 24,
+        display: 'grid',
+        gap: 20
+      }}
+    >
+      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        <KPICard kpi={kpi} index={0} />
+        <KPICard kpi={{ ...kpi, label: 'Παραγγελίες', value: '1.284', change: -4, trend: 'down', sparklineData: undefined }} index={1} />
+        <SkeletonKPI />
+      </div>
+
+      <Card padding="lg">
+        <CardHeader
+          title="Μια κάρτα με τίτλο"
+          subtitle="Η κάρτα, ο τίτλος της και τα κουμπιά της — όπως εμφανίζονται μέσα στην εφαρμογή."
+          action={<Button size="sm" variant="secondary">Ενέργεια</Button>}
+        />
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <Button variant="primary">Primary</Button>
+          <Button variant="secondary">Secondary</Button>
+          <Button variant="ghost">Ghost</Button>
+          <Button variant="danger">Danger</Button>
+          <Button variant="primary" size="sm">Small</Button>
+          <Button variant="primary" size="lg">Large</Button>
+        </div>
+        <p style={{ font: '400 12px Inter, sans-serif', color: 'var(--text-muted)', margin: '12px 0 0' }}>
+          All four variants are one element, so they share height, radius and focus ring. Tab through
+          them to see the ring; the primary is white on --orange-700 (5.60:1), not on --orange-500
+          (3.00:1) as it used to be.
+        </p>
+      </Card>
+
+      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+        <Card padding="lg" hover>
+          <CardHeader title="Interactive" subtitle="Hover me — this card responds; the one beside it does not." />
+          <p style={{ font: '400 13px/1.6 Inter, sans-serif', color: 'var(--text-secondary)', margin: 0 }}>
+            A static card must not lift, or the lift stops meaning "this is clickable".
+          </p>
+        </Card>
+        <Card padding="lg">
+          <CardHeader title="Loading" subtitle="A skeleton keeps the layout; a spinner throws it away and the page jumps." />
+          <SkeletonText lines={3} />
+          <div style={{ height: 12 }} />
+          <Skeleton height={28} width="45%" shape="card" />
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 export function StyleGuide() {
   return (
     <div style={{ background: 'var(--surface-0)', minHeight: '100vh' }}>
@@ -630,6 +711,13 @@ export function StyleGuide() {
             this page changes with it — that is what makes it a checkpoint rather than documentation.
           </p>
         </header>
+
+        <Section
+          title="Live components"
+          description="The real Card, KPICard, Button and Skeleton, on the real app canvas rather than on this page's white. Everything below this section is swatches; this is the part that shows how the app actually looks."
+        >
+          <LiveComponents />
+        </Section>
 
         <Section
           title="Brand"
