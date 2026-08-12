@@ -28,8 +28,9 @@ interface KPICardProps {
 
 export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
   const sparkGradientId = `kpi-spark-${useId().replace(/:/g, '')}`;
-  // Literal hex from the active profile; var(--nts-accent) does not resolve reliably
-  // inside SVG gradient stops / url(#id).
+  // A literal hex from the active profile. The old note here claimed var() does not resolve inside
+  // SVG gradient stops — measured in Chromium, it does, for stroke, fill and stop-color alike. The
+  // hook stays because the accent is a per-profile runtime value, not because var() is unavailable.
   const { accent: accentColor } = useAccentColor();
   const chartTheme = useChartTheme();
 
@@ -136,9 +137,11 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
           ) : null}
         </div>
 
-        <p className="kpi-value relative text-3xl font-bold text-[var(--nts-charcoal)] mb-1 font-mono tracking-tight">
-          {kpi.value}
-        </p>
+        {/* `.kpi-value` carries the size, face, weight and tabular figures — see tokens.css. It
+            replaces `text-3xl font-bold font-mono tracking-tight`, which set all four inline and
+            skipped the tabular figures the same class exists to apply. `relative` keeps it above
+            the sparkline that now sits behind the card. */}
+        <p className="kpi-value relative mb-1 truncate">{kpi.value}</p>
 
         {(kpi.change != null || kpi.changeLabel) && (
           <div className="relative flex items-center gap-2 mt-2">

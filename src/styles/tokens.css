@@ -179,25 +179,34 @@
      included. --font-display starts as Inter so the foundation looks unchanged,
      and is the single line a direction flips to start using what we already pay
      to load. */
-  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* DIRECTION A — the display face the project already pays to download starts being used.
+     index.css has imported Plus Jakarta Sans at four weights since the beginning, and /styleguide
+     is the only thing that ever rendered it; the app was Inter everywhere, headings included. That
+     is most of why the styleguide looks better than the product. */
+  --font-display: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono:    'JetBrains Mono', ui-monospace, monospace;
 
   /* The ramp the app actually uses today: page titles are text-xl rising to
      text-2xl at sm, section titles text-lg, body text-sm, dense labels 10-11px. */
-  --type-display:  clamp(1.5rem, 1.25rem + 1.2vw, 1.875rem); /* hero figures / display */
-  --type-h1:       clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);   /* page title */
-  --type-h2:       1.125rem;  /* section / card title */
-  --type-h3:       1rem;
-  --type-body:     0.875rem;  /* 14px — matches body in index.css */
+  /* DIRECTION A — a real scale, with the dynamic range the app never had.
+     The audit counted 2.012 uses between 10px and 14px against 169 above 20px: a ratio of 12:1
+     toward the small, with the largest common heading at 24px. That is not a hierarchy, it is a
+     puddle. The page title moves from a flat 20→24px to 32→52px, and the body from 14px to 15px
+     with looser leading, because this direction asks type to carry the design on its own. */
+  --type-display:  clamp(2.5rem, 1.9rem + 2.6vw, 4rem);      /* hero figures / display */
+  --type-h1:       clamp(2rem, 1.55rem + 2vw, 3.25rem);      /* page title */
+  --type-h2:       clamp(1.25rem, 1.15rem + 0.5vw, 1.5rem);  /* section / card title */
+  --type-h3:       1.0625rem;
+  --type-body:     0.9375rem; /* 15px — reading size, not UI size */
   --type-small:    0.8125rem;
   --type-micro:    0.6875rem; /* dense table labels */
 
-  --leading-tight: 1.15;
+  --leading-tight: 1.05;      /* large headings only; anything smaller collides at this value */
   --leading-snug:  1.35;
-  --leading-body:  1.5;
-  --tracking-tight: 0;        /* directions tighten large headings from here */
-  --measure:       none;      /* max line length for long-form prose */
+  --leading-body:  1.65;      /* long-form leading, from 1.5 */
+  --tracking-tight: -0.03em;  /* large type needs negative tracking or it reads loose */
+  --measure:       68ch;      /* prose stops here rather than running the full width */
 
   /* ---- SPACE — 4px base ----
      Named so a direction can open up the page without every component being
@@ -212,8 +221,12 @@
   --space-10: 40px;
   --space-12: 48px;
   --space-16: 64px;
-  --space-page-top: var(--space-4);   /* band above a page title */
-  --space-section:  var(--space-6);   /* between major blocks */
+  /* DIRECTION A — the contrast between dense and open is the whole point.
+     Amateur layouts are evenly spaced; this one is deliberately not. The band above a page title
+     goes to 64px so the title arrives after a pause, while the inside of a data table stays at 12px
+     because that is where density is correct. */
+  --space-page-top: var(--space-16);
+  --space-section:  var(--space-12);
 
   /* ---- RADIUS ----
      Namespaced `--ui-radius-*` and NOT `--radius-*`, which is Tailwind 4's own theme namespace:
@@ -234,15 +247,20 @@
      border 1.24:1 on white, so the only thing separating a card from the page is
      the shadow below. Naming the three lets a direction fix that by re-valuing
      them rather than by editing Card.tsx. */
-  --canvas-bg:   var(--surface-1);
-  --card-bg:     var(--surface-0);
-  --card-border: var(--borderColor-default, #d0d7de);
-  --card-radius: var(--ui-radius-md);
-  --edge-highlight: transparent;  /* inset top hairline; off by default */
+  /* DIRECTION A — paper. There is no box.
+     The card stops being a container and becomes a passage: same white as the page, no border on
+     three sides, no shadow, grouped by a rule above it and by the space around it. Depth is spent
+     entirely on things that genuinely float — modals, popovers, the command palette — which is what
+     makes those read as above the page instead of merely on it. */
+  --canvas-bg:   var(--surface-0);
+  --card-bg:     transparent;
+  --card-border: transparent;
+  --card-radius: 0;
+  --edge-highlight: transparent;
 
-  --elev-1: 0 2px 6px rgba(0, 0, 0, 0.10), 0 1px 3px rgba(0, 0, 0, 0.08);
-  --elev-2: 0 6px 20px rgba(0, 0, 0, 0.14), 0 3px 8px rgba(0, 0, 0, 0.10);
-  --elev-3: 0 24px 60px rgba(16, 24, 40, 0.12);  /* overlays, modals, popovers */
+  --elev-1: none;
+  --elev-2: none;
+  --elev-3: 0 24px 60px rgba(16, 24, 40, 0.12);  /* overlays, modals, popovers — the only depth left */
 
   /* ---- BUTTON ----
      The primary button rendered white on --nts-accent (#FE630C) = 3.00:1, which colors.md §3 and
@@ -337,11 +355,16 @@
  * values. `data-interactive` marks the cards that respond to the pointer; a static card must not
  * lift, or the lift stops meaning "this is clickable".
  */
+/* DIRECTION A — the rule replaces the box.
+   A hairline above the block and the whitespace around it group content just as well as four
+   borders do, and they do it without drawing 40 rectangles on a page. This is the change that
+   decides whether the direction reads as editorial or as an admin template. */
 .surface {
   background: var(--card-bg);
-  border: 1px solid var(--card-border);
+  border: none;
+  border-top: 1px solid var(--border);
   border-radius: var(--card-radius);
-  box-shadow: var(--elev-1), inset 0 1px 0 var(--edge-highlight);
+  box-shadow: none;
   transition:
     background-color var(--dur-state) var(--ease-out),
     border-color var(--dur-state) var(--ease-out),
@@ -349,10 +372,11 @@
     transform var(--dur-state) var(--ease-out);
 }
 
+/* DIRECTION A — with no box to lift, the rule itself does the work: the hairline darkens to the
+   text colour, the way a heading rule thickens under the cursor in print. */
 .surface[data-interactive='true']:hover,
 .surface[data-interactive='true']:focus-visible {
-  border-color: var(--border-strong, var(--card-border));
-  box-shadow: var(--elev-2), inset 0 1px 0 var(--edge-highlight);
+  border-top-color: var(--text-primary);
 }
 
 /**
@@ -468,6 +492,31 @@
   letter-spacing: var(--tracking-tight);
   color: var(--text-heading);
   text-wrap: balance;
+}
+
+/* DIRECTION A — the title arrives after a pause, and the prose under it stops at a readable
+   measure instead of running the full width of a 1400px shell. A 200-character line is the reason
+   dense dashboards feel like documentation nobody reads. */
+.page-title {
+  margin-top: var(--space-page-top);
+}
+
+.page-title ~ p,
+.page-title ~ div > p {
+  max-width: var(--measure);
+  font-size: var(--type-body);
+  line-height: var(--leading-body);
+}
+
+/* DIRECTION A — the KPI figure. Still monospaced, because a figure that changes width as it
+   updates is worse than one that is not on brand, but given the room the scale now allows. */
+.kpi-value {
+  font-family: var(--font-mono);
+  font-size: clamp(1.75rem, 1.4rem + 1.5vw, 2.5rem);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
 }
 
 /**
