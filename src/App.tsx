@@ -2,7 +2,14 @@ import { useState, useEffect, useLayoutEffect, useCallback, lazy, Suspense, type
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
-import { ToastProvider, ErrorBoundary, Spinner } from './components/common';
+import {
+  ToastProvider,
+  ErrorBoundary,
+  SkeletonScreen,
+  SkeletonPageHeader,
+  SkeletonKPI,
+  SkeletonChart,
+} from './components/common';
 import { AuthGuard, InviteAcceptPage, InviteUserSection } from './components/auth';
 import { AppShell } from './components/layout';
 import { AIInsightsTriggerWrapper } from './components/insights/AIInsightsPanel';
@@ -249,6 +256,32 @@ function normalizeHashPath(segmentPart: string): string {
   return (raw.startsWith('/') ? raw.slice(1) : raw).trim();
 }
 
+/**
+ * What every section shows while its chunk is still downloading.
+ *
+ * This fallback is shared by all 39 lazy sections, so it cannot be any one of their layouts. It is
+ * the shape they have in common — a header, a row of figures, two panels — which is enough for the
+ * page to arrive in place rather than expand into an empty 64px box. The old `<Spinner size="lg">`
+ * in a `h-64` div gave the route no height at all, so every section switch collapsed the scroll
+ * position and then jumped when the chunk resolved.
+ */
+function RouteFallback() {
+  return (
+    <SkeletonScreen label="Φόρτωση σελίδας" className="space-y-6">
+      <SkeletonPageHeader />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-5">
+        <SkeletonKPI />
+        <SkeletonKPI />
+        <SkeletonKPI />
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <SkeletonChart height={220} />
+        <SkeletonChart height={220} />
+      </div>
+    </SkeletonScreen>
+  );
+}
+
 /** Hash routing + AppShell — must render under AuthGuard → BrandProvider (useModules → useBrand). */
 function AppMain() {
   const { isSectionEnabled, getFallbackSection, resolveAccessibleSection } = useModules();
@@ -472,7 +505,7 @@ function AppMain() {
         onSectionChange={handleSectionChange}
       >
         <ErrorBoundary>
-          <Suspense fallback={<div className="flex items-center justify-center h-64"><Spinner size="lg" /></div>}>
+          <Suspense fallback={<RouteFallback />}>
             {renderContent()}
           </Suspense>
         </ErrorBoundary>

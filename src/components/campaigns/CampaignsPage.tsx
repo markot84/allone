@@ -2,7 +2,21 @@ import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { TrendingUp, Filter, Download, Search, DollarSign, Trash2, ArrowUp, ArrowDown, ArrowUpDown, Wallet } from 'lucide-react';
-import { Card, CardHeader, Badge, Button, Spinner, useToast, Tooltip, AlertsBanner, PageHeader, MetaAttributionSelector } from '../common';
+import {
+  Card,
+  CardHeader,
+  Badge,
+  Button,
+  useToast,
+  Tooltip,
+  AlertsBanner,
+  PageHeader,
+  MetaAttributionSelector,
+  SkeletonScreen,
+  SkeletonPageHeader,
+  SkeletonKPI,
+  SkeletonTable,
+} from '../common';
 import { CampaignsGeoTab } from './CampaignsGeoTab';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useCampaigns } from '../../hooks/useCampaigns';
@@ -588,9 +602,15 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Spinner size="lg" label="Loading campaigns…" />
-      </div>
+      <SkeletonScreen label="Φόρτωση καμπανιών" className="space-y-6">
+        <SkeletonPageHeader />
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <SkeletonKPI key={i} />
+          ))}
+        </div>
+        <SkeletonTable rows={8} columns={6} />
+      </SkeletonScreen>
     );
   }
 

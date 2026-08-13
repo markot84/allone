@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Building2, Plus, ChevronRight, Edit3, Loader2, Save, X } from 'lucide-react';
-import { Card, Button, PageHeader, Spinner } from '../common';
+import { Card, Button, PageHeader, SkeletonScreen, SkeletonCard } from '../common';
 import { useBrand } from '../../hooks/useBrand';
 import { useAuth } from '../../hooks';
 import { BrandCreateForm } from '../auth/BrandCreateForm';
@@ -143,11 +143,15 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
       )}
 
       {loading ? (
-        <Card padding="lg" className="py-12">
-          <div className="flex justify-center">
-            <Spinner size="md" label="Φόρτωση brands..." />
-          </div>
-        </Card>
+        // The grid the brands land in, not a centred spinner in a box of a different height.
+        <SkeletonScreen
+          label="Φόρτωση brands"
+          className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
+        >
+          {[0, 1, 2].map((i) => (
+            <SkeletonCard key={i} lines={2} />
+          ))}
+        </SkeletonScreen>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {brands.map((brand, index) => {

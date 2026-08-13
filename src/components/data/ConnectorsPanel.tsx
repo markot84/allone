@@ -10,7 +10,7 @@ import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
 import { FirestoreService } from '../../services/firestore';
 import { refreshProductIntelligenceOnServer } from '../../services/productIntelligenceAggregate';
-import { Card, Button, Spinner, useToast, PageHeader } from '../common';
+import { Card, Button, Spinner, useToast, PageHeader, SkeletonScreen, SkeletonCard } from '../common';
 import type { ModuleId } from '../../types';
 import { isSectionHidden } from '../../config/modules';
 import {
@@ -3036,13 +3036,23 @@ export function ConnectorsPanel() {
           )}
 
           {loading ? (
-            <div className="rounded-xl border border-dashed border-[#D1D5DB] bg-[#FAFAFA] px-4 py-8 text-center">
-              <Spinner size="sm" className="mx-auto mb-3" />
-              <p className="text-sm font-semibold text-[#4B5563]">Ανάκτηση αποθηκευμένων συνδέσεων…</p>
-              <p className="mt-1 text-xs text-[#9CA3AF]">
-                Οι ρυθμίσεις παραμένουν ασφαλώς στη Firebase. Δεν γίνεται reset σε refresh.
-              </p>
-            </div>
+            // The reassurance is the point of this block, so the copy stays; what changes is that
+            // the connector groups it resolves into are now drawn underneath it.
+            <SkeletonScreen label="Ανάκτηση αποθηκευμένων συνδέσεων" className="space-y-4">
+              <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-1)] px-4 py-5 text-center">
+                <p className="text-sm font-semibold text-[var(--text-secondary)]">
+                  Ανάκτηση αποθηκευμένων συνδέσεων…
+                </p>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                  Οι ρυθμίσεις παραμένουν ασφαλώς στη Firebase. Δεν γίνεται reset σε refresh.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {[0, 1, 2].map((i) => (
+                  <SkeletonCard key={i} lines={1} padding={16} />
+                ))}
+              </div>
+            </SkeletonScreen>
           ) : (
             <div className="space-y-8">
               {connectorGroups.map((group) => {

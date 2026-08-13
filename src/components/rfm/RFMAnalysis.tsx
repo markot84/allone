@@ -24,7 +24,21 @@ import {
   Tooltip,
   CartesianGrid
 } from 'recharts';
-import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useToast, PageHeader, DataSourcePill } from '../common';
+import {
+  Card,
+  CardHeader,
+  Badge,
+  Button,
+  Tooltip as InfoTooltip,
+  useToast,
+  PageHeader,
+  DataSourcePill,
+  Skeleton,
+  SkeletonText,
+  SkeletonScreen,
+  SkeletonKPI,
+  SkeletonChart,
+} from '../common';
 import { useSegments, type SegmentsDataSource } from '../../hooks/useSegments';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBrand } from '../../hooks/useBrand';
@@ -324,9 +338,11 @@ export function RFMAnalysis() {
         />
         <Card padding="lg" className="max-w-2xl mx-auto">
           {stillLoadingOrders ? (
-            <div className="flex flex-col items-center gap-3 py-8 text-center">
-              <Spinner size="lg" />
-              <p className="text-sm font-semibold text-[#1A1A1A]">Φόρτωση παραγγελιών e-shop…</p>
+            <div className="flex flex-col gap-4 py-6" role="status" aria-busy="true" aria-label="Φόρτωση παραγγελιών e-shop">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">Φόρτωση παραγγελιών e-shop…</p>
+              {/* Left-aligned lines rather than a centred spinner: this card resolves into prose or
+                  into an error, both of which start at the left edge. */}
+              <SkeletonText lines={3} />
             </div>
           ) : ordersError ? (
             <div className="text-center py-8">
@@ -886,63 +902,72 @@ function LoadingStatusPill({ label }: { label: string }) {
   );
 }
 
+/**
+ * Data Analysis while the segments load.
+ *
+ * This screen already had a skeleton, but it predates the design system: every block was an
+ * `animate-pulse` div over a hardcoded grey (#E5E7EB, #F3F4F6, #FAFBFC, #E8EAED). That reads as a
+ * different era on the redesigned surfaces, and worse, it does not follow a direction — A, B, C
+ * and D each move `--surface-*`, so the page would have loaded in one palette and resolved into
+ * another. Rebuilt on the shared kit, which is token-only, so it now inherits whichever direction
+ * is running.
+ *
+ * The real title is kept rather than skeletonised. It is known before the data is — the page is
+ * always called "Data Analysis" — and a placeholder over a string we already have is a placeholder
+ * that makes the app look slower than it is.
+ */
 function DataAnalysisSkeleton() {
   return (
-    <div className="space-y-3" aria-busy="true" aria-label="Φόρτωση Data Analysis">
+    <SkeletonScreen label="Φόρτωση Data Analysis" className="space-y-3">
       <PageHeader
         className="gap-2 lg:gap-4 [&_.space-y-1]:space-y-0"
         title="Data Analysis"
         actions={
           <>
-            <div className="h-9 w-28 animate-pulse rounded-lg bg-[#F3F4F6]" />
-            <div className="h-9 w-28 animate-pulse rounded-lg bg-[#F3F4F6]" />
-            <div className="h-9 w-32 animate-pulse rounded-lg bg-[#F3F4F6]" />
+            <Skeleton height={36} width={112} shape="card" />
+            <Skeleton height={36} width={112} shape="card" />
+            <Skeleton height={36} width={128} shape="card" />
           </>
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#E8EAED] bg-[#FAFBFC] px-3 py-2">
-        <div className="h-6 w-48 animate-pulse rounded-lg bg-[#E5E7EB]" />
-        <div className="h-4 w-24 animate-pulse rounded bg-[#E5E7EB]" />
-        <div className="h-6 w-28 animate-pulse rounded-full bg-[#E5E7EB]" />
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2">
+        <Skeleton height={24} width={192} shape="card" />
+        <Skeleton height={16} width={96} />
+        <Skeleton height={24} width={112} shape="pill" />
       </div>
 
-      <div className="rounded-2xl border border-[#E5E7EB] bg-white p-3 shadow-sm">
-        <div className="mb-3 h-4 w-40 animate-pulse rounded bg-[#E5E7EB]" />
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <Card padding="md">
+        <Skeleton height={16} width={160} />
+        <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="rounded-xl border border-[#E5E7EB] bg-white p-4">
-              <div className="mb-3 h-3 w-20 animate-pulse rounded bg-[#E5E7EB]" />
-              <div className="h-5 w-14 animate-pulse rounded bg-[#E5E7EB]" />
+            <div key={i} className="surface" style={{ padding: 16 }}>
+              <Skeleton height={12} width={80} />
+              <div style={{ height: 12 }} />
+              <Skeleton height={20} width={56} />
             </div>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div className="flex w-fit items-center gap-1 rounded-xl bg-[var(--nts-light-gray)] p-1">
+      {/* The three tabs, at their real size — this strip is the page's main control. */}
+      <div className="flex w-fit items-center gap-1 rounded-xl bg-[var(--surface-2)] p-1">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-8 w-24 animate-pulse rounded-lg bg-white" />
+          <Skeleton key={i} height={32} width={96} shape="card" />
         ))}
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
-          <Card key={i} padding="md">
-            <div className="h-4 w-24 animate-pulse rounded bg-[#E5E7EB]" />
-            <div className="mt-4 h-7 w-16 animate-pulse rounded bg-[#E5E7EB]" />
-          </Card>
+          <SkeletonKPI key={i} />
         ))}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {[0, 1].map((i) => (
-          <Card key={i} padding="lg">
-            <div className="mb-6 h-5 w-44 animate-pulse rounded bg-[#E5E7EB]" />
-            <div className="mx-auto h-64 max-w-sm animate-pulse rounded-full bg-[#F3F4F6]" />
-          </Card>
-        ))}
+        <SkeletonChart height={240} variant="donut" />
+        <SkeletonChart height={240} variant="donut" />
       </div>
-    </div>
+    </SkeletonScreen>
   );
 }
 

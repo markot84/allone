@@ -17,7 +17,15 @@ import {
   Send,
   PenLine,
 } from 'lucide-react';
-import { Card, Badge, Spinner, FormattedProse, toPlainProseText, PageHeader } from '../common';
+import {
+  Card,
+  Badge,
+  FormattedProse,
+  toPlainProseText,
+  PageHeader,
+  SkeletonScreen,
+  SkeletonCard,
+} from '../common';
 import { logger } from '../../utils/logger';
 import { sanitizeClipboardText } from '../../utils/spreadsheetSafe';
 // Data is now read from activeStrategy.contentSuggestions (persisted on strategy save)
@@ -278,9 +286,11 @@ export function ContentStrategy() {
 
       {/* Loading state */}
       {hasStrategy && suggestionsLoading && (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-orange-100/80 bg-gradient-to-b from-amber-50/30 to-white py-20">
-          <Spinner size="lg" label="Φόρτωση ιδεών περιεχομένου..." />
-        </div>
+        <SkeletonScreen label="Φόρτωση ιδεών περιεχομένου" className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {[0, 1, 2, 3].map((i) => (
+            <SkeletonCard key={i} lines={3} />
+          ))}
+        </SkeletonScreen>
       )}
 
       {/* Empty state when strategy exists but no content suggestions saved */}

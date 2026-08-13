@@ -362,14 +362,28 @@
  * reads as something arriving. It animates `background-position`, which does not touch layout.
  * The global reduced-motion rule at the end of this file collapses it to a flat block, which is
  * the correct still frame.
+ *
+ * THE SHEEN IS CAPPED BELOW THE CANVAS, and that is the whole point of `--skeleton-sheen`.
+ * It used to sweep to `--surface-0` — solid #FFFFFF — while the canvas behind it is --surface-1,
+ * #FAFBFC. White is LIGHTER than the canvas, so at the peak of every pass the placeholder stopped
+ * being a shape and became a hole, and a screen of them read as an empty page twice a second.
+ * Measured: base 1.064:1 against the canvas and correctly darker; the old peak 1.036:1 and
+ * inverted. At 50% white the peak lands on #F8FAFB, still darker than the canvas, so the block
+ * keeps its shape through the entire sweep. 60% already crosses back over — there is not much room
+ * here, which is why this is a token and not a number buried in a gradient.
  */
+:root {
+  --skeleton-bg: var(--surface-2);
+  --skeleton-sheen: rgba(255, 255, 255, 0.5);
+}
+
 .skeleton {
   display: block;
-  background-color: var(--surface-2);
+  background-color: var(--skeleton-bg);
   background-image: linear-gradient(
     90deg,
     transparent 0%,
-    var(--surface-0) 50%,
+    var(--skeleton-sheen) 50%,
     transparent 100%
   );
   background-size: 200% 100%;

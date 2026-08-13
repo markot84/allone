@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../hooks/useBrand';
 import { useRefreshProcurementSignals } from '../../hooks/useProcurementSignals';
 import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink, Package, Users, BarChart3, Euro, ClipboardList } from 'lucide-react';
-import { Card, Button, Spinner, ProgressBar, useToast, Badge, PageHeader } from '../common';
+import { Card, Button, Spinner, ProgressBar, useToast, Badge, PageHeader, SkeletonScreen, SkeletonCard } from '../common';
 import { importFile, saveImportJob, getImportJobs, getLastImportDates, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress, type CampaignChannelOverride } from '../../services/import';
 import { auth, buildFunctionUrl, getAppCheckHeader } from '../../config/firebase';
 import { FEED_SOURCE_OPTIONS, downloadGoogleAdsCsvTemplate, type FeedSourceType } from '../../data/feedSourceConfig';
@@ -1073,9 +1073,11 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                 </h3>
                 <div className="space-y-3">
                   {historyLoading ? (
-                    <div className="py-12">
-                      <Spinner size="md" label="Φόρτωση ιστορικού…" />
-                    </div>
+                    <SkeletonScreen label="Φόρτωση ιστορικού εισαγωγών" className="space-y-3">
+                      {[0, 1, 2].map((i) => (
+                        <SkeletonCard key={i} lines={1} padding={16} />
+                      ))}
+                    </SkeletonScreen>
                   ) : importHistory.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       Δεν υπάρχει ιστορικό εισαγωγών ακόμα

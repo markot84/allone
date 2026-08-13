@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Key, Copy, Trash2, Plus, Check, Eye, EyeOff, Code, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Card, Button, Badge, Spinner, useToast, PageHeader } from '../common';
+import { Card, Button, Badge, Spinner, useToast, PageHeader, SkeletonScreen, SkeletonCard } from '../common';
 import { useBrand } from '../../hooks/useBrand';
 import { useAuth } from '../../hooks/useAuth';
 import { FirestoreService } from '../../services/firestore';
@@ -215,11 +215,17 @@ export function ApiKeyManager() {
 
         {/* Keys list */}
         {loading ? (
-          <div className="rounded-lg border border-dashed border-[#D1D5DB] bg-[#FAFAFA] px-4 py-5 text-center text-[var(--nts-medium-gray)]">
-            <Spinner size="sm" className="mx-auto mb-2" />
-            <p className="text-sm font-medium text-[#4B5563]">Ανάκτηση αποθηκευμένων API keys…</p>
-            <p className="mt-1 text-xs">Οι ρυθμίσεις παραμένουν στη Firebase. Δεν γίνεται reset.</p>
-          </div>
+          <SkeletonScreen label="Ανάκτηση αποθηκευμένων API keys" className="space-y-3">
+            <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-1)] px-4 py-4 text-center text-[var(--text-secondary)]">
+              <p className="text-sm font-medium">Ανάκτηση αποθηκευμένων API keys…</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                Οι ρυθμίσεις παραμένουν στη Firebase. Δεν γίνεται reset.
+              </p>
+            </div>
+            {[0, 1].map((i) => (
+              <SkeletonCard key={i} lines={1} padding={12} />
+            ))}
+          </SkeletonScreen>
         ) : activeKeys.length === 0 ? (
           <div className="py-8 text-center text-[var(--nts-medium-gray)]">
             <Key size={32} className="mx-auto mb-2 opacity-20" />

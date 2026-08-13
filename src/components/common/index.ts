@@ -4,7 +4,16 @@ export { Badge } from './Badge';
 export { Slider } from './Slider';
 export { ProgressBar } from './ProgressBar';
 export { Spinner } from './Spinner';
-export { Skeleton, SkeletonText, SkeletonKPI } from './Skeleton';
+export {
+  Skeleton,
+  SkeletonScreen,
+  SkeletonText,
+  SkeletonKPI,
+  SkeletonCard,
+  SkeletonChart,
+  SkeletonTable,
+  SkeletonPageHeader,
+} from './Skeleton';
 export { ChartTooltip } from './ChartTooltip';
 export { VariantBadge } from './VariantBadge';
 export { ErrorBoundary } from './ErrorBoundary';

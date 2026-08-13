@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus, RefreshCw, Trash2, Pencil, Link as LinkIcon, FileText } from 'lucide-react';
-import { Card, Button, Spinner, useToast, PageHeader } from '../common';
+import { Card, Button, Spinner, useToast, PageHeader, SkeletonScreen, SkeletonCard } from '../common';
 import { useFeedSources } from '../../hooks/useFeedSources';
 import { useBrand } from '../../hooks/useBrand';
 import { FEED_SOURCE_OPTIONS } from '../../data/feedSourceConfig';
@@ -216,9 +216,11 @@ export function FeedSourcesSection() {
         )}
 
         {isLoading ? (
-          <div className="py-8 flex justify-center">
-            <Spinner size="md" />
-          </div>
+          <SkeletonScreen label="Φόρτωση feed sources" className="space-y-2 py-2">
+            {[0, 1].map((i) => (
+              <SkeletonCard key={i} lines={1} padding={12} />
+            ))}
+          </SkeletonScreen>
         ) : feedSources.length === 0 ? (
           <p className="text-sm text-[#6B7280] py-4">
             Δεν υπάρχουν αποθηκευμένα feed sources. Προσθέστε ένα για γρήγορη εισαγωγή με «Sync τώρα».

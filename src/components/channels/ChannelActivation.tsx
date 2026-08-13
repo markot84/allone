@@ -199,14 +199,17 @@ const ACTION_TYPE_CONFIG = {
 
 type ChannelStatus = 'pending' | 'in_progress' | 'done';
 
-/** Pulse skeleton block — neutral gray, animated. */
+/**
+ * Skeleton block, sized by the caller's Tailwind classes.
+ *
+ * Deliberately still local rather than the shared `<Skeleton>` from `../common`: the 14 call sites
+ * below size themselves with classes (`h-4 w-32`), and the shared component writes width and height
+ * as inline styles, which would beat every one of those classes. What it no longer has is its own
+ * look — the `animate-pulse` over a hardcoded #F0F0F0/#F8F8F8 gradient is gone, and this now renders
+ * the design system's `.skeleton` sweep, so it follows whichever direction is running.
+ */
 function Skeleton({ className = '', style }: { className?: string; style?: React.CSSProperties }) {
-  return (
-    <div
-      className={`animate-pulse rounded-md bg-gradient-to-r from-[#F0F0F0] via-[#F8F8F8] to-[#F0F0F0] ${className}`}
-      style={style}
-    />
-  );
+  return <div aria-hidden="true" className={`skeleton rounded-md ${className}`.trim()} style={style} />;
 }
 
 function PieSkeleton() {
@@ -214,7 +217,7 @@ function PieSkeleton() {
     <div className="flex items-center justify-center" style={{ width: '100%', height: 256 }}>
       <div className="relative" style={{ width: 170, height: 170 }}>
         <Skeleton className="!rounded-full" style={{ width: 170, height: 170 }} />
-        <div className="absolute inset-[22px] rounded-full bg-white" />
+        <div className="absolute inset-[22px] rounded-full bg-[var(--card-bg)]" />
       </div>
     </div>
   );

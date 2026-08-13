@@ -3,7 +3,14 @@ import { Card, CardHeader } from '../common/Card';
 import { Button } from '../common/Button';
 import { KPICard } from '../common/KPICard';
 import { PageHeader } from '../common/PageHeader';
-import { Skeleton, SkeletonKPI, SkeletonText } from '../common/Skeleton';
+import {
+  Skeleton,
+  SkeletonKPI,
+  SkeletonText,
+  SkeletonChart,
+  SkeletonTable,
+  SkeletonPageHeader,
+} from '../common/Skeleton';
 import { WeightsRadar } from '../strategy/WeightsRadar';
 import { VelocitySpark } from '../common/VelocitySpark';
 import { SegmentTreemap } from '../rfm/SegmentTreemap';
@@ -715,6 +722,29 @@ function LiveComponents() {
           <Skeleton height={28} width="45%" shape="card" />
         </Card>
       </div>
+
+      {/*
+        The loading vocabulary, in one place.
+
+        These are the pieces the 14 converted screens are assembled from, so this block is where a
+        direction gets checked: every value in them is a token, which is why the same code renders
+        correctly on A, B, C and D. If a skeleton ever looks like it belongs to a different branch
+        than the card beside it, a hardcoded grey has come back and it will show here first.
+      */}
+      <Card padding="lg">
+        <CardHeader
+          title="Το λεξιλόγιο της φόρτωσης"
+          subtitle="Header, chart, table — τα σχήματα που δανείζονται οι σελίδες αντί για spinner."
+        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <SkeletonPageHeader />
+          <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+            <SkeletonChart height={160} />
+            <SkeletonChart height={160} variant="donut" />
+          </div>
+          <SkeletonTable rows={4} columns={4} />
+        </div>
+      </Card>
     </div>
   );
 }

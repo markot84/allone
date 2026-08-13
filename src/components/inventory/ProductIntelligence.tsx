@@ -34,6 +34,8 @@ import {
   ProductThumbnail,
   ColumnExcelFilter,
   VelocitySpark,
+  Skeleton,
+  SkeletonScreen,
 } from '../common';
 import { hasVelocityData } from '../../utils/salesVelocity';
 import type { ExcelFilterOption } from '../common';
@@ -82,88 +84,91 @@ const EMPTY_INVENTORY_SUMMARY: InventorySummary = {
   low_stock: { count: 0, percentage: 0 },
 };
 
-/** Skeleton: same structure as the page (cards + table) — no blank screen while loading. */
+/**
+ * Skeleton: same structure as the page (cards + table) — no blank screen while loading.
+ *
+ * The structure was already right, down to the responsive `hidden sm:table-cell` columns and the
+ * real column labels, which are known before the rows are. What was wrong was every colour: eight
+ * hardcoded greys (#E5E7EB, #F3F4F6, #E8E8E8, #FAFAFA, #F5F5F5, #9CA3AF…) and `animate-pulse`, all
+ * from before the design system. Those follow no direction — A/B/C/D each move `--surface-*` — so
+ * the page loaded in one palette and resolved into another. Now it is the shared kit throughout,
+ * which is tokens only.
+ */
 function ProductIntelligenceSkeleton() {
   return (
-    <div className="space-y-6">
+    <SkeletonScreen label="Φόρτωση δεδομένων προϊόντων" className="space-y-6">
       <div
         className="rounded-xl border border-[var(--nts-accent)]/25 bg-gradient-to-r from-orange-50/90 via-amber-50/50 to-white px-4 py-3.5 flex flex-wrap items-center gap-3 text-sm shadow-sm"
-        role="status"
-        aria-live="polite"
       >
         <Loader2 className="h-5 w-5 animate-spin text-[var(--nts-accent-text)] flex-shrink-0" aria-hidden />
-        <span className="font-semibold text-[#9A3412]">Φόρτωση δεδομένων προϊόντων…</span>
-        <span className="text-[#78716C] text-xs sm:text-sm">
+        <span className="font-semibold text-[var(--nts-accent-text)]">Φόρτωση δεδομένων προϊόντων…</span>
+        <span className="text-[var(--text-secondary)] text-xs sm:text-sm">
           Εμφανίζεται το layout· τα νούμερα ενημερώνονται όταν ολοκληρωθεί το sync.
         </span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div
-            key={i}
-            className="rounded-xl border border-[#E8E8E8] bg-white p-4 h-[108px] shadow-sm"
-          >
-            <div className="h-3 w-28 bg-[#E5E7EB] rounded-md mb-4 animate-pulse" />
-            <div className="h-8 w-24 bg-[#E5E7EB] rounded-md animate-pulse" />
+          <div key={i} className="surface" style={{ padding: 16, height: 108 }}>
+            <Skeleton height={12} width={112} />
+            <div style={{ height: 16 }} />
+            <Skeleton height={32} width={96} />
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-[88px] rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] animate-pulse" />
+          <Skeleton key={i} height={88} shape="card" />
         ))}
       </div>
 
-      <Card padding="none" className="overflow-hidden border-[#E8E8E8] shadow-sm">
-        <div className="p-4 border-b border-[#E5E5E5] flex flex-wrap gap-3">
-          <div className="h-10 flex-1 min-w-[200px] max-w-md bg-[#F3F4F6] rounded-lg animate-pulse" />
-          <div className="h-10 w-36 bg-[#F3F4F6] rounded-lg animate-pulse hidden sm:block" />
-          <div className="h-10 w-36 bg-[#F3F4F6] rounded-lg animate-pulse hidden md:block" />
+      <Card padding="none" className="overflow-hidden">
+        <div className="p-4 border-b border-[var(--border)] flex flex-wrap gap-3">
+          <Skeleton height={40} shape="card" className="flex-1 min-w-[200px] max-w-md" />
+          <Skeleton height={40} width={144} shape="card" className="hidden sm:block" />
+          <Skeleton height={40} width={144} shape="card" className="hidden md:block" />
         </div>
         <div className="overflow-x-auto max-h-[min(52vh,480px)]">
           <table className="data-table w-full">
             <thead>
-              <tr className="bg-[#F5F5F5]">
+              <tr>
                 {['Προϊόν', 'Margin', 'Stock', 'DOS', 'Τιμή'].map((label, i) => (
-                  <th key={label + i} className="px-3 py-2.5 text-left">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">
-                      {label}
-                    </span>
+                  <th key={label + i} className="px-3 py-2.5">
+                    {label}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {Array.from({ length: 14 }).map((_, row) => (
-                <tr key={row} className="border-b border-[#F3F4F6]">
+                <tr key={row}>
                   <td className="px-3 py-3">
-                    <div className="h-4 bg-[#E5E7EB] rounded animate-pulse w-[min(100%,14rem)]" />
+                    <Skeleton height={16} className="w-[min(100%,14rem)]" />
                   </td>
                   <td className="px-3 py-3">
-                    <div className="h-4 w-12 bg-[#E5E7EB] rounded animate-pulse" />
+                    <Skeleton height={16} width={48} />
                   </td>
                   <td className="px-3 py-3 hidden sm:table-cell">
-                    <div className="h-4 w-10 bg-[#E5E7EB] rounded animate-pulse" />
+                    <Skeleton height={16} width={40} />
                   </td>
                   <td className="px-3 py-3 hidden md:table-cell">
-                    <div className="h-4 w-8 bg-[#E5E7EB] rounded animate-pulse" />
+                    <Skeleton height={16} width={32} />
                   </td>
                   <td className="px-3 py-3 hidden sm:table-cell">
-                    <div className="h-4 w-16 bg-[#E5E7EB] rounded animate-pulse" />
+                    <Skeleton height={16} width={64} />
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div className="p-4 border-t border-[#E5E5E5] flex justify-between">
-          <div className="h-4 w-48 bg-[#F3F4F6] rounded animate-pulse" />
-          <div className="h-9 w-56 bg-[#F3F4F6] rounded-lg animate-pulse" />
+        <div className="p-4 border-t border-[var(--border)] flex justify-between">
+          <Skeleton height={16} width={192} />
+          <Skeleton height={36} width={224} shape="card" />
         </div>
       </Card>
-    </div>
+    </SkeletonScreen>
   );
 }
 

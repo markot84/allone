@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Card, Button, Spinner, useToast, Tooltip } from '../common';
+import { Card, Button, useToast, Tooltip, SkeletonScreen, SkeletonCard } from '../common';
 import { useBrand } from '../../hooks/useBrand';
 import { useRefreshAggregates } from '../../hooks/useAggregates';
 import { FirestoreService } from '../../services/firestore';
@@ -282,9 +282,11 @@ export function SalesChannelRulesEditor() {
       </div>
 
       {isPending ? (
-        <div className="flex items-center justify-center py-6">
-          <Spinner />
-        </div>
+        <SkeletonScreen label="Φόρτωση κανόνων" className="space-y-2 py-2">
+          {[0, 1].map((i) => (
+            <SkeletonCard key={i} lines={1} padding={12} />
+          ))}
+        </SkeletonScreen>
       ) : drafts.length === 0 ? (
         <div className="text-center py-8 border border-dashed border-[var(--nts-border-gray)] rounded-lg">
           <p className="text-[13px] text-[var(--nts-medium-gray)]">

@@ -18,7 +18,16 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { Card, CardHeader, KPICard, PageHeader } from '../common';
+import {
+  Card,
+  CardHeader,
+  KPICard,
+  PageHeader,
+  SkeletonScreen,
+  SkeletonKPI,
+  SkeletonChart,
+  SkeletonTable,
+} from '../common';
 import { useGA4Data, type OrganicSearchSource } from '../../hooks/useGA4Data';
 import { useGA4PeriodTotals } from '../../hooks/useGA4PeriodTotals';
 import type { KPICardData } from '../common/KPICard';
@@ -495,10 +504,27 @@ export function GA4Analytics() {
 
   if (isLoading) {
     return (
-      <div className="py-16 text-center text-[#6B7280]">
-        <div className="animate-spin h-8 w-8 border-2 border-orange-400 border-t-transparent rounded-full mx-auto mb-3" />
-        Φόρτωση GA4 δεδομένων...
-      </div>
+      <SkeletonScreen label="Φόρτωση GA4 δεδομένων" className="space-y-6">
+        {/* Two rows of four KPIs, then the 2:1 traffic/sources split and the first table — the
+            page's real shape, so nothing moves when the numbers land. */}
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[0, 1, 2, 3].map((i) => (
+              <SkeletonKPI key={i} />
+            ))}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[4, 5, 6, 7].map((i) => (
+              <SkeletonKPI key={i} />
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <SkeletonChart height={280} className="lg:col-span-2" />
+          <SkeletonChart height={220} variant="donut" />
+        </div>
+        <SkeletonTable rows={6} columns={4} />
+      </SkeletonScreen>
     );
   }
 

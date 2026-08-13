@@ -31,7 +31,20 @@ import {
   Cell,
   ResponsiveContainer,
 } from 'recharts';
-import { Card, CardHeader, KPICard, Tooltip, AlertsBanner, PageHeader, Spinner, Button, ChartTooltip } from '../common';
+import {
+  Card,
+  CardHeader,
+  KPICard,
+  Tooltip,
+  AlertsBanner,
+  PageHeader,
+  Button,
+  ChartTooltip,
+  SkeletonScreen,
+  SkeletonKPI,
+  SkeletonChart,
+  Skeleton,
+} from '../common';
 import { useSegments } from '../../hooks/useSegments';
 import { useOrganic } from '../../hooks/useOrganic';
 import { useCampaigns } from '../../hooks/useCampaigns';
@@ -198,6 +211,46 @@ interface DashboardOverviewProps {
   /** Optional `hashQuery` for deep links (e.g. alerts -> `#products?stock=low`) */
   onSectionChange?: (section: string, opts?: { hashQuery?: string }) => void;
   onOpenInsights?: () => void;
+}
+
+/**
+ * The dashboard while its numbers are still being reconciled.
+ *
+ * Both loading states used to be a small notice card with a spinner, and NOTHING ELSE: everything
+ * from the period selector down is gated on `!dashboardOverviewLoading`, so the screen was a
+ * ~90px card that then expanded to about 2.400px in one frame. The notice itself is worth keeping —
+ * it explains why the wait exists, which a spinner cannot — so it stays, and the shape of what is
+ * coming is drawn underneath it.
+ *
+ * The three-then-two layout matches the real grid below, including on direction C, where the hero
+ * card spans two columns: a skeleton is allowed to be the simpler ancestor of the layout it
+ * announces, but not a different number of rows.
+ */
+function DashboardLoading({ title, body }: { title: string; body: string }) {
+  return (
+    <SkeletonScreen label={title} className="space-y-4">
+      <Card padding="lg">
+        <p className="text-sm font-semibold text-[var(--text-primary)]">{title}</p>
+        <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">{body}</p>
+      </Card>
+
+      {/* The period selector's own footprint — it is the first thing that appears on resolve. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Skeleton height={36} width={320} shape="card" style={{ maxWidth: '100%' }} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-5">
+        <SkeletonKPI />
+        <SkeletonKPI />
+        <SkeletonKPI />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <SkeletonChart height={240} />
+        <SkeletonChart height={240} variant="donut" />
+      </div>
+    </SkeletonScreen>
+  );
 }
 
 export function DashboardOverview({ onSectionChange, onOpenInsights }: DashboardOverviewProps = {}) {
@@ -1028,17 +1081,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       )}
 
       {currentBrand && dashboardOverviewLoading && (
-        <Card padding="lg" className="border border-[#E8EAED] bg-white">
-          <div className="flex gap-4 items-start">
-            <Spinner size="md" className="shrink-0" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Σταθεροποίηση οικονομικών δεδομένων…</p>
-              <p className="mt-1 text-xs leading-relaxed text-[var(--nts-medium-gray)]">
-                Φορτώνουμε ERP, e-shop και καμπάνιες πριν εμφανιστούν KPI και charts, ώστε το Dashboard να μη δείχνει προσωρινά νούμερα.
-              </p>
-            </div>
-          </div>
-        </Card>
+        <DashboardLoading
+          title="Σταθεροποίηση οικονομικών δεδομένων…"
+          body="Φορτώνουμε ERP, e-shop και καμπάνιες πριν εμφανιστούν KPI και charts, ώστε το Dashboard να μη δείχνει προσωρινά νούμερα."
+        />
       )}
 
       {/* Morning Briefing */}
@@ -1082,17 +1128,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
       {currentBrand && !dashboardOverviewLoading && !hasAnyData && (
         dashboardStillHydrating ? (
-          <Card padding="lg" className="border border-[#E8EAED] bg-white">
-            <div className="flex gap-4 items-start">
-              <Spinner size="md" className="shrink-0" />
-              <motion.div className="min-w-0">
-                <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Φόρτωση δεδομένων πίνακα ελέγχου…</p>
-                <p className="mt-1 text-xs leading-relaxed text-[var(--nts-medium-gray)]">
-                  Συγχρονισμένα δεδομένα — φορτώνουμε e-shop, καμπάνιες και analytics…
-                </p>
-              </motion.div>
-            </div>
-          </Card>
+          <DashboardLoading
+            title="Φόρτωση δεδομένων πίνακα ελέγχου…"
+            body="Συγχρονισμένα δεδομένα — φορτώνουμε e-shop, καμπάνιες και analytics…"
+          />
         ) : (
           <Card padding="lg" className="border border-dashed border-[#D1D5DB] bg-[#FAFAFA]">
             <h3 className="text-base font-semibold text-[var(--nts-charcoal)]">Γεμίστε το Dashboard</h3>

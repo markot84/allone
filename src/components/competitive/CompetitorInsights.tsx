@@ -7,7 +7,20 @@ import { useBrand } from '../../hooks/useBrand';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { usePriceInsights, type PriceInsight } from '../../hooks/usePriceInsights';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
-import { Card, Button, Spinner, Badge, Tooltip, useToast, PageHeader } from '../common';
+// `Spinner` stays: the five that remain in this file are all inside buttons, where a spinner is the
+// right control — it reports an action the user just started, not content that is on its way.
+import {
+  Card,
+  Button,
+  Spinner,
+  Badge,
+  Tooltip,
+  useToast,
+  PageHeader,
+  SkeletonScreen,
+  SkeletonTable,
+  SkeletonCard,
+} from '../common';
 import {
   Search,
   Plus,
@@ -1299,9 +1312,9 @@ export function CompetitorInsights() {
               )}
 
               {isBenchmarkInitialLoading ? (
-                <div className="py-8 flex justify-center">
-                  <Spinner size="md" label="Φόρτωση benchmarks..." />
-                </div>
+                <SkeletonScreen label="Φόρτωση benchmarks" className="py-2">
+                  <SkeletonTable rows={8} columns={5} surface={false} />
+                </SkeletonScreen>
               ) : benchmarksQueryError ? (
                 <div className="text-center py-10 text-sm text-[#9CA3AF]">
                   Δεν εμφανίζονται δεδομένα λόγω σφάλματος ανάγνωσης. Πατήστε «Επανάληψη» παραπάνω ή ανανεώστε τη σελίδα.
@@ -1484,7 +1497,9 @@ export function CompetitorInsights() {
               </div>
 
               {insightsLoading ? (
-                <div className="py-8 flex justify-center"><Spinner size="md" label="Φόρτωση insights..." /></div>
+                <SkeletonScreen label="Φόρτωση insights" className="py-2">
+                  <SkeletonTable rows={6} columns={4} surface={false} />
+                </SkeletonScreen>
               ) : !hasInsightsData || insightsCount === 0 ? (
                 <div className="text-center py-10">
                   <TrendingUp size={40} className="mx-auto text-[#D1D5DB] mb-3" />
@@ -1917,9 +1932,11 @@ export function CompetitorInsights() {
               </div>
 
               {adsLoading ? (
-                <div className="py-8 flex justify-center">
-                  <Spinner size="md" label="Φόρτωση ads..." />
-                </div>
+                <SkeletonScreen label="Φόρτωση ads" className="space-y-3">
+                  {[0, 1, 2].map((i) => (
+                    <SkeletonCard key={i} lines={2} padding={16} />
+                  ))}
+                </SkeletonScreen>
               ) : ads.length === 0 ? (
                 <p className="text-sm text-[#9CA3AF] text-center py-8">Δεν υπάρχουν δεδομένα. Προσθέστε ανταγωνιστές και πατήστε "Scan τώρα".</p>
               ) : (

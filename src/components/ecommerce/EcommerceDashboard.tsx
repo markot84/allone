@@ -37,7 +37,17 @@ import {
   PieChart,
   Pie,
 } from 'recharts';
-import { Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
+import {
+  Card,
+  CardHeader,
+  KPICard,
+  Tooltip,
+  PageHeader,
+  SkeletonScreen,
+  SkeletonKPI,
+  SkeletonChart,
+  SkeletonTable,
+} from '../common';
 import { useEcommerceSummary, type EcommerceTopProduct } from '../../hooks/useEcommerceSummary';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import { aggregateOrderLinesForTopProducts } from '../../utils/productLineStats';
@@ -716,10 +726,21 @@ export function EcommerceDashboard() {
             <p className="text-sm text-[#6B7280]">Δεδομένα παραγγελιών και προϊόντων από τα συνδεδεμένα e-shop</p>
           }
         />
-        <div className="py-16 text-center text-[#6B7280]">
-          <div className="animate-spin h-8 w-8 border-2 border-orange-400 border-t-transparent rounded-full mx-auto mb-3" />
-          Φόρτωση e-commerce δεδομένων…
-        </div>
+        {/* The shape of the screen that is coming: four KPIs, then the 2:1 revenue/platform split.
+            The previous `animate-spin` in a `py-16` block gave the page ~120px of height and then
+            expanded to roughly 2.000px in one frame. */}
+        <SkeletonScreen label="Φόρτωση e-commerce δεδομένων" className="space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[0, 1, 2, 3].map((i) => (
+              <SkeletonKPI key={i} />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <SkeletonChart height={280} className="xl:col-span-2" />
+            <SkeletonChart height={200} variant="donut" />
+          </div>
+          <SkeletonTable rows={6} columns={5} />
+        </SkeletonScreen>
       </div>
     );
   }
