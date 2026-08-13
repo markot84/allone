@@ -24,9 +24,24 @@ const DEV_ORIGINS = [
   'http://127.0.0.1:5173',
 ];
 
+/**
+ * Firebase Hosting preview channels of THIS project: `https://<project>--<channel>-<hash>.web.app`.
+ *
+ * Preview channels are the review surface — a UI branch deployed for someone to click through
+ * before it ships. Without this, every AI-backed screen on a preview dies at the preflight with a
+ * bare "Failed to fetch", which reads as a broken product rather than a locked-down backend.
+ *
+ * The project id is interpolated, so this widens the allow-list only to hosts Firebase itself
+ * issues under this project — and creating one of those already requires deploy access.
+ */
+const PREVIEW_CHANNEL_ORIGIN = new RegExp(
+  `^https://${PROJECT_ID.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}--[a-z0-9-]{1,60}\\.web\\.app$`,
+);
+
 export function resolveAllowedOrigin(reqOrigin?: string): string | null {
   if (!reqOrigin) return null;
   if (PROD_ORIGINS.includes(reqOrigin)) return reqOrigin;
+  if (PREVIEW_CHANNEL_ORIGIN.test(reqOrigin)) return reqOrigin;
   if (process.env.FUNCTIONS_EMULATOR === 'true' && DEV_ORIGINS.includes(reqOrigin)) return reqOrigin;
   return null;
 }
