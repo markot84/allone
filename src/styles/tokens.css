@@ -303,6 +303,52 @@
   --focus-ring-offset: 2px;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   DIRECTION D — THE NAVY SHELL.  This is the one place the app spends colors.md §6.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+   §6 bullet 4 reads: "Όχι navy ως φόντο μεγάλων επιφανειών σε αυτή την έκδοση." Everything above
+   this line obeys it. This block does not, and the reason is a measurement.
+
+   The app has no depth left to give. Shell against canvas:
+
+       client production, dark chrome   #111111 vs #FFFFFF   18.88:1
+       direction B today                #FFFFFF vs #F2F4F7    1.10:1
+       this block                       #003087 vs #F2F4F7   10.75:1
+
+   1.10:1 is not a design decision, it is the absence of one — the header, the sidebar and the
+   canvas are the same surface, so nothing frames anything. That is why every previous pass read as
+   "correct but flat": each one moved contrast around INSIDE a single white plane. No amount of
+   typography or spacing buys a second plane.
+
+   What §6 was actually protecting is the READING surface: navy behind body text, tables and charts
+   for eight hours a day is fatiguing, and that judgement stands. So the rule is narrowed rather
+   than dropped — navy takes the chrome, the canvas stays light, and the two other §6 bullets
+   (no large-surface gradients, one accent per component) are untouched. Cards, tables, charts and
+   every page body render on exactly the surfaces they did before.
+
+   Contrast, measured, all against #003087:
+       white       11.85:1   active nav item, brand name, primary chrome text
+       navy-50      9.83:1   every other nav label
+       navy-100     7.25:1   group headings — the sidebar keeps its three legible steps
+       orange-500   3.95:1   active marker and its icon (graphical objects need 3:1)
+       gold-500     7.40:1   legible here, against 1.60:1 on white — see the --band-* note
+
+   Reverting is this block. Delete it and the shell is white again. */
+:root {
+  --chrome-bg:             var(--navy-500);
+  --chrome-fg:             #FFFFFF;
+  --chrome-fg-muted:       var(--navy-50);
+  --chrome-fg-subtle:      var(--navy-100);
+  /* Controls sitting ON the shell are translucent white rather than another navy step: navy-700 on
+     navy-500 measures 1.13:1, so a solid step would be invisible. Alpha keeps them legible without
+     introducing a hue the palette does not have. */
+  --chrome-border:         rgba(255, 255, 255, 0.14);
+  --chrome-control-bg:     rgba(255, 255, 255, 0.08);
+  --chrome-control-border: rgba(255, 255, 255, 0.20);
+  --chrome-control-hover:  rgba(255, 255, 255, 0.14);
+}
+
 /**
  * Legacy bridge.
  *

@@ -833,7 +833,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               cursor: 'pointer',
             }}
           >
-            <AllOneLogo height={30} className="max-w-[6.5rem] min-[420px]:max-w-[9rem] sm:max-w-none" variant="onLight" />
+            <AllOneLogo height={30} className="max-w-[6.5rem] min-[420px]:max-w-[9rem] sm:max-w-none" variant="onDark" />
           </PrimerHeader.Link>
         </PrimerHeader.Item>
 
