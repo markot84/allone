@@ -22,7 +22,11 @@ export function StrategyBriefingQuickStrip({
 
   return (
     <>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-[#E5E7EB] bg-gradient-to-r from-[var(--nts-accent)]/[0.06] to-transparent px-4 py-3">
+      {/* The orange wash is a 6% tint over TRANSPARENT, so the strip borrowed whatever was behind
+          it. On a light canvas that read as a faint warm panel; on direction E's navy field it
+          vanished and left dark text on navy. Adding an explicit surface underneath keeps the wash
+          exactly as it was and makes the strip a light island like every other block. */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--card-bg)] bg-gradient-to-r from-[var(--nts-accent)]/[0.06] to-transparent px-4 py-3">
         <div className="flex items-start gap-3 min-w-0">
           <div className="p-2 rounded-lg bg-[var(--nts-accent)]/15 text-[var(--nts-accent-text)] shrink-0">
             <Sparkles size={18} />

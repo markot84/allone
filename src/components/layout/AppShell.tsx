@@ -928,9 +928,12 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         )}
 
         {/* Main Content */}
-        <div 
+        <div
           ref={mainContentScrollRef}
-          style={{ 
+          /* `app-canvas` is the hook direction E inverts against — see the .app-canvas block in
+             tokens.css. On every other direction the class carries no rules. */
+          className="app-canvas"
+          style={{
             flex: 1,
             minWidth: 0,
             minHeight: 0,

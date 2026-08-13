@@ -349,6 +349,75 @@
   --chrome-control-hover:  rgba(255, 255, 255, 0.14);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   DIRECTION E — THE CANVAS GOES NAVY TOO.  §6 bullet 4 is not narrowed here, it is spent.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+   D put navy on the chrome and kept the light canvas, so §6's protection of the reading surface
+   survived. E drops that protection: the canvas becomes one continuous navy field and the cards
+   become light islands floating on it. Chosen deliberately, with the cost known — navy behind a
+   working surface all day is more fatiguing than white, and this direction exists to be compared
+   against D, not to quietly replace it.
+
+   Note what E is NOT: the dark cockpit. There the cards were dark too, so body text, tables and
+   charts all rendered on dark. Here every card, table and chart keeps the exact light surface it
+   has in A/B/C/D — 11.85:1 white-on-navy separates them from the field, which is more separation
+   than any light-on-light arrangement can reach. What inverts is only the text that sits on the
+   canvas itself, which an audit put at 5-20 elements per page rather than the thousands a full
+   dark theme would touch.
+
+   The navy scale cannot give shell and canvas two distinguishable planes — navy-900 on navy-500
+   measures 1.27:1 and navy-700 measures 1.13:1 — so the shell and canvas are deliberately the SAME
+   navy. The app reads as one navy field with light content on it, not as three stacked greys. */
+:root {
+  --canvas-bg: var(--navy-500);
+
+  /* Text that lands on the navy field. Measured against #003087. */
+  --on-canvas-fg:        #FFFFFF;           /* 11.85:1 — page titles */
+  --on-canvas-fg-muted:  var(--navy-50);    /*  9.83:1 — descriptions, meta */
+  --on-canvas-fg-subtle: var(--navy-100);   /*  7.25:1 — timestamps, counts */
+  --on-canvas-accent:    var(--gold-500);   /*  7.40:1 — the one place gold reads as text */
+  /* Hairlines and ghost fills on the field have to be light, not dark. */
+  --on-canvas-border:    rgba(255, 255, 255, 0.16);
+}
+
+/* HOW THE INVERSION IS SCOPED — and the two approaches that were tried and measured out.
+ *
+ * 1. `.app-canvas { color: ... }` and let inheritance do it. Fails: several major panels, the AI
+ *    Briefing among them, paint themselves `bg-gradient-to-br from-white ...` — a white surface
+ *    whose background-COLOR is transparent. Inherited light text lands on those and vanishes. The
+ *    attempt rendered the whole briefing paragraph in navy-50 on white.
+ *
+ * 2. Scope it positionally, to the canvas wrapper's first child, on the assumption that the first
+ *    child is the page header. Fails harder: on the dashboard the first child is a wrapper holding
+ *    the alerts AND the briefing, so the rule bleached the entire page.
+ *
+ * So the inversion is OPT-IN and nothing else. `data-on-canvas` marks a region that genuinely sits
+ * on the field, and PageHeader carries it by default because a page header always does. A page that
+ * floats something else on the canvas adds the attribute itself. Nothing is inferred from position
+ * or inheritance, which is the only way to be safe in a tree where surfaces are painted a dozen
+ * different ways.
+ *
+ * `!important` because these call sites set their own colour, frequently as an arbitrary Tailwind
+ * value that no class can outrank. Same reasoning and discipline as the .page-band rules below. */
+[data-on-canvas] :is(h1, h2, .page-title),
+[data-on-canvas]:is(h1, h2, .page-title) {
+  color: var(--on-canvas-fg) !important;
+}
+
+/* Anything that owns a surface is excluded, both itself and its contents: a badge, pill or button
+   inside a header brings its own background and its own text colour with it. */
+[data-on-canvas] :is(p, span, h3, label, div, time):not(
+    :is(.card-primer, .surface, .btn, [data-light-surface], [class*='bg-']) *
+  ):not(:is(.card-primer, .surface, .btn, [data-light-surface], [class*='bg-'])) {
+  color: var(--on-canvas-fg-muted) !important;
+}
+
+/* Hairlines drawn on the field have to be light — a dark border disappears into navy. */
+[data-on-canvas] hr {
+  border-color: var(--on-canvas-border);
+}
+
 /**
  * Legacy bridge.
  *

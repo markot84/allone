@@ -31,7 +31,12 @@ export function PageHeader({
     <div
       className={`flex flex-col gap-3 min-w-0 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between lg:gap-x-6 lg:gap-y-3 ${className}`.trim()}
     >
-      <div className="min-w-0 flex-1 space-y-1 lg:min-w-[240px]">
+      {/* `data-on-canvas` goes on the TEXT column only, not the header root. The root also holds
+          `actions`, and those are buttons and pills that paint their own backgrounds — marking the
+          root would invert their labels too and bleach the toolbar. Scoping it here means the
+          inversion cannot reach anything that owns a surface. Direction E is the only place the
+          attribute has rules attached; elsewhere it costs nothing. */}
+      <div data-on-canvas="" className="min-w-0 flex-1 space-y-1 lg:min-w-[240px]">
         {typeof title === 'string' ? <h1 className="page-title">{title}</h1> : title}
         {description}
         {meta}
