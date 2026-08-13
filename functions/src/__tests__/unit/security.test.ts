@@ -121,6 +121,21 @@ describe('resolveAllowedOrigin', () => {
     );
   });
 
+  it('echoes a Hosting preview-channel origin of this project', () => {
+    const origin = `https://${PROJECT_ID}--ui-b-8dwn8buv.web.app`;
+    expect(resolveAllowedOrigin(origin)).toBe(origin);
+  });
+
+  it('rejects a preview-channel origin belonging to another project', () => {
+    expect(resolveAllowedOrigin('https://some-other-project--ui-b-8dwn8buv.web.app')).toBeNull();
+  });
+
+  it('rejects a look-alike host that merely starts with the project id', () => {
+    expect(resolveAllowedOrigin(`https://${PROJECT_ID}--ui.web.app.evil.example`)).toBeNull();
+    expect(resolveAllowedOrigin(`https://${PROJECT_ID}-ui-b.web.app`)).toBeNull();
+    expect(resolveAllowedOrigin(`https://evil.${PROJECT_ID}--ui-b.web.app`)).toBeNull();
+  });
+
   it('rejects a random evil origin', () => {
     expect(resolveAllowedOrigin('https://evil.example')).toBeNull();
   });
