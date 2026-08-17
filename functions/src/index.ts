@@ -557,7 +557,7 @@ export const importData = onRequest(
     maxInstances: 5,
   },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed. Use POST.' });
       return;
@@ -747,7 +747,7 @@ export const importData = onRequest(
 export const fetchImportUrl = onRequest(
   { region: 'europe-west1', timeoutSeconds: 60, memory: '256MiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
       return;
@@ -813,7 +813,7 @@ export const fetchImportUrl = onRequest(
 export const generateApiKey = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Use POST' });
       return;
@@ -882,7 +882,7 @@ function clientErrorFlooding(identity: string, now: number): boolean {
 export const logClientError = onRequest(
   { region: 'europe-west1', timeoutSeconds: 10, memory: '256MiB', maxInstances: 10 },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Use POST' });
       return;
@@ -948,7 +948,7 @@ export const connectorAuth = onRequest(
   // CONNECTOR_TOKEN_KEY: used by signState() to HMAC-sign the OAuth state.
   { region: 'europe-west1', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -1260,7 +1260,7 @@ export const connectorCallback = onRequest(
 export const connectorDisconnect = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -1389,7 +1389,7 @@ export const connectorDisconnect = onRequest(
 export const connectorSelectAccount = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -1484,7 +1484,7 @@ export const connectorSelectAccount = onRequest(
 export const connectorSync = onRequest(
   { region: 'europe-west1', timeoutSeconds: 1200, memory: '4GiB', cpu: 2, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -1644,7 +1644,7 @@ export const ga4PeriodTotals = onRequest(
   // CONNECTOR_TOKEN_KEY: decryptToken needs it for the GA4 refresh token, else "GA4 token unavailable".
   { region: 'europe-west1', secrets: ['GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
@@ -2189,7 +2189,7 @@ export const processMegaventorySyncJobs = onSchedule(
 export const connectorSaveCredentials = onRequest(
   { region: 'europe-west1', secrets: ['CONNECTOR_TOKEN_KEY', 'META_APP_ID', 'META_APP_SECRET'], ...OPENCART_EGRESS_OPTIONS },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -2515,7 +2515,7 @@ export const connectorSaveCredentials = onRequest(
 export const importMagentoSearchTerms = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -3217,7 +3217,7 @@ export const signupGate = beforeUserCreated({ region: 'europe-west1' }, async (e
 export const acceptInvite = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
       return;
@@ -3339,7 +3339,7 @@ export const geminiProxy = onRequest(
    * causing DEADLINE_EXCEEDED. */
   { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB', secrets: [GEMINI_SECRET] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
       return;
@@ -3495,7 +3495,7 @@ export const geminiProxy = onRequest(
 export const webSearch = onRequest(
   { region: 'europe-west1', timeoutSeconds: 30, memory: '256MiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization || '';
@@ -3536,7 +3536,7 @@ export const webSearch = onRequest(
 export const sendEmailNotification = onRequest(
   { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).send('POST only'); return; }
 
     const authHeader = req.headers.authorization;
@@ -3658,7 +3658,7 @@ function safeHttpUrl(u: unknown): string {
 export const sendInviteEmail = onRequest(
   { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).send('POST only'); return; }
 
     const authHeader = req.headers.authorization;
@@ -3797,7 +3797,7 @@ export const refreshAggregates = onRequest(
   // 4GiB: the ~220k-SKU Product Intelligence aggregate OOM'd at 2GiB (SIGABRT/signal 6).
   { region: 'europe-west1', timeoutSeconds: 540, memory: '4GiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -3846,7 +3846,7 @@ export const refreshAggregates = onRequest(
 export const megaventoryReceiptBackfill = onRequest(
   { region: 'europe-west1', timeoutSeconds: 540, memory: '1GiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
@@ -3880,7 +3880,7 @@ export const magentoRefundBackfill = onRequest(
   // history (108k+ on prod e-tennis) and OOM'd at 1GiB — same budget its other callers need.
   { region: 'europe-west1', timeoutSeconds: 540, memory: '4GiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
@@ -3917,7 +3917,7 @@ export const magentoRefundBackfill = onRequest(
 export const refreshDataAnalysisRfm = onRequest(
   { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -3955,7 +3955,7 @@ export const refreshDataAnalysisRfm = onRequest(
 export const refreshProductIntelligence = onRequest(
   { region: 'europe-west1', timeoutSeconds: 1200, memory: '4GiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -3988,7 +3988,7 @@ export const refreshProductIntelligence = onRequest(
 export const refreshErpVelocity = onRequest(
   { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -4020,7 +4020,7 @@ export const queryProductIntelligence = onRequest(
   // DEADLINE_EXCEEDED on the read; the heavy PI writers already run at 4GiB.
   { region: 'europe-west1', timeoutSeconds: 120, memory: '2GiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -4050,7 +4050,7 @@ export const queryProductIntelligence = onRequest(
 export const megaventoryListLocations = onRequest(
   { region: 'europe-west1', timeoutSeconds: 60, memory: '256MiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -4089,7 +4089,7 @@ export const megaventoryListLocations = onRequest(
 export const megaventorySampleCustomFields = onRequest(
   { region: 'europe-west1', timeoutSeconds: 60, memory: '256MiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -4122,7 +4122,7 @@ export const megaventorySampleCustomFields = onRequest(
 export const refreshCompetitiveInventory = onRequest(
   { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -4155,7 +4155,7 @@ export const refreshCompetitiveInventory = onRequest(
 export const captureStock = onRequest(
   { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -4190,7 +4190,7 @@ export const captureStock = onRequest(
 export const refreshSignals = onRequest(
   { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -4226,7 +4226,7 @@ export const refreshMarketingPlanInsight = onRequest(
   // (1GiB OOM'd at 1078MiB on e-tennis). Same heap home as the nightly PI worker.
   { region: 'europe-west1', timeoutSeconds: 540, memory: '4GiB', cpu: 2 },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -4388,7 +4388,7 @@ export const scheduledReorderEmail = onSchedule(
 export const reorderEmailSend = onRequest(
   { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
@@ -4417,7 +4417,7 @@ export const submitInterestLead = onRequest(
   { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
     // Strict CORS (whitelisted origins only) — prevents scraping/abuse from arbitrary domains
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'POST only' });
       return;
