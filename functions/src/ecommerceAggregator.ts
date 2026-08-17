@@ -3,6 +3,7 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, type QueryDocumentSnapshot, FieldValue } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
+import { readNonMerchandise, fold } from './nonMerchandise';
 import {
   aggregateOrderLinesForTopProducts,
   shouldSkipMagentoLineForTopProducts,
@@ -148,6 +149,8 @@ interface OrderRow {
     parentItemId?: string | number | null;
     rowTotal?: number;
   }>;
+  /** PER-301: revenue of nonMerchandise-matched lines, precomputed by readers that drop lineItems. */
+  nonMerchTotal?: number;
 }
 
 export const ECOMMERCE_PROVIDERS = ['shopify', 'woocommerce', 'opencart', 'magento'] as const;
@@ -160,6 +163,47 @@ const OMIT_FROM_RECENT_ORDER_LIST = new Set(['viva_klarna_undefined']);
 
 function isOmittedFromRecentOrderList(status: string | null | undefined): boolean {
   return OMIT_FROM_RECENT_ORDER_LIST.has(String(status || '').trim().toLowerCase());
+}
+
+type NonMerchLineMatch = (li: { sku?: string; title?: string; name?: string }) => boolean;
+
+/** PER-301 — line matcher for the brand's nonMerchandise rules (categories→SKU set, lines carry no category); brand rules only, null when none. */
+async function loadNonMerchLineMatcher(
+  db: Firestore,
+  brandId: string,
+  brandData: Record<string, unknown> | undefined
+): Promise<NonMerchLineMatch | null> {
+  const rules = readNonMerchandise(brandData);
+  const needles = rules.nameContains ?? [];
+  const cats = rules.categories ?? [];
+  const skus = new Set<string>();
+  if (cats.length) {
+    const query = db.collection('products').where('brandId', '==', brandId).select('sku', 'category');
+    for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
+      const d = doc.data();
+      if (!cats.includes(fold(d.category))) continue;
+      const sku = String(d.sku || '').trim().toLowerCase();
+      if (sku) skus.add(sku);
+    }
+  }
+  if (!needles.length && !skus.size) return null;
+  return (li) => {
+    const sku = String(li.sku || '').trim().toLowerCase();
+    if (sku && skus.has(sku)) return true;
+    if (!needles.length) return false;
+    const name = fold(`${li.title || ''} ${li.name || ''}`);
+    return needles.some((n) => name.includes(n));
+  };
+}
+
+/** Revenue of an order's line items matching the nonMerchandise rules. */
+export function nonMerchLineRevenue(lineItems: OrderRow['lineItems'], match: NonMerchLineMatch | null): number {
+  if (!match || !lineItems?.length) return 0;
+  let sum = 0;
+  for (const li of lineItems) {
+    if (match(li)) sum += li.rowTotal ?? (li.price || 0) * (li.quantity || 1);
+  }
+  return sum;
 }
 
 /** Demo products (name/SKU contains "demo") are excluded from every aggregate. */
@@ -404,7 +448,11 @@ export function softOneSalesDocNetAmount(d: Record<string, unknown>): number {
   return Math.abs(parseNumeric(d['SALDOC.SUMAMNT'] ?? d['SALDOC.TOTALNET']));
 }
 
-async function readMegaventoryInvoiceOrderRows(db: Firestore, brandId: string): Promise<OrderRow[]> {
+async function readMegaventoryInvoiceOrderRows(
+  db: Firestore,
+  brandId: string,
+  nonMerchMatch: NonMerchLineMatch | null = null
+): Promise<OrderRow[]> {
   // Stream rather than .get(): on large brands megaventory_invoices is ~100k+ docs, and holding the
   // whole snapshot alongside the result array was a heap-OOM driver in the aggregate refresh.
   const query = db.collection('megaventory_invoices').where('brandId', '==', brandId);
@@ -430,6 +478,7 @@ async function readMegaventoryInvoiceOrderRows(db: Firestore, brandId: string): 
       shippingMethod: '',
       customerEmail: String(d.clientName ?? ''),
       lineItems: [],
+      nonMerchTotal: nonMerchLineRevenue(d.lineItems as OrderRow['lineItems'], nonMerchMatch),
     });
   }
   return rows;
@@ -501,18 +550,27 @@ async function readSoftOneSalesOrderRows(db: Firestore, brandId: string): Promis
 
 /** Total business revenue from ERP (Megaventory invoices / SoftOne SALDOC); separate from
  * `ecommerce_summary`, which stays strictly for e-shop connectors. */
-export async function computeBusinessRevenueSummary(brandId: string): Promise<void> {
+export async function computeBusinessRevenueSummary(
+  brandId: string,
+  // ponytail: caller-supplied matcher avoids re-streaming the products projection when computeEcommerceSummary already built one.
+  prebuiltMatch?: NonMerchLineMatch | null
+): Promise<void> {
   const db = getDb();
-  const connDoc = await db.doc(`connectors/${brandId}`).get();
+  const [connDoc, brandDoc] = await Promise.all([
+    db.doc(`connectors/${brandId}`).get(),
+    prebuiltMatch === undefined ? db.doc(`brands/${brandId}`).get() : Promise.resolve(null),
+  ]);
   const connPlain = (connDoc.data() || {}) as Record<string, unknown>;
   const erpBackend = resolveErpRevenueBackend(connPlain);
+  const nonMerchMatch =
+    prebuiltMatch !== undefined ? prebuiltMatch : await loadNonMerchLineMatcher(db, brandId, brandDoc?.data());
 
   let rawRows: OrderRow[] = [];
   let creditRows: MegaventoryCreditNoteRow[] = [];
   let source: 'none' | 'megaventory_invoices' | 'softone_sales_documents' = 'none';
 
   if (erpBackend === 'megaventory_invoices') {
-    rawRows = await readMegaventoryInvoiceOrderRows(db, brandId);
+    rawRows = await readMegaventoryInvoiceOrderRows(db, brandId, nonMerchMatch);
     creditRows = await readMegaventoryCreditNoteRows(db, brandId);
     source = 'megaventory_invoices';
   } else if (erpBackend === 'softone_sales_documents') {
@@ -524,8 +582,11 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
   const grossRevenueByDay: Record<string, number> = {};
   const grossRevenueByMonth: Record<string, number> = {};
   let grossTotalRevenue = 0;
+  // ponytail: gross of sales docs only — credit notes aren't netted per-line; informative indicator, not accounting.
+  let nonMerchandiseRevenue = 0;
   for (const o of rawRows) {
     grossTotalRevenue += o.totalPrice;
+    nonMerchandiseRevenue += o.nonMerchTotal ?? nonMerchLineRevenue(o.lineItems, nonMerchMatch);
     const day = o.createdAt?.slice(0, 10) || 'unknown';
     if (day !== 'unknown') {
       grossRevenueByDay[day] = (grossRevenueByDay[day] || 0) + o.totalPrice;
@@ -574,6 +635,9 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
     creditTotal,
     creditNotesApplied,
     unlinkedCreditTotal,
+    // PER-301: revenue produced by the brand's nonMerchandise-excluded products (kept in totals).
+    nonMerchandiseRevenue,
+    nonMerchandiseShare: totalRevenue > 0 ? nonMerchandiseRevenue / totalRevenue : 0,
     syncedAt: FieldValue.serverTimestamp(),
   });
   logger.info(
@@ -846,6 +910,9 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
 
   // --- Aggregation ---
   const totalRevenue = revenueOrders.reduce((s, o) => s + o.totalPrice, 0);
+  // PER-301: revenue of nonMerchandise-matched lines within the counted orders (kept in totals).
+  const nonMerchMatch = await loadNonMerchLineMatcher(db, brandId, brandData);
+  const nonMerchandiseRevenue = revenueOrders.reduce((s, o) => s + nonMerchLineRevenue(o.lineItems, nonMerchMatch), 0);
   const orderCount = revenueOrders.length;
   const aov = orderCount > 0 ? totalRevenue / orderCount : 0;
 
@@ -1032,6 +1099,8 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     totalRevenue,
     orderCount,
     aov,
+    nonMerchandiseRevenue,
+    nonMerchandiseShare: totalRevenue > 0 ? nonMerchandiseRevenue / totalRevenue : 0,
     revenueByDay,
     revenueByMonth,
     revenueByPlatform,
@@ -1074,5 +1143,5 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
   logger.info(
     `[EcommerceAgg] Summary for ${brandId}: ${orderCount} orders, €${totalRevenue.toFixed(2)} revenue, sources=${revenueSummaryPlatforms.join(',')}`
   );
-  await computeBusinessRevenueSummary(brandId);
+  await computeBusinessRevenueSummary(brandId, nonMerchMatch);
 }

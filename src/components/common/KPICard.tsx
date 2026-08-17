@@ -14,6 +14,8 @@ export interface KPICardData {
   trend?: 'up' | 'down';
   sparklineData?: number[];
   tooltip?: string;
+  /** Small caption rendered under the value (e.g. PER-301 non-merchandise revenue share). */
+  subtext?: string;
   /** Pulsing dot next to the tooltip indicating the KPI is refreshing. */
   refreshing?: boolean;
 }
@@ -84,6 +86,10 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
         <p className="text-3xl font-bold text-[var(--nts-charcoal)] mb-1 font-mono tracking-tight">
           {kpi.value}
         </p>
+
+        {kpi.subtext && (
+          <p className="text-[11px] text-[var(--nts-medium-gray)] mb-1">{kpi.subtext}</p>
+        )}
 
         {kpi.sparklineData && kpi.sparklineData.length > 0 && (
           <div className="my-1 h-[32px] w-full min-w-0 -mx-1">

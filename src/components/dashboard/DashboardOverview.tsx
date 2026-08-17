@@ -581,6 +581,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     campaignMetrics.totalRevenue,
   ]);
 
+  /** PER-301 disclosure: share from the KPI's backing source; € approximated as share × the period figure. */
+  const nonMerchSubtext = useMemo(() => {
+    const share = kpiUsesErp ? businessRevenue.nonMerchandiseShare : ecomm.nonMerchandiseShare;
+    if (!share || share <= 0 || dashboardTotalRevenue <= 0) return undefined;
+    return `~${formatCurrencyCompact(dashboardTotalRevenue * share)} (${(share * 100).toFixed(1)}%) από μη εμπορεύσιμα προϊόντα`;
+  }, [kpiUsesErp, businessRevenue.nonMerchandiseShare, ecomm.nonMerchandiseShare, dashboardTotalRevenue]);
+
   const revenueTotalKpiTooltip = useMemo(() => {
     if (isB2B) {
       return 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.';
@@ -1371,6 +1378,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 kpi={{
                   label: isB2B ? 'Revenue baseline' : 'Σύνολο Εσόδων',
                   value: formatCurrencyCompact(dashboardTotalRevenue),
+                  subtext: nonMerchSubtext,
                   change: revenueMoM !== null ? Math.round(revenueMoM) : undefined,
                   changeLabel: revenueMoM !== null ? 'vs προηγ. μήνα' : undefined,
                   trend: revenueMoM !== null ? (revenueMoM >= 0 ? 'up' : 'down') : 'up',

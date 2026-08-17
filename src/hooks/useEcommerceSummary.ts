@@ -36,6 +36,8 @@ interface EcommerceSummaryRaw {
   totalRevenue: number;
   orderCount: number;
   aov: number;
+  /** PER-301: revenue share of the brand's nonMerchandise-excluded products (kept in totals). */
+  nonMerchandiseShare?: number;
   revenueByDay: Record<string, number>;
   revenueByMonth: Record<string, number>;
   revenueByPlatform: Record<string, PlatformBreakdown>;
@@ -301,6 +303,7 @@ export function useEcommerceSummary(options?: { includeSkuDetails?: boolean; inc
     totalRevenue: data?.totalRevenue ?? 0,
     orderCount: data?.orderCount ?? 0,
     aov: data?.aov ?? 0,
+    nonMerchandiseShare: data?.nonMerchandiseShare ?? 0,
     dailyRevenue,
     monthlyRevenue,
     platformBreakdown,

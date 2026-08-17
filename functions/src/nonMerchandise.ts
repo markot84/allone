@@ -5,7 +5,7 @@ export type ClassifiableRow = { name?: unknown; sku?: unknown; category?: unknow
 
 const lower = (v: unknown) => String(v ?? '').trim().toLowerCase();
 // Accent- AND case-insensitive so 'ΔΩΡΟΕΠΙΤΑΓΕΣ' matches 'Δωροεπιταγές'.
-const fold = (v: unknown) =>
+export const fold = (v: unknown) =>
   String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 
 /** Reads `nonMerchandise` off a brand doc's data; tolerant of missing/malformed shapes. */

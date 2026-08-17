@@ -14,6 +14,8 @@ interface BusinessRevenueSummaryRaw {
   orderCount?: number;
   revenueByDay?: Record<string, number>;
   revenueByMonth?: Record<string, number>;
+  /** PER-301: revenue share of the brand's nonMerchandise-excluded products (kept in totals). */
+  nonMerchandiseShare?: number;
   syncedAt?: unknown;
 }
 
@@ -76,6 +78,7 @@ export function useBusinessRevenueSummary() {
     hasErpRevenueData,
     totalRevenue: data?.totalRevenue ?? 0,
     orderCount: data?.orderCount ?? 0,
+    nonMerchandiseShare: data?.nonMerchandiseShare ?? 0,
     revenueByDay: data?.revenueByDay ?? {},
     revenueByDayRecord,
     monthlyRevenue,
