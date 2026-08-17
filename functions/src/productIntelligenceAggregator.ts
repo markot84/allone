@@ -874,7 +874,8 @@ function applyMegaventoryStockOverlay(products: Map<string, CompactProduct>, sto
     if (!product.productId) continue;
     const stock = stockByProductId.get(product.productId);
     if (!stock) continue;
-    const stockLevel = stock.available > 0 ? stock.available : stock.physical;
+    // PER-300: shelf units — MV's "available" adds unreceived orders.
+    const stockLevel = stock.physical;
     const qtySold = product.qty_sold_period ?? 0;
     product.stock_level = Math.round(stockLevel * 100) / 100;
     product.stock_on_hand = Math.round(stock.physical * 100) / 100;
@@ -1234,9 +1235,14 @@ function brandCounts(products: CompactProduct[]): Array<{ name: string; count: n
     .map(([name, count]) => ({ name, count }));
 }
 
+/** PER-300: stock means units on the shelf, never the ERP's on-hand (which adds unreceived orders). */
+function effectiveStock(product: CompactProduct): number {
+  return product.stock_on_hand ?? product.stock_level ?? 0;
+}
+
 /** Mirrors the effectiveTag rule in matchesQuery. */
 function effectiveTagId(product: CompactProduct): string {
-  const stock = product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
+  const stock = effectiveStock(product);
   return stock <= 0 ? 'no_stock' : text(product.priority_tag).toLowerCase();
 }
 
@@ -1269,7 +1275,7 @@ function buildQueryFacets(rows: CompactProduct[], params: ProductIntelligenceQue
 }
 
 function daysOfStock(product: CompactProduct): number {
-  const stock = product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
+  const stock = effectiveStock(product);
   if (stock <= 0) return 0;
   const sold = product.qty_sold_period ?? 0;
   if (sold <= 0) return Number.POSITIVE_INFINITY;
@@ -1322,9 +1328,9 @@ function matchesQuery(product: CompactProduct, params: ProductIntelligenceQueryP
   const search = text(params.search).toLowerCase();
   if (search && !searchText(product).includes(search)) return false;
 
-  const effectiveStock = product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
-  const effectiveTag = effectiveStock <= 0 ? 'no_stock' : text(product.priority_tag).toLowerCase();
-  if (params.includeNoStock !== true && effectiveStock <= 0) return false;
+  const stock = effectiveStock(product);
+  const effectiveTag = stock <= 0 ? 'no_stock' : text(product.priority_tag).toLowerCase();
+  if (params.includeNoStock !== true && stock <= 0) return false;
 
   if (params.categories?.length) {
     const allowed = new Set(params.categories);
@@ -1442,8 +1448,8 @@ function bucketRows(products: CompactProduct[], bucket: PageBucket): CompactProd
   const rows = bucket === 'all' ? products : products.filter((product) => product.priority_tag === bucket);
   return [...rows].sort((a, b) => {
     if (bucket === 'all') {
-      const stockA = a.available_stock ?? a.stock_on_hand ?? a.stock_level ?? 0;
-      const stockB = b.available_stock ?? b.stock_on_hand ?? b.stock_level ?? 0;
+      const stockA = effectiveStock(a);
+      const stockB = effectiveStock(b);
       if (stockA !== stockB) return stockB - stockA;
       const soldA = a.qty_sold_period ?? a.qty_sold_lifetime ?? 0;
       const soldB = b.qty_sold_period ?? b.qty_sold_lifetime ?? 0;
@@ -1645,7 +1651,7 @@ function competitiveInventoryForProducts(products: CompactProduct[]): Record<str
   const add = (key: string, product: CompactProduct) => {
     const normalized = normalizeSku(key);
     if (!normalized) return;
-    const stock = Math.round((product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0) * 100) / 100;
+    const stock = Math.round(effectiveStock(product) * 100) / 100;
     const sold = Math.round((product.qty_sold_period ?? product.qty_sold_lifetime ?? 0) * 100) / 100;
     if (stock <= 0 && sold <= 0) return;
     const previous = rows[normalized];
@@ -1927,6 +1933,7 @@ export async function refreshCompetitiveInventoryLookup(brandId: string): Promis
 
 /** Test-only export — unit tests exercise the real code, not copies. */
 export const __test = {
+  effectiveStock,
   productFromRow,
   stampVariantCounts,
   collapseByParentSku,

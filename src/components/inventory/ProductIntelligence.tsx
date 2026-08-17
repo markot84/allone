@@ -1008,7 +1008,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     onClick={() => handleSort('stock_level')}
                     className="flex items-center gap-1 hover:text-[#1A1A1A]"
                   >
-                    <Tooltip content="Διαθέσιμο απόθεμα ανά SKU. Όπου υπάρχει ERP ανάλυση, εμφανίζεται και το stock on hand." size={12}>
+                    <Tooltip content="Τεμάχια στην αποθήκη ανά SKU. Δεν περιλαμβάνει αναμενόμενες παραλαβές από παραγγελίες ή παραγωγή." size={12}>
                       Stock
                     </Tooltip>
                     <SortIcon field="stock_level" current={sortField} direction={sortDirection} />
@@ -1182,8 +1182,11 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
   const thumbUrl = getThumbnailUrl(product.sku || '', product).url;
   const health = resolveStockHealth(product, supplierTodMap, useProcurementRowModel);
   const effectiveStock = getEffectiveStockLevel(product);
-  const onHandStock = product.stock_on_hand;
-  const availableStock = product.available_stock;
+  // PER-300: explain the ERP's figure on hover instead of showing a second, misreadable number.
+  const erpStockNote =
+    typeof product.available_stock === 'number' && product.available_stock !== effectiveStock
+      ? `Στο ράφι: ${formatNumber(effectiveStock)}. Το ERP δηλώνει ${formatNumber(product.available_stock)} — περιλαμβάνει δεσμεύσεις σε παραγγελίες και αναμενόμενες παραλαβές.`
+      : null;
   const healthColor =
     health === 'dead' ? '#EF4444' :
     health === 'excess' ? '#F59E0B' :
@@ -1237,20 +1240,15 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
               size="sm"
               className="w-10"
             />
-            <span className="text-xs font-semibold tabular-nums text-[#1A1A1A]">
-              {formatNumber(effectiveStock)}
-            </span>
+            {(() => {
+              const value = (
+                <span tabIndex={erpStockNote ? 0 : undefined} className="text-xs font-semibold tabular-nums text-[#1A1A1A]">
+                  {formatNumber(effectiveStock)}
+                </span>
+              );
+              return erpStockNote ? <Tooltip content={erpStockNote} size={11}>{value}</Tooltip> : value;
+            })()}
           </div>
-          {typeof onHandStock === 'number' && onHandStock !== effectiveStock ? (
-            <div className="text-[10px] text-[#9CA3AF]">
-              On hand {formatNumber(onHandStock)}
-            </div>
-          ) : null}
-          {typeof availableStock === 'number' && typeof onHandStock === 'number' && availableStock !== onHandStock ? (
-            <div className="text-[10px] text-[#9CA3AF]">
-              Available {formatNumber(availableStock)}
-            </div>
-          ) : null}
         </div>
       </td>
       <td className="px-3 py-2 hidden md:table-cell">

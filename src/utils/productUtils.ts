@@ -139,8 +139,10 @@ export const DEFAULT_TOD = 60;
 /** Assumed period length (days) for qty_sold_period */
 const SALES_PERIOD_DAYS = 30;
 
+/** PER-300: shelf units — available_stock also counts unreceived orders; mirrors effectiveStock in
+ * functions/src/productIntelligenceAggregator.ts, keep in sync. */
 export function getEffectiveStockLevel(product: Product): number {
-  return product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
+  return product.stock_on_hand ?? product.stock_level ?? 0;
 }
 
 /** Days the current stock lasts at sell-through rate; Infinity when qty_sold is 0,

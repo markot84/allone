@@ -1123,7 +1123,7 @@ export async function recomputeMegaventoryProductTotals(brandId: string): Promis
     id: `mv_p_${pid}`,
     data: {
       productId: pid,
-      stockOnHand: t.available > 0 ? t.available : t.physical,
+      stockOnHand: t.physical, // PER-300: shelf units, not MV on-hand (adds unreceived orders)
       availableStockTotal: t.available,
       physicalStockTotal: t.physical,
     },
@@ -2217,7 +2217,7 @@ export async function fetchMegaventoryData(
         id: `mv_p_${pid}`,
         data: {
           productId: pid,
-          stockOnHand: t.available > 0 ? t.available : t.physical,
+          stockOnHand: t.physical, // PER-300: shelf units, not MV on-hand (adds unreceived orders)
           availableStockTotal: t.available,
           physicalStockTotal: t.physical,
         },
