@@ -14,6 +14,39 @@ export function excludeDemoProducts<T extends Pick<Product, 'name' | 'sku'>>(ite
   return items.filter(p => !isDemoProduct(p));
 }
 
+/** PER-293 — per-brand non-merchandise rules; mirrors functions/src/nonMerchandise.ts, keep in sync. */
+export type NonMerchandiseRules = { categories?: string[]; nameContains?: string[] };
+
+// Accent- AND case-insensitive so 'ΔΩΡΟΕΠΙΤΑΓΕΣ' matches 'Δωροεπιταγές'.
+const fold = (v: unknown) =>
+  String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+
+type NonStockedRow = Pick<Product, 'name' | 'sku'> & { category?: string };
+
+/** Demo ∪ platform non-merchandise (plain lowercase, like the server) ∪ brand rules; stock analytics only. */
+export function buildIsNonStocked(rules?: NonMerchandiseRules): (p: NonStockedRow) => boolean {
+  const cats = (rules?.categories ?? []).map(fold).filter(Boolean);
+  const needles = (rules?.nameContains ?? []).map(fold).filter(Boolean);
+  return (p) => {
+    if (isDemoProduct(p)) return true;
+    const sku = (p?.sku || '').toString().trim().toLowerCase();
+    const name = (p?.name || '').toString().trim().toLowerCase();
+    if (sku === 'discount' || sku.includes('shipping') || name.includes('shipping πωλήσεων')) return true;
+    if (cats.length && cats.includes(fold(p.category))) return true;
+    if (needles.length) {
+      const foldedName = fold(p.name);
+      return needles.some(n => foldedName.includes(n));
+    }
+    return false;
+  };
+}
+
+/** Filter that removes demo + non-merchandise products (platform rule + brand additions). */
+export function excludeNonStockedProducts<T extends NonStockedRow>(items: T[], rules?: NonMerchandiseRules): T[] {
+  const isNonStocked = buildIsNonStocked(rules);
+  return items.filter(p => !isNonStocked(p));
+}
+
 /** Days from date string (Excel serial or ISO) to today */
 function daysFromDate(val: string): number | null {
   if (!val || !String(val).trim()) return null;

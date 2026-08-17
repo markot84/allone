@@ -3,6 +3,7 @@ import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 import { ALERT } from './utils/alertKeys';
 import { computeProcurementSignals } from './procurementSignals';
+import { buildIsNonStocked, readNonMerchandise } from './nonMerchandise';
 
 let db: Firestore;
 
@@ -1147,7 +1148,10 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean, manual = 
   const overlay = hasErp
     ? await loadMegaventoryProductOverlay(brandId, bySku, stockResult.byProductId)
     : { rowsRead: 0, overlaysApplied: 0, erpOnlyProducts: 0 };
-  const products = [...bySku.values()].filter((product) => !isDemoProduct(product) && !isNonMerchandiseProduct(product));
+  // PER-293: brand additions (brands/{id}.nonMerchandise) join the platform demo/non-merch rule.
+  const brandSnap = await assertDb().doc(`brands/${brandId}`).get().catch(() => null);
+  const isNonStocked = buildIsNonStocked(readNonMerchandise(brandSnap?.data()));
+  const products = [...bySku.values()].filter((product) => !isNonStocked(product));
   stampVariantCounts(products);
   return {
     products,

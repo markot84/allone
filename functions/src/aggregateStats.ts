@@ -1,6 +1,7 @@
 import { getFirestore, type Firestore, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 import { ALERT } from './utils/alertKeys';
+import { buildIsNonStocked, readNonMerchandise } from './nonMerchandise';
 
 let _db: Firestore;
 function db() {
@@ -52,12 +53,17 @@ function classifyStock(p: Record<string, unknown>, supplierTod = 60): string {
 }
 
 async function aggregateProducts(brandId: string): Promise<ProductAggregates> {
+  const brandSnap = await db().doc(`brands/${brandId}`).get().catch(() => null);
+  const isNonStocked = buildIsNonStocked(readNonMerchandise(brandSnap?.data()));
   // A full .get() loads every product doc at once (~221k post-import) and OOMs the 512MiB function;
   // stream only the fields the aggregation reads — identical results.
   const query = db()
     .collection('products')
     .where('brandId', '==', brandId)
     .select(
+      'name',
+      'sku',
+      'category',
       'price',
       'list_price',
       'compare_at_price',
@@ -88,6 +94,8 @@ async function aggregateProducts(brandId: string): Promise<ProductAggregates> {
     // Skip discontinued tombstones in-loop: they inflate totalSkus/'low', and Firestore ==null
     // can't match absent fields so they can't be filtered in the query.
     if (p.discontinued_at) continue;
+    // PER-293: skip demo/non-merchandise (platform + brand rules) — aligns these KPIs with the PI table.
+    if (isNonStocked(p)) continue;
     result.totalSkus++;
     const price = ((p.price as number) ?? (p.list_price as number) ?? (p.compare_at_price as number)) || 0;
     const stockLevel = ((p.available_stock as number) ?? (p.stock_level as number)) || 0;

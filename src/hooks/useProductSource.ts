@@ -4,7 +4,8 @@ import { useProcurement } from './useProcurement';
 import { usePlan } from './usePlan';
 import type { Product } from '../types';
 import { classifyProcurementInventoryRow } from '../utils/procurementInventoryClassify';
-import { excludeDemoProducts, normalizeSpreadsheetCellToFirstAvailableDate } from '../utils/productUtils';
+import { excludeNonStockedProducts, normalizeSpreadsheetCellToFirstAvailableDate } from '../utils/productUtils';
+import { useBrand } from './useBrand';
 
 /** First header matching a keyword (substring, case-insensitive); keyword order = priority. */
 function findColByKeywords(rows: Record<string, unknown>[], keywords: readonly string[]): string {
@@ -122,6 +123,7 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
   const enabled = options.enabled ?? true;
   const productHook = useProducts({ maxDocs: options.maxProducts, enabled });
   const { isEnterprise } = usePlan();
+  const { currentBrand } = useBrand();
   const { data: procData, isLoading: procurementLoading } = useProcurement();
 
   const procProducts = useMemo((): Product[] => {
@@ -238,8 +240,11 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
       : sourceKind === 'products_import'
         ? 'Products import'
         : 'Pending';
-  // Demo products are filtered here too so it applies across all aggregates.
-  const products = excludeDemoProducts(usingProcurement ? procProducts : productHook.products);
+  // Demo/non-merchandise products are filtered here too so it applies across all aggregates.
+  const products = excludeNonStockedProducts(
+    usingProcurement ? procProducts : productHook.products,
+    currentBrand?.nonMerchandise
+  );
 
   /** Until procurement also finishes (Enterprise), don't show an empty «no products» page.
    *  When the fetch is gated off (PER-166), it isn't loading — a disabled query stays `pending`. */

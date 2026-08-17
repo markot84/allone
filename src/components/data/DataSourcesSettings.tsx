@@ -5,6 +5,7 @@ import { SalesChannelRulesEditor } from './SalesChannelRulesEditor';
 import { SourceRoleSettingCard, type SourceRoleOption } from './SourceRoleSettingCard';
 import { StockSourceInfoCard } from './StockSourceInfoCard';
 import { InventoryThresholdsCard } from './InventoryThresholdsCard';
+import { NonMerchandiseCard } from './NonMerchandiseCard';
 import { resolveRevenuePerformanceSource } from '../../utils/revenueSource';
 
 /** Per-brand "Data Sources" page: groups the source-role settings (revenue performance, e-shop
@@ -64,6 +65,8 @@ export function DataSourcesSettings() {
       <StockSourceInfoCard />
 
       <InventoryThresholdsCard />
+
+      <NonMerchandiseCard />
 
       <RevenueSourceSettings />
       <SalesChannelRulesEditor />

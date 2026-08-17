@@ -22,6 +22,7 @@ import {
 } from './marketingPlanInsights';
 import { resolvePlanPeriod, MARKETING_PLAN_PRESETS, type Product } from './shared';
 import { loadMarketingPlanOrdersByWindow, type OrderWindow } from './orders';
+import { buildIsNonStocked, readNonMerchandise, type ClassifiableRow } from '../nonMerchandise';
 
 let _db: Firestore | null = null;
 export function setDb(db: Firestore) { _db = db; }
@@ -74,11 +75,15 @@ export async function refreshMarketingPlanInsightAggregate(
 
   try {
     // 1) products (streamed, projected) + 2) procurement signals
-    const [products, sigSnap, parentSkuBySku] = await Promise.all([
+    const [rawProducts, sigSnap, parentSkuBySku, brandSnap] = await Promise.all([
       streamProducts(brandId),
       db().doc(`procurement_signals/${brandId}`).get(),
       loadParentSkuMap(brandId),
+      db().doc(`brands/${brandId}`).get().catch(() => null),
     ]);
+    // PER-293: exclude demo/non-merchandise (platform rule + brand additions) from stock analytics.
+    const isNonStocked = buildIsNonStocked(readNonMerchandise(brandSnap?.data()));
+    const products = rawProducts.filter((p) => !isNonStocked(p as ClassifiableRow));
     const sigData = sigSnap.data() || {};
     const signals = JSON.parse((sigData.skuSignalsJson as string) || '{}') as Record<string, any>;
     const signalCount = Object.keys(signals).length;

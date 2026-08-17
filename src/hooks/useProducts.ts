@@ -4,7 +4,7 @@ import { ProductsService } from '../services/firestore';
 import { useBrand } from './useBrand';
 import { useBrandSyncVersion } from './useBrandSyncVersion';
 import type { Product } from '../types';
-import { excludeDemoProducts } from '../utils/productUtils';
+import { excludeNonStockedProducts } from '../utils/productUtils';
 import { logger } from '../utils/logger';
 
 type UseProductsOptions = {
@@ -58,9 +58,9 @@ export function useProducts(options: UseProductsOptions = {}) {
     placeholderData: (previousData) => previousData,
   });
 
-  /** Ignore demo products in all lists (name/SKU contains "demo"). */
+  /** Ignore demo + non-merchandise products in all lists (platform rule + brand's own PER-293 rules). */
   const productRows = Array.isArray(firestoreProducts) ? firestoreProducts : [];
-  const products = excludeDemoProducts((brandId ? productRows : []) as Product[])
+  const products = excludeNonStockedProducts((brandId ? productRows : []) as Product[], currentBrand?.nonMerchandise)
     // ERP-deleted products are kept only for history/stats; single-point filter excludes them
     // from ALL client lists (Ads feed, charts, automation, procurement) so client & server agree.
     .filter((p) => !(p as { discontinued_at?: unknown }).discontinued_at)

@@ -4,6 +4,7 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
+import { buildIsNonStocked, readNonMerchandise } from './nonMerchandise';
 
 let _db: Firestore | null = null;
 
@@ -306,6 +307,13 @@ export async function computeProcurementSignals(brandId: string): Promise<{
     if (!sig.evaluation_label && typeof row.ΑΞΙΟΛΟΓΗΣΗ === 'string') {
       sig.evaluation_label = row.ΑΞΙΟΛΟΓΗΣΗ.trim();
     }
+  }
+
+  // PER-293: one site covers the persisted signals doc, marketing-plan signals and PI procurement catalog.
+  const brandSnap = await db.doc(`brands/${brandId}`).get().catch(() => null);
+  const isNonStocked = buildIsNonStocked(readNonMerchandise(brandSnap?.data()));
+  for (const [sku, sig] of map.entries()) {
+    if (isNonStocked({ sku, name: sig.description, category: sig.category })) map.delete(sku);
   }
 
   const signals: Record<string, ProcurementSignal> = {};

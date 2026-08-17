@@ -114,6 +114,13 @@ export interface Brand {
     /** Send the weekly Monday reorder email (Low Stock grouped by supplier) to daily-digest recipients. Default false. */
     reorderEmailEnabled?: boolean;
   };
+  /** PER-293 non-merchandise (services/vouchers/made-to-order): out of stock analytics, revenue kept; extends the built-in shipping/discount rule; unset = unchanged. */
+  nonMerchandise?: {
+    /** Exact category match (accent/case-insensitive), e.g. 'plejimo'. Not a substring. */
+    categories?: string[];
+    /** Product-name substring (accent/case-insensitive), e.g. 'Court Cards', 'Unstrung'. */
+    nameContains?: string[];
+  };
 }
 
 export type BrandArchetype =
