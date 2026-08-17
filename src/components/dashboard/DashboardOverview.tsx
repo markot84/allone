@@ -13,6 +13,7 @@ import {
   Handshake,
   Plug,
   Package,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -49,6 +50,7 @@ import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateC
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useConnectorSyncErrors } from '../../hooks/useConnectorSyncErrors';
 import { useEcommerceFullHistoryMetrics } from '../../hooks/useEcommerceFullHistoryMetrics';
 import { useBusinessRevenueSummary } from '../../hooks/useBusinessRevenueSummary';
 import { useProcurement } from '../../hooks/useProcurement';
@@ -226,6 +228,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   useAutomationRunner();
   const ga4 = useGA4Data();
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
+  const connectorSyncErrors = useConnectorSyncErrors();
   /** Server summary only (`ecommerce_summary`) — one Firestore read; `full` mode froze the main
    *  thread on 10K+ order brands. Accuracy kept via `refreshAggregates` on rules/source change. */
   const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
@@ -984,6 +987,30 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
       {/* Automation Alerts */}
       <AlertsBanner maxAlerts={3} onNavigate={onSectionChange} />
+
+      {/* PER-194: failed connector syncs — visible without opening Συνδέσεις */}
+      {connectorSyncErrors.length > 0 && (
+        <Card
+          padding="lg"
+          hover
+          className="border border-amber-200 bg-amber-50/70 cursor-pointer"
+          onClick={() => onSectionChange?.('data')}
+        >
+          <div className="flex min-w-0 gap-3 items-center">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+              <AlertTriangle size={20} />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-[var(--nts-charcoal)]">
+                Αποτυχημένος συγχρονισμός: {connectorSyncErrors.map((e) => e.name).join(', ')}
+              </h3>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--nts-medium-gray)]">
+                Τα δεδομένα από {connectorSyncErrors.length === 1 ? 'αυτή τη σύνδεση' : 'αυτές τις συνδέσεις'} μπορεί να είναι ελλιπή. Δείτε λεπτομέρειες στις Συνδέσεις →
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {!currentBrand && (
         <Card padding="lg" className="border border-amber-200 bg-amber-50/70">
