@@ -43,8 +43,18 @@ describe('collapseByParentSku', () => {
     expect(parent.stock_level).toBe(14);
     expect(parent.qty_sold_period).toBe(5);
     expect(parent.variant_count).toBe(2);
-    expect(parent.name).toBe('X-2'); // highest-stock representative
+    expect(parent.name).toBe('X-2'); // no parent name → highest-stock representative
     expect(out.find((r: { sku: string }) => r.sku === 'Y-1')).toBeTruthy();
+  });
+
+  it('titles the group with the Magento configurable name when the sync carried one', () => {
+    const size = (sku: string, name: string, stock: number) =>
+      ({ ...v(sku, '101552-100', stock), name, parent_name: 'Ρακέτα τένις Babolat Pure Drive' });
+    const out = collapseByParentSku([
+      size('101552-100-L2', 'Babolat Pure Drive Tennis Racquet-L2', 3),
+      size('101552-100-L4', 'Babolat Pure Drive Tennis Racquet-L4', 9),
+    ]);
+    expect(out[0].name).toBe('Ρακέτα τένις Babolat Pure Drive');
   });
 
   // PER-187: a 14-pc parent was flagged "low" because the representative size held 2.

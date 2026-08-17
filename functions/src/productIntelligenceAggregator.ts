@@ -45,6 +45,8 @@ type CompactProduct = {
   reorder_qty?: number;
   /** Declared parent (Magento itemGroupId) — real relations only, never heuristics. */
   parent_sku?: string;
+  /** The Magento configurable's own name — the grouped row's title. */
+  parent_name?: string;
   /** Sibling rows sharing parent_sku (incl. this one). */
   variant_count?: number;
   source?: string;
@@ -786,6 +788,9 @@ async function overlayMagentoCatalogDetails(brandId: string, bySku: Map<string, 
   const firestore = assertDb();
   let cursor: QueryDocumentSnapshot | null = null;
   let read = 0;
+  // Configurables match no ERP sku, so parent names live among the unmatched.
+  // ponytail: holds every unmatched name (parents unknown until the walk ends); prune to referenced parents if this ever pressures the heap.
+  const unmatchedNames = new Map<string, string>();
   for (;;) {
     let query = firestore
       .collection('magento_products')
@@ -800,7 +805,10 @@ async function overlayMagentoCatalogDetails(brandId: string, bySku: Map<string, 
       if (!detail) continue;
       const key = normalizeSku(detail.sku);
       const existing = bySku.get(key);
-      if (!existing) continue;
+      if (!existing) {
+        if (detail.name && detail.name !== detail.sku) unmatchedNames.set(key, detail.name);
+        continue;
+      }
       bySku.set(key, {
         ...existing,
         name: existing.name && existing.name !== existing.sku ? existing.name : detail.name,
@@ -813,6 +821,10 @@ async function overlayMagentoCatalogDetails(brandId: string, bySku: Map<string, 
     if (snap.size < READ_PAGE_SIZE) break;
     cursor = snap.docs[snap.docs.length - 1] ?? null;
     if (!cursor) break;
+  }
+  for (const product of bySku.values()) {
+    const parentName = product.parent_sku ? unmatchedNames.get(normalizeSku(product.parent_sku)) : undefined;
+    if (parentName) product.parent_name = parentName;
   }
   return read;
 }
@@ -1555,6 +1567,7 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
       ...rep,
       id: `parent_${parent}`,
       sku: parent,
+      name: rep.parent_name ?? rep.name,
       stock_level: stock,
       stock_capacity: sum((p) => p.stock_capacity),
       ...(members.some((p) => p.stock_on_hand != null) ? { stock_on_hand: sum((p) => p.stock_on_hand) } : {}),
