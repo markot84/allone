@@ -1548,18 +1548,23 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
     const sum = (f: (p: CompactProduct) => number | undefined) =>
       Math.round(members.reduce((t, p) => t + (f(p) || 0), 0) * 100) / 100;
     const lastSale = members.map((p) => p.last_sale_at || '').sort().pop();
+    const stock = sum((p) => p.stock_level);
+    const soldPeriod = members.some((p) => p.qty_sold_period != null) ? sum((p) => p.qty_sold_period) : null;
+    const soldLifetime = members.some((p) => p.qty_sold_lifetime != null) ? sum((p) => p.qty_sold_lifetime) : null;
     out.push({
       ...rep,
       id: `parent_${parent}`,
       sku: parent,
-      stock_level: sum((p) => p.stock_level),
+      stock_level: stock,
       stock_capacity: sum((p) => p.stock_capacity),
       ...(members.some((p) => p.stock_on_hand != null) ? { stock_on_hand: sum((p) => p.stock_on_hand) } : {}),
       ...(members.some((p) => p.available_stock != null) ? { available_stock: sum((p) => p.available_stock) } : {}),
-      ...(members.some((p) => p.qty_sold_period != null) ? { qty_sold_period: sum((p) => p.qty_sold_period) } : {}),
-      ...(members.some((p) => p.qty_sold_lifetime != null) ? { qty_sold_lifetime: sum((p) => p.qty_sold_lifetime) } : {}),
+      ...(soldPeriod != null ? { qty_sold_period: soldPeriod } : {}),
+      ...(soldLifetime != null ? { qty_sold_lifetime: soldLifetime } : {}),
       ...(lastSale ? { last_sale_at: lastSale } : {}),
       variant_count: members.length,
+      // The bucket describes the group, not its representative variant.
+      priority_tag: stockBucket(stock, soldPeriod, soldLifetime, null, leadDaysForSupplier(rep.supplier)),
     });
   }
   return out;
@@ -1582,11 +1587,15 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
   const bucket = params.bucket ?? 'all';
   const pageSize = Math.max(1, Math.min(params.pageSize ?? TABLE_PAGE_SIZE, TABLE_PAGE_SIZE));
   const requestedPage = Math.max(1, Math.floor(params.page ?? 1));
-  const pageCount = Math.max(1, aggregate.pagesByBucket?.[bucket] ?? 1);
-  const rows = await loadBucketProductsFromPages(params.brandId, bucket, pageCount);
+  // PER-187: siblings scatter across buckets, so grouping reads the whole catalog and buckets the groups.
+  const readBucket: PageBucket = params.groupByParent ? 'all' : bucket;
+  const pageCount = Math.max(1, aggregate.pagesByBucket?.[readBucket] ?? 1);
+  const rows = await loadBucketProductsFromPages(params.brandId, readBucket, pageCount);
   const filtered = rows.filter((product) => matchesQuery(product, params));
   // Collapse after filtering (variant-level filters stay precise), before sort/pagination.
-  const display = params.groupByParent ? collapseByParentSku(filtered) : filtered;
+  const display = params.groupByParent
+    ? collapseByParentSku(filtered).filter((row) => bucket === 'all' || row.priority_tag === bucket)
+    : filtered;
   const sorted = sortProducts(
     display,
     params.sortField ?? 'margin_percentage',

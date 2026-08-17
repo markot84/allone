@@ -46,4 +46,12 @@ describe('collapseByParentSku', () => {
     expect(parent.name).toBe('X-2'); // highest-stock representative
     expect(out.find((r: { sku: string }) => r.sku === 'Y-1')).toBeTruthy();
   });
+
+  // PER-187: a 14-pc parent was flagged "low" because the representative size held 2.
+  it('re-buckets the parent from summed stock, not from the representative variant', () => {
+    const low = { ...v('X-1', 'X', 2, 4), priority_tag: 'low' };
+    const out = collapseByParentSku([low, { ...v('X-2', 'X', 12, 0), priority_tag: 'healthy' }]);
+    expect(out[0].stock_level).toBe(14);
+    expect(out[0].priority_tag).toBe('healthy'); // 14 pcs / 4 per 30d ≈ 105 days of cover
+  });
 });
