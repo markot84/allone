@@ -100,6 +100,7 @@ import {
   setDb as setMegaventoryDb,
 } from './megaventoryConnector';
 import { decideStaleRecovery, isJobWriteOwned, MAX_STALE_RESUMES } from './megaventorySyncPlan';
+import { CONNECTOR_DOC_KEY, persistConnectorSyncError } from './connectorSyncStatus';
 import { randomUUID } from 'crypto';
 import {
   saveSoftOneCredentials,
@@ -2856,19 +2857,31 @@ async function executeBrandNightlyWave(
     const wrap = (label: string, p: Promise<unknown>) =>
       tasks.push(
         p
-          .then((r) => {
-            const result = r as { imported?: number; success?: boolean; error?: string } | undefined;
+          .then(async (r) => {
+            const result = r as
+              | { imported?: number; success?: boolean; error?: string; partial?: boolean; needsContinuation?: boolean }
+              | undefined;
             const imported = result?.imported;
+            const key = CONNECTOR_DOC_KEY[label];
             if (result?.success === false || result?.error) {
               logger.warnAlert(
                 `[ScheduledSync/${wave}] ${label} for ${brandId}: imported ${imported ?? 0}, error: ${result.error || 'unknown'}`,
                 { alertKey: ALERT.nightlyWaveFailed }
               );
+              if (key) await persistConnectorSyncError(brandId, key, result.error || `${label} sync failed`);
             } else {
               logger.info(`[ScheduledSync/${wave}] ${label} for ${brandId}: imported ${imported ?? '—'}`);
+              // Don't clear on partial/continuation — e.g. OpenCart page-cap self-writes lastSyncError; a blind clear would erase it.
+              if (key && !result?.partial && !result?.needsContinuation) {
+                await persistConnectorSyncError(brandId, key, null);
+              }
             }
           })
-          .catch((err) => logger.error(`[ScheduledSync/${wave}] ${label} failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err }))
+          .catch(async (err) => {
+            logger.error(`[ScheduledSync/${wave}] ${label} failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
+            const key = CONNECTOR_DOC_KEY[label];
+            if (key) await persistConnectorSyncError(brandId, key, err instanceof Error ? err.message : String(err));
+          })
       );
     return { tasks, wrap };
   };
