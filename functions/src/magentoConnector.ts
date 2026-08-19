@@ -15,6 +15,7 @@ import {
   toMagentoDateTime,
   toYmd,
 } from './syncPolicy';
+import { writeSkuStatsChunked } from './ecommerceAggregator';
 
 let _db: Firestore | null = null;
 
@@ -501,6 +502,7 @@ async function patchMagentoParentLinks(
   brandId: string,
   parentLinks: { childId: string; parentId: string }[],
   idToSku: Map<string, string>,
+  runLinks?: Map<string, string>,
 ): Promise<void> {
   if (parentLinks.length === 0) return;
   const childToParents = new Map<string, Set<string>>();
@@ -515,6 +517,7 @@ async function patchMagentoParentLinks(
       const parentSkus = [...parentIds].map((pid) => idToSku.get(pid)).filter((v): v is string => Boolean(v));
       if (parentSkus.length === 0) continue;
       const childSku = idToSku.get(childId) || '';
+      if (childSku && runLinks) runLinks.set(childSku, parentSkus[0]);
       batch.set(db.collection('magento_products').doc(`mag_${childId}`), {
         parentSkus,
         itemGroupId: parentSkus[0],
@@ -524,6 +527,37 @@ async function patchMagentoParentLinks(
     await batch.commit();
   }
   parentLinks.length = 0;
+}
+
+/** PER-307: slim {childSku → parentSku} doc for the E-commerce page — full link set overwrites (self-cleans), partial (full_catalog resume) merges over the existing doc. */
+export function buildParentLinksPayload(
+  runLinks: Map<string, string>,
+  existing: Record<string, string>,
+  sawFullLinkSet: boolean,
+): Record<string, string> | null {
+  if (sawFullLinkSet) return Object.fromEntries(runLinks);
+  if (runLinks.size === 0) return null;
+  return { ...existing, ...Object.fromEntries(runLinks) };
+}
+
+async function writeMagentoParentLinks(
+  db: Firestore,
+  brandId: string,
+  runLinks: Map<string, string>,
+  sawFullLinkSet: boolean,
+): Promise<void> {
+  try {
+    let existing: Record<string, string> = {};
+    if (!sawFullLinkSet && runLinks.size > 0) {
+      const snap = await db.collection('magento_parent_links').doc(brandId).collection('chunks').get();
+      for (const d of snap.docs) Object.assign(existing, JSON.parse(String(d.data().skuStatsJson || '{}')));
+    }
+    const links = buildParentLinksPayload(runLinks, existing, sawFullLinkSet);
+    if (!links) return;
+    await writeSkuStatsChunked(db, brandId, links, Object.keys(links).length, { collection: 'magento_parent_links' });
+  } catch (err) {
+    logger.warnAlert(`[Magento] parent-links doc write failed for ${brandId}: ${(err as Error).message}`, { alertKey: ALERT.magentoSyncFailed });
+  }
 }
 
 async function loadActiveStockSkus(db: Firestore, brandId: string): Promise<string[]> {
@@ -1510,6 +1544,9 @@ export async function fetchMagentoData(brandId: string): Promise<{
     // SKU lookup map (id → sku) — lightweight, only IDs+SKUs kept in memory for variant resolution.
     const idToSku = new Map<string, string>();
     const parentLinks: { childId: string; parentId: string }[] = [];
+    // PER-307: run-level {childSku → parentSku} accumulator across both patch calls.
+    const runLinks = new Map<string, string>();
+    let sawFullLinkSet = false;
     const categoryMap = await fetchMagentoCategoryMap(restApiBase, storeCode, headers);
 
     // ERP/import fills `products` with stock_level>0. Magento-only brands have empty `products`
@@ -1585,12 +1622,15 @@ export async function fetchMagentoData(brandId: string): Promise<{
       if (productsOk && productsBackfillIncomplete && lastProductUpdatedAt) {
         fullCatalogResumeCursor = lastProductUpdatedAt;
       }
+      // PER-307: only an uncursored, uncut, successful pass saw every configurable.
+      sawFullLinkSet = !productCursor && productsOk && !productsBackfillIncomplete;
     } else {
       // ── Active-stock scope (ERP-backed): SKU-filtered enrichment ──────
       // Configurables + parent patch FIRST — the enrichment below can eat the whole function window.
       {
         prodPage = 1;
         prodMore = true;
+        sawFullLinkSet = true; // cursor-less loop sees every configurable (cleared on fetch failure)
         while (prodMore) {
           const searchParams = new URLSearchParams({
             'searchCriteria[pageSize]': '100',
@@ -1603,6 +1643,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
           const res = await magentoFetch(productUrl, { headers });
           if (!res.ok) {
             logger.warnAlert(`[Magento] Configurables fetch failed (${res.status}) page=${prodPage} for ${brandId}`, { alertKey: ALERT.magentoSyncFailed });
+            sawFullLinkSet = false;
             break;
           }
           const body = await res.json();
@@ -1615,7 +1656,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
           prodPage++;
         }
         await resolveChildSkus(restApiBase, storeCode, headers, parentLinks, idToSku);
-        await patchMagentoParentLinks(db, brandId, parentLinks, idToSku);
+        await patchMagentoParentLinks(db, brandId, parentLinks, idToSku, runLinks);
       }
 
       const activeSkuChunks = chunkArray(activeStockSkus, MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE);
@@ -1679,7 +1720,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
 
     // Fill parentSku on child variants (so in the Ads Feed → item_group_id = parent SKU).
     await resolveChildSkus(restApiBase, storeCode, headers, parentLinks, idToSku);
-    await patchMagentoParentLinks(db, brandId, parentLinks, idToSku);
+    await patchMagentoParentLinks(db, brandId, parentLinks, idToSku, runLinks);
+    await writeMagentoParentLinks(db, brandId, runLinks, sawFullLinkSet);
 
     if (prodImportedCount > 0) {
       totalImported += prodImportedCount;

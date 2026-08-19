@@ -604,6 +604,15 @@ service cloud.firestore {
         allow write: if false;
       }
     }
+    // PER-307: slim {childSku → parentSku} map — same chunked layout/access as sku_stats.
+    match /magento_parent_links/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+      match /chunks/{chunkId} {
+        allow read: if isBrandMember(brandId);
+        allow write: if false;
+      }
+    }
     // Procurement signals — server-aggregated per-SKU map (keyed by brandId)
     match /procurement_signals/{brandId} {
       allow read: if isBrandMember(brandId);

@@ -49,10 +49,10 @@ type SkuStatsRow = {
   soldNeg90d?: number;
 };
 
-async function writeSkuStatsChunked(
+export async function writeSkuStatsChunked(
   db: Firestore,
   brandId: string,
-  skuStats: Record<string, SkuStatsRow>,
+  skuStats: Record<string, unknown>,
   skuCount: number,
   opts?: { collection?: string }
 ): Promise<void> {
@@ -65,7 +65,7 @@ async function writeSkuStatsChunked(
   } else {
     /** Split alphabetically to stay deterministic per run. Each chunk as close to the limit as possible. */
     const skus = Object.keys(skuStats).sort();
-    let bucket: Record<string, SkuStatsRow> = {};
+    let bucket: Record<string, unknown> = {};
     let bucketBytes = 2;
 
     for (const sku of skus) {

@@ -43,7 +43,7 @@ import { useEcommerceChannelDaily, sumChannelDailyWindow } from '../../hooks/use
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import { aggregateOrderLinesForTopProducts } from '../../utils/productLineStats';
 import { resolveParentSku, hasDerivedParentSku } from '../../utils/parentSku';
-import { useMagentoProductEnrichment } from '../../hooks/useMagentoProductEnrichment';
+import { useMagentoParentLinks } from '../../hooks/useMagentoParentLinks';
 import { paymentChartLabelForEcommerceOrder } from '../../utils/magentoPaymentChart';
 import { getBrandHistoryStartISO } from '../../utils/brandHistoryStart';
 import type { KPICardData } from '../common/KPICard';
@@ -252,16 +252,25 @@ export function EcommerceDashboard() {
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const channelDaily = useEcommerceChannelDaily();
 
+  const [prodScope, setProdScopeState] = useState<ProductScope>(() =>
+    typeof window !== 'undefined' && window.localStorage.getItem('pp.ecommerce.prodScope') === 'parents_only' ? 'parents_only' : 'all'
+  );
+  const setProdScope = (next: ProductScope) => {
+    setProdScopeState(next);
+    try { window.localStorage.setItem('pp.ecommerce.prodScope', next); } catch { /* private mode */ }
+  };
+
   // Parent SKUs come only from declared catalog relations (Magento itemGroupId) — no heuristics.
-  const productEnrichment = useMagentoProductEnrichment();
+  // PER-307: slim precomputed {childSku → parentSku} doc instead of the full magento_products download.
+  const parentLinks = useMagentoParentLinks();
   const parentSkuOf = useMemo(() => {
-    const bySku = productEnrichment.bySku;
-    return (sku: string | null | undefined) => resolveParentSku(sku, bySku.get(String(sku || '').trim())?.itemGroupId);
-  }, [productEnrichment.bySku]);
+    const links = parentLinks.links;
+    return (sku: string | null | undefined) => resolveParentSku(sku, links[String(sku || '').trim()]);
+  }, [parentLinks.links]);
   const hasParentOf = useMemo(() => {
-    const bySku = productEnrichment.bySku;
-    return (sku: string | null | undefined) => hasDerivedParentSku(sku, bySku.get(String(sku || '').trim())?.itemGroupId);
-  }, [productEnrichment.bySku]);
+    const links = parentLinks.links;
+    return (sku: string | null | undefined) => hasDerivedParentSku(sku, links[String(sku || '').trim()]);
+  }, [parentLinks.links]);
 
   // Same global date range as Dashboard/ROI — no session-local override (that caused the E-commerce and Dashboard periods to diverge).
   const {
@@ -309,6 +318,8 @@ export function EcommerceDashboard() {
             sinceDate: effectiveFrom,
             untilDate: effectiveTo,
             revenueMode: 'classified',
+            // PER-307: revisits read the SDK cache (empty-cache falls back to server inside the service).
+            cacheFirst: true,
           })
         : Promise.resolve([]),
     enabled: !!brandId && ecomm.connectedPlatforms.length > 0,
@@ -325,13 +336,6 @@ export function EcommerceDashboard() {
   const [orderRows, setOrderRows] = useState<RowsPerPage>(20);
   const [orderPage, setOrderPage] = useState(1);
   const [prodSearch, setProdSearch] = useState('');
-  const [prodScope, setProdScopeState] = useState<ProductScope>(() =>
-    typeof window !== 'undefined' && window.localStorage.getItem('pp.ecommerce.prodScope') === 'parents_only' ? 'parents_only' : 'all'
-  );
-  const setProdScope = (next: ProductScope) => {
-    setProdScopeState(next);
-    try { window.localStorage.setItem('pp.ecommerce.prodScope', next); } catch { /* private mode */ }
-  };
   const [prodRows, setProdRows] = useState<RowsPerPage>(20);
   const [prodPage, setProdPage] = useState(1);
 
@@ -449,6 +453,11 @@ export function EcommerceDashboard() {
         ? periodMetricsFromRawOrders.platformBreakdown
         : ecomm.platformBreakdown,
     [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.platformBreakdown],
+  );
+  // PER-307: pct against the breakdown's own total — the fallback rows are all-window, ÷ period revenue gave 10000%+ shares.
+  const displayPlatformTotal = useMemo(
+    () => displayPlatformBreakdown.reduce((s, p) => s + (p.revenue || 0), 0),
+    [displayPlatformBreakdown],
   );
 
   // ECOM Phase 2 (PER-170): the period-correct channel split is summed client-side from the server
@@ -881,7 +890,7 @@ export function EcommerceDashboard() {
                 </ResponsiveContainer>
                 <div className="mt-4 space-y-2.5">
                   {displayPlatformBreakdown.map((p) => {
-                    const pct = filteredTotalRevenue > 0 ? (p.revenue / filteredTotalRevenue) * 100 : 0;
+                    const pct = displayPlatformTotal > 0 ? (p.revenue / displayPlatformTotal) * 100 : 0;
                     return (
                       <div key={p.platform}>
                         <div className="flex items-center justify-between text-xs mb-1">
@@ -1120,7 +1129,7 @@ export function EcommerceDashboard() {
             </div>
             {topProductsPending ? (
               <p className="text-xs text-[#6B7280] py-6 text-center">Υπολογισμός ακριβών στοιχείων περιόδου…</p>
-            ) : prodScope === 'parents_only' && productEnrichment.isLoading ? (
+            ) : prodScope === 'parents_only' && parentLinks.isLoading ? (
               <p className="text-xs text-[#6B7280] py-6 text-center">Φόρτωση καταλόγου για ομαδοποίηση Parent SKU…</p>
             ) : pagedProducts.length > 0 ? (
               <div className="overflow-x-auto -mx-5 px-5">

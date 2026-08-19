@@ -781,6 +781,7 @@ describe('Y. server-write-only aggregates are client-immutable', () => {
     'product_intelligence',
     'erp_sku_velocity',
     'procurement_signals',
+    'magento_parent_links',
   ] as const;
 
   beforeEach(async () => {
@@ -790,7 +791,14 @@ describe('Y. server-write-only aggregates are client-immutable', () => {
       }
       await setDoc(doc(db, 'product_intelligence_pages/pageA'), { brandId: BRAND_A, rows: [] });
       await setDoc(doc(db, 'magento_products/mag_1'), { brandId: BRAND_A, sku: 'X' });
+      await setDoc(doc(db, `magento_parent_links/${BRAND_A}/chunks/0`), { skuStatsJson: '{}' });
     });
+  });
+
+  it('magento_parent_links chunks: member reads, cross-brand and writes denied', async () => {
+    await assertSucceeds(getDoc(doc(authed(MEMBER_A), `magento_parent_links/${BRAND_A}/chunks/0`)));
+    await assertFails(getDoc(doc(authed(MEMBER_B), `magento_parent_links/${BRAND_A}/chunks/0`)));
+    await assertFails(setDoc(doc(authed(OWNER_A), `magento_parent_links/${BRAND_A}/chunks/0`), { skuStatsJson: '{"x":"y"}' }));
   });
 
   for (const coll of SERVER_ONLY_BRAND_KEYED) {
