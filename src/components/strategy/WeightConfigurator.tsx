@@ -55,6 +55,7 @@ import { calculateCompositeScore, type CompositeScoreContext } from '../../utils
 import {
   filterProductsBySalesBaseScope,
   filterProductsByProfitMaxScope,
+  isPositiveSalesPreset,
   productInProfitMaxScope,
   productParticipatesInSalesBase,
   salesMomentumLabel,
@@ -1230,7 +1231,11 @@ export function WeightConfigurator({
     source = filterProductsByTriageScope(source);
 
     const scoreCtx: CompositeScoreContext | undefined =
-      strategyId === 'price_benchmark' ? benchmarkScoreContext : undefined;
+      strategyId === 'price_benchmark'
+        ? benchmarkScoreContext
+        : strategyId === 'sales_base' && isPositiveSalesPreset(salesBaseScopeForPreview?.preset)
+          ? { invertMomentum: true }
+          : undefined;
 
     const scored = source
       .map((p) => {
@@ -1989,7 +1994,12 @@ export function WeightConfigurator({
                   : undefined
           )}
           scoreContext={
-            pendingScenarioChange === 'price_benchmark' ? benchmarkScoreContext : undefined
+            pendingScenarioChange === 'price_benchmark'
+              ? benchmarkScoreContext
+              : pendingScenarioChange === 'sales_base' &&
+                  isPositiveSalesPreset(pendingSalesBaseScope?.preset)
+                ? { invertMomentum: true }
+                : undefined
           }
         />
       )}

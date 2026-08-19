@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Product } from '../types';
-import { filterProductsByProfitMaxScope, productMatchesSalesBasePreset } from './salesBaseScore';
+import { calculateSalesHeatScore, filterProductsByProfitMaxScope, isPositiveSalesPreset, productMatchesSalesBasePreset } from './salesBaseScore';
 
 function makeProduct(overrides: Partial<Product> = {}): Product {
   return {
@@ -57,6 +57,74 @@ describe('productMatchesSalesBasePreset', () => {
   it('does not treat 30d=0 as never_sold without an explicit lifetime signal', () => {
     const product = makeProduct({ qty_sold_period: 0, revenue_period: 0 });
     expect(productMatchesSalesBasePreset(product, 'never_sold')).toBe(false);
+  });
+
+  // ── PER-302 positive presets ─────────────────────────────────────────
+
+  it('sold_last_30d: matches via qty_sold_period even when the raw 30d window is zero-defaulted', () => {
+    expect(
+      productMatchesSalesBasePreset(makeProduct({ qty_sold_last_30d: 0, qty_sold_period: 4 }), 'sold_last_30d'),
+    ).toBe(true);
+    expect(
+      productMatchesSalesBasePreset(makeProduct({ qty_sold_last_30d: 0, qty_sold_period: 0 }), 'sold_last_30d'),
+    ).toBe(false);
+    expect(
+      productMatchesSalesBasePreset(makeProduct({ qty_sold_last_30d: 2, stock_level: 0 }), 'sold_last_30d'),
+    ).toBe(false);
+  });
+
+  it('sold_last_90d: falls back to a recent last_sale_at when windows are missing', () => {
+    const recent = new Date(Date.now() - 10 * 86400000).toISOString();
+    expect(productMatchesSalesBasePreset(makeProduct({ last_sale_at: recent }), 'sold_last_90d')).toBe(true);
+    const old = new Date(Date.now() - 200 * 86400000).toISOString();
+    expect(productMatchesSalesBasePreset(makeProduct({ last_sale_at: old }), 'sold_last_90d')).toBe(false);
+  });
+
+  it('sold_lifetime: any historical sales evidence with stock > 0', () => {
+    expect(productMatchesSalesBasePreset(makeProduct({ qty_sold_lifetime: 3 }), 'sold_lifetime')).toBe(true);
+    expect(productMatchesSalesBasePreset(makeProduct({ qty_sold_lifetime: 0 }), 'sold_lifetime')).toBe(false);
+  });
+
+  it('fast_low_cover: selling with low days-of-cover only', () => {
+    // stock 5, qty_sold_period 30 → 5 days of cover (≤ TOD/2 = 30)
+    expect(productMatchesSalesBasePreset(makeProduct({ qty_sold_period: 30 }), 'fast_low_cover')).toBe(true);
+    // stock 5, qty_sold_period 1 → 150 days of cover
+    expect(productMatchesSalesBasePreset(makeProduct({ qty_sold_period: 1 }), 'fast_low_cover')).toBe(false);
+    expect(productMatchesSalesBasePreset(makeProduct({ qty_sold_period: 0 }), 'fast_low_cover')).toBe(false);
+    // zero stock is out of stock, not "about to run out"
+    expect(
+      productMatchesSalesBasePreset(makeProduct({ stock_level: 0, qty_sold_period: 10 }), 'fast_low_cover'),
+    ).toBe(false);
+  });
+
+  it('heat score is monotone in velocity/recency (hot sellers outrank slow ones)', () => {
+    const heavySeller = calculateSalesHeatScore(
+      makeProduct({ qty_sold_last_30d: 20, last_sale_at: new Date(Date.now() - 10 * 86400000).toISOString() }),
+    );
+    const oneOff = calculateSalesHeatScore(
+      makeProduct({ qty_sold_last_30d: 1, last_sale_at: new Date(Date.now() - 2 * 86400000).toISOString() }),
+    );
+    expect(heavySeller).toBeGreaterThan(oneOff);
+    // in-store seller with zero-defaulted e-shop windows still reads hot via qty_sold_period
+    const inStore = calculateSalesHeatScore(makeProduct({ qty_sold_last_30d: 0, qty_sold_period: 30 }));
+    expect(inStore).toBeGreaterThan(oneOff);
+    expect(calculateSalesHeatScore(makeProduct({ stock_level: 0, qty_sold_period: 30 }))).toBe(12);
+  });
+
+  it('retired presets keep matching for saved strategies', () => {
+    expect(
+      productMatchesSalesBasePreset(makeProduct({ qty_sold_last_7d: 0 }), 'zero_last_7d'),
+    ).toBe(true);
+    const old = new Date(Date.now() - 60 * 86400000).toISOString();
+    expect(productMatchesSalesBasePreset(makeProduct({ last_sale_at: old }), 'cold_last_sale_30d')).toBe(true);
+  });
+
+  it('isPositiveSalesPreset flags only the positive group', () => {
+    expect(isPositiveSalesPreset('sold_last_30d')).toBe(true);
+    expect(isPositiveSalesPreset('fast_low_cover')).toBe(true);
+    expect(isPositiveSalesPreset('zero_last_30d')).toBe(false);
+    expect(isPositiveSalesPreset('all')).toBe(false);
+    expect(isPositiveSalesPreset(undefined)).toBe(false);
   });
 
   it('does not treat 30d=0 as cold_last_sale_30d when last_sale_at is missing', () => {

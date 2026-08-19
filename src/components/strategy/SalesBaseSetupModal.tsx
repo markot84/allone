@@ -4,8 +4,10 @@ import { X, Search, Layers, Info, RefreshCw } from 'lucide-react';
 import type { Product, SalesBaseCategorySource, SalesBasePresetId, SalesBaseScope } from '../../types';
 import {
   SALES_BASE_PRESET_OPTIONS,
+  calculateSalesHeatScore,
   calculateSalesMomentumScore,
   categoryForSource,
+  isPositiveSalesPreset,
   productMatchesSalesBasePreset,
   productMatchesSalesBaseTextFilters,
 } from '../../utils/salesBaseScore';
@@ -18,12 +20,12 @@ function brandOf(p: Product): string {
 
 type GroupRow = { label: string; count: number; avgMomentum: number };
 
-function buildBrandGroups(products: Product[]): GroupRow[] {
+function buildBrandGroups(products: Product[], score: (p: Product) => number): GroupRow[] {
   const m = new Map<string, { count: number; sumMom: number }>();
   for (const p of products) {
     const label = brandOf(p) || '—';
     const cur = m.get(label) ?? { count: 0, sumMom: 0 };
-    const mom = calculateSalesMomentumScore(p);
+    const mom = score(p);
     cur.count += 1;
     cur.sumMom += mom;
     m.set(label, cur);
@@ -33,12 +35,16 @@ function buildBrandGroups(products: Product[]): GroupRow[] {
     .sort((a, b) => b.count - a.count);
 }
 
-function buildCategoryGroups(products: Product[], source: SalesBaseCategorySource): GroupRow[] {
+function buildCategoryGroups(
+  products: Product[],
+  source: SalesBaseCategorySource,
+  score: (p: Product) => number,
+): GroupRow[] {
   const m = new Map<string, { count: number; sumMom: number }>();
   for (const p of products) {
     const label = categoryForSource(p, source) || '—';
     const cur = m.get(label) ?? { count: 0, sumMom: 0 };
-    const mom = calculateSalesMomentumScore(p);
+    const mom = score(p);
     cur.count += 1;
     cur.sumMom += mom;
     m.set(label, cur);
@@ -150,10 +156,12 @@ export function SalesBaseSetupModal({
   }, [products, brandFilter, categoryFilter, search, preset, excludedCategories, categorySource]);
 
   const totalMatched = ruleFiltered.length;
-  const brandGroups = useMemo(() => buildBrandGroups(ruleFiltered), [ruleFiltered]);
+  // Positive presets average the hot-first heat score; negatives keep the cold-first momentum.
+  const groupScore = isPositiveSalesPreset(preset) ? calculateSalesHeatScore : calculateSalesMomentumScore;
+  const brandGroups = useMemo(() => buildBrandGroups(ruleFiltered, groupScore), [ruleFiltered, groupScore]);
   const categoryGroups = useMemo(
-    () => buildCategoryGroups(ruleFiltered, categorySource),
-    [ruleFiltered, categorySource],
+    () => buildCategoryGroups(ruleFiltered, categorySource, groupScore),
+    [ruleFiltered, categorySource, groupScore],
   );
 
   // Detect data limitation: brand has no per-window sales nor last_sale_at anywhere.
@@ -327,8 +335,10 @@ export function SalesBaseSetupModal({
             )}
             {(() => {
               const allOpt = SALES_BASE_PRESET_OPTIONS.find((o) => o.group === 'all');
-              const zeroOpts = SALES_BASE_PRESET_OPTIONS.filter((o) => o.group === 'zero_window');
-              const otherOpts = SALES_BASE_PRESET_OPTIONS.filter((o) => o.group === 'other');
+              // Retired presets stay matchable for saved strategies but render only when selected.
+              const visible = SALES_BASE_PRESET_OPTIONS.filter((o) => !o.retired || o.id === preset);
+              const positiveOpts = visible.filter((o) => o.group === 'positive');
+              const negativeOpts = visible.filter((o) => o.group === 'zero_window' || o.group === 'other');
 
               const renderOpt = (opt: typeof SALES_BASE_PRESET_OPTIONS[number]) => (
                 <label
@@ -359,15 +369,15 @@ export function SalesBaseSetupModal({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] px-1">
-                        Μηδενικές πωλήσεις σε χρονικό παράθυρο
+                        Θετικά σενάρια πωλήσεων
                       </p>
-                      <div className="space-y-2">{zeroOpts.map(renderOpt)}</div>
+                      <div className="space-y-2">{positiveOpts.map(renderOpt)}</div>
                     </div>
                     <div className="space-y-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] px-1">
-                        Χωρίς πωλήσεις και στασιμότητα
+                        Αρνητικά σενάρια — χωρίς πωλήσεις / στασιμότητα
                       </p>
-                      <div className="space-y-2">{otherOpts.map(renderOpt)}</div>
+                      <div className="space-y-2">{negativeOpts.map(renderOpt)}</div>
                     </div>
                   </div>
                 </div>

@@ -1,6 +1,6 @@
 import type { Product, ProfitMaxScope, SalesBaseCategorySource, SalesBasePresetId, SalesBaseScope } from '../types';
 import { coerceToDate } from './coerceDate';
-import { getStockAgeDays } from './productUtils';
+import { getDaysOfStock, getProductTod, getStockAgeDays } from './productUtils';
 
 /** Effective category per SKU: 'product' uses `product.category`; 'procurement' uses
  *  `procurement_status` then `procurement_category` then `category`. */
@@ -116,6 +116,18 @@ export function calculateSalesMomentumScore(product: Product): number {
   return 40;
 }
 
+/** Hot-first 0–100 score for positive presets (PER-302): monotone in 30d velocity + recency bonus — the cold-first momentum scale is branch-ordered, so 100−x is not a valid inversion. */
+export function calculateSalesHeatScore(product: Product): number {
+  if ((product.stock_level ?? 0) <= 0) return 12;
+  // max() not ??: raw q-windows are zero-defaulted for SKUs the e-shop enrichment misses.
+  const q30 = Math.max(product.qty_sold_last_30d ?? 0, product.qty_sold_period ?? 0);
+  const d = daysSince(product.last_sale_at);
+  let s = 20 + Math.min(50, q30 * 2.5);
+  if ((product.qty_sold_last_7d ?? 0) > 0 || (d !== null && d <= 7)) s += 30;
+  else if (d !== null && d <= 30) s += 15;
+  return Math.min(100, s);
+}
+
 /** Short label for the preview column. */
 export function salesMomentumLabel(product: Product): string {
   const s = calculateSalesMomentumScore(product);
@@ -126,14 +138,16 @@ export function salesMomentumLabel(product: Product): string {
   return 'Ενεργό';
 }
 
-/** Preset grouping for the Sales Optimization modal UI. */
-export type SalesBasePresetGroup = 'all' | 'zero_window' | 'other';
+/** Preset grouping for the Sales Optimization modal UI (PER-302: positive = left column). */
+export type SalesBasePresetGroup = 'all' | 'positive' | 'zero_window' | 'other';
 
 export const SALES_BASE_PRESET_OPTIONS: {
   id: SalesBasePresetId;
   label: string;
   hint: string;
   group: SalesBasePresetGroup;
+  /** Hidden from the picker unless it is the saved preset (saved strategies keep matching). */
+  retired?: boolean;
 }[] = [
   {
     id: 'all',
@@ -141,12 +155,38 @@ export const SALES_BASE_PRESET_OPTIONS: {
     hint: 'Χωρίς φίλτρο ρυθμού πωλήσεων — εφαρμόζονται μόνο τα φίλτρα μάρκας/κατηγορίας/αναζήτησης.',
     group: 'all',
   },
-  // ── Left column: 0 sales within a time window ─────────────────────────
+  // ── Left column: positive sales scenarios (PER-302) ───────────────────
+  {
+    id: 'sold_last_30d',
+    label: 'Πωλήσεις (30 ημέρες)',
+    hint: 'Τουλάχιστον μία πώληση τις τελευταίες 30 ημ. (ενδέχεται να μην έχει πωλήσεις τις τελευταίες 7 ημ.).',
+    group: 'positive',
+  },
+  {
+    id: 'sold_last_90d',
+    label: 'Πωλήσεις (90 ημέρες)',
+    hint: 'Τουλάχιστον μία πώληση τις τελευταίες 90 ημ. (ή τελευταία πώληση εντός 90 ημ.).',
+    group: 'positive',
+  },
+  {
+    id: 'sold_lifetime',
+    label: 'Με πωλήσεις (lifetime)',
+    hint: 'Έχει καταγεγραμμένη πώληση οποιαδήποτε στιγμή, με απόθεμα > 0.',
+    group: 'positive',
+  },
+  {
+    id: 'fast_low_cover',
+    label: 'Ταχυκίνητα — κίνδυνος εξάντλησης',
+    hint: 'Πουλάει και το τρέχον απόθεμα καλύπτει λίγες ημέρες — προτεραιότητα σε προβολή/αναπλήρωση.',
+    group: 'positive',
+  },
+  // ── Right column: negative scenarios (0 sales / stalled) ──────────────
   {
     id: 'zero_last_7d',
     label: '0 πωλήσεις (7 ημέρες)',
     hint: 'Καμία μείωση αποθέματος τις τελευταίες 7 ημ. (από orders connector ή κινητικότητα αποθέματος).',
     group: 'zero_window',
+    retired: true,
   },
   {
     id: 'zero_last_30d',
@@ -160,7 +200,6 @@ export const SALES_BASE_PRESET_OPTIONS: {
     hint: 'Καμία μείωση αποθέματος τις τελευταίες 90 ημ. (από orders connector ή κινητικότητα αποθέματος).',
     group: 'zero_window',
   },
-  // ── Right column: No sales & stalled ──────────────────────────────────
   {
     id: 'never_sold',
     label: 'Χωρίς πωλήσεις (lifetime)',
@@ -172,6 +211,7 @@ export const SALES_BASE_PRESET_OPTIONS: {
     label: 'Χωρίς πώληση >30 ημέρες',
     hint: 'Η τελευταία καταγεγραμμένη πώληση (last_sale_at) είναι πάνω από 30 ημ. πίσω, με απόθεμα > 0.',
     group: 'other',
+    retired: true,
   },
   {
     id: 'stalled_7_vs_90',
@@ -180,6 +220,11 @@ export const SALES_BASE_PRESET_OPTIONS: {
     group: 'other',
   },
 ];
+
+/** Positive presets rank hot sellers first (momentum scale is cold-first — see compositeScore). */
+export function isPositiveSalesPreset(preset: SalesBasePresetId | undefined | null): boolean {
+  return SALES_BASE_PRESET_OPTIONS.some((o) => o.id === preset && o.group === 'positive');
+}
 
 function productBrandLabel(p: Product): string {
   const b = p.brand?.trim();
@@ -223,6 +268,25 @@ export function productMatchesSalesBasePreset(product: Product, preset: SalesBas
   switch (preset) {
     case 'all':
       return true;
+    // Positive presets (PER-302) read qty_sold_period/last_sale_at — raw q-windows are zero-defaulted for SKUs the e-shop enrichment misses (e.g. in-store sales).
+    case 'sold_last_30d': {
+      const q30 = product.qty_sold_last_30d;
+      return Math.max(q30 ?? 0, product.qty_sold_period ?? 0) > 0 && stock > 0;
+    }
+    case 'sold_last_90d': {
+      const d = daysSince(product.last_sale_at);
+      return (
+        ((q90 ?? 0) > 0 || (product.qty_sold_period ?? 0) > 0 || (d !== null && d <= 90)) &&
+        stock > 0
+      );
+    }
+    case 'sold_lifetime':
+      return hasHistoricalSalesEvidence(product) && stock > 0;
+    case 'fast_low_cover': {
+      // classifyStockHealth 'low' semantics (≤ TOD/2, default TOD); dos > 0 excludes the zero-stock sentinel. ponytail: per-supplier TOD map not threaded here.
+      const dos = getDaysOfStock(product);
+      return (product.qty_sold_period ?? 0) > 0 && stock > 0 && dos > 0 && dos <= getProductTod(product) / 2;
+    }
     case 'never_sold': {
       // Authoritative: import lifetime field
       if (typeof life === 'number') return life === 0;

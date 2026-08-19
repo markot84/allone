@@ -1,11 +1,13 @@
 import type { Product } from '../types';
 import { getDaysOfStock, getProductTod } from './productUtils';
-import { calculateSalesMomentumScore } from './salesBaseScore';
+import { calculateSalesHeatScore, calculateSalesMomentumScore } from './salesBaseScore';
 import type { BenchmarkPriceFields } from './priceBenchmarkStrategy';
 import { calculatePriceBenchmarkAdvantageScore } from './priceBenchmarkStrategy';
 
 export type CompositeScoreContext = {
   benchmarkLookup?: (p: Product) => BenchmarkPriceFields | undefined;
+  /** PER-302: momentum is cold-first; positive sales presets invert it so hot sellers rank first. */
+  invertMomentum?: boolean;
 };
 
 /** Calculate composite score for a product based on weights and strategy. segmentAffinities are on
@@ -46,7 +48,10 @@ export function calculateCompositeScore(
     : 50;
 
   if (strategyId === 'sales_base') {
-    const momentum = calculateSalesMomentumScore(product);
+    // PER-302: positive presets use the hot-first heat score (cold-first momentum is branch-ordered, not invertible).
+    const momentum = scoreContext?.invertMomentum
+      ? calculateSalesHeatScore(product)
+      : calculateSalesMomentumScore(product);
     const total =
       momentum * 0.52 +
       profitScore * 0.13 +

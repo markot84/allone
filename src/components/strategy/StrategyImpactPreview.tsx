@@ -118,7 +118,10 @@ function useProductImpacts(
         undefined,
         currentScenarioId,
         undefined,
-        currentScenarioId === 'price_benchmark' ? scoreContext : undefined,
+        // scoreContext describes the PENDING scope — the "before" score shares only the benchmark lookup, never the pending inversion.
+        currentScenarioId === 'price_benchmark'
+          ? { benchmarkLookup: scoreContext?.benchmarkLookup }
+          : undefined,
       );
       const newScore = calculateCompositeScore(
         product,
@@ -126,7 +129,7 @@ function useProductImpacts(
         undefined,
         newScenarioId,
         undefined,
-        newScenarioId === 'price_benchmark' ? scoreContext : undefined,
+        scoreContext,
       );
       const diff = newScore - currentScore;
       const threshold = Math.max(1, Math.abs(currentScore) * 0.01);

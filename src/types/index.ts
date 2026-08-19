@@ -244,6 +244,10 @@ export interface Scenario {
 /** Predefined SKU filtering scenarios for Sales Optimization (sales_base). */
 export type SalesBasePresetId =
   | 'all'
+  | 'sold_last_30d'
+  | 'sold_last_90d'
+  | 'sold_lifetime'
+  | 'fast_low_cover'
   | 'never_sold'
   | 'zero_last_7d'
   | 'zero_last_30d'
