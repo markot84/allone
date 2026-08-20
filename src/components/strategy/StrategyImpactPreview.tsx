@@ -12,15 +12,15 @@ import {
   ChevronDown,
   Check,
   Clock,
-  Infinity
+  Infinity as InfinityIcon
 } from 'lucide-react';
 import { Button } from '../common';
-import { useProductSource } from '../../hooks/useProductSource';
+import { useBoundedProductSource } from '../../hooks/useBoundedProductSource';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useContent } from '../../hooks/useContent';
 import { calculateCompositeScore, type CompositeScoreContext } from '../../utils/compositeScore';
 import { scenarios } from '../../data/mockScenarios';
-import type { Product } from '../../types';
+import type { Product, ProfitMaxScope } from '../../types';
 
 interface ImpactBaseProps {
   currentWeights: Record<string, number>;
@@ -118,7 +118,10 @@ function useProductImpacts(
         undefined,
         currentScenarioId,
         undefined,
-        currentScenarioId === 'price_benchmark' ? scoreContext : undefined,
+        // scoreContext describes the PENDING scope — the "before" score shares only the benchmark lookup, never the pending inversion.
+        currentScenarioId === 'price_benchmark'
+          ? { benchmarkLookup: scoreContext?.benchmarkLookup }
+          : undefined,
       );
       const newScore = calculateCompositeScore(
         product,
@@ -126,7 +129,7 @@ function useProductImpacts(
         undefined,
         newScenarioId,
         undefined,
-        newScenarioId === 'price_benchmark' ? scoreContext : undefined,
+        scoreContext,
       );
       const diff = newScore - currentScore;
       const threshold = Math.max(1, Math.abs(currentScore) * 0.01);
@@ -171,7 +174,7 @@ export function StrategyImpactSummary({
   onConfirm, onCancel, onDetails, initialDuration, impactProductFilter, scoreContext,
 }: StrategyImpactSummaryProps) {
   const [duration, setDuration] = useState<number | 'ongoing'>(initialDuration);
-  const { products } = useProductSource();
+  const { products } = useBoundedProductSource();
   const impacts = useProductImpacts(
     products,
     currentWeights,
@@ -257,7 +260,7 @@ export function StrategyImpactSummary({
         {impacts.usedSample && (
           <p className="text-[10px] text-[#9CA3AF] mt-2 leading-snug">
             Έλεγχος επίδρασης σε {impacts.sampleSize.toLocaleString('el-GR')} από{' '}
-            {impacts.catalogTotal.toLocaleString('el-GR')} SKU (δείγμα για ταχύτητα· τα ↑/↓/ίδια αφορούν μόνο αυτό το
+            {impacts.catalogTotal.toLocaleString('el-GR')} SKU (δείγμα για ταχύτητα πωλήσεων· τα ↑/↓/ίδια αφορούν μόνο αυτό το
             υποσύνολο).
           </p>
         )}
@@ -288,7 +291,7 @@ export function StrategyImpactSummary({
                   : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
               }`}
             >
-              <Infinity size={11} />
+              <InfinityIcon size={11} />
             </button>
           </div>
         </div>
@@ -334,6 +337,10 @@ interface StrategyImpactModalProps extends ImpactBaseProps {
   onConfirm: (selectedDuration: number | 'ongoing') => void;
   impactProductFilter?: (p: Product) => boolean;
   scoreContext?: CompositeScoreContext;
+  /** Profit Max scope selects (shown only when provided). */
+  profitMaxScope?: ProfitMaxScope | null;
+  onProfitMaxScopeChange?: (scope: ProfitMaxScope) => void;
+  profitMaxScopeOptions?: { brands: string[]; subcategories: string[]; productTypes: string[] };
 }
 
 const formatDuration = (d?: number | 'ongoing') =>
@@ -346,8 +353,11 @@ export function StrategyImpactModal({
   currentDuration, newDuration,
   impactProductFilter,
   scoreContext,
+  profitMaxScope,
+  onProfitMaxScopeChange,
+  profitMaxScopeOptions,
 }: StrategyImpactModalProps) {
-  const { products } = useProductSource();
+  const { products } = useBoundedProductSource();
   const { campaigns: campaignsFromHook } = useCampaigns();
   const { contentItems: contentFromHook } = useContent();
   const campaigns = campaignsFromHook ?? [];
@@ -457,6 +467,32 @@ export function StrategyImpactModal({
         </div>
 
         <div className="p-5 space-y-5">
+          {/* Profit Max scope — filters the strategy before applying */}
+          {onProfitMaxScopeChange && profitMaxScope && profitMaxScopeOptions && (
+            <div>
+              <h3 className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-2">Εύρος εφαρμογής</h3>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ['brandFilter', 'Όλα τα brands', profitMaxScopeOptions.brands],
+                  ['subcategoryFilter', 'Όλες οι υποκατηγορίες', profitMaxScopeOptions.subcategories],
+                  ['productTypeFilter', 'Όλα τα product types', profitMaxScopeOptions.productTypes],
+                ] as const)
+                  .filter(([, , options]) => options.length > 0)
+                  .map(([key, allLabel, options]) => (
+                    <select
+                      key={key}
+                      value={profitMaxScope[key]}
+                      onChange={(e) => onProfitMaxScopeChange({ ...profitMaxScope, [key]: e.target.value })}
+                      className="rounded-md border border-[#E5E7EB] bg-white px-2 py-1.5 text-xs text-[#111827]"
+                    >
+                      <option value="">{allLabel}</option>
+                      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ))}
+              </div>
+            </div>
+          )}
+
           {/* Weight Diff */}
           {weightDiffs.length > 0 && (
             <div>
@@ -594,7 +630,7 @@ export function StrategyImpactModal({
                 }`}
                 title="Συνεχής — χωρίς αυτόματη λήξη"
               >
-                <Infinity size={12} aria-hidden />
+                <InfinityIcon size={12} aria-hidden />
                 Συνεχής
               </button>
             </div>

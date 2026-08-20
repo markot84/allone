@@ -7,7 +7,7 @@ import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 import { ALERT } from './utils/alertKeys';
 import { encryptToken, decryptToken } from './tokenCrypto';
-import { erpWriteBatch, erpIsoDate, erpNum, normalizeHttpBase, sanitizeFirestoreDocId } from './erpConnectorFirestore';
+import { erpWriteBatch, erpPruneStale, erpIsoDate, erpNum, normalizeHttpBase, sanitizeFirestoreDocId } from './erpConnectorFirestore';
 import { buildHistoricalOrIncrementalWindow, toYmd } from './syncPolicy';
 
 let _db: Firestore | null = null;
@@ -295,6 +295,12 @@ export function assembleBrowserRows(
   return order.map((key) => byKey.get(key)!);
 }
 
+/** Every advertised row arrived. A snapshot must NOT be pruned on a partial fetch: a dropped page
+ *  would look like "these items no longer exist" and delete live data. */
+export function isCompleteFetch(total: number, fetched: number): boolean {
+  return total === 0 || fetched >= total;
+}
+
 async function fetchBrowserAll(
   serviceUrl: string,
   clientID: string,
@@ -303,7 +309,7 @@ async function fetchBrowserAll(
   list: string,
   filters: string,
   label: string
-): Promise<{ rows: Record<string, unknown>[]; error?: string }> {
+): Promise<{ rows: Record<string, unknown>[]; error?: string; complete?: boolean }> {
   const infoCall = await softoneCall(serviceUrl, {
     service: 'getBrowserInfo',
     clientID,
@@ -357,7 +363,7 @@ async function fetchBrowserAll(
     logger.warn(`[SoftOne] ${label}: fetched ${raw.length}/${total} rows — incomplete`);
   }
 
-  return { rows: assembleBrowserRows(groups, raw, total, label) };
+  return { rows: assembleBrowserRows(groups, raw, total, label), complete: isCompleteFetch(total, raw.length) };
 }
 
 export interface SoftOneTestResult {
@@ -488,6 +494,15 @@ export interface SoftOneSalesLine {
 
 /** Parse the ITELINES grid out of a getData OBJECT=SALDOC response (the SALDOC browser carries only
  * headers). Item code = MTRL_ITEM_CODE (joins softone_items.sku); quantity = QTY1; value = NETLINEVAL. */
+/** Internal document id from ZOOMINFO ('SERIES;ID'), '' when absent.
+ *
+ *  The SALDOC/PURDOC browsers return FINDOC/SERIES empty, so ZOOMINFO is the only stable per-document
+ *  key. Never fall back to the row index: ids must not depend on position, or each sync overwrites
+ *  whatever previously occupied those slots. */
+export function softOneDocKey(row: Record<string, unknown>): string {
+  return String(row.ZOOMINFO ?? '').split(';').pop() ?? '';
+}
+
 export function parseSoftOneSalesLines(getDataResponse: Record<string, unknown> | null | undefined): SoftOneSalesLine[] {
   const data = (getDataResponse?.data ?? {}) as Record<string, unknown>;
   const lines = (data.ITELINES ?? data.MTRLINES) as Record<string, unknown>[] | undefined;
@@ -566,7 +581,7 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
 
   const { clientID } = session.session;
   let totalImported = 0;
-  const counts = { customers: 0, items: 0, salesDocs: 0, purchaseDocs: 0 };
+  const counts = { customers: 0, items: 0, salesDocs: 0, purchaseDocs: 0, customersPruned: 0, itemsPruned: 0 };
   const errors: string[] = [];
 
   const docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
@@ -592,7 +607,11 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
           source: 'softone_api',
         },
       }));
-      if (items.length) await erpWriteBatch(db, 'softone_customers', brandId, items);
+      if (items.length) {
+        const t0 = new Date();
+        await erpWriteBatch(db, 'softone_customers', brandId, items);
+        if (cRes.complete) counts.customersPruned = await erpPruneStale(db, 'softone_customers', brandId, t0);
+      }
       counts.customers = items.length;
       totalImported += items.length;
     }
@@ -621,7 +640,11 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
           source: 'softone_api',
         },
       }));
-      if (items.length) await erpWriteBatch(db, 'softone_items', brandId, items);
+      if (items.length) {
+        const t0 = new Date();
+        await erpWriteBatch(db, 'softone_items', brandId, items);
+        if (iRes.complete) counts.itemsPruned = await erpPruneStale(db, 'softone_items', brandId, t0);
+      }
       counts.items = items.length;
       totalImported += items.length;
     }
@@ -637,17 +660,23 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
         // Per-document line items (the SALDOC browser carries only headers): getData per doc, keyed by the
         // internal id in ZOOMINFO ('SERIES;ID'). Needed for per-SKU sales velocity.
         const lineItemsByIdx = await mapWithConcurrency(sRes.rows, 5, (r) =>
-          fetchSoftOneSalesDocLines(serviceUrl, clientID, appId, String(r.ZOOMINFO ?? '').split(';').pop() ?? '')
+          fetchSoftOneSalesDocLines(serviceUrl, clientID, appId, softOneDocKey(r))
         );
-        const items = sRes.rows.map((r, idx) => ({
-          id: `s1_sd_${sanitizeFirestoreDocId(String(r['SALDOC.FINDOC'] || r.FINDOC || r['SALDOC.SERIES'] || idx) + '_' + idx)}`,
-          data: {
-            ...r,
-            documentDate: erpIsoDate(r['SALDOC.TRNDATE'] ?? r.TRNDATE),
-            lineItems: lineItemsByIdx[idx] ?? [],
-            source: 'softone_api',
-          },
-        }));
+        const items = sRes.rows.flatMap((r, idx) => {
+          const key = softOneDocKey(r);
+          if (!key) return [];
+          return [{
+            id: `s1_sd_${sanitizeFirestoreDocId(key)}`,
+            data: {
+              ...r,
+              documentDate: erpIsoDate(r['SALDOC.TRNDATE'] ?? r.TRNDATE),
+              lineItems: lineItemsByIdx[idx] ?? [],
+              source: 'softone_api',
+            },
+          }];
+        });
+        const skipped = sRes.rows.length - items.length;
+        if (skipped > 0) logger.warn(`[SoftOne] ${brandId}: skipped ${skipped} sales docs with no ZOOMINFO key`);
         if (items.length) await erpWriteBatch(db, 'softone_sales_documents', brandId, items);
         counts.salesDocs = items.length;
         totalImported += items.length;
@@ -662,14 +691,20 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
         errors.push(pRes.error);
       }
       else {
-        const items = pRes.rows.map((r, idx) => ({
-          id: `s1_pd_${sanitizeFirestoreDocId(String(r['PURDOC.FINDOC'] || r.FINDOC || idx) + '_' + idx)}`,
-          data: {
-            ...r,
-            documentDate: erpIsoDate(r['PURDOC.TRNDATE'] ?? r.TRNDATE),
-            source: 'softone_api',
-          },
-        }));
+        const items = pRes.rows.flatMap((r) => {
+          const key = softOneDocKey(r);
+          if (!key) return [];
+          return [{
+            id: `s1_pd_${sanitizeFirestoreDocId(key)}`,
+            data: {
+              ...r,
+              documentDate: erpIsoDate(r['PURDOC.TRNDATE'] ?? r.TRNDATE),
+              source: 'softone_api',
+            },
+          }];
+        });
+        const skippedPd = pRes.rows.length - items.length;
+        if (skippedPd > 0) logger.warn(`[SoftOne] ${brandId}: skipped ${skippedPd} purchase docs with no ZOOMINFO key`);
         if (items.length) await erpWriteBatch(db, 'softone_purchase_documents', brandId, items);
         counts.purchaseDocs = items.length;
         totalImported += items.length;

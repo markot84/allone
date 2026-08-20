@@ -13,6 +13,7 @@ import {
   Handshake,
   Plug,
   Package,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -37,6 +38,7 @@ import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { useBrand } from '../../hooks/useBrand';
 import { prefersEshopRevenuePerformance } from '../../utils/revenueSource';
+import { buildSupplierTodMap } from '../../utils/productUtils';
 import { useProductAggregates, useSegmentAggregates } from '../../hooks/useAggregates';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { useProcurementSignals } from '../../hooks/useProcurementSignals';
@@ -48,6 +50,7 @@ import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateC
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useConnectorSyncErrors } from '../../hooks/useConnectorSyncErrors';
 import { useEcommerceFullHistoryMetrics } from '../../hooks/useEcommerceFullHistoryMetrics';
 import { useBusinessRevenueSummary } from '../../hooks/useBusinessRevenueSummary';
 import { useProcurement } from '../../hooks/useProcurement';
@@ -226,6 +229,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   useAutomationRunner();
   const ga4 = useGA4Data();
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
+  const connectorSyncErrors = useConnectorSyncErrors();
   /** Server summary only (`ecommerce_summary`) — one Firestore read; `full` mode froze the main
    *  thread on 10K+ order brands. Accuracy kept via `refreshAggregates` on rules/source change. */
   const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
@@ -257,11 +261,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const showSegmentsStaleSourceNote =
     !segmentsLoading && rfmSegments.length > 0 && segmentsDataSource !== 'ecommerce';
 
-  const supplierTodMap = useMemo(() => {
-    const m = new Map<string, number>();
-    suppliers.forEach(s => m.set(s.name, s.tod));
-    return m;
-  }, [suppliers]);
+  const supplierTodMap = useMemo(
+    () => buildSupplierTodMap(suppliers, currentBrand?.inventoryThresholds?.defaultTod),
+    [suppliers, currentBrand?.inventoryThresholds?.defaultTod]
+  );
   const productsCount = productIntelligence.aggregate?.totalCount ?? productStats?.totalSkus ?? 0;
   const hasAnyData =
     hasOrganic ||
@@ -551,6 +554,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const hasErpRevenueForPeriod =
     hasErpBusinessRevenue && erpRevenueInPeriod > 0 && erpDailyCoverageIsCurrentForPeriod;
 
+  /** PER-171: the headline total-turnover KPI (and its tooltip) use the business-wide ERP figure
+   *  whenever ERP data exists — matching the Finances detail headline. The coverage-freshness gate
+   *  stays on the chart/sparkline/AOV only; for the headline it would silently degrade the €268K
+   *  business-wide turnover to the €83K e-shop subset whenever the ERP daily series lags by a day. */
+  const kpiUsesErp = hasErpBusinessRevenue && erpRevenueInPeriod > 0;
+
   const hasProcurementTurnoverEstimate = procurementRevenueInPeriod > 0;
 
   /** The Revenue Performance trend uses the e-shop order-date series when the brand prefers it (avoids
@@ -562,19 +571,26 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
    *  Procurement always wins when 12-month costing data exists. */
   const dashboardTotalRevenue = useMemo(() => {
     if (hasProcurementTurnoverEstimate) return procurementRevenueInPeriod;
-    if (hasErpRevenueForPeriod) return erpRevenueInPeriod;
+    if (kpiUsesErp) return erpRevenueInPeriod;
     if (hasEcommerceRevenue) return storeRevenueInPeriod;
     return organicRevenueInPeriod + campaignMetrics.totalRevenue;
   }, [
     hasProcurementTurnoverEstimate,
     procurementRevenueInPeriod,
-    hasErpRevenueForPeriod,
+    kpiUsesErp,
     erpRevenueInPeriod,
     hasEcommerceRevenue,
     storeRevenueInPeriod,
     organicRevenueInPeriod,
     campaignMetrics.totalRevenue,
   ]);
+
+  /** PER-301 disclosure: share from the KPI's backing source; € approximated as share × the period figure. */
+  const nonMerchSubtext = useMemo(() => {
+    const share = kpiUsesErp ? businessRevenue.nonMerchandiseShare : ecomm.nonMerchandiseShare;
+    if (!share || share <= 0 || dashboardTotalRevenue <= 0) return undefined;
+    return `~${formatCurrencyCompact(dashboardTotalRevenue * share)} (${(share * 100).toFixed(1)}%) από μη εμπορεύσιμα προϊόντα`;
+  }, [kpiUsesErp, businessRevenue.nonMerchandiseShare, ecomm.nonMerchandiseShare, dashboardTotalRevenue]);
 
   const revenueTotalKpiTooltip = useMemo(() => {
     if (isB2B) {
@@ -587,7 +603,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         tail
       );
     }
-    if (hasErpRevenueForPeriod) {
+    if (kpiUsesErp) {
       return 'Πραγματικός τζίρος από τα παραστατικά του ERP για την περίοδο. Περιλαμβάνει φυσικά καταστήματα, B2B και online πωλήσεις, όπως καταγράφονται στο ERP.' + tail;
     }
     if (enabledModules.procurement) {
@@ -600,7 +616,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       'Συνολικά έσοδα της επιχείρησης για την περίοδο. Χρησιμοποιείται η καλύτερη διαθέσιμη πηγή με σειρά: παραστατικά ERP → τζίρος e-shop → εκτίμηση από organic & καμπάνιες.' +
       tail
     );
-  }, [isB2B, hasProcurementTurnoverEstimate, hasErpRevenueForPeriod, enabledModules.procurement]);
+  }, [isB2B, hasProcurementTurnoverEstimate, kpiUsesErp, enabledModules.procurement]);
 
   const revenuePerformanceChartLabel = chartUsesProcurement
     ? 'Τζίρος επιχείρησης (Procurement · εκτίμηση 12μ.)'
@@ -984,6 +1000,30 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
       {/* Automation Alerts */}
       <AlertsBanner maxAlerts={3} onNavigate={onSectionChange} />
+
+      {/* PER-194: failed connector syncs — visible without opening Συνδέσεις */}
+      {connectorSyncErrors.length > 0 && (
+        <Card
+          padding="lg"
+          hover
+          className="border border-amber-200 bg-amber-50/70 cursor-pointer"
+          onClick={() => onSectionChange?.('data')}
+        >
+          <div className="flex min-w-0 gap-3 items-center">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+              <AlertTriangle size={20} />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-[var(--nts-charcoal)]">
+                Αποτυχημένος συγχρονισμός: {connectorSyncErrors.map((e) => e.name).join(', ')}
+              </h3>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--nts-medium-gray)]">
+                Τα δεδομένα από {connectorSyncErrors.length === 1 ? 'αυτή τη σύνδεση' : 'αυτές τις συνδέσεις'} μπορεί να είναι ελλιπή. Δείτε λεπτομέρειες στις Συνδέσεις →
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {!currentBrand && (
         <Card padding="lg" className="border border-amber-200 bg-amber-50/70">
@@ -1378,6 +1418,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 kpi={{
                   label: isB2B ? 'Revenue baseline' : 'Σύνολο Εσόδων',
                   value: formatCurrencyCompact(dashboardTotalRevenue),
+                  subtext: nonMerchSubtext,
                   change: revenueMoM !== null ? Math.round(revenueMoM) : undefined,
                   changeLabel: revenueMoM !== null ? 'vs προηγ. μήνα' : undefined,
                   trend: revenueMoM !== null ? (revenueMoM >= 0 ? 'up' : 'down') : 'up',

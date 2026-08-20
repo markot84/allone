@@ -14,6 +14,39 @@ export function excludeDemoProducts<T extends Pick<Product, 'name' | 'sku'>>(ite
   return items.filter(p => !isDemoProduct(p));
 }
 
+/** PER-293 — per-brand non-merchandise rules; mirrors functions/src/nonMerchandise.ts, keep in sync. */
+export type NonMerchandiseRules = { categories?: string[]; nameContains?: string[] };
+
+// Accent- AND case-insensitive so 'ΔΩΡΟΕΠΙΤΑΓΕΣ' matches 'Δωροεπιταγές'.
+const fold = (v: unknown) =>
+  String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+
+type NonStockedRow = Pick<Product, 'name' | 'sku'> & { category?: string };
+
+/** Demo ∪ platform non-merchandise (plain lowercase, like the server) ∪ brand rules; stock analytics only. */
+export function buildIsNonStocked(rules?: NonMerchandiseRules): (p: NonStockedRow) => boolean {
+  const cats = (rules?.categories ?? []).map(fold).filter(Boolean);
+  const needles = (rules?.nameContains ?? []).map(fold).filter(Boolean);
+  return (p) => {
+    if (isDemoProduct(p)) return true;
+    const sku = (p?.sku || '').toString().trim().toLowerCase();
+    const name = (p?.name || '').toString().trim().toLowerCase();
+    if (sku === 'discount' || sku.includes('shipping') || name.includes('shipping πωλήσεων')) return true;
+    if (cats.length && cats.includes(fold(p.category))) return true;
+    if (needles.length) {
+      const foldedName = fold(p.name);
+      return needles.some(n => foldedName.includes(n));
+    }
+    return false;
+  };
+}
+
+/** Filter that removes demo + non-merchandise products (platform rule + brand additions). */
+export function excludeNonStockedProducts<T extends NonStockedRow>(items: T[], rules?: NonMerchandiseRules): T[] {
+  const isNonStocked = buildIsNonStocked(rules);
+  return items.filter(p => !isNonStocked(p));
+}
+
 /** Days from date string (Excel serial or ISO) to today */
 function daysFromDate(val: string): number | null {
   if (!val || !String(val).trim()) return null;
@@ -106,8 +139,10 @@ export const DEFAULT_TOD = 60;
 /** Assumed period length (days) for qty_sold_period */
 const SALES_PERIOD_DAYS = 30;
 
+/** PER-300: shelf units — available_stock also counts unreceived orders; mirrors effectiveStock in
+ * functions/src/productIntelligenceAggregator.ts, keep in sync. */
 export function getEffectiveStockLevel(product: Product): number {
-  return product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
+  return product.stock_on_hand ?? product.stock_level ?? 0;
 }
 
 /** Days the current stock lasts at sell-through rate; Infinity when qty_sold is 0,
@@ -124,13 +159,47 @@ export function getDaysOfStock(product: Product): number {
 export type StockHealth = 'healthy' | 'excess' | 'low' | 'dead';
 
 /** Classify stock health via TOD: dead (∞ days), low (≤TOD/2), excess (>TOD×2), else healthy. */
-/** Resolve TOD for a product: supplier-specific if available, else default */
-export function getProductTod(product: Product, supplierTodMap?: Map<string, number>): number {
+/** Build a supplier→TOD map: each supplier's own tod, else the brand default (config page), else
+ * the platform floor. Products whose supplier isn't listed fall back via getProductTod. */
+export function buildSupplierTodMap(
+  suppliers: { name: string; tod?: number | null }[],
+  brandDefaultTod: number = DEFAULT_TOD
+): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const s of suppliers) {
+    if (!s.name) continue;
+    m.set(s.name, s.tod != null && s.tod > 0 ? s.tod : brandDefaultTod);
+  }
+  return m;
+}
+
+/** Default supplier lead time (days) when neither the supplier nor the brand sets one. */
+export const DEFAULT_LEAD_TIME_DAYS = 30;
+/** Default reorder point as a multiple of lead time — warn 50% before the stock runs out. */
+export const DEFAULT_REORDER_MULTIPLIER = 1.5;
+
+/** Reorder point in days of cover: reorder once stock covers less than lead time × multiplier,
+ *  so the replenishment lands before the shelf empties. */
+export function getReorderPointDays(
+  leadTime: number | null | undefined,
+  brandDefaultLeadTime: number = DEFAULT_LEAD_TIME_DAYS,
+  multiplier: number = DEFAULT_REORDER_MULTIPLIER,
+): number {
+  const lead = leadTime != null && leadTime > 0 ? leadTime : brandDefaultLeadTime;
+  return Math.round(lead * multiplier);
+}
+
+/** Resolve TOD for a product: supplier-specific → brand default (config page) → platform floor. */
+export function getProductTod(
+  product: Product,
+  supplierTodMap?: Map<string, number>,
+  brandDefaultTod: number = DEFAULT_TOD
+): number {
   if (supplierTodMap && product.supplier) {
     const supplierTod = supplierTodMap.get(product.supplier);
     if (supplierTod != null && supplierTod > 0) return supplierTod;
   }
-  return DEFAULT_TOD;
+  return brandDefaultTod;
 }
 
 export function classifyStockHealth(product: Product, tod: number = DEFAULT_TOD): StockHealth {
@@ -150,7 +219,8 @@ export function classifyStockHealth(product: Product, tod: number = DEFAULT_TOD)
 export function resolveStockHealth(
   product: Product,
   supplierTodMap?: Map<string, number>,
-  useProcurementRowModel?: boolean
+  useProcurementRowModel?: boolean,
+  brandDefaultTod: number = DEFAULT_TOD
 ): StockHealth {
   if (useProcurementRowModel) {
     const tag = product.priority_tag;
@@ -158,7 +228,7 @@ export function resolveStockHealth(
       return tag;
     }
   }
-  return classifyStockHealth(product, getProductTod(product, supplierTodMap));
+  return classifyStockHealth(product, getProductTod(product, supplierTodMap, brandDefaultTod));
 }
 
 /** Delivery-note-first products have stock but no cost price yet; true when stock > 0 and

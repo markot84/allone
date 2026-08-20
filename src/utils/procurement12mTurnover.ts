@@ -1,29 +1,6 @@
 /** Sum of the "real 12-month turnover" column in the Costing (Procurement) sheet. */
 
-function parseNum(v: unknown): number {
-  if (v == null || v === '') return 0;
-  if (typeof v === 'number') return isNaN(v) ? 0 : v;
-  const s = String(v).trim().replace(/\s/g, '');
-  if (!s) return 0;
-  if (s.includes(',')) {
-    const n = parseFloat(s.replace(/\./g, '').replace(',', '.'));
-    return isNaN(n) ? 0 : n;
-  }
-  const dots = (s.match(/\./g) ?? []).length;
-  if (dots > 1) {
-    const n = parseFloat(s.replace(/\./g, ''));
-    return isNaN(n) ? 0 : n;
-  }
-  if (dots === 1) {
-    const afterDot = s.split('.')[1] ?? '';
-    if (afterDot.length === 3) {
-      const n = parseFloat(s.replace(/\./g, ''));
-      return isNaN(n) ? 0 : n;
-    }
-  }
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-}
+import { parseNum } from './procurementNum';
 
 function isNumericColName(k: string): boolean {
   return k.trim() !== '' && !isNaN(Number(k.trim()));

@@ -7,6 +7,7 @@ import { PROCUREMENT_SHEET_NAMES } from '../types/procurement';
 import type { ProcurementSheetType } from '../types/procurement';
 import { FEED_SOURCE_CONFIG, type FeedSourceType } from '../data/feedSourceConfig';
 import { logger } from '../utils/logger';
+import { supplierDocId } from '../utils/supplierDocId';
 import type { Product, RFMSegment, Campaign } from '../types';
 
 const BATCH_SIZE = 500; // Firestore limit per writeBatch
@@ -244,8 +245,31 @@ export interface ImportProgress {
   phase?: string;
 }
 
+/** Sniff the field delimiter from the first non-empty line — Greek/EU Excel exports use ';' (and the
+ * data has EU-decimal commas), so a hard-coded ',' shredded columns. Picks the candidate with the most
+ * occurrences outside quotes; ties/none → ','. */
+export function detectDelimiter(csvText: string): ',' | ';' | '\t' | '|' {
+  const firstLine = csvText.split(/\r?\n/).find((l) => l.trim().length > 0) ?? '';
+  const candidates: Array<',' | ';' | '\t' | '|'> = [',', ';', '\t', '|'];
+  let best: ',' | ';' | '\t' | '|' = ',';
+  let bestCount = 0;
+  for (const delim of candidates) {
+    let count = 0;
+    let inQuotes = false;
+    for (const char of firstLine) {
+      if (char === '"') inQuotes = !inQuotes;
+      else if (char === delim && !inQuotes) count++;
+    }
+    if (count > bestCount) {
+      bestCount = count;
+      best = delim;
+    }
+  }
+  return best;
+}
+
 // CSV Parser (simple implementation, can be replaced with papaparse later)
-export function parseCSV(csvText: string): string[][] {
+export function parseCSV(csvText: string, delimiter: string = detectDelimiter(csvText)): string[][] {
   const lines: string[][] = [];
   let currentLine: string[] = [];
   let currentField = '';
@@ -262,7 +286,7 @@ export function parseCSV(csvText: string): string[][] {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       currentLine.push(currentField.trim());
       currentField = '';
     } else if ((char === '\n' || char === '\r') && !inQuotes) {
@@ -721,7 +745,7 @@ function parseLooseNumber(value: string | number | null | undefined): number {
 
 // Validate and transform Products
 // Primary schema: FINAL_Unified_Production_Schema (SKU_ID, Product_Name, Category, Sell_Price, Cost_Price, Stock_On_Hand, Qty_Sold_Period, Revenue_Period, Supplier, Brand, First_Available_Date, Last_Sale_Date, Priority_Flag, Stock_Age_Days, Gross_Profit, Gross_Margin_%, Margin_Tier)
-function validateProduct(row: Record<string, string>, index: number): { valid: boolean; data?: Product; error?: string } {
+export function validateProduct(row: Record<string, string>, index: number): { valid: boolean; data?: Product; error?: string } {
   // Debug: log keys for first rows. DEV-gated — logs include commercial values
   // (price/cost/margin/SKU) and must not run in production.
   if (import.meta.env.DEV && index < 3) {
@@ -747,7 +771,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   const marginTier = pick(row, 'margin_tier', 'margin_category', 'tier');
   const marginPct = pick(row, 'margin_percentage', 'margin_pct', 'margin', 'margin_%', 'gross_margin_%', 'gross_margin', 'gross_margin_pct', 'profit_margin', 'profit', 'κέρδος', 'περιθώριο', 'μικτό_κέρδος');
   // Stock level - Greek: "Διαθεσιμότητα" = Availability/Stock Level (normalized: "διαθεσιμότητα")
-  const stockLevel = pick(row, 'διαθεσιμότητα', 'stock_on_hand', 'Stock_On_Hand', 'stock_level', 'Stock_Level', 'stock', 'Stock', 'quantity', 'Quantity', 'qty', 'Qty', 'inventory', 'Inventory', 'on_hand', 'On_Hand', 'units', 'Units', 'απόθεμα', 'ποσότητα', 'available_stock', 'Available_Stock', 'δυναμικό_υπόλοιπο', 'κίνηση', 'availability');
+  const stockLevel = pick(row, 'διαθεσιμότητα', 'stock_on_hand', 'Stock_On_Hand', 'stock_level', 'Stock_Level', 'stock', 'Stock', 'quantity', 'Quantity', 'qty', 'Qty', 'inventory', 'Inventory', 'on_hand', 'On_Hand', 'units', 'Units', 'απόθεμα', 'ποσότητα', 'available_stock', 'Available_Stock', 'δυναμικό_υπόλοιπο', 'κίνηση', 'availability', 'υπόλοιπο');
   const stockOnHand = pick(row, 'stock_on_hand', 'on_hand', 'stock', 'quantity', 'qty', 'inventory', 'units', 'απόθεμα', 'ποσότητα');
   const availableStock = pick(row, 'available_stock', 'sellable_stock', 'free_stock', 'διαθέσιμο_απόθεμα', 'δυναμικό_υπόλοιπο');
   const stockCapacity = pick(row, 'stock_capacity', 'capacity', 'max_stock', 'max_quantity', 'χωρητικότητα', 'επιθυμητό_απόθεμα', 'αναμενόμενα', 'Αναμενόμενα');
@@ -1670,6 +1694,21 @@ const KNOWN_PROCUREMENT_HEADERS = new Set([
 
 /** Detects the column-header row, scanning the first 5 rows to handle XLSX variants
  * (standard row 0, or row 0 being numeric IDs / title / blank). */
+/** Synthetic headers for the headerless statistics sheet. */
+export const STAT_METRIC_HEADER = 'ΔΕΙΚΤΗΣ';
+export const STAT_VALUE_HEADER = 'ΤΙΜΗ';
+
+/** True when the statistics sheet carries no header row, i.e. its first row is already data.
+ *  A real header is text in BOTH cells; a data row pairs a text metric with a numeric value.
+ *  Deliberately narrow — anything else falls back to normal header detection. */
+export function isHeaderlessStatSheet(cleaned: string[][]): boolean {
+  const first = (cleaned[0] ?? []).filter(c => c !== '');
+  if (first.length !== 2) return false;
+  const [label, value] = first;
+  const isNum = (c: string) => c !== '' && !isNaN(Number(c.replace(',', '.')));
+  return !isNum(label) && isNum(value);
+}
+
 function detectHeaderRow(cleaned: string[][]): number {
   const MAX_SCAN = Math.min(5, cleaned.length - 1);
 
@@ -1786,8 +1825,13 @@ async function importProcurementFile(
         continue;
       }
 
-      const headerRowIdx = detectHeaderRow(cleaned);
-      const headers = cleaned[headerRowIdx].map(h => String(h || '').trim());
+      // The statistics sheet is a headerless «δείκτης | τιμή» list, which detectHeaderRow cannot
+      // score (every row looks alike) — it would consume row 0 and lose that metric.
+      const headerless = sheetType === 'statistics' && isHeaderlessStatSheet(cleaned);
+      const headerRowIdx = headerless ? -1 : detectHeaderRow(cleaned);
+      const headers = headerless
+        ? [STAT_METRIC_HEADER, STAT_VALUE_HEADER]
+        : cleaned[headerRowIdx].map(h => String(h || '').trim());
       const dataRows = cleaned.slice(headerRowIdx + 1).filter(r => r.some(c => c !== ''));
 
       // Normalize headers: spaces/dots → underscore for stable downstream keys
@@ -2020,7 +2064,7 @@ export async function importFile(
 
         // Auto-extract suppliers with TOD from imported products
         try {
-          const supplierMap = new Map<string, number>();
+          const supplierMap = new Map<string, number | undefined>();
           const rawRows = objects;
           const pickCol = (r: Record<string, string>, ...alts: string[]) => {
             for (const a of alts) {
@@ -2034,13 +2078,14 @@ export async function importFile(
             if (!sName) continue;
             const todVal = parseInt(pickCol(r, 'tod', 'target_days', 'target_days_of_stock') || '0', 10);
             if (!supplierMap.has(sName) || (todVal > 0 && !supplierMap.get(sName))) {
-              supplierMap.set(sName, todVal > 0 ? todVal : 60);
+              supplierMap.set(sName, todVal > 0 ? todVal : undefined);
             }
           }
-          if (supplierMap.size > 0) {
+          if (supplierMap.size > 0 && brandId) {
+            // Only name (+ sheet-provided tod) — never stamp defaults over existing docs (PER-183)
             const supItems = Array.from(supplierMap.entries()).map(([name, tod]) => ({
-              id: name.replace(/[/\\#$.[\]]/g, '_').replace(/\s+/g, '_').slice(0, 120),
-              data: { name, tod, lead_time: 0, contact: '' } as Record<string, unknown>,
+              id: supplierDocId(brandId, name),
+              data: { name, ...(tod ? { tod } : {}) } as Record<string, unknown>,
             }));
             await FirestoreService.batchSet('suppliers', supItems, brandId);
             result.warnings.push(`Αυτόματη εισαγωγή ${supItems.length} προμηθευτών με TOD`);
@@ -2283,7 +2328,7 @@ export async function importFile(
         break;
       }
       
-      case 'custom':
+      case 'custom': {
         result.warnings.push(`${type} import is not yet fully implemented`);
         // Batch store as raw data
         const rawItems = objects.map((obj, i) => ({
@@ -2305,6 +2350,7 @@ export async function importFile(
         });
         result.imported = objects.length;
         break;
+      }
     }
 
     result.success = result.failed === 0;

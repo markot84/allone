@@ -9,7 +9,7 @@ export function eachDateInclusive(fromDate: string, toDate: string): string[] {
   const out: string[] = [];
   const [fy, fm, fd] = fromDate.split('-').map(Number);
   const [ty, tm, td] = toDate.split('-').map(Number);
-  let cur = new Date(Date.UTC(fy, fm - 1, fd, 12, 0, 0));
+  const cur = new Date(Date.UTC(fy, fm - 1, fd, 12, 0, 0));
   const endT = new Date(Date.UTC(ty, tm - 1, td, 12, 0, 0)).getTime();
   while (cur.getTime() <= endT) {
     out.push(cur.toISOString().slice(0, 10));

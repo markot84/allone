@@ -7,13 +7,16 @@ import { logger } from '../../utils/logger';
 import type { Brand } from '../../types';
 
 type Thresholds = NonNullable<Brand['inventoryThresholds']>;
-type FieldKey = keyof Thresholds;
+type FieldKey = Exclude<keyof Thresholds, 'reorderEmailEnabled'>;
 
-const FIELDS: { key: FieldKey; label: string; def: number; hint: string }[] = [
+const FIELDS: { key: FieldKey; label: string; def: number; hint: string; step?: number }[] = [
   { key: 'velocityWindowDays', label: 'Παράθυρο πωλήσεων (ημέρες)', def: 30, hint: 'Σε πόσες ημέρες αναφέρεται η ταχύτητα πωλήσεων.' },
-  { key: 'lowDaysOfCover', label: 'Όριο «Χαμηλού» (ημέρες κάλυψης)', def: 30, hint: 'Κάτω από τόσες ημέρες κάλυψης → «Χαμηλό απόθεμα».' },
-  { key: 'excessDaysOfCover', label: 'Όριο «Υπερβολικού» (ημέρες κάλυψης)', def: 120, hint: 'Πάνω από τόσες ημέρες κάλυψης → «Υπερβολικό απόθεμα».' },
-  { key: 'newStockGraceDays', label: 'Περίοδος χάριτος νέου αποθέματος (ημέρες)', def: 60, hint: 'Απόθεμα χωρίς πωλήσεις δεν χαρακτηρίζεται «Νεκρό» πριν περάσουν τόσες ημέρες από την παραλαβή.' },
+  { key: 'lowDaysOfCover', label: 'Όριο «Low Stock» (ημέρες κάλυψης)', def: 30, hint: 'Κάτω από τόσες ημέρες κάλυψης → «Low Stock».' },
+  { key: 'excessDaysOfCover', label: 'Όριο «Excess Stock» (ημέρες κάλυψης)', def: 120, hint: 'Πάνω από τόσες ημέρες κάλυψης → «Excess Stock».' },
+  { key: 'newStockGraceDays', label: 'Περίοδος χάριτος νέου αποθέματος (ημέρες)', def: 60, hint: 'Απόθεμα χωρίς πωλήσεις δεν χαρακτηρίζεται «Dead Stock» πριν περάσουν τόσες ημέρες από την παραλαβή.' },
+  { key: 'defaultLeadTimeDays', label: 'Προεπιλογή lead time προμηθευτή (ημέρες)', def: 30, hint: 'Εφεδρικός χρόνος παράδοσης όταν ο προμηθευτής δεν έχει δικό του lead time. Χρησιμοποιείται στον χαρακτηρισμό «Low Stock».' },
+  { key: 'defaultTod', label: 'Προεπιλογή TOD ανά προμηθευτή (ημέρες)', def: 60, hint: 'Εφεδρικό Target Days of Stock όταν ο προμηθευτής δεν έχει δικό του TOD. Το κάθε προμηθευτής μπορεί να το υπερισχύσει στη σελίδα Προμηθευτών.' },
+  { key: 'reorderWarningMultiplier', label: 'Σημείο επαναπαραγγελίας (× lead time)', def: 1.5, step: 0.1, hint: 'Πόσες φορές το lead time πρέπει να καλύπτει το απόθεμα πριν ειδοποιηθείτε για επαναπαραγγελία. 1.5 = ειδοποίηση 50% νωρίτερα από την εξάντληση.' },
 ];
 
 /** Per-brand stock-health thresholds (Product Intelligence). Empty inputs keep the platform default.
@@ -31,10 +34,15 @@ export function InventoryThresholdsCard() {
   }, [stored]);
 
   const [vals, setVals] = useState<Record<FieldKey, string>>(initial);
+  const [reorderEmail, setReorderEmail] = useState(stored?.reorderEmailEnabled ?? false);
   const [saving, setSaving] = useState(false);
   useEffect(() => setVals(initial), [currentBrand?.id, initial]);
+  useEffect(() => setReorderEmail(stored?.reorderEmailEnabled ?? false), [currentBrand?.id, stored]);
 
-  const dirty = useMemo(() => FIELDS.some((f) => vals[f.key] !== initial[f.key]), [vals, initial]);
+  const dirty = useMemo(
+    () => FIELDS.some((f) => vals[f.key] !== initial[f.key]) || reorderEmail !== (stored?.reorderEmailEnabled ?? false),
+    [vals, initial, reorderEmail, stored],
+  );
 
   const handleSave = async () => {
     if (!currentBrand) return;
@@ -43,6 +51,7 @@ export function InventoryThresholdsCard() {
       const n = Number(vals[f.key]);
       if (vals[f.key].trim() !== '' && Number.isFinite(n) && n > 0) next[f.key] = n;
     }
+    next.reorderEmailEnabled = reorderEmail;
     setSaving(true);
     try {
       await FirestoreService.updateDocument('brands', currentBrand.id, { inventoryThresholds: next } as Partial<Brand>);
@@ -80,8 +89,11 @@ export function InventoryThresholdsCard() {
             </span>
             <input
               type="number"
-              min={1}
-              inputMode="numeric"
+              // Days are whole numbers; the reorder multiplier is fractional (1.5), so a
+              // step of 1 would make the browser reject it as invalid.
+              min={f.step ?? 1}
+              step={f.step ?? 1}
+              inputMode={f.step ? 'decimal' : 'numeric'}
               value={vals[f.key]}
               placeholder={`Προεπιλογή ${f.def}`}
               onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
@@ -90,6 +102,19 @@ export function InventoryThresholdsCard() {
           </label>
         ))}
       </div>
+
+      <label className="flex items-start gap-2 mt-4 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={reorderEmail}
+          onChange={(e) => setReorderEmail(e.target.checked)}
+          className="mt-0.5 accent-[var(--nts-accent)]"
+        />
+        <span className="flex flex-col gap-0.5">
+          <span className="text-[12px] font-medium text-[var(--nts-charcoal)]">Εβδομαδιαίο email επαναπαραγγελίας</span>
+          <span className="text-[11px] text-[var(--nts-medium-gray)]">Κάθε Δευτέρα πρωί: προϊόντα σε Low Stock ομαδοποιημένα ανά προμηθευτή, στους παραλήπτες του daily digest.</span>
+        </span>
+      </label>
 
       <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-[var(--nts-border-gray)]">
         {dirty && <span className="text-[11px] text-[var(--nts-medium-gray)]">Μη αποθηκευμένες αλλαγές</span>}

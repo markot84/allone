@@ -14,8 +14,8 @@ import {
   coerceSyncDate,
   toMagentoDateTime,
   toYmd,
-  type ConnectorSyncMode,
 } from './syncPolicy';
+import { writeSkuStatsChunked } from './ecommerceAggregator';
 
 let _db: Firestore | null = null;
 
@@ -61,6 +61,8 @@ const MAGENTO_FETCH_TIMEOUT_MS = 30_000;
 const MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE = 50;
 /** Full-catalog fallback (ERP-less brands): max pages/run (×100 products), resume via cursor. */
 const MAGENTO_FULL_CATALOG_PAGE_BUDGET = 150;
+/** Stop the catalog loop before the 540s wall — a run killed mid-loop never writes the parent patch or cursor. */
+const MAGENTO_FULL_CATALOG_TIME_BUDGET_MS = 6 * 60 * 1000;
 
 /** Bounded retries (idempotent GETs) ONLY on timeout/network/5xx/429 — never other 4xx,
  * so the degraded catalog-401 path surfaces immediately. */
@@ -232,7 +234,7 @@ function getStoreMediaBaseUrl(config: MagentoStoreConfig | null): string {
 
 /** Consistent with the e-commerce chart: BOX/lockers in one bucket, split ACS+ΕΛΤΑ labels. */
 function normalizeMagentoShippingDescription(raw: string | null | undefined): string {
-  let s = String(raw || '')
+  const s = String(raw || '')
     .replace(/\s+/g, ' ')
     .trim();
   if (!s) return '';
@@ -290,7 +292,8 @@ async function fetchAndSaveMagentoPopularSearchTerms(
         const url = buildMagentoRestUrl(restApiBase, path, code);
         const res = await magentoFetch(url, { headers });
         if (!res.ok) {
-          logger.warn(`[Magento] searchTerms [store=${code || 'default'}] ${path}: HTTP ${res.status}`);
+          // Expected on Magento Open Source (no searchTerms endpoint) / no custom module → debug, not warn.
+          logger.debug(`[Magento] searchTerms [store=${code || 'default'}] ${path}: HTTP ${res.status}`);
           continue;
         }
         const body = (await res.json()) as { items?: unknown[] };
@@ -329,10 +332,14 @@ async function fetchAndSaveMagentoPopularSearchTerms(
         logger.info(`[Magento] Popular search terms (REST): ${terms.length} for brand ${brandId}`);
         return terms.length;
       } catch (e) {
-        logger.warn(`[Magento] searchTerms failed [store=${code || 'default'}] (${path}):`, { err: e });
+        logger.debug(`[Magento] searchTerms failed [store=${code || 'default'}] (${path}):`, { err: e });
       }
     }
   }
+  // All REST attempts exhausted (normal on Open Source): one actionable summary instead of ~12 warns.
+  logger.info(
+    `[Magento] Popular search terms unavailable via REST for ${brandId} (Open Source has no searchTerms endpoint; Performance+ module not installed). Upload via Admin → Marketing → Search Terms CSV, or install the Performance+ module.`
+  );
   return 0;
 }
 
@@ -454,6 +461,103 @@ function chunkArray<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
   return chunks;
+}
+
+/** Fill idToSku for child ids the sync never fetched (zero-stock children in active-stock scope),
+ * via a lightweight id→sku lookup, so their parent-link docs carry sku/brandId and stay visible
+ * to the PI catalog overlay instead of remaining invisible stubs. */
+async function resolveChildSkus(
+  restApiBase: string,
+  storeCode: string | undefined,
+  headers: Record<string, string>,
+  parentLinks: { childId: string; parentId: string }[],
+  idToSku: Map<string, string>,
+): Promise<void> {
+  const missing = [...new Set(parentLinks.map((l) => l.childId))].filter((id) => !idToSku.has(id));
+  for (const chunk of chunkArray(missing, 100)) {
+    const params = new URLSearchParams({
+      'searchCriteria[pageSize]': '100',
+      'searchCriteria[filter_groups][0][filters][0][field]': 'entity_id',
+      'searchCriteria[filter_groups][0][filters][0][value]': chunk.join(','),
+      'searchCriteria[filter_groups][0][filters][0][condition_type]': 'in',
+      fields: 'items[id,sku]',
+    });
+    const res = await magentoFetch(buildMagentoRestUrl(restApiBase, `products?${params.toString()}`, storeCode), { headers });
+    if (!res.ok) {
+      logger.warn(`[Magento] Child sku resolve failed (${res.status}) for ${chunk.length} ids`);
+      continue;
+    }
+    const body = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const it of (body.items || []) as any[]) {
+      if (it?.id && it?.sku) idToSku.set(String(it.id), String(it.sku));
+    }
+  }
+}
+
+/** Patch parentSkus/itemGroupId onto child docs; merge-set. Children never otherwise synced get a
+ * doc with sku/brandId (when resolvable) so the PI overlay can still graft the parent link. */
+async function patchMagentoParentLinks(
+  db: Firestore,
+  brandId: string,
+  parentLinks: { childId: string; parentId: string }[],
+  idToSku: Map<string, string>,
+  runLinks?: Map<string, string>,
+): Promise<void> {
+  if (parentLinks.length === 0) return;
+  const childToParents = new Map<string, Set<string>>();
+  for (const { childId, parentId } of parentLinks) {
+    if (!childToParents.has(childId)) childToParents.set(childId, new Set());
+    childToParents.get(childId)!.add(parentId);
+  }
+  const childEntries = [...childToParents.entries()];
+  for (let i = 0; i < childEntries.length; i += 500) {
+    const batch = db.batch();
+    for (const [childId, parentIds] of childEntries.slice(i, i + 500)) {
+      const parentSkus = [...parentIds].map((pid) => idToSku.get(pid)).filter((v): v is string => Boolean(v));
+      if (parentSkus.length === 0) continue;
+      const childSku = idToSku.get(childId) || '';
+      if (childSku && runLinks) runLinks.set(childSku, parentSkus[0]);
+      batch.set(db.collection('magento_products').doc(`mag_${childId}`), {
+        parentSkus,
+        itemGroupId: parentSkus[0],
+        ...(childSku ? { sku: childSku, brandId } : {}),
+      }, { merge: true });
+    }
+    await batch.commit();
+  }
+  parentLinks.length = 0;
+}
+
+/** PER-307: slim {childSku → parentSku} doc for the E-commerce page — full link set overwrites (self-cleans), partial (full_catalog resume) merges over the existing doc. */
+export function buildParentLinksPayload(
+  runLinks: Map<string, string>,
+  existing: Record<string, string>,
+  sawFullLinkSet: boolean,
+): Record<string, string> | null {
+  if (sawFullLinkSet) return Object.fromEntries(runLinks);
+  if (runLinks.size === 0) return null;
+  return { ...existing, ...Object.fromEntries(runLinks) };
+}
+
+async function writeMagentoParentLinks(
+  db: Firestore,
+  brandId: string,
+  runLinks: Map<string, string>,
+  sawFullLinkSet: boolean,
+): Promise<void> {
+  try {
+    let existing: Record<string, string> = {};
+    if (!sawFullLinkSet && runLinks.size > 0) {
+      const snap = await db.collection('magento_parent_links').doc(brandId).collection('chunks').get();
+      for (const d of snap.docs) Object.assign(existing, JSON.parse(String(d.data().skuStatsJson || '{}')));
+    }
+    const links = buildParentLinksPayload(runLinks, existing, sawFullLinkSet);
+    if (!links) return;
+    await writeSkuStatsChunked(db, brandId, links, Object.keys(links).length, { collection: 'magento_parent_links' });
+  } catch (err) {
+    logger.warnAlert(`[Magento] parent-links doc write failed for ${brandId}: ${(err as Error).message}`, { alertKey: ALERT.magentoSyncFailed });
+  }
 }
 
 async function loadActiveStockSkus(db: Firestore, brandId: string): Promise<string[]> {
@@ -1035,6 +1139,135 @@ async function ingestMagentoProductPage(
 
 /** Fetch Magento orders/products → Firestore: first run backfills, later runs use updated_at with
  * overlap. Stores customer email for exports; `customerEmailHash` for analytics/matching. */
+/**
+ * ONE-TIME targeted backfill of Magento partial credit memos (PER-137 follow-up). Fetches only orders
+ * with `base_total_refunded > 0` and merges the `*_refunded` fields that `computeOrderExVatRevenue`
+ * nets out — so historical e-shop turnover stops over-counting refunded merchandise. Idempotent (merge),
+ * resumable via `magento.refundBackfillCursor` (entity_id walk), brand-agnostic. Future refunds self-heal
+ * via the `updated_at` incremental sync, so this only needs to run once per brand after deploy.
+ * Matches existing order docs by the `brandId`+`orderId` fields (doc-id scheme is brand-prefixed
+ * historically; the aggregator reads by field, so we patch whatever doc it reads).
+ */
+export async function backfillMagentoRefunds(
+  brandId: string,
+  opts?: { maxRuntimeMs?: number; maxPages?: number },
+): Promise<{ success: boolean; error?: string; ordersScanned: number; ordersPatched: number; complete: boolean; durationMs: number }> {
+  const start = Date.now();
+  const db = getDb();
+  const maxRuntimeMs = opts?.maxRuntimeMs ?? 480_000;
+  const maxPages = opts?.maxPages ?? 2000;
+  const baseRet = { ordersScanned: 0, ordersPatched: 0, complete: false };
+
+  const connector = (await db.doc(`connectors/${brandId}`).get()).data()?.magento as Record<string, unknown> | undefined;
+  if (!connector?.connected || !connector?.accessToken) {
+    return { success: false, error: 'Magento not connected', ...baseRet, durationMs: Date.now() - start };
+  }
+  const storeUrl = String(connector.storeUrl || '').replace(/\/+$/, '');
+  const restApiBase = String((connector.restApiBase as string) || storeUrl).replace(/\/+$/, '');
+  const storeCode = String((connector.storeCode as string) || '').trim();
+  const storeId = Number(connector.storeId);
+  const syncAllStores = Boolean(connector.syncAllStores);
+  const accessToken = decryptToken(String(connector.accessToken));
+  if (!accessToken) {
+    return { success: false, error: 'Magento token unavailable — reconnect required', ...baseRet, durationMs: Date.now() - start };
+  }
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'User-Agent': MAGENTO_UA,
+  };
+
+  let ordersScanned = 0;
+  let ordersPatched = 0;
+  let cursor = Number(connector.refundBackfillCursor ?? 0) || 0; // resume from last entity_id
+  let pages = 0;
+  let complete = false;
+
+  // Bound the walk to the synced history window — orders older than what we hold in Firestore can't be
+  // patched anyway, so this keeps the walk to the relevant set (high match rate) instead of churning
+  // through years of ancient refunded orders. Refunds inside the window self-heal going forward via the
+  // updated_at incremental sync; this one pass clears the historical backlog.
+  const histYear = Number(connector.historyLoadedUntilYear);
+  const windowStart =
+    Number.isFinite(histYear) && histYear > 2000
+      ? `${histYear}-01-01 00:00:00`
+      : `${new Date(Date.now() - 3 * 365 * 24 * 3600 * 1000).toISOString().slice(0, 10)} 00:00:00`;
+
+  while (pages < maxPages && Date.now() - start < maxRuntimeMs) {
+    const params = new URLSearchParams({
+      'searchCriteria[filter_groups][0][filters][0][field]': 'base_total_refunded',
+      'searchCriteria[filter_groups][0][filters][0][value]': '0',
+      'searchCriteria[filter_groups][0][filters][0][condition_type]': 'gt',
+      'searchCriteria[filter_groups][1][filters][0][field]': 'entity_id',
+      'searchCriteria[filter_groups][1][filters][0][value]': String(cursor),
+      'searchCriteria[filter_groups][1][filters][0][condition_type]': 'gt',
+      'searchCriteria[filter_groups][2][filters][0][field]': 'created_at',
+      'searchCriteria[filter_groups][2][filters][0][value]': windowStart,
+      'searchCriteria[filter_groups][2][filters][0][condition_type]': 'gteq',
+      'searchCriteria[sortOrders][0][field]': 'entity_id',
+      'searchCriteria[sortOrders][0][direction]': 'ASC',
+      'searchCriteria[pageSize]': '100',
+      'searchCriteria[currentPage]': '1',
+      'fields': 'items[entity_id,base_total_refunded,base_subtotal_refunded,base_discount_refunded,subtotal_refunded,discount_refunded],total_count',
+    });
+    if (!syncAllStores && Number.isFinite(storeId) && storeId > 0) {
+      params.set('searchCriteria[filter_groups][3][filters][0][field]', 'store_id');
+      params.set('searchCriteria[filter_groups][3][filters][0][value]', String(storeId));
+      params.set('searchCriteria[filter_groups][3][filters][0][condition_type]', 'eq');
+    }
+    const res = await magentoFetch(buildMagentoRestUrl(restApiBase, `orders?${params.toString()}`, storeCode), { headers });
+    if (!res.ok) {
+      return { success: false, error: `Orders fetch failed (${res.status})`, ordersScanned, ordersPatched, complete: false, durationMs: Date.now() - start };
+    }
+    const orders: Array<Record<string, unknown>> = (await res.json()).items || [];
+    if (orders.length === 0) { complete = true; break; }
+    pages += 1;
+
+    const patches: { ref: FirebaseFirestore.DocumentReference; data: Record<string, unknown> }[] = [];
+    for (const o of orders) {
+      ordersScanned += 1;
+      const eid = Number(o.entity_id);
+      if (Number.isFinite(eid) && eid > cursor) cursor = eid;
+      if (!(parseFloat(String(o.base_total_refunded ?? '0')) > 0)) continue;
+      const snap = await db.collection('magento_orders')
+        .where('brandId', '==', brandId)
+        .where('orderId', '==', String(o.entity_id))
+        .limit(1).get();
+      if (snap.empty) continue;
+      patches.push({
+        ref: snap.docs[0].ref,
+        data: {
+          baseTotalRefunded: parseFloat(String(o.base_total_refunded ?? '0')),
+          baseSubtotalRefunded: parseFloat(String(o.base_subtotal_refunded ?? '0')),
+          baseDiscountRefunded: parseFloat(String(o.base_discount_refunded ?? '0')),
+          subtotalRefunded: parseFloat(String(o.subtotal_refunded ?? '0')),
+          discountRefunded: parseFloat(String(o.discount_refunded ?? '0')),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+      });
+    }
+    for (let i = 0; i < patches.length; i += 400) {
+      const batch = db.batch();
+      for (const p of patches.slice(i, i + 400)) batch.set(p.ref, p.data, { merge: true });
+      await batch.commit();
+    }
+    ordersPatched += patches.length;
+    // Checkpoint the cursor so a re-run resumes instead of restarting the walk.
+    await db.doc(`connectors/${brandId}`).set({ magento: { refundBackfillCursor: cursor } }, { merge: true });
+    if (orders.length < 100) { complete = true; break; }
+  }
+
+  if (complete) {
+    await db.doc(`connectors/${brandId}`).set(
+      { magento: { refundBackfillComplete: true, refundBackfillCompletedAt: FieldValue.serverTimestamp() } },
+      { merge: true },
+    );
+  }
+  logger.info(`[Magento] Refund backfill for ${brandId}: scanned=${ordersScanned} patched=${ordersPatched} complete=${complete}`);
+  return { success: true, ordersScanned, ordersPatched, complete, durationMs: Date.now() - start };
+}
+
 export async function fetchMagentoData(brandId: string): Promise<{
   success: boolean;
   imported: number;
@@ -1137,7 +1370,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         'searchCriteria[sortOrders][0][direction]': orderSortDirection,
         'searchCriteria[pageSize]': '100',
         'searchCriteria[currentPage]': String(currentPage),
-        'fields': 'items[entity_id,increment_id,store_id,customer_id,customer_email,customer_firstname,customer_lastname,billing_address[email,firstname,lastname],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,payment,items[item_id,sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
+        'fields': 'items[entity_id,increment_id,store_id,customer_id,customer_email,customer_firstname,customer_lastname,billing_address[email,firstname,lastname],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,total_refunded,base_total_refunded,subtotal_refunded,base_subtotal_refunded,discount_refunded,base_discount_refunded,payment,items[item_id,sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
       });
       if (!syncAllStores && Number.isFinite(storeId) && storeId > 0) {
         searchParams.set('searchCriteria[filter_groups][1][filters][0][field]', 'store_id');
@@ -1199,6 +1432,18 @@ export async function fetchMagentoData(brandId: string): Promise<{
             baseTaxAmount: parseFloat(o.base_tax_amount || '0'),
             baseDiscountAmount: parseFloat(o.base_discount_amount || '0'),
             baseCurrencyCode: o.base_currency_code || 'EUR',
+            // Partial credit memos (refunds against still-complete orders) — netted out of e-shop
+            // turnover in computeOrderExVatRevenue. Stored only when a refund exists to keep docs lean;
+            // fully-refunded orders are already dropped by status (closed/refunded). (PER-137 follow-up)
+            ...(parseFloat(o.base_total_refunded || '0') > 0
+              ? {
+                  baseTotalRefunded: parseFloat(o.base_total_refunded || '0'),
+                  baseSubtotalRefunded: parseFloat(o.base_subtotal_refunded || '0'),
+                  baseDiscountRefunded: parseFloat(o.base_discount_refunded || '0'),
+                  subtotalRefunded: parseFloat(o.subtotal_refunded || '0'),
+                  discountRefunded: parseFloat(o.discount_refunded || '0'),
+                }
+              : {}),
             totalItemCount: parseInt(o.total_item_count || '0', 10),
             currency: o.order_currency_code || 'EUR',
             paymentMethod: paymentAdditionalInfo || paymentMethodCode || '',
@@ -1299,18 +1544,23 @@ export async function fetchMagentoData(brandId: string): Promise<{
     // SKU lookup map (id → sku) — lightweight, only IDs+SKUs kept in memory for variant resolution.
     const idToSku = new Map<string, string>();
     const parentLinks: { childId: string; parentId: string }[] = [];
+    // PER-307: run-level {childSku → parentSku} accumulator across both patch calls.
+    const runLinks = new Map<string, string>();
+    let sawFullLinkSet = false;
     const categoryMap = await fetchMagentoCategoryMap(restApiBase, storeCode, headers);
 
     // ERP/import fills `products` with stock_level>0. Magento-only brands have empty `products`
     // (0 SKUs) → fall back to a direct full-catalog sync, else the catalog never syncs.
     const useFullCatalogFallback = productsMode === 'full_catalog';
     let fullCatalogResumeCursor: Date | null = null;
+    let enrichNextIdx: number | null = null;
 
     if (useFullCatalogFallback) {
       // ── Full catalog fallback (no ERP stock source) ──────────────────
       const productCursor = coerceSyncDate((connector as Record<string, unknown>).productsHistoryCursor);
       let lastProductUpdatedAt: Date | null = null;
       let pagesFetched = 0;
+      const catalogStart = Date.now();
       prodPage = 1;
       prodMore = true;
       logger.info(
@@ -1359,10 +1609,11 @@ export async function fetchMagentoData(brandId: string): Promise<{
 
         pagesFetched++;
         prodMore = prodPage * 100 < totalCount;
-        if (prodMore && pagesFetched >= MAGENTO_FULL_CATALOG_PAGE_BUDGET) {
+        // Time cap besides the page cap — dying at the function wall skips the patch/cursor and reruns redo the same pages.
+        if (prodMore && (pagesFetched >= MAGENTO_FULL_CATALOG_PAGE_BUDGET || Date.now() - catalogStart > MAGENTO_FULL_CATALOG_TIME_BUDGET_MS)) {
           productsBackfillIncomplete = true;
           prodMore = false;
-          logger.warnAlert(`[Magento] Full catalog page budget (${MAGENTO_FULL_CATALOG_PAGE_BUDGET}) reached for ${brandId}, resume next run`, { alertKey: ALERT.magentoSyncFailed });
+          logger.warnAlert(`[Magento] Full catalog budget reached for ${brandId} (${pagesFetched} pages, ${Math.round((Date.now() - catalogStart) / 1000)}s), resume next run`, { alertKey: ALERT.magentoSyncFailed });
         }
         prodPage++;
       }
@@ -1371,11 +1622,59 @@ export async function fetchMagentoData(brandId: string): Promise<{
       if (productsOk && productsBackfillIncomplete && lastProductUpdatedAt) {
         fullCatalogResumeCursor = lastProductUpdatedAt;
       }
+      // PER-307: only an uncursored, uncut, successful pass saw every configurable.
+      sawFullLinkSet = !productCursor && productsOk && !productsBackfillIncomplete;
     } else {
       // ── Active-stock scope (ERP-backed): SKU-filtered enrichment ──────
+      // Configurables + parent patch FIRST — the enrichment below can eat the whole function window.
+      {
+        prodPage = 1;
+        prodMore = true;
+        sawFullLinkSet = true; // cursor-less loop sees every configurable (cleared on fetch failure)
+        while (prodMore) {
+          const searchParams = new URLSearchParams({
+            'searchCriteria[pageSize]': '100',
+            'searchCriteria[currentPage]': String(prodPage),
+            'searchCriteria[filter_groups][0][filters][0][field]': 'type_id',
+            'searchCriteria[filter_groups][0][filters][0][value]': 'configurable',
+            'searchCriteria[filter_groups][0][filters][0][condition_type]': 'eq',
+          });
+          const productUrl = buildMagentoRestUrl(restApiBase, `products?${searchParams.toString()}`, storeCode);
+          const res = await magentoFetch(productUrl, { headers });
+          if (!res.ok) {
+            logger.warnAlert(`[Magento] Configurables fetch failed (${res.status}) page=${prodPage} for ${brandId}`, { alertKey: ALERT.magentoSyncFailed });
+            sawFullLinkSet = false;
+            break;
+          }
+          const body = await res.json();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const products: any[] = body.items || [];
+          const totalCount: number = body.total_count || 0;
+          prodImportedCount += await ingestMagentoProductPage(db, brandId, products, categoryMap, idToSku, parentLinks);
+          // ponytail: 150-page cap (15k configurables) — e-tennis exceeded 5k; raise again if a store ever tops this.
+          prodMore = prodPage * 100 < totalCount && prodPage < 150;
+          prodPage++;
+        }
+        await resolveChildSkus(restApiBase, storeCode, headers, parentLinks, idToSku);
+        await patchMagentoParentLinks(db, brandId, parentLinks, idToSku, runLinks);
+      }
+
       const activeSkuChunks = chunkArray(activeStockSkus, MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE);
 
-      for (const skuChunk of activeSkuChunks) {
+      // Resume cursor + time budget: without them every run restarts at chunk 0 and dies at the
+      // function wall on the same chunks — the tail of the catalog would never sync.
+      const enrichStart = Date.now();
+      const enrichResumeIdx = Math.min(
+        Math.max(0, Number((connector as Record<string, unknown>).activeStockEnrichIdx ?? 0) || 0),
+        activeSkuChunks.length
+      );
+      for (let chunkIdx = enrichResumeIdx; chunkIdx < activeSkuChunks.length; chunkIdx++) {
+        if (Date.now() - enrichStart > MAGENTO_FULL_CATALOG_TIME_BUDGET_MS) {
+          enrichNextIdx = chunkIdx;
+          logger.warnAlert(`[Magento] Active-stock enrichment budget reached for ${brandId} at chunk ${chunkIdx}/${activeSkuChunks.length}, resume next run`, { alertKey: ALERT.magentoSyncFailed });
+          break;
+        }
+        const skuChunk = activeSkuChunks[chunkIdx];
         prodPage = 1;
         prodMore = true;
         while (prodMore) {
@@ -1416,30 +1715,13 @@ export async function fetchMagentoData(brandId: string): Promise<{
         }
         if (!productsOk) break;
       }
+
     }
 
     // Fill parentSku on child variants (so in the Ads Feed → item_group_id = parent SKU).
-    // Done with targeted updates after all products are written (streaming mode).
-    if (parentLinks.length > 0) {
-      const childToParents = new Map<string, Set<string>>();
-      for (const { childId, parentId } of parentLinks) {
-        if (!childToParents.has(childId)) childToParents.set(childId, new Set());
-        childToParents.get(childId)!.add(parentId);
-      }
-      const childEntries = [...childToParents.entries()];
-      for (let i = 0; i < childEntries.length; i += 500) {
-        const batch = db.batch();
-        for (const [childId, parentIds] of childEntries.slice(i, i + 500)) {
-          const parentSkus = [...parentIds].map((pid) => idToSku.get(pid)).filter((v): v is string => Boolean(v));
-          if (parentSkus.length === 0) continue;
-          batch.update(db.collection('magento_products').doc(`mag_${childId}`), {
-            parentSkus,
-            itemGroupId: parentSkus[0],
-          });
-        }
-        await batch.commit();
-      }
-    }
+    await resolveChildSkus(restApiBase, storeCode, headers, parentLinks, idToSku);
+    await patchMagentoParentLinks(db, brandId, parentLinks, idToSku, runLinks);
+    await writeMagentoParentLinks(db, brandId, runLinks, sawFullLinkSet);
 
     if (prodImportedCount > 0) {
       totalImported += prodImportedCount;
@@ -1464,6 +1746,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
       connectorPatch['magento.productCatalogAccessCheckedAt'] = FieldValue.serverTimestamp();
       connectorPatch['magento.productSyncScope'] = productsMode;
       connectorPatch['magento.activeStockSkuCount'] = activeStockSkus.length;
+      connectorPatch['magento.activeStockEnrichIdx'] = enrichNextIdx ?? FieldValue.delete();
       // Full-catalog fallback: keep cursor if cut by budget, otherwise clear it.
       connectorPatch['magento.productsHistoryCursor'] = fullCatalogResumeCursor
         ? fullCatalogResumeCursor

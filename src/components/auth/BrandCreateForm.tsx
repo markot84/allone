@@ -48,6 +48,7 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
         id: brandId,
         name: trimmed,
         type: 'B2C',
+        plan: 'growth',
         createdAt: new Date().toISOString(),
         createdBy: user.uid,
       };

@@ -2,6 +2,7 @@
 import type { Request } from 'firebase-functions/v2/https';
 import type { Response } from 'express';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getAppCheck } from 'firebase-admin/app-check';
 import { logger } from './utils/logger';
 
 // `GCLOUD_PROJECT` is set by the Functions runtime/emulator; no fallback —
@@ -46,8 +47,26 @@ export function resolveAllowedOrigin(reqOrigin?: string): string | null {
   return null;
 }
 
-/** Applies strict allow-list CORS; returns true if the request ended here (OPTIONS preflight or rejected origin) and the caller must return. */
-export function applyStrictCors(req: Request, res: Response): boolean {
+/** PER-62: verifies X-Firebase-AppCheck (CORS stops browsers, not scripts); true = denied.
+ *  OFF unless APP_CHECK_ENFORCE=true, so enabling it is a config flip, not a deploy. */
+export async function appCheckDenied(req: Request, res: Response): Promise<boolean> {
+  if (process.env.APP_CHECK_ENFORCE !== 'true') return false;
+  const token = req.headers['x-firebase-appcheck'];
+  if (typeof token !== 'string' || !token) {
+    denyAndLog(res, 401, 'Missing App Check token');
+    return true;
+  }
+  try {
+    await getAppCheck().verifyToken(token);
+    return false;
+  } catch (err) {
+    denyAndLog(res, 401, 'Invalid App Check token', { err });
+    return true;
+  }
+}
+
+/** Strict allow-list CORS + App Check; returns true if the request ended here and the caller must return. */
+export async function applyStrictCors(req: Request, res: Response): Promise<boolean> {
   const origin = (req.headers.origin as string | undefined) || '';
   const allowed = resolveAllowedOrigin(origin);
   if (allowed) {
@@ -67,7 +86,22 @@ export function applyStrictCors(req: Request, res: Response): boolean {
     res.status(403).json({ error: 'Origin not allowed' });
     return true;
   }
-  return false;
+  return appCheckDenied(req, res);
+}
+
+/** Send a 401/403 AND leave security telemetry behind — silent denials make enumeration,
+ * brute force, and horizontal-privilege probing invisible. Endpoint + IP come off the
+ * response's own request; uid rides in via the ambient log context or explicit ctx. */
+export function denyAndLog(res: Response, status: number, error: string, ctx?: Record<string, unknown>): void {
+  const req = res.req;
+  logger.warn('[authz] request denied', {
+    status,
+    endpoint: req?.hostname || req?.path || '',
+    ip: req ? getClientIp(req as unknown as Request) : '',
+    reason: error,
+    ...ctx,
+  });
+  res.status(status).json({ error });
 }
 
 export function getClientIp(req: Request): string {

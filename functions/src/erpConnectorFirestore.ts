@@ -1,6 +1,7 @@
 /** Shared Firestore helpers for ERP connectors (SoftOne, Epsilon Net, Entersoft). */
 
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
+import { logger } from './utils/logger';
 
 /** Firestore document IDs cannot contain `/`. */
 export function sanitizeFirestoreDocId(raw: string): string {
@@ -11,6 +12,13 @@ export function sanitizeFirestoreDocId(raw: string): string {
   if (s === '.' || s === '..') s = '_dot_';
   if (s.length > 1500) s = s.slice(0, 1500);
   return s;
+}
+
+/** Canonical `suppliers` doc id: brand-scoped + name-normalized so every writer
+ * (MV normalizer, imports, UI) upserts the same doc. Keep in sync with src/utils/supplierDocId.ts. */
+export function supplierDocId(brandId: string, name: string): string {
+  const norm = String(name ?? '').trim().replace(/\s+/g, ' ').toLocaleUpperCase('el-GR');
+  return `sup_${brandId}_${norm}`.replace(/[/\\]/g, '_').slice(0, 900);
 }
 
 export function erpNum(value: unknown): number {
@@ -53,5 +61,38 @@ export async function erpWriteBatch(
       );
     }
     await batch.commit();
+  }
+}
+
+/** Delete a brand's docs in a snapshot collection that the run at `writtenAfter` did not touch — items
+ *  removed upstream, or written under an older doc-id scheme. Snapshot collections ONLY: calling this on
+ *  a date-windowed collection (sales/purchase docs) would delete everything outside the window. */
+export async function erpPruneStale(
+  db: Firestore,
+  collection: string,
+  brandId: string,
+  writtenAfter: Date
+): Promise<number> {
+  let deleted = 0;
+  try {
+    for (;;) {
+      const snap = await db
+        .collection(collection)
+        .where('brandId', '==', brandId)
+        .where('updatedAt', '<', writtenAfter)
+        .select()
+        .limit(500)
+        .get();
+      if (snap.empty) return deleted;
+      const batch = db.batch();
+      for (const doc of snap.docs) batch.delete(doc.ref);
+      await batch.commit();
+      deleted += snap.size;
+    }
+  } catch (e) {
+    // Cleanup is best-effort: stale docs are stale again next run, but a failed prune must never
+    // fail the sync that just ingested good data.
+    logger.warn(`[erpPruneStale] ${collection}/${brandId} pruned ${deleted} then failed:`, { err: e });
+    return deleted;
   }
 }

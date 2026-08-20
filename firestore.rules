@@ -109,14 +109,26 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 120;
+        && request.resource.data.name.size() <= 120
+        // SEC entitlement (PP-01/06/03): a self-service brand starts on the default plan with no
+        // module overrides — only a super-admin (billing) may mint an Enterprise brand.
+        && (isSuperAdmin()
+            || (request.resource.data.get('plan', 'growth') == 'growth'
+                && !('enabledModules' in request.resource.data)));
       // SEC-M2: `createdBy` is trusted as a membership/ownership signal (isBrandMember,
       // isBrandOwnerOrAdmin, Storage rules) but was mutable on update — letting an
       // owner/admin re-point it to their own uid and keep a persistent backdoor even
       // after being removed from members. Pin it immutable; a normal update (which never
       // changes createdBy) still passes since request.resource.data carries it unchanged.
+      // SEC entitlement (PP-01/06/03): `plan` and `enabledModules` gate the paid Enterprise
+      // edition and the server-side procurement-catalog switch. An owner/admin could self-upgrade
+      // for free via the same SDK path used to edit name/logo, so pin them: only a super-admin
+      // (billing) may change them. `type` (B2B/B2C) stays owner-editable — it is a product setting,
+      // not a paywall (BrandsPage edits it and no paid feature gates on it).
       allow update: if isBrandOwnerOrAdmin(brandId)
-        && request.resource.data.createdBy == resource.data.createdBy;
+        && request.resource.data.createdBy == resource.data.createdBy
+        && (isSuperAdmin()
+            || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['plan', 'enabledModules']));
       allow delete: if isBrandOwnerOrAdmin(brandId);
 
       // Brand members — προσοχή: collection group query `where userId == request.auth.uid` ΔΕΝ πρέπει
@@ -217,10 +229,11 @@ service cloud.firestore {
     // Brand-scoped collections: verify user is member of the doc's brandId
     match /products/{productId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
-      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
-      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+      // Writes are bulk catalog import / feed sync / catalog wipe — owner/admin only.
+      allow create: if request.auth != null && isBrandOwnerOrAdmin(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId)
         && brandIdUnchanged();
-      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow delete: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId);
     }
     match /segments/{segmentId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
@@ -291,10 +304,11 @@ service cloud.firestore {
     }
     match /feed_sources/{sourceId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
-      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
-      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+      // A feed source drives catalog imports, so managing one is the same tier as importing.
+      allow create: if request.auth != null && isBrandOwnerOrAdmin(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId)
         && brandIdUnchanged();
-      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow delete: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId);
     }
     match /channel_activations/{docId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
@@ -482,10 +496,11 @@ service cloud.firestore {
     // Orders
     match /orders/{orderId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
-      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
-      allow update: if request.auth != null && isBrandMember(resource.data.brandId)
+      // Orders arrive via connectors (Admin SDK); no client write path exists — owner/admin only.
+      allow create: if request.auth != null && isBrandOwnerOrAdmin(request.resource.data.brandId);
+      allow update: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId)
         && brandIdUnchanged();
-      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow delete: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId);
     }
     // Price benchmarks (keyed by brandId)
     match /price_benchmarks/{brandId} {
@@ -525,6 +540,12 @@ service cloud.firestore {
     }
     // E-commerce summary (keyed by brandId, server-write only)
     match /ecommerce_summary/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
+    // Per-day-per-channel rollup — split from ecommerce_summary to keep it under the 1MB doc limit
+    // (PER-170); client sums the picker window for the Sales Channel card. Server-write only.
+    match /ecommerce_channel_daily/{brandId} {
       allow read: if isBrandMember(brandId);
       allow write: if false;
     }
@@ -574,8 +595,33 @@ service cloud.firestore {
         allow write: if false;
       }
     }
+    // ERP all-channel SKU velocity — same chunked layout/access as sku_stats.
+    match /erp_sku_velocity/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+      match /chunks/{chunkId} {
+        allow read: if isBrandMember(brandId);
+        allow write: if false;
+      }
+    }
+    // PER-307: slim {childSku → parentSku} map — same chunked layout/access as sku_stats.
+    match /magento_parent_links/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+      match /chunks/{chunkId} {
+        allow read: if isBrandMember(brandId);
+        allow write: if false;
+      }
+    }
     // Procurement signals — server-aggregated per-SKU map (keyed by brandId)
     match /procurement_signals/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
+
+    // PER-157: server-precomputed Marketing Plan insight (all presets, JSON blob). Read-only for
+    // members; written only by the marketing_plan_insight Cloud Function (admin SDK bypasses rules).
+    match /marketing_plan_insight/{brandId} {
       allow read: if isBrandMember(brandId);
       allow write: if false;
     }
@@ -735,10 +781,12 @@ service cloud.firestore {
 
     match /commercial_actions/{actionId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      // Acting on an action is ordinary operator work — create/update stay member-level,
+      // destructive delete is owner/admin.
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
       allow update: if request.auth != null && isBrandMember(resource.data.brandId)
         && brandIdUnchanged();
-      allow delete: if request.auth != null && isBrandMember(resource.data.brandId);
+      allow delete: if request.auth != null && isBrandOwnerOrAdmin(resource.data.brandId);
     }
 
     match /commercial_decision_events/{eventId} {

@@ -39,6 +39,7 @@ import { hasVelocityData } from '../../utils/salesVelocity';
 import type { ExcelFilterOption } from '../common';
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import { useBrand } from '../../hooks/useBrand';
+import { useIsBrandOwnerOrAdmin } from '../../hooks/useIsBrandOwnerOrAdmin';
 import { usePlan } from '../../hooks/usePlan';
 import { useProcurementSignals } from '../../hooks/useProcurementSignals';
 import { useSuppliers } from '../../hooks/useSuppliers';
@@ -47,6 +48,7 @@ import { useProductIntelligenceAggregate } from '../../hooks/useProductIntellige
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import { FirestoreService } from '../../services/firestore';
 import {
+  buildSupplierTodMap,
   getDaysOfStock,
   getEffectiveStockLevel,
   hasPricePending,
@@ -69,6 +71,10 @@ const PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT = 5000;
 const EMPTY_CATEGORY_ID = '__EMPTY_CAT__';
 /** Fixed priority_tag values (inventory intelligence) — always shown in the filter even if the client catalog lacks the field. */
 const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead', 'no_stock', 'price_pending'] as const;
+const STOCK_TAG_LABELS: Record<string, string> = {
+  healthy: 'Healthy Stock', low: 'Low Stock', excess: 'Excess Stock',
+  dead: 'Dead Stock', no_stock: 'No Stock', price_pending: 'Price Pending',
+};
 const productStockLevel = (product: Product): number =>
   Number(product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0) || 0;
 const productDisplayTag = (product: Product): string =>
@@ -174,8 +180,11 @@ interface ProductIntelligenceProps {
 export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProps = {}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryInclude, setCategoryInclude] = useState<string[] | null>(null);
+  const [brandInclude, setBrandInclude] = useState<string[] | null>(null);
   const [tagInclude, setTagInclude] = useState<string[] | null>(null);
   const [includeNoStock, setIncludeNoStock] = useState(false);
+  // Default ON: parent grouping is the platform default; no-op for brands without declared relations.
+  const [groupByParent, setGroupByParent] = useState(true);
   const [marginFilter, setMarginFilter] = useState<string>('all');
   const [stockAgeFilter, setStockAgeFilter] = useState<'all' | 'dead' | 'near-dead' | 'high-margin-low-stock'>('all');
   const [stockCardFilter, setStockCardFilter] = useState<'all' | 'healthy' | 'excess' | 'dead' | 'low'>('all');
@@ -220,7 +229,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, []);
 
   const { currentBrand } = useBrand();
+  const canManageCatalog = useIsBrandOwnerOrAdmin();
   const brandId = currentBrand?.id ?? null;
+  const lowDaysOfCover = currentBrand?.inventoryThresholds?.lowDaysOfCover ?? 30;
+  const excessDaysOfCover = currentBrand?.inventoryThresholds?.excessDaysOfCover ?? 120;
   const { isEnterprise } = usePlan();
   const procurementModuleEnabled = currentBrand?.enabledModules?.procurement !== false;
   const { signalsBySku: piProcurementSignals } = useProcurementSignals();
@@ -258,6 +270,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     pageSize: PAGE_SIZE,
     search: searchQuery.trim() || undefined,
     categories: categoryInclude == null ? undefined : categoryInclude.length > 0 ? categoryInclude : ['__NO_MATCH__'],
+    brands: brandInclude == null ? undefined : brandInclude.length > 0 ? brandInclude : ['__NO_MATCH__'],
     tags: effectiveTagFilter == null ? undefined : effectiveTagFilter.length > 0 ? effectiveTagFilter : ['__NO_MATCH__'],
     margin: marginFilter === 'all' ? undefined : marginFilter as ProductIntelligenceQuery['margin'],
     stockAge: stockAgeFilter === 'all' ? undefined : stockAgeFilter,
@@ -267,7 +280,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     dateTo: productDateTo || undefined,
     dateMode: productDateMode,
     includeNoStock,
-  }), [PAGE_SIZE, searchQuery, categoryInclude, effectiveTagFilter, marginFilter, stockAgeFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode, includeNoStock]);
+    ...(groupByParent ? { groupByParent: true } : {}),
+  }), [PAGE_SIZE, searchQuery, categoryInclude, brandInclude, effectiveTagFilter, marginFilter, stockAgeFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode, includeNoStock, groupByParent]);
   const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage, serverQuery);
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -292,11 +306,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [benchmarks]);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const supplierTodMap = useMemo(() => {
-    const m = new Map<string, number>();
-    suppliers.forEach(s => m.set(s.name, s.tod));
-    return m;
-  }, [suppliers]);
+  const supplierTodMap = useMemo(
+    () => buildSupplierTodMap(suppliers, currentBrand?.inventoryThresholds?.defaultTod),
+    [suppliers, currentBrand?.inventoryThresholds?.defaultTod]
+  );
 
   const hasServerAggregate = !!serverIntelligence.aggregate;
   const hasImported = hasServerAggregate;
@@ -364,20 +377,47 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [serverIntelligence.safePage, currentPage]);
 
   const inventoryAlerts: InventoryAlert[] = [];
-  const displaySummary = serverIntelligence.aggregate?.summary ?? EMPTY_INVENTORY_SUMMARY;
+  // PER-178: with no stock-card bucket selected, the cards follow the active filters (category/brand/
+  // search/margin/date) via the CF's filtered summary; a selected bucket keeps whole-inventory numbers
+  // so the cards stay usable as bucket navigation.
+  const displaySummary =
+    (serverBucket === 'all' ? serverIntelligence.page?.summary : undefined)
+    ?? serverIntelligence.aggregate?.summary
+    ?? EMPTY_INVENTORY_SUMMARY;
+
+  // PER-188: prefer server facets (actionable options); fall back to whole-catalog aggregate lists.
+  const facets = serverIntelligence.page?.facets;
 
   const categoryOptions = useMemo((): ExcelFilterOption[] => {
-    return (serverIntelligence.aggregate?.categories ?? [])
+    const rows = facets?.categories
+      ? facets.categories.map((row) => ({ name: row.id === EMPTY_CATEGORY_ID ? '' : row.id }))
+      : (serverIntelligence.aggregate?.categories ?? []);
+    return rows
       .map((row) => ({
         id: row.name?.trim() ? row.name : EMPTY_CATEGORY_ID,
         label: row.name?.trim() ? row.name : '(Κενή κατηγορία)',
       }))
       .sort((a, b) => a.label.localeCompare(b.label, 'el'));
-  }, [serverIntelligence.aggregate?.categories]);
+  }, [facets?.categories, serverIntelligence.aggregate?.categories]);
+
+  const brandOptions = useMemo((): ExcelFilterOption[] => {
+    const rows = facets?.brands
+      ? facets.brands.map((row) => ({ name: row.id }))
+      : (serverIntelligence.aggregate?.brands ?? []);
+    return rows
+      .filter((row) => row.name?.trim())
+      .map((row) => ({ id: row.name, label: row.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'el'));
+  }, [facets?.brands, serverIntelligence.aggregate?.brands]);
 
   const tagOptions = useMemo((): ExcelFilterOption[] => {
-    return STOCK_INTELLIGENCE_TAG_IDS.map((id) => ({ id, label: id }));
-  }, []);
+    // Keep canonical order; always keep price_pending (client-derived, not a server tag).
+    const present = facets?.tags ? new Set(facets.tags.map((row) => row.id)) : null;
+    const ids = present
+      ? STOCK_INTELLIGENCE_TAG_IDS.filter((id) => id === 'price_pending' || present.has(id))
+      : STOCK_INTELLIGENCE_TAG_IDS;
+    return ids.map((id) => ({ id, label: STOCK_TAG_LABELS[id] ?? id }));
+  }, [facets?.tags]);
 
   const filteredProducts = useMemo(() => {
     const rows = serverIntelligence.page?.products ?? [];
@@ -428,7 +468,11 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     if (!s) return serverFilteredTotal || totalCatalogCount;
     return s.healthy_stock.count + s.low_stock.count + s.excess_stock.count + s.dead_stock.count;
   }, [serverIntelligence.aggregate?.summary, serverFilteredTotal, totalCatalogCount]);
-  const displayTotalSkus = includeNoStock ? totalCatalogCount : activeInventoryTotal;
+  // PER-178: the Active/Total SKUs card follows filters too — the filtered row count when no stock-card
+  // bucket is selected, whole-catalog otherwise (matching the health cards' navigation behavior).
+  const displayTotalSkus = serverBucket === 'all'
+    ? serverFilteredTotal || (includeNoStock ? totalCatalogCount : activeInventoryTotal)
+    : includeNoStock ? totalCatalogCount : activeInventoryTotal;
   const showMagentoImageAccessNotice =
     hasServerAggregate &&
     productDataSourceLabel === 'ERP' &&
@@ -438,7 +482,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, categoryInclude, tagInclude, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
+  }, [searchQuery, categoryInclude, brandInclude, tagInclude, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
 
   const handleQuickExportCsv = () => {
     if (paginatedProducts.length === 0) {
@@ -533,20 +577,36 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           }
         />
         <Card padding="lg" className="text-center py-12">
-          <p className="text-[#4A4A4A] mb-4">
-            Δεν υπάρχουν imported προϊόντα ακόμα.
-          </p>
-          <p className="text-sm text-[#4A4A4A]">
-            Ανεβάστε αρχείο ή συνδέστε πλατφόρμα από την{' '}
-            <button
-              type="button"
-              onClick={() => onSectionChange?.('data-products')}
-              className="font-semibold text-[var(--nts-accent-text)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
-            >
-              καρτέλα εισαγωγής προϊόντων
-            </button>
-            .
-          </p>
+          {serverIntelligence.buildFailed ? (
+            <>
+              <p className="text-[#4A4A4A] mb-4">
+                Ο κατάλογος δεν μπόρεσε να υπολογιστεί. Τα προϊόντα σας δεν έχουν χαθεί.
+              </p>
+              {serverIntelligence.buildError && (
+                <p className="text-sm text-[#4A4A4A] mb-4">{serverIntelligence.buildError}</p>
+              )}
+              <Button variant="secondary" onClick={triggerProductIntelligenceRebuild} disabled={piRebuilding}>
+                {piRebuilding ? 'Ανανέωση…' : 'Δοκιμή ξανά'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-[#4A4A4A] mb-4">
+                Δεν υπάρχουν imported προϊόντα ακόμα.
+              </p>
+              <p className="text-sm text-[#4A4A4A]">
+                Ανεβάστε αρχείο ή συνδέστε πλατφόρμα από την{' '}
+                <button
+                  type="button"
+                  onClick={() => onSectionChange?.('data-products')}
+                  className="font-semibold text-[var(--nts-accent-text)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
+                >
+                  καρτέλα εισαγωγής προϊόντων
+                </button>
+                .
+              </p>
+            </>
+          )}
         </Card>
       </div>
     );
@@ -623,7 +683,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               size="sm"
               icon={<Trash2 size={14} />}
               onClick={handleDeleteProducts}
-              disabled={effectiveSourceLoading || isDeleting || !currentBrand?.id}
+              disabled={effectiveSourceLoading || isDeleting || !currentBrand?.id || !canManageCatalog}
+              title={canManageCatalog ? undefined : 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαγράψει τον κατάλογο'}
               className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] text-[#DC2626] hover:bg-[#FEE2E2] sm:flex-initial sm:basis-auto"
             >
               {isDeleting ? (
@@ -725,7 +786,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={`${displaySummary.excess_stock.count} SKUs`}
           icon={<AlertTriangle size={20} />}
           color="#F59E0B"
-          tooltip="Προϊόντα με πλεόνασμα αποθέματος."
+          tooltip={`Προϊόντα με απόθεμα που καλύπτει πάνω από ${excessDaysOfCover} ημέρες πωλήσεων, με βάση τον τρέχοντα ρυθμό. Το όριο ρυθμίζεται στα «Όρια υγείας αποθέματος».`}
           active={stockCardFilter === 'excess'}
           onClick={() => selectStockCardFilter(stockCardFilter === 'excess' ? 'all' : 'excess')}
         />
@@ -747,7 +808,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={`${displaySummary.low_stock.count} SKUs`}
           icon={<TrendingDown size={20} />}
           color="#8B5CF6"
-          tooltip="Προϊόντα με χαμηλό απόθεμα — κίνδυνος εξάντλησης."
+          tooltip={`Προϊόντα με απόθεμα που καλύπτει έως ${lowDaysOfCover} ημέρες πωλήσεων. Κίνδυνος εξάντλησης. Το όριο ρυθμίζεται στα «Όρια υγείας αποθέματος».`}
           active={stockCardFilter === 'low'}
           onClick={() => selectStockCardFilter(stockCardFilter === 'low' ? 'all' : 'low')}
         />
@@ -871,6 +932,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               onChange={setCategoryInclude}
             />
             <ColumnExcelFilter
+              label="Brand"
+              options={brandOptions}
+              value={brandInclude}
+              onChange={setBrandInclude}
+            />
+            <ColumnExcelFilter
               label="Tag"
               options={tagOptions}
               value={tagInclude}
@@ -886,16 +953,28 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               />
               <span className="whitespace-nowrap">Εμφάνιση no stock</span>
             </label>
+            <label
+              className="flex min-h-[38px] items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#374151]"
+              title="Οι παραλλαγές με δηλωμένη σχέση parent-child (Magento) εμφανίζονται ως μία γραμμή ανά parent, με αθροισμένο απόθεμα/πωλήσεις."
+            >
+              <input
+                type="checkbox"
+                checked={groupByParent}
+                onChange={(e) => { setGroupByParent(e.target.checked); setCurrentPage(1); }}
+                className="rounded border-[#D1D5DB] text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]/30"
+              />
+              <span className="whitespace-nowrap">Ομαδοποίηση Parent SKU</span>
+            </label>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Margin tier</span>
               <DropdownFilter
                 value={marginFilter}
                 onChange={setMarginFilter}
                 options={[
-                  { value: 'all', label: 'Όλα τα margins' },
-                  { value: 'high', label: 'Υψηλό margin' },
-                  { value: 'medium', label: 'Μέτριο margin' },
-                  { value: 'low', label: 'Χαμηλό margin' },
+                  { value: 'all', label: 'All margins' },
+                  { value: 'high', label: 'High margin' },
+                  { value: 'medium', label: 'Medium margin' },
+                  { value: 'low', label: 'Low margin' },
                 ]}
               />
             </div>
@@ -949,28 +1028,36 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     <Tooltip content="Κατηγορία προϊόντος (π.χ. από DSS: Προμηθευτής)." size={12} />
                   </span>
                 </th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
+                  <span className="inline-flex items-center gap-1">
+                    Brand
+                    <Tooltip content="Κατασκευαστής του προϊόντος (manufacturer), όπως έρχεται από το ERP ή το e-shop — όχι το brand/κατάστημα της πλατφόρμας." size={12} />
+                  </span>
+                </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A]">
-                  <button
-                    onClick={() => handleSort('margin_percentage')}
-                    className="flex items-center gap-1 hover:text-[#1A1A1A]"
-                  >
-                    Margin
-                    <SortIcon field="margin_percentage" current={sortField} direction={sortDirection} />
-                  </button>
+                  <Tooltip content="Μικτό περιθώριο κέρδους: (τιμή πώλησης − κόστος) / τιμή πώλησης. Απαιτεί κόστος από το ERP — χωρίς αυτό εμφανίζεται κενό." size={12}>
+                    <button
+                      onClick={() => handleSort('margin_percentage')}
+                      className="flex items-center gap-1 hover:text-[#1A1A1A]"
+                    >
+                      Margin
+                      <SortIcon field="margin_percentage" current={sortField} direction={sortDirection} />
+                    </button>
+                  </Tooltip>
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden sm:table-cell">
                   <button
                     onClick={() => handleSort('stock_level')}
                     className="flex items-center gap-1 hover:text-[#1A1A1A]"
                   >
-                    <Tooltip content="Διαθέσιμο απόθεμα ανά SKU. Όπου υπάρχει ERP ανάλυση, εμφανίζεται και το stock on hand." size={12}>
+                    <Tooltip content="Τεμάχια στην αποθήκη ανά SKU. Δεν περιλαμβάνει αναμενόμενες παραλαβές από παραγγελίες ή παραγωγή." size={12}>
                       Stock
                     </Tooltip>
                     <SortIcon field="stock_level" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden md:table-cell">
-                  <Tooltip content="Εκτιμώμενες ημέρες αποθέματος βάσει ρυθμού πωλήσεων (Days of Stock)." size={12}>
+                  <Tooltip content="Days of Stock: για πόσες ημέρες φτάνει το τρέχον απόθεμα με τον ρυθμό πωλήσεων του τελευταίου μήνα. «∞» = απόθεμα χωρίς πωλήσεις." size={12}>
                     <button
                       onClick={() => handleSort('stock_age_days')}
                       className="flex items-center gap-1 hover:text-[#1A1A1A]"
@@ -981,7 +1068,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                   </Tooltip>
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
-                  Tag
+                  <span className="inline-flex items-center gap-1">
+                    Tag
+                    <Tooltip content="Κατάσταση αποθέματος: Low (κάτω από το σημείο αναπαραγγελίας), Excess (πολύ μεγάλη κάλυψη), Dead (χωρίς πωλήσεις), No stock (μηδενικό)." size={12} />
+                  </span>
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden sm:table-cell">
                   <button
@@ -1182,8 +1272,11 @@ function ProductRow({
   const thumbUrl = getThumbnailUrl(product.sku || '', product).url;
   const health = resolveStockHealth(product, supplierTodMap, useProcurementRowModel);
   const effectiveStock = getEffectiveStockLevel(product);
-  const onHandStock = product.stock_on_hand;
-  const availableStock = product.available_stock;
+  // PER-300: explain the ERP's figure on hover instead of showing a second, misreadable number.
+  const erpStockNote =
+    typeof product.available_stock === 'number' && product.available_stock !== effectiveStock
+      ? `Στο ράφι: ${formatNumber(effectiveStock)}. Το ERP δηλώνει ${formatNumber(product.available_stock)} — περιλαμβάνει δεσμεύσεις σε παραγγελίες και αναμενόμενες παραλαβές.`
+      : null;
   const healthColor = STOCK_HEALTH_COLOR[health] ?? 'var(--success)';
   const stockColor = healthColor;
   const ageColor = healthColor;
@@ -1204,6 +1297,9 @@ function ProductRow({
       </td>
       <td className="px-3 py-2 hidden lg:table-cell">
         <span className="text-xs text-[#4A4A4A] truncate block max-w-[120px]">{product.category}</span>
+      </td>
+      <td className="px-3 py-2 hidden lg:table-cell">
+        <span className="text-xs text-[#4A4A4A] truncate block max-w-[120px]">{product.brand || '—'}</span>
       </td>
       <td className="px-3 py-2">
         <Badge
@@ -1226,27 +1322,19 @@ function ProductRow({
               size="sm"
               className="w-10"
             />
-            <span className="text-xs font-semibold tabular-nums text-[#1A1A1A]" data-numeric>
-              {formatNumber(effectiveStock)}
-            </span>
+            {(() => {
+              const value = (
+                <span
+                  tabIndex={erpStockNote ? 0 : undefined}
+                  className="text-xs font-semibold tabular-nums text-[#1A1A1A]"
+                  data-numeric
+                >
+                  {formatNumber(effectiveStock)}
+                </span>
+              );
+              return erpStockNote ? <Tooltip content={erpStockNote} size={11}>{value}</Tooltip> : value;
+            })()}
           </div>
-          {/* One line, not a stack: the row height is fixed for the virtualizer. */}
-          {(() => {
-            const detail: string[] = [];
-            if (typeof onHandStock === 'number' && onHandStock !== effectiveStock) {
-              detail.push(`On hand ${formatNumber(onHandStock)}`);
-            }
-            if (
-              typeof availableStock === 'number' &&
-              typeof onHandStock === 'number' &&
-              availableStock !== onHandStock
-            ) {
-              detail.push(`Avail. ${formatNumber(availableStock)}`);
-            }
-            return detail.length > 0 ? (
-              <div className="truncate text-[10px] text-[var(--text-muted)]">{detail.join(' · ')}</div>
-            ) : null;
-          })()}
         </div>
       </td>
       <td className="px-3 py-2 hidden md:table-cell">

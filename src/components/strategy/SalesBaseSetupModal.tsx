@@ -4,8 +4,10 @@ import { X, Search, Layers, Info, RefreshCw } from 'lucide-react';
 import type { Product, SalesBaseCategorySource, SalesBasePresetId, SalesBaseScope } from '../../types';
 import {
   SALES_BASE_PRESET_OPTIONS,
+  calculateSalesHeatScore,
   calculateSalesMomentumScore,
   categoryForSource,
+  isPositiveSalesPreset,
   productMatchesSalesBasePreset,
   productMatchesSalesBaseTextFilters,
 } from '../../utils/salesBaseScore';
@@ -18,12 +20,12 @@ function brandOf(p: Product): string {
 
 type GroupRow = { label: string; count: number; avgMomentum: number };
 
-function buildBrandGroups(products: Product[]): GroupRow[] {
+function buildBrandGroups(products: Product[], score: (p: Product) => number): GroupRow[] {
   const m = new Map<string, { count: number; sumMom: number }>();
   for (const p of products) {
     const label = brandOf(p) || '—';
     const cur = m.get(label) ?? { count: 0, sumMom: 0 };
-    const mom = calculateSalesMomentumScore(p);
+    const mom = score(p);
     cur.count += 1;
     cur.sumMom += mom;
     m.set(label, cur);
@@ -33,12 +35,16 @@ function buildBrandGroups(products: Product[]): GroupRow[] {
     .sort((a, b) => b.count - a.count);
 }
 
-function buildCategoryGroups(products: Product[], source: SalesBaseCategorySource): GroupRow[] {
+function buildCategoryGroups(
+  products: Product[],
+  source: SalesBaseCategorySource,
+  score: (p: Product) => number,
+): GroupRow[] {
   const m = new Map<string, { count: number; sumMom: number }>();
   for (const p of products) {
     const label = categoryForSource(p, source) || '—';
     const cur = m.get(label) ?? { count: 0, sumMom: 0 };
-    const mom = calculateSalesMomentumScore(p);
+    const mom = score(p);
     cur.count += 1;
     cur.sumMom += mom;
     m.set(label, cur);
@@ -72,9 +78,9 @@ interface SalesBaseSetupModalProps {
   stockMovementBaselineDate?: string | null;
   /** Windows available from stock movement tracking. */
   hasMovementWindows?: { d7: boolean; d30: boolean; d90: boolean; any: boolean };
-  /** If a procurement_inventory upload exists for the brand → enables the category-source toggle. */
-  hasProcurementCategories?: boolean;
   onRefreshStats?: () => Promise<void>;
+  /** True while the bounded product source is still loading — shows a loading note instead of a false 0. */
+  productsLoading?: boolean;
 }
 
 export function SalesBaseSetupModal({
@@ -87,8 +93,8 @@ export function SalesBaseSetupModal({
   hasFreshWindowedStats,
   stockMovementBaselineDate,
   hasMovementWindows,
-  hasProcurementCategories,
   onRefreshStats,
+  productsLoading = false,
 }: SalesBaseSetupModalProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshDone, setRefreshDone] = useState(false);
@@ -97,7 +103,9 @@ export function SalesBaseSetupModal({
   const [categoryFilter, setCategoryFilter] = useState('');
   const [search, setSearch] = useState('');
   const [excludedCategories, setExcludedCategories] = useState<string[]>([]);
-  const [categorySource, setCategorySource] = useState<SalesBaseCategorySource>('product');
+  // PER-181: the category source is always the product catalog; the field is still emitted so
+  // strategies saved with the old 'procurement' toggle keep round-tripping.
+  const categorySource: SalesBaseCategorySource = 'product';
 
   useEffect(() => {
     if (!isOpen) return;
@@ -107,14 +115,7 @@ export function SalesBaseSetupModal({
     setCategoryFilter(s.categoryFilter);
     setSearch(s.search);
     setExcludedCategories(s.excludedCategories ?? []);
-    setCategorySource(s.categorySource ?? 'product');
   }, [isOpen, initialScope]);
-
-  // When the category source changes, clear excluded/filter — labels differ.
-  useEffect(() => {
-    setExcludedCategories([]);
-    setCategoryFilter('');
-  }, [categorySource]);
 
   const toggleExcludedCategory = (cat: string) => {
     setExcludedCategories((prev) =>
@@ -155,10 +156,12 @@ export function SalesBaseSetupModal({
   }, [products, brandFilter, categoryFilter, search, preset, excludedCategories, categorySource]);
 
   const totalMatched = ruleFiltered.length;
-  const brandGroups = useMemo(() => buildBrandGroups(ruleFiltered), [ruleFiltered]);
+  // Positive presets average the hot-first heat score; negatives keep the cold-first momentum.
+  const groupScore = isPositiveSalesPreset(preset) ? calculateSalesHeatScore : calculateSalesMomentumScore;
+  const brandGroups = useMemo(() => buildBrandGroups(ruleFiltered, groupScore), [ruleFiltered, groupScore]);
   const categoryGroups = useMemo(
-    () => buildCategoryGroups(ruleFiltered, categorySource),
-    [ruleFiltered, categorySource],
+    () => buildCategoryGroups(ruleFiltered, categorySource, groupScore),
+    [ruleFiltered, categorySource, groupScore],
   );
 
   // Detect data limitation: brand has no per-window sales nor last_sale_at anywhere.
@@ -332,8 +335,10 @@ export function SalesBaseSetupModal({
             )}
             {(() => {
               const allOpt = SALES_BASE_PRESET_OPTIONS.find((o) => o.group === 'all');
-              const zeroOpts = SALES_BASE_PRESET_OPTIONS.filter((o) => o.group === 'zero_window');
-              const otherOpts = SALES_BASE_PRESET_OPTIONS.filter((o) => o.group === 'other');
+              // Retired presets stay matchable for saved strategies but render only when selected.
+              const visible = SALES_BASE_PRESET_OPTIONS.filter((o) => !o.retired || o.id === preset);
+              const positiveOpts = visible.filter((o) => o.group === 'positive');
+              const negativeOpts = visible.filter((o) => o.group === 'zero_window' || o.group === 'other');
 
               const renderOpt = (opt: typeof SALES_BASE_PRESET_OPTIONS[number]) => (
                 <label
@@ -364,58 +369,24 @@ export function SalesBaseSetupModal({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] px-1">
-                        Μηδενικές πωλήσεις σε χρονικό παράθυρο
+                        Θετικά σενάρια πωλήσεων
                       </p>
-                      <div className="space-y-2">{zeroOpts.map(renderOpt)}</div>
+                      <div className="space-y-2">{positiveOpts.map(renderOpt)}</div>
                     </div>
                     <div className="space-y-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] px-1">
-                        Χωρίς πωλήσεις και στασιμότητα
+                        Αρνητικά σενάρια — χωρίς πωλήσεις / στασιμότητα
                       </p>
-                      <div className="space-y-2">{otherOpts.map(renderOpt)}</div>
+                      <div className="space-y-2">{negativeOpts.map(renderOpt)}</div>
                     </div>
                   </div>
                 </div>
               );
             })()}
 
-            {hasProcurementCategories && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA]">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                  Πηγή κατηγοριών
-                </span>
-                <div className="ml-auto inline-flex rounded-lg border border-[#E5E5E5] bg-white p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setCategorySource('product')}
-                    className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                      categorySource === 'product'
-                        ? 'bg-[var(--nts-accent)] text-white'
-                        : 'text-[#4B5563] hover:bg-[#F5F5F5]'
-                    }`}
-                    title="Από στήλη Category του products import (ευρεία εμπορική κατηγορία)"
-                  >
-                    Προϊόντα
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCategorySource('procurement')}
-                    className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                      categorySource === 'procurement'
-                        ? 'bg-[var(--nts-accent)] text-white'
-                        : 'text-[#4B5563] hover:bg-[#F5F5F5]'
-                    }`}
-                    title="Από procurement_inventory: STATUS / ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ (π.χ. «Επί παραγγελία», «Προς κατάργηση»)"
-                  >
-                    Procurement
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex-1 min-w-[140px]">
-                <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">Μάρκα / προμηθευτής</label>
+                <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">Brand / προμηθευτής</label>
                 <input
                   list="sales-base-brands"
                   value={brandFilter}
@@ -503,8 +474,14 @@ export function SalesBaseSetupModal({
 
             <div className="rounded-lg border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/5 px-3 py-2">
               <p className="text-xs font-medium text-[#1A1A1A]">
-                Σύνολο <span className="text-[var(--nts-accent-text)]">{totalMatched.toLocaleString('el-GR')}</span> SKU
-                ταιριάζουν με τα κριτήρια.
+                {productsLoading && totalMatched === 0 ? (
+                  <>Φόρτωση καταλόγου προϊόντων…</>
+                ) : (
+                  <>
+                    Σύνολο <span className="text-[var(--nts-accent-text)]">{totalMatched.toLocaleString('el-GR')}</span> SKU
+                    ταιριάζουν με τα κριτήρια.
+                  </>
+                )}
                 {excludedCategories.length > 0 && (
                   <span className="text-[10px] text-[#6B7280] font-normal ml-1">
                     (εξαιρούνται {excludedCategories.length} κατηγορίες)
@@ -519,12 +496,12 @@ export function SalesBaseSetupModal({
 
             {totalMatched > 0 && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {renderGroupTable('Ανά μάρκα / προμηθευτή', brandS.shown, brandS.rest, brandGroups.length)}
+                {renderGroupTable('Ανά Brand / προμηθευτή', brandS.shown, brandS.rest, brandGroups.length)}
                 {renderGroupTable('Ανά κατηγορία', catS.shown, catS.rest, categoryGroups.length)}
               </div>
             )}
 
-            {totalMatched === 0 && (
+            {totalMatched === 0 && !productsLoading && (
               <p className="text-xs text-center text-[#9CA3AF] py-6">Δεν βρέθηκε κανένα SKU που να ικανοποιεί τα επιλεγμένα φίλτρα ή preset.</p>
             )}
           </div>

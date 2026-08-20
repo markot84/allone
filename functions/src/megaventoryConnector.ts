@@ -18,6 +18,7 @@ import {
   MEGAVENTORY_NORMALIZED_SOURCE,
   type MegaventoryNormalizationCounts,
 } from './megaventoryNormalizer';
+import { supplierDocId } from './erpConnectorFirestore';
 import { refreshMegaventoryRfmSegments, type MegaventoryRfmCounts } from './megaventoryRfm';
 import { refreshProcurementSignals } from './procurementSignals';
 import { refreshStockMovement } from './stockMovementTracker';
@@ -143,6 +144,14 @@ function asMvError(call: MvCallResult, label: string): string | null {
 const CUSTOM_REPORT_LIMIT = 1000;
 const CUSTOM_REPORT_COLLECTION = 'megaventory_custom_report_rows';
 const CUSTOM_REPORT_MAX_PAGES = 500;
+
+/** Custom-report window span in days — the denominator turning Qty_Sold_Period into a daily velocity. */
+export function customReportPeriodDays(date1: string, date2: string): number | undefined {
+  const from = Date.parse(`${date1}T00:00:00Z`);
+  const to = Date.parse(`${date2}T00:00:00Z`);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return undefined;
+  return Math.round((to - from) / 86400000);
+}
 
 /** Extract the row array from a CustomReportGetData response (official shape: `Rows[]` with `{ Index, Data[] }`). */
 export function extractCustomReportRows(body: unknown): Record<string, unknown>[] {
@@ -321,8 +330,11 @@ export async function updateMegaventoryConnectorSettings(
     customReportEnabled?: boolean | null;
     stockLocations?: string[] | null;
     stockLocationLabels?: string[] | null;
+    brandCustomField?: number | null;
+    productTypeCustomField?: number | null;
+    productSubtypeCustomField?: number | null;
   }
-): Promise<{ ok: boolean; error?: string; stockLocationsChanged?: boolean }> {
+): Promise<{ ok: boolean; error?: string; stockLocationsChanged?: boolean; brandCustomFieldChanged?: boolean; productTypeCustomFieldChanged?: boolean; productSubtypeCustomFieldChanged?: boolean }> {
   const db = getDb();
   const snap = await db.doc(`connectors/${brandId}`).get();
   if (!snap.exists) return { ok: false, error: 'Δεν υπάρχουν ρυθμίσεις Megaventory.' };
@@ -368,12 +380,55 @@ export async function updateMegaventoryConnectorSettings(
     patch['megaventory.stockLocationLabels'] = labels.length ? labels : FieldValue.delete();
   }
 
+  // Brand source = which MV custom field holds the manufacturer (PER-176). Changing it needs a full
+  // ProductGet re-walk (brand only lands on a fresh catalog fetch) — the caller resets + re-syncs.
+  let brandCustomFieldChanged = false;
+  if (updates.brandCustomField !== undefined) {
+    const prev = positiveNumber(mv.brandCustomField);
+    const next = updates.brandCustomField === null ? null : positiveNumber(updates.brandCustomField);
+    if (next !== null && (next < 1 || next > 20)) {
+      return { ok: false, error: 'Το πεδίο brand πρέπει να είναι μεταξύ 1 και 20.' };
+    }
+    if (next !== prev) {
+      patch['megaventory.brandCustomField'] = next === null ? FieldValue.delete() : next;
+      brandCustomFieldChanged = true;
+    }
+  }
+
+  // Product-type source: same contract as brandCustomField — a change needs a fresh ProductGet walk.
+  let productTypeCustomFieldChanged = false;
+  if (updates.productTypeCustomField !== undefined) {
+    const prev = positiveNumber(mv.productTypeCustomField);
+    const next = updates.productTypeCustomField === null ? null : positiveNumber(updates.productTypeCustomField);
+    if (next !== null && (next < 1 || next > 20)) {
+      return { ok: false, error: 'Το πεδίο product type πρέπει να είναι μεταξύ 1 και 20.' };
+    }
+    if (next !== prev) {
+      patch['megaventory.productTypeCustomField'] = next === null ? FieldValue.delete() : next;
+      productTypeCustomFieldChanged = true;
+    }
+  }
+
+  // Product-subtype source: same contract again (feeds the Subcategories dimension).
+  let productSubtypeCustomFieldChanged = false;
+  if (updates.productSubtypeCustomField !== undefined) {
+    const prev = positiveNumber(mv.productSubtypeCustomField);
+    const next = updates.productSubtypeCustomField === null ? null : positiveNumber(updates.productSubtypeCustomField);
+    if (next !== null && (next < 1 || next > 20)) {
+      return { ok: false, error: 'Το πεδίο υποκατηγορίας πρέπει να είναι μεταξύ 1 και 20.' };
+    }
+    if (next !== prev) {
+      patch['megaventory.productSubtypeCustomField'] = next === null ? FieldValue.delete() : next;
+      productSubtypeCustomFieldChanged = true;
+    }
+  }
+
   if (Object.keys(patch).length === 0) {
-    return { ok: true, stockLocationsChanged: false };
+    return { ok: true, stockLocationsChanged: false, brandCustomFieldChanged: false, productTypeCustomFieldChanged: false, productSubtypeCustomFieldChanged: false };
   }
 
   await db.doc(`connectors/${brandId}`).update(patch);
-  return { ok: true, stockLocationsChanged };
+  return { ok: true, stockLocationsChanged, brandCustomFieldChanged, productTypeCustomFieldChanged, productSubtypeCustomFieldChanged };
 }
 
 /** *Get endpoints with ReturnTopNRecords return top N descending by primary id; next page = same filters + And LessThan min(id) of the previous page. */
@@ -445,6 +500,20 @@ export function extractMvCategory(p: Record<string, unknown>): string {
   if (flatName) return flatName;
 
   return leafCategoryName(p.ProductCategoryDescription);
+}
+
+/** PER-177 (storefront/Store dimension, NOT the brand): the segment right under the catalog root in
+ *  the MV category path ("Root Catalog/<store>/<category>/…" → "<store>", e.g. e-tennis / e-running /
+ *  e-padel). Kept for the upcoming Store/Domain column; brand now comes from a CF (see mvBrand). */
+export function extractMvStorefront(p: Record<string, unknown>): string {
+  const ref = (p.mvProductCategory ?? p.ProductCategory) as Record<string, unknown> | undefined;
+  const raw =
+    ref && typeof ref === 'object'
+      ? (ref.ProductCategoryName ?? ref.ProductCategoryDescription)
+      : (p.ProductCategoryName ?? p.ProductCategoryDescription);
+  const parts = String(raw ?? '').split('/').map((x) => x.trim()).filter(Boolean);
+  // brand/storefront = the segment directly under the "Root Catalog" root (incl. depth-2 brand-only paths)
+  return parts.length >= 2 && /^root catalog$/i.test(parts[0]) ? parts[1] : '';
 }
 
 async function fetchAllMvPages(
@@ -981,6 +1050,38 @@ export async function listMegaventoryLocations(
   return { ok: true, locations };
 }
 
+/** PER-176: sample ProductGet custom fields 1–20 so the connector card can show the admin which field
+ *  holds the brand (e.g. "CF11 — Nike, Asics, Babolat") before they pick brandCustomField. One small
+ *  ProductGet page — no sync needed. */
+export async function sampleMegaventoryCustomFields(
+  brandId: string
+): Promise<{ ok: boolean; fields: { n: number; fillPct: number; samples: string[] }[]; error?: string }> {
+  const conn = (await getDb().doc(`connectors/${brandId}`).get()).data()?.megaventory as Record<string, unknown> | undefined;
+  if (!conn?.connected || !conn?.apiKey) return { ok: false, fields: [], error: 'Το Megaventory δεν είναι συνδεδεμένο.' };
+  const apiKey = decryptToken(conn.apiKey as string);
+  if (!apiKey) return { ok: false, fields: [], error: 'Μη διαθέσιμο API key — απαιτείται επανασύνδεση.' };
+
+  const call = await mvCall('ProductGet', apiKey, { ReturnTopNRecords: 200 });
+  const err = asMvError(call, 'ProductGet');
+  if (err) return { ok: false, fields: [], error: err };
+  const rows = ((call.body as Record<string, unknown>)?.mvProducts as Record<string, unknown>[]) || [];
+
+  const fields: { n: number; fillPct: number; samples: string[] }[] = [];
+  for (let n = 1; n <= 20; n++) {
+    const key = 'ProductCustomField' + n;
+    const distinct = new Set<string>();
+    let filled = 0;
+    for (const p of rows) {
+      const v = String(p[key] ?? '').trim();
+      if (!v || v === '-') continue;
+      filled++;
+      if (distinct.size < 5) distinct.add(v);
+    }
+    fields.push({ n, fillPct: rows.length ? Math.round((100 * filled) / rows.length) : 0, samples: [...distinct] });
+  }
+  return { ok: true, fields };
+}
+
 /** Light recompute for a warehouse-filter change: re-derive per-product stock totals from the
  *  already-synced megaventory_stock rows under the brand's current stockLocations — NO Megaventory
  *  API round-trip. Mirrors the stock-ingestion roll-up exactly (filter + {0,0} zero-emit for products
@@ -1022,7 +1123,7 @@ export async function recomputeMegaventoryProductTotals(brandId: string): Promis
     id: `mv_p_${pid}`,
     data: {
       productId: pid,
-      stockOnHand: t.available > 0 ? t.available : t.physical,
+      stockOnHand: t.physical, // PER-300: shelf units, not MV on-hand (adds unreceived orders)
       availableStockTotal: t.available,
       physicalStockTotal: t.physical,
     },
@@ -1044,7 +1145,7 @@ function num(value: unknown): number {
 function isoDate(value: unknown): string {
   if (!value) return '';
   const s = String(value);
-  const mvMatch = s.match(/\/Date\((\-?\d+)(?:[+\-]\d+)?\)\//);
+  const mvMatch = s.match(/\/Date\((-?\d+)(?:[+-]\d+)?\)\//);
   if (mvMatch) {
     const millis = Number(mvMatch[1]);
     if (Number.isFinite(millis)) {
@@ -1094,8 +1195,8 @@ export async function mergeMegaventoryApiCatalogProducts(
   brandId: string,
   customReportSnapshotRows: Record<string, unknown>[],
 ): Promise<number> {
-  // Projection (source/sku only) — otherwise ~221k whole docs load into the worker's memory.
-  const snap = await db.collection('products').where('brandId', '==', brandId).select('source', 'sku').get();
+  // Projection (source/sku/brand only) — otherwise ~221k whole docs load into the worker's memory.
+  const snap = await db.collection('products').where('brandId', '==', brandId).select('source', 'sku', 'brand').get();
   const apiCatalogDocs = snap.docs.filter((d) => d.data().source === PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE);
   for (let i = 0; i < apiCatalogDocs.length; i += 500) {
     const batch = db.batch();
@@ -1118,15 +1219,22 @@ export async function mergeMegaventoryApiCatalogProducts(
 
   // Read the full catalog from megaventory_products (persisted, already normalized) instead of an
   // in-memory ProductGet set — gap-fill works without holding the whole 87k-SKU catalog in one invocation.
-  const catalogSnap = await db.collection('megaventory_products').where('brandId', '==', brandId).get();
+  const catalogSnap = await db.collection('megaventory_products').where('brandId', '==', brandId)
+    .select('sku', 'mvDeletedAt', 'stockOnHand', 'sellingPrice', 'purchasePrice', 'name', 'category', 'brand', 'product_type', 'product_subtype')
+    .get();
   const items: { id: string; data: Record<string, unknown> }[] = [];
   const seenSku = new Set<string>();
   const deletedSkus = new Set<string>();
+  // PER-176: brand/storefront source-of-truth (from the MV category path) — applied to gap-fill docs
+  // below and patched onto report-source docs (which lack the path) afterwards.
+  const skuBrand = new Map<string, string>();
   for (const doc of catalogSnap.docs) {
     const p = doc.data();
     const sku = String(p.sku ?? '').trim();
     if (!sku || seenSku.has(sku)) continue;
     seenSku.add(sku);
+    const brand = String(p.brand ?? '').trim();
+    if (brand) skuBrand.set(sku, brand); // capture for report-source docs too (before the reportSkus skip)
     // mvDeletedAt → doc stays (history/attribution) but gets discontinued_at + ZERO stock so dashboards
     // distinguish "delisted in ERP" from "sold out". Reversible: an unmarked source doc rebuilds it clean.
     const isDeleted = Boolean(p.mvDeletedAt);
@@ -1144,6 +1252,9 @@ export async function mergeMegaventoryApiCatalogProducts(
         sku,
         name,
         ...(cat ? { category: cat } : {}),
+        ...(brand ? { brand } : {}),
+        ...(String(p.product_type ?? '').trim() ? { product_type: String(p.product_type).trim() } : {}),
+        ...(String(p.product_subtype ?? '').trim() ? { subcategory: String(p.product_subtype).trim() } : {}),
         price: sell,
         cost_price: purchase,
         stock_level: stock,
@@ -1162,11 +1273,18 @@ export async function mergeMegaventoryApiCatalogProducts(
     if (!sku) continue;
     const isDeleted = deletedSkus.has(sku);
     const wasMarked = Boolean(doc.data().discontinued_at);
+    const data: Record<string, unknown> = {};
     if (isDeleted && !wasMarked) {
-      normalizedPatches.push({ ref: doc.ref, data: { discontinued_at: FieldValue.serverTimestamp(), stock_level: 0, stock_capacity: 0 } });
+      data.discontinued_at = FieldValue.serverTimestamp();
+      data.stock_level = 0;
+      data.stock_capacity = 0;
     } else if (!isDeleted && wasMarked) {
-      normalizedPatches.push({ ref: doc.ref, data: { discontinued_at: FieldValue.delete() } });
+      data.discontinued_at = FieldValue.delete();
     }
+    // PER-176: report-source docs carry no MV category path → backfill brand from megaventory_products.
+    const brand = skuBrand.get(sku);
+    if (brand && doc.data().brand !== brand) data.brand = brand;
+    if (Object.keys(data).length) normalizedPatches.push({ ref: doc.ref, data });
   }
   for (let i = 0; i < normalizedPatches.length; i += 400) {
     const batch = db.batch();
@@ -1318,42 +1436,90 @@ export function mergeEarliestReceiptDates(
   }
 }
 
+/** Latest supplier per SKU from inbound documents (newest date wins; date kept so cross-pass merges stay order-independent). */
+export function mergeLatestReceiptSuppliers(
+  into: Map<string, { d: string; s: string }>,
+  docs: Array<{ date: string; supplier?: string; lineItems: Array<Record<string, unknown>> }>
+): void {
+  for (const d of docs) {
+    const date = (d.date || '').slice(0, 10);
+    const supplier = String(d.supplier ?? '').trim();
+    if (!date || !supplier) continue;
+    for (const li of d.lineItems || []) {
+      const sku = String((li.sku as unknown) ?? '').trim();
+      if (!sku) continue;
+      const cur = into.get(sku);
+      if (!cur || date >= cur.d) into.set(sku, { d: date, s: supplier });
+    }
+  }
+}
+
 const RECEIPTS_CHUNK_BYTES = 900_000;
 
-/** Read the chunked receipt-date map (sku → earliest YYYY-MM-DD) for merge across backfill passes. */
-async function readReceiptDatesChunked(db: Firestore, brandId: string): Promise<Record<string, string>> {
-  const out: Record<string, string> = {};
-  const snap = await db.doc(`megaventory_receipts/${brandId}`).collection('chunks').get();
+/** Read a chunked JSON map under megaventory_receipts/{brandId}/{sub} for merge across passes. */
+async function readReceiptChunkMap<T>(db: Firestore, brandId: string, sub: string, field: string): Promise<Record<string, T>> {
+  const out: Record<string, T> = {};
+  const snap = await db.doc(`megaventory_receipts/${brandId}`).collection(sub).get();
   for (const d of snap.docs) {
-    const json = (d.data() as { receiptDatesJson?: string }).receiptDatesJson;
+    const json = (d.data() as Record<string, string>)[field];
     if (!json) continue;
     try { Object.assign(out, JSON.parse(json)); } catch { /* skip bad chunk */ }
   }
   return out;
 }
 
-/** Persist sku → earliest receipt date under megaventory_receipts/{brandId}/chunks (parent holds metadata). */
-async function writeReceiptDatesChunked(db: Firestore, brandId: string, datesBySku: Record<string, string>): Promise<number> {
-  const skus = Object.keys(datesBySku).sort();
+/** Persist a sku-keyed map as JSON chunks under megaventory_receipts/{brandId}/{sub} (parent holds metadata). */
+async function writeReceiptChunkMap(
+  db: Firestore, brandId: string, sub: string, field: string,
+  bySku: Record<string, unknown>, meta: (chunkCount: number, skuCount: number) => Record<string, number>
+): Promise<number> {
+  const skus = Object.keys(bySku).sort();
   const chunks: string[] = [];
-  let bucket: Record<string, string> = {};
+  let bucket: Record<string, unknown> = {};
   let bytes = 2;
   for (const sku of skus) {
-    const eb = JSON.stringify({ [sku]: datesBySku[sku] }).length - 2;
+    const eb = JSON.stringify({ [sku]: bySku[sku] }).length - 2;
     if (bytes + eb > RECEIPTS_CHUNK_BYTES && Object.keys(bucket).length) { chunks.push(JSON.stringify(bucket)); bucket = {}; bytes = 2; }
-    bucket[sku] = datesBySku[sku];
+    bucket[sku] = bySku[sku];
     bytes += eb + 1;
   }
   if (Object.keys(bucket).length) chunks.push(JSON.stringify(bucket));
   const parent = db.doc(`megaventory_receipts/${brandId}`);
-  const chunksCol = parent.collection('chunks');
+  const chunksCol = parent.collection(sub);
   const existing = await chunksCol.get();
   const batch = db.batch();
   existing.docs.forEach((d) => batch.delete(d.ref));
-  chunks.forEach((json, i) => batch.set(chunksCol.doc(String(i)), { receiptDatesJson: json }));
-  batch.set(parent, { brandId, chunkCount: chunks.length, skuCount: skus.length, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  chunks.forEach((json, i) => batch.set(chunksCol.doc(String(i)), { [field]: json }));
+  batch.set(parent, { brandId, ...meta(chunks.length, skus.length), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   await batch.commit();
   return skus.length;
+}
+
+const readReceiptDatesChunked = (db: Firestore, brandId: string) =>
+  readReceiptChunkMap<string>(db, brandId, 'chunks', 'receiptDatesJson');
+const writeReceiptDatesChunked = (db: Firestore, brandId: string, datesBySku: Record<string, string>) =>
+  writeReceiptChunkMap(db, brandId, 'chunks', 'receiptDatesJson', datesBySku, (c, s) => ({ chunkCount: c, skuCount: s }));
+const readReceiptSuppliersChunked = (db: Firestore, brandId: string) =>
+  readReceiptChunkMap<{ d: string; s: string }>(db, brandId, 'supplier_chunks', 'receiptSuppliersJson');
+const writeReceiptSuppliersChunked = (db: Firestore, brandId: string, bySku: Record<string, { d: string; s: string }>) =>
+  writeReceiptChunkMap(db, brandId, 'supplier_chunks', 'receiptSuppliersJson', bySku, (c, s) => ({ supplierChunkCount: c, supplierSkuCount: s }));
+
+/** Create `suppliers` docs for names not yet present; existing docs (user-edited lead_time/tod) are never touched. */
+async function upsertMissingSuppliers(db: Firestore, brandId: string, names: Iterable<string>): Promise<number> {
+  const wanted = new Map<string, string>();
+  for (const n of names) { const name = String(n ?? '').trim(); if (name) wanted.set(supplierDocId(brandId, name), name); }
+  if (!wanted.size) return 0;
+  const refs = [...wanted.keys()].map((id) => db.collection('suppliers').doc(id));
+  const existing = await db.getAll(...refs);
+  const missing = existing.filter((snap) => !snap.exists);
+  for (let i = 0; i < missing.length; i += 400) {
+    const batch = db.batch();
+    for (const snap of missing.slice(i, i + 400)) {
+      batch.set(snap.ref, { name: wanted.get(snap.id), brandId, source: 'megaventory_receipts', updatedAt: FieldValue.serverTimestamp() });
+    }
+    await batch.commit();
+  }
+  return missing.length;
 }
 
 /** Historical receipt-date backfill: walk only inbound supplier DocumentTypeIds, derive earliest receipt
@@ -1377,9 +1543,13 @@ export async function backfillMegaventoryReceiptDates(
 
   const deadline = opts?.maxRuntimeMs ? Date.now() + opts.maxRuntimeMs : null;
   const datesBySku = new Map<string, string>(Object.entries(await readReceiptDatesChunked(db, brandId)));
+  const suppliersBySku = new Map<string, { d: string; s: string }>(Object.entries(await readReceiptSuppliersChunked(db, brandId)));
   // Per-type resume state persisted on the connector: each pass continues where the last left off and
   // skips already-exhausted types, so the walk completes across multiple budget-limited invocations.
-  const progress = { ...((conn.receiptBackfillProgress as Record<string, { cursor?: number | null; done?: boolean }>) ?? {}) };
+  // Pre-supplier-capture progress is discarded so the walk re-runs once for supplier names (min-merge keeps dates idempotent).
+  const progress = conn.receiptSupplierCapture === true
+    ? { ...((conn.receiptBackfillProgress as Record<string, { cursor?: number | null; done?: boolean }>) ?? {}) }
+    : {} as Record<string, { cursor?: number | null; done?: boolean }>;
   const errors: string[] = [];
   for (const rt of receiptTypes) {
     if (progress[rt.id]?.done) continue;
@@ -1400,15 +1570,22 @@ export async function backfillMegaventoryReceiptDates(
         initialCursor: progress[rt.id]?.cursor ?? null,
       },
     );
-    const docs = (rows as Record<string, unknown>[]).map((d) => ({ date: isoDate(mvField(d, 'DocumentDate')), lineItems: mvDocumentLineItems(d) }));
+    const docs = (rows as Record<string, unknown>[]).map((d) => ({
+      date: isoDate(mvField(d, 'DocumentDate')),
+      supplier: mvText(d, 'DocumentSupplierClientName', 'SupplierClientName', 'ClientName'),
+      lineItems: mvDocumentLineItems(d),
+    }));
     mergeEarliestReceiptDates(datesBySku, docs);
+    mergeLatestReceiptSuppliers(suppliersBySku, docs);
     if (error) { errors.push(error); progress[rt.id] = { cursor: nextCursor, done: false }; continue; }
     progress[rt.id] = { cursor: exhausted ? null : nextCursor, done: exhausted };
   }
   const complete = errors.length === 0 && receiptTypes.every((rt) => progress[rt.id]?.done === true);
   const skuCount = await writeReceiptDatesChunked(db, brandId, Object.fromEntries(datesBySku));
+  await writeReceiptSuppliersChunked(db, brandId, Object.fromEntries(suppliersBySku));
+  await upsertMissingSuppliers(db, brandId, new Set([...suppliersBySku.values()].map((v) => v.s)));
   await db.doc(`connectors/${brandId}`).set(
-    { megaventory: { receiptBackfillComplete: complete, receiptBackfillAt: FieldValue.serverTimestamp(), receiptBackfillSkuCount: skuCount, receiptBackfillProgress: progress } },
+    { megaventory: { receiptBackfillComplete: complete, receiptBackfillAt: FieldValue.serverTimestamp(), receiptBackfillSkuCount: skuCount, receiptBackfillProgress: progress, receiptSupplierCapture: true } },
     { merge: true }
   );
   logger.info(`[Megaventory] Receipt-date backfill for ${brandId}: ${skuCount} SKUs across ${receiptTypes.length} inbound types (complete=${complete}${errors.length ? `, errors=${errors.length}` : ''})`);
@@ -1432,6 +1609,22 @@ export async function fetchMegaventoryData(
   if (!apiKey) {
     return { success: false, imported: 0, error: 'Megaventory API key unavailable — reconnect required' };
   }
+
+  // PER-176: brand = the manufacturer stored in a per-brand-configured MV custom field
+  // (`connectors/{id}.megaventory.brandCustomField`, e.g. e-tennis=11 → ProductCustomField11).
+  // Unset ⇒ no MV brand (blank). MV uses '-' for empty custom fields → treat as blank.
+  // Per-brand-configured MV custom fields (brand / product type / sub-type); MV uses '-' for empty.
+  const brandCF = positiveNumber(conn.brandCustomField);
+  const productTypeCF = positiveNumber(conn.productTypeCustomField);
+  const productSubtypeCF = positiveNumber(conn.productSubtypeCustomField);
+  const mvCustomField = (p: Record<string, unknown>, n: number | null): string => {
+    if (!n) return '';
+    const v = String(p['ProductCustomField' + n] ?? '').trim();
+    return v === '-' ? '' : v;
+  };
+  const mvBrand = (p: Record<string, unknown>): string => mvCustomField(p, brandCF);
+  const mvProductType = (p: Record<string, unknown>): string => mvCustomField(p, productTypeCF);
+  const mvProductSubtype = (p: Record<string, unknown>): string => mvCustomField(p, productSubtypeCF);
 
   const mode = options.mode || 'manual';
   // Soft deadline so no invocation runs into the worker's hard timeout.
@@ -1521,7 +1714,6 @@ export async function fetchMegaventoryData(
   let rfmSkippedReason = '';
   let customReportRowsSnapshot: Record<string, unknown>[] = [];
   let apiCatalogGapFillCount = 0;
-  let productGetExhausted = false;
   // Did each ancillary phase finish (fetch+write) on THIS pass — feeds the ingestionComplete gate.
   let ordersDoneThisPass = false;
   let stockDoneThisPass = false;
@@ -1702,14 +1894,20 @@ export async function fetchMegaventoryData(
       counts.invoices = items.length;
       counts.creditNotes = creditItems.length;
       totalImported += allDocItems.length;
-      // Merge earliest supplier-receipt date per SKU into megaventory_receipts (min-merge, idempotent).
+      // Merge receipt date (earliest, min-merge) + supplier (latest wins) per SKU into megaventory_receipts.
       if (receiptDocs.length) {
+        const mapped = receiptDocs.map((d) => ({
+          date: isoDate(mvField(d, 'DocumentDate')),
+          supplier: mvText(d, 'DocumentSupplierClientName', 'SupplierClientName', 'ClientName'),
+          lineItems: mvDocumentLineItems(d),
+        }));
         const receiptDatesBySku = new Map<string, string>(Object.entries(await readReceiptDatesChunked(db, brandId)));
-        mergeEarliestReceiptDates(
-          receiptDatesBySku,
-          receiptDocs.map((d) => ({ date: isoDate(mvField(d, 'DocumentDate')), lineItems: mvDocumentLineItems(d) }))
-        );
+        mergeEarliestReceiptDates(receiptDatesBySku, mapped);
         await writeReceiptDatesChunked(db, brandId, Object.fromEntries(receiptDatesBySku));
+        const receiptSuppliersBySku = new Map<string, { d: string; s: string }>(Object.entries(await readReceiptSuppliersChunked(db, brandId)));
+        mergeLatestReceiptSuppliers(receiptSuppliersBySku, mapped);
+        await writeReceiptSuppliersChunked(db, brandId, Object.fromEntries(receiptSuppliersBySku));
+        await upsertMissingSuppliers(db, brandId, new Set(mapped.map((m) => m.supplier).filter(Boolean)));
       }
       if (shouldStageInvoiceBackfill) {
         invoiceBackfillProgress = {
@@ -1923,6 +2121,9 @@ export async function fetchMegaventoryData(
             name: p.ProductDescription || '',
             longDescription: p.ProductLongDescription || '',
             category: extractMvCategory(p as Record<string, unknown>),
+            brand: mvBrand(p as Record<string, unknown>),
+            product_type: mvProductType(p as Record<string, unknown>),
+            product_subtype: mvProductSubtype(p as Record<string, unknown>),
             unitOfMeasurement: p.ProductUnitOfMeasurement || '',
             sellingPrice: num(p.ProductSellingPrice),
             purchasePrice: num(p.ProductPurchasePrice),
@@ -1984,7 +2185,7 @@ export async function fetchMegaventoryData(
       needsContinuation = true;
       logger.warn(`[Megaventory] InventoryLocationStockGet truncated by budget for ${brandId} (${stRowsRaw.length} rows) — deferring stock to continuation pass`);
     } else {
-      let stocks: any[] = normalizeInventoryStockRows(stRowsRaw);
+      const stocks: any[] = normalizeInventoryStockRows(stRowsRaw);
       const items = stocks.map((s, idx) => ({
         id: `mv_stk_${s.productID || s.ProductId || s.productSKU || idx}_${s.inventoryLocationID || s.InventoryLocationId || 'main'}`,
         data: {
@@ -2016,7 +2217,7 @@ export async function fetchMegaventoryData(
         id: `mv_p_${pid}`,
         data: {
           productId: pid,
-          stockOnHand: t.available > 0 ? t.available : t.physical,
+          stockOnHand: t.physical, // PER-300: shelf units, not MV on-hand (adds unreceived orders)
           availableStockTotal: t.available,
           physicalStockTotal: t.physical,
         },
@@ -2125,6 +2326,9 @@ export async function fetchMegaventoryData(
                 name: p.ProductDescription || '',
                 longDescription: p.ProductLongDescription || '',
                 category: extractMvCategory(p as Record<string, unknown>),
+                brand: mvBrand(p as Record<string, unknown>),
+                product_type: mvProductType(p as Record<string, unknown>),
+                product_subtype: mvProductSubtype(p as Record<string, unknown>),
                 unitOfMeasurement: p.ProductUnitOfMeasurement || '',
                 sellingPrice: num(p.ProductSellingPrice),
                 purchasePrice: num(p.ProductPurchasePrice),
@@ -2217,6 +2421,19 @@ export async function fetchMegaventoryData(
     } // end deleted-scan reserve guard
     } // end deleted-scan ingestion guard
 
+    // ── Early completion marker ──────────────────────────────────────
+    // Documents/products/stock are written; stamp `lastSyncAt` BEFORE the long tail (custom report,
+    // gap-fill, RFM, procurement). A pass killed in that tail — which is what happens on large
+    // brands — used to leave the UI showing the previous day's sync date.
+    try {
+      await db.doc(`connectors/${brandId}`).update({
+        'megaventory.lastSyncAt': FieldValue.serverTimestamp(),
+        ...(counts.products > 0 ? { 'megaventory.lastSyncProducts': counts.products } : {}),
+      });
+    } catch (markErr) {
+      logger.warn(`[Megaventory] early lastSyncAt mark failed for ${brandId}: ${markErr instanceof Error ? markErr.message : String(markErr)}`);
+    }
+
     // ── Custom saved report (e.g. Performance / stock — CustomReportGetData) ──
     const reportId = String(conn.customReportId || '').trim();
     const reportEnabled = conn.customReportEnabled !== false;
@@ -2241,7 +2458,9 @@ export async function fetchMegaventoryData(
         if (crItems.length) {
           await writeBatch(db, CUSTOM_REPORT_COLLECTION, brandId, crItems);
         }
-        normalizedCounts = await normalizeMegaventoryCustomReportRows(db, brandId, crRows);
+        normalizedCounts = await normalizeMegaventoryCustomReportRows(db, brandId, crRows, {
+          periodDays: customReportPeriodDays(customReportDate1, customReportDate2),
+        });
         counts.customReportRows = crItems.length;
         totalImported += crItems.length;
         logger.info(
@@ -2252,16 +2471,6 @@ export async function fetchMegaventoryData(
         errors.push(`CustomReport (${reportId}): ${msg}`);
         logger.warnAlert(`[Megaventory] Custom report sync failed brand ${brandId}: ${msg}`, { alertKey: ALERT.megaventorySyncFailed });
       }
-    }
-
-    // ── Early completion marker ──────────────────────────────────────
-    // Core data is written; mark visible `lastSyncAt` HERE so the UI shows a fresh sync even if the heavy steps (gap-fill/RFM/procurement) run long or time out.
-    try {
-      await db.doc(`connectors/${brandId}`).update({
-        'megaventory.lastSyncAt': FieldValue.serverTimestamp(),
-      });
-    } catch (markErr) {
-      logger.warn(`[Megaventory] early lastSyncAt mark failed for ${brandId}: ${markErr instanceof Error ? markErr.message : String(markErr)}`);
     }
 
     // Gap-fill purges & rewrites the ENTIRE api-catalog from megaventory_products; runs ONLY when the catalog is COMPLETE
@@ -2368,7 +2577,8 @@ export async function fetchMegaventoryData(
       docsOk &&
       normalizedCounts !== null &&
       normalizedCounts.products > 0 &&
-      ((docsWindow.mode === 'historical' && !conn.manualImportCleanupAt) || !conn.manualSegmentCleanupAt);
+      docsWindow.mode === 'historical' &&
+      (!conn.manualImportCleanupAt || !conn.manualSegmentCleanupAt);
     if (shouldCleanupManualImports) {
       try {
         manualCleanupCounts = await cleanupManualImportsForMegaventoryMaster(db, brandId);

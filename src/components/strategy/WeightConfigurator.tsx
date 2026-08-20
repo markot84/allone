@@ -33,7 +33,7 @@ import { WeightsRadar } from './WeightsRadar';
 import { emitStrategyCascade } from '../../utils/strategyCascade';
 import { SeasonalBanner } from './SeasonalBanner';
 import { SeasonalPeriodsModal } from './SeasonalPeriodsModal';
-import { useProductSource } from '../../hooks/useProductSource';
+import { useBoundedProductSource } from '../../hooks/useBoundedProductSource';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { useProductSignals } from '../../hooks/useProductSignals';
 import { buildTriagePromptContext, buildProvenancePromptContext } from '../../utils/aiPromptContext';
@@ -54,9 +54,12 @@ import { formatBrandProfileForPrompt } from '../../services/brandProfile';
 import { FirestoreService } from '../../services/firestore';
 import { BriefingDrawer } from '../coordination/BriefingDrawer';
 import { getPreviewConfig, type PreviewColumnId } from '../../data/strategyPreviewConfig';
-import { blendFactorScores, calculateCompositeScore, calculateFactorScores, type CompositeScoreContext } from '../../utils/compositeScore';
+import { blendFactorScores, calculateFactorScores, type CompositeScoreContext } from '../../utils/compositeScore';
 import {
   filterProductsBySalesBaseScope,
+  filterProductsByProfitMaxScope,
+  isPositiveSalesPreset,
+  productInProfitMaxScope,
   productParticipatesInSalesBase,
   salesMomentumLabel,
 } from '../../utils/salesBaseScore';
@@ -67,7 +70,7 @@ import {
   productInPriceBenchmarkScopeWithLookup,
 } from '../../utils/priceBenchmarkStrategy';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
-import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useEcommerceSummary, useErpSkuVelocity } from '../../hooks/useEcommerceSummary';
 import { useRefreshAggregates } from '../../hooks/useAggregates';
 import { useProcurement } from '../../hooks/useProcurement';
 import { getEffectiveStockLevel, getStockAgeDays } from '../../utils/productUtils';
@@ -77,7 +80,7 @@ import { exportStrategyPlan } from '../../services/segmentActionPack';
 import { useToast } from '../common/Toast';
 import { Tooltip } from '../common';
 import type { SeasonalPeriod } from '../../data/seasonalPeriods';
-import type { Product, PriceBenchmarkStrategyScope, SalesBaseScope } from '../../types';
+import type { Product, PriceBenchmarkStrategyScope, ProfitMaxScope, SalesBaseScope } from '../../types';
 import { logger } from '../../utils/logger';
 import { sanitizeSpreadsheetCell, sanitizeRow } from '../../utils/spreadsheetSafe';
 
@@ -121,12 +124,15 @@ const PreviewCell = memo(function PreviewCell({
   rank,
   rankDelta,
   previousRank,
+  posNeg,
 }: {
   columnId: PreviewColumnId;
   product: Product & { composite_score?: number };
   rank: number;
   rankDelta?: number | null;
   previousRank?: number | null;
+  /** Gross/returns units for the selected window; null = source can't split (show «—»). */
+  posNeg?: { pos: number; neg: number } | null;
 }) {
   const effectiveStock = getEffectiveStockLevel(product);
   const stockCapacity = Math.max(product.stock_capacity || 0, 1);
@@ -253,6 +259,24 @@ const PreviewCell = memo(function PreviewCell({
         </td>
       );
     }
+    case 'sales_pos_neg': {
+      if (!posNeg) {
+        return (
+          <td className="py-2 pr-2 w-20 hidden sm:table-cell">
+            <span className="text-[10px] text-[#9CA3AF]">—</span>
+          </td>
+        );
+      }
+      return (
+        <td className="py-2 pr-2 w-20 hidden sm:table-cell">
+          <span className="text-[10px] font-mono">
+            <span className="text-emerald-700">+{posNeg.pos}</span>
+            {' / '}
+            <span className={posNeg.neg > 0 ? 'text-rose-700' : 'text-[#9CA3AF]'}>−{posNeg.neg}</span>
+          </span>
+        </td>
+      );
+    }
     case 'benchmark_signal': {
       type PBench = Product & {
         __priceBenchmark?: { priceDiff: number; benchmarkPrice: number; yourPrice: number };
@@ -320,20 +344,25 @@ export function WeightConfigurator({
   onSectionChange,
 }: { onSectionChange?: (section: string) => void } = {}) {
   const { currentBrand } = useBrand();
+  // PER-167: score the bounded in-stock set (~14k) from the precomputed PI bucket pages instead of
+  // loading + scoring the full ~222k catalog on the main thread (the freeze). useBoundedProductSource
+  // falls back to the full catalog only when the aggregate isn't ready (e.g. a brand with no PI).
   const {
     products: sourceProducts,
     hasImported: sourceHasImported,
     usingProcurement,
     sourceLabel: sourceProductDataSourceLabel,
     sourceKind: sourceProductSourceKind,
-  } = useProductSource();
+    isLoading: sourceProductsLoading,
+  } = useBoundedProductSource();
   // staticFirstPage: read ONLY .aggregate; avoids the unfiltered CF (~1.5k reads) per mount.
   const serverProductIntelligence = useProductIntelligenceAggregate('all', 1, {}, { staticFirstPage: true });
   const products = sourceProducts;
   const hasImported = sourceHasImported || !!serverProductIntelligence.aggregate;
   const productDataSourceLabel = serverProductIntelligence.aggregate?.sourceLabel ?? sourceProductDataSourceLabel;
   const productSourceKind = serverProductIntelligence.aggregate ? 'erp' : sourceProductSourceKind;
-  const productSourceCount = serverProductIntelligence.aggregate?.totalCount ?? products.length;
+  // PER-179 — count the bounded in-stock set actually scored, not aggregate totalCount (includes no_stock).
+  const productSourceCount = products.length;
 
   const scenarioErpHints = useMemo(() => {
     if (!usingProcurement || products.length === 0) return undefined;
@@ -370,6 +399,47 @@ export function WeightConfigurator({
   });
 
   const benchmarkLookupMap = useMemo(() => buildBenchmarkLookup(benchmarks), [benchmarks]);
+
+  // ± sales split (ERP velocity store). Window selector for the sales_base preview column.
+  const erpVelocity = useErpSkuVelocity();
+  const [posNegWindow, setPosNegWindow] = useState<'lifetime' | '30d' | '90d'>('30d');
+  // Key-normalized once per data load; the window pick happens per rendered cell (≤10 rows),
+  // so toggling the window never re-walks the full velocity map.
+  const posNegRowsBySku = useMemo(() => {
+    const out = new Map<string, (typeof erpVelocity)[string]>();
+    for (const [sku, row] of Object.entries(erpVelocity)) {
+      if (row.soldPos == null) continue; // source can't split → leave absent, cell shows «—»
+      out.set(sku.trim().toLowerCase(), row);
+    }
+    return out;
+  }, [erpVelocity]);
+  const posNegFor = useCallback(
+    (sku: string): { pos: number; neg: number } | null => {
+      const row = posNegRowsBySku.get(sku.trim().toLowerCase());
+      if (!row) return null;
+      const [pos, neg] =
+        posNegWindow === 'lifetime'
+          ? [row.soldPos, row.soldNeg]
+          : posNegWindow === '30d'
+            ? [row.soldPos30d, row.soldNeg30d]
+            : [row.soldPos90d, row.soldNeg90d];
+      return { pos: pos ?? 0, neg: neg ?? 0 };
+    },
+    [posNegRowsBySku, posNegWindow]
+  );
+
+  // Distinct values for the Profit Max scope selects; product_type appears only when data exists.
+  const profitMaxScopeOptions = useMemo(() => {
+    const brands = new Set<string>(); const subcategories = new Set<string>(); const productTypes = new Set<string>();
+    for (const p of products) {
+      if (p.brand) brands.add(p.brand);
+      if (p.subcategory) subcategories.add(p.subcategory);
+      if (p.product_type) productTypes.add(p.product_type);
+    }
+    const sort = (x: Set<string>) => [...x].sort((a, b) => a.localeCompare(b));
+    return { brands: sort(brands), subcategories: sort(subcategories), productTypes: sort(productTypes) };
+  }, [products]);
+
   const normalizedSkuStats = useMemo(() => {
     if (!skuStats) return null;
     const entries = Object.entries(skuStats).map(([sku, stats]) => [sku.trim().toLowerCase(), stats] as const);
@@ -401,7 +471,6 @@ export function WeightConfigurator({
     return out;
   }, [procurementData]);
 
-  const hasProcurementCategories = procurementBySku.size > 0;
 
   // Sales-filter source priority: connector orders (skuStats.sold*) → stock movement
   // (skuMovement.dec*, net of returns) → import lifetime/period. Movement lacks `last_sale_at` but covers 7/30/90d; zero decrease ⇒ stock-frozen, 0 sales.
@@ -604,6 +673,7 @@ export function WeightConfigurator({
 
   const [pendingScenarioChange, setPendingScenarioChange] = useState<string | null>(null);
   const [salesBaseSetupOpen, setSalesBaseSetupOpen] = useState(false);
+  const [pendingProfitMaxScope, setPendingProfitMaxScope] = useState<ProfitMaxScope | null>(null);
   const [pendingSalesBaseScope, setPendingSalesBaseScope] = useState<SalesBaseScope | null>(null);
   const [priceBenchmarkSetupOpen, setPriceBenchmarkSetupOpen] = useState(false);
   const [pendingPriceBenchmarkScope, setPendingPriceBenchmarkScope] =
@@ -634,7 +704,10 @@ export function WeightConfigurator({
   const triageScopedProductIds = useMemo(() => {
     if (!triageOrigin) return null;
     if (triageOrigin.productIds && triageOrigin.productIds.length > 0) {
-      return new Set(triageOrigin.productIds);
+      // Intersect with the live catalog — persisted ids of deleted products would inflate the scope count.
+      const idSet = new Set(triageOrigin.productIds);
+      const matched = products.filter((p) => idSet.has(p.id)).map((p) => p.id);
+      return matched.length > 0 ? new Set(matched) : null;
     }
     if (triageOrigin.skus && triageOrigin.skus.length > 0) {
       const skuSet = new Set(triageOrigin.skus.map((sku) => sku.trim().toLowerCase()).filter(Boolean));
@@ -664,10 +737,16 @@ export function WeightConfigurator({
   const triageScopeCount = triageScopedProductIds?.size ?? 0;
 
   // Memoized AI prompt contexts — rebuilt only when triage or source coverage changes.
-  const triagePromptCtx = useMemo(
-    () => buildTriagePromptContext(triageOrigin),
-    [triageOrigin]
-  );
+  const triagePromptCtx = useMemo(() => {
+    if (!triageOrigin) return undefined;
+    // Drop persisted SKUs that left the catalog so the AI prompt doesn't reason over deleted products.
+    if (!Array.isArray(triageOrigin.skus) || triageOrigin.skus.length === 0 || products.length === 0) {
+      return buildTriagePromptContext(triageOrigin);
+    }
+    const known = new Set(products.map((p) => (p.sku || '').trim().toLowerCase()));
+    const skus = triageOrigin.skus.filter((s) => known.has(s.trim().toLowerCase()));
+    return buildTriagePromptContext({ ...triageOrigin, skus });
+  }, [triageOrigin, products]);
   const provenancePromptCtx = useMemo(
     () => buildProvenancePromptContext(signalCoverage, productSourceCount),
     [signalCoverage, productSourceCount]
@@ -763,7 +842,7 @@ export function WeightConfigurator({
   const applyScenarioChange = useCallback((
     scenarioId: string,
     overrideDuration?: number | 'ongoing',
-    saveOptions?: { salesBaseScope?: SalesBaseScope; priceBenchmarkScope?: PriceBenchmarkStrategyScope },
+    saveOptions?: { salesBaseScope?: SalesBaseScope; priceBenchmarkScope?: PriceBenchmarkStrategyScope; profitMaxScope?: ProfitMaxScope },
   ) => {
     setSelectedScenario(scenarioId);
     setHasManualWeightChanges(false);
@@ -821,6 +900,9 @@ export function WeightConfigurator({
         : {}),
       ...(scenarioId === 'price_benchmark'
         ? { priceBenchmarkScope: saveOptions?.priceBenchmarkScope ?? defaultPriceBenchmarkScope }
+        : {}),
+      ...(scenarioId === 'profit_max' && saveOptions?.profitMaxScope
+        ? { profitMaxScope: saveOptions.profitMaxScope }
         : {}),
       ...(triageOrigin ? { triageOrigin } : {}),
     }).then((saved) => {
@@ -1013,6 +1095,12 @@ export function WeightConfigurator({
     
     setMixPanelOpen(false);
     setSeasonalPanelOpen(false);
+    if (scenarioId === 'profit_max') {
+      setPendingProfitMaxScope(
+        (activeStrategy as { profitMaxScope?: ProfitMaxScope })?.profitMaxScope ??
+          { brandFilter: '', subcategoryFilter: '', productTypeFilter: '' }
+      );
+    }
     startTransition(() => {
       setPendingScenarioChange(scenarioId);
     });
@@ -1024,7 +1112,11 @@ export function WeightConfigurator({
     const saveOpts: {
       salesBaseScope?: SalesBaseScope;
       priceBenchmarkScope?: PriceBenchmarkStrategyScope;
+      profitMaxScope?: ProfitMaxScope;
     } = {};
+    if (pendingScenarioChange === 'profit_max' && pendingProfitMaxScope) {
+      saveOpts.profitMaxScope = pendingProfitMaxScope;
+    }
     if (pendingScenarioChange === 'sales_base') {
       saveOpts.salesBaseScope =
         pendingSalesBaseScope ?? {
@@ -1047,7 +1139,7 @@ export function WeightConfigurator({
     }
     applyScenarioChange(pendingScenarioChange, selectedDuration, saveOpts);
     clearPendingScenario();
-  }, [pendingScenarioChange, pendingSalesBaseScope, pendingPriceBenchmarkScope, applyScenarioChange, clearPendingScenario]);
+  }, [pendingScenarioChange, pendingSalesBaseScope, pendingPriceBenchmarkScope, pendingProfitMaxScope, applyScenarioChange, clearPendingScenario]);
 
   const previewUiScenarioId =
     pendingScenarioChange === 'sales_base'
@@ -1079,6 +1171,12 @@ export function WeightConfigurator({
     }
     return undefined;
   }, [pendingScenarioChange, pendingPriceBenchmarkScope, selectedScenario, activeStrategy]);
+
+  const profitMaxScopeForPreview = useMemo(() => {
+    if (pendingScenarioChange === 'profit_max' && pendingProfitMaxScope) return pendingProfitMaxScope;
+    if (selectedScenario === 'profit_max') return (activeStrategy as { profitMaxScope?: ProfitMaxScope })?.profitMaxScope;
+    return undefined;
+  }, [pendingScenarioChange, pendingProfitMaxScope, selectedScenario, activeStrategy]);
 
   // Weights auto-sync from scenario selection; slider edits stay on the selected preset until save.
 
@@ -1149,13 +1247,15 @@ export function WeightConfigurator({
     setHasManualWeightChanges(false);
   }, []);
 
-  // Calculate prioritized products (strategy-specific score logic)
-  // Use debounced weights for expensive calculations, limit to top 100 for preview
+  // Calculate prioritized products (strategy-specific score logic).
   /**
    * The weight-independent half of the ranking: which products are in scope, and their five
    * sub-scores. Recomputed only when the catalogue or the strategy changes — never while a slider
    * moves. Keeping the object spread and `calculateFactorScores` out of the slider path is what
    * makes a 60ms debounce viable over a 4.500-SKU catalogue.
+   *
+   * PER-167 still holds: the catalogue is walked once, and the preview and the export both read
+   * from this pass instead of re-scoring it twice.
    */
   const scoredCandidates = useMemo(() => {
     const previewingSalesPending = pendingScenarioChange === 'sales_base';
@@ -1175,10 +1275,17 @@ export function WeightConfigurator({
     if (strategyId === 'price_benchmark') {
       source = filterProductsByPriceBenchmarkScope(products, priceBenchmarkScopeForPreview, benchmarks);
     }
+    if (strategyId === 'profit_max') {
+      source = filterProductsByProfitMaxScope(products, profitMaxScopeForPreview);
+    }
     source = filterProductsByTriageScope(source);
 
     const scoreCtx: CompositeScoreContext | undefined =
-      strategyId === 'price_benchmark' ? benchmarkScoreContext : undefined;
+      strategyId === 'price_benchmark'
+        ? benchmarkScoreContext
+        : strategyId === 'sales_base' && isPositiveSalesPreset(salesBaseScopeForPreview?.preset)
+          ? { invertMomentum: true }
+          : undefined;
 
     return source.map((p) => ({
       product: p,
@@ -1192,6 +1299,7 @@ export function WeightConfigurator({
     pendingScenarioChange,
     salesBaseScopeForPreview,
     priceBenchmarkScopeForPreview,
+    profitMaxScopeForPreview,
     benchmarks,
     filterProductsByTriageScope,
     benchmarkLookup,
@@ -1199,10 +1307,11 @@ export function WeightConfigurator({
   ]);
 
   /**
-   * The weight-dependent half: a weighted sum per product, a sort over primitives, and object
-   * spreads only for the 100 rows that survive it. This is everything a slider frame pays for.
+   * The weight-dependent half: a weighted sum per product and a sort over primitives. Object
+   * spreads are deferred to `materializeRanked`, so a slider frame pays for the arithmetic and
+   * nothing else.
    */
-  const prioritizedProducts = useMemo(() => {
+  const rankedCandidates = useMemo(() => {
     if (scoredCandidates.length === 0) return [];
 
     const weightsForScore = pendingScenarioChange === 'sales_base'
@@ -1216,16 +1325,28 @@ export function WeightConfigurator({
       score: blendFactorScores(candidate.parts, weightsForScore),
     }));
     ranked.sort((a, b) => b.score - a.score);
-
-    return ranked.slice(0, 100).map(({ index, score }) => {
-      const { product, priceBenchmark } = scoredCandidates[index];
-      return {
-        ...product,
-        ...(priceBenchmark ? { __priceBenchmark: priceBenchmark } : {}),
-        composite_score: score,
-      };
-    });
+    return ranked;
   }, [scoredCandidates, debouncedWeights, pendingScenarioChange, getWeightsForScenario]);
+
+  /** Ranked positions back into product objects — the one place the spread is paid for. */
+  const materializeRanked = useCallback(
+    (entries: { index: number; score: number }[]) =>
+      entries.map(({ index, score }) => {
+        const { product, priceBenchmark } = scoredCandidates[index];
+        return {
+          ...product,
+          ...(priceBenchmark ? { __priceBenchmark: priceBenchmark } : {}),
+          composite_score: score,
+        };
+      }),
+    [scoredCandidates]
+  );
+
+  /** Top 100 for the preview; the export materialises the full list on demand. */
+  const prioritizedProducts = useMemo(
+    () => materializeRanked(rankedCandidates.slice(0, 100)),
+    [rankedCandidates, materializeRanked]
+  );
 
   /**
    * Where each product sat in the previous ranking, so a reorder can say how far things moved.
@@ -1278,72 +1399,18 @@ export function WeightConfigurator({
     triageScopeCount,
   ]);
 
-  // Full list for export (only calculated when needed)
-  const allPrioritizedProducts = useMemo(() => {
-    const previewingSalesPending = pendingScenarioChange === 'sales_base';
-    const previewingPriceBenchPending = pendingScenarioChange === 'price_benchmark';
-    if (!selectedScenario && !previewingSalesPending && !previewingPriceBenchPending) return [];
-
-    const strategyId: string | undefined = previewingSalesPending
-      ? 'sales_base'
-      : previewingPriceBenchPending
-        ? 'price_benchmark'
-        : (selectedScenario ?? undefined);
-
-    const weightsForScore = previewingSalesPending
-      ? getWeightsForScenario('sales_base')
-      : previewingPriceBenchPending
-        ? getWeightsForScenario('price_benchmark')
-        : debouncedWeights;
-
-    let source = products;
-    if (strategyId === 'sales_base') {
-      source = filterProductsBySalesBaseScope(salesBaseProducts, salesBaseScopeForPreview);
-    }
-    if (strategyId === 'price_benchmark') {
-      source = filterProductsByPriceBenchmarkScope(products, priceBenchmarkScopeForPreview, benchmarks);
-    }
-    source = filterProductsByTriageScope(source);
-
-    const scoreCtx: CompositeScoreContext | undefined =
-      strategyId === 'price_benchmark' ? benchmarkScoreContext : undefined;
-
-    return source
-      .map((p) => ({
-        ...p,
-        composite_score: calculateCompositeScore(
-          p,
-          weightsForScore,
-          undefined,
-          strategyId,
-          undefined,
-          scoreCtx,
-        ),
-      }))
-      .sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0));
-  }, [
-    products,
-    salesBaseProducts,
-    debouncedWeights,
-    selectedScenario,
-    pendingScenarioChange,
-    salesBaseScopeForPreview,
-    priceBenchmarkScopeForPreview,
-    benchmarks,
-    filterProductsByTriageScope,
-    benchmarkScoreContext,
-    getWeightsForScenario,
-  ]);
+  // Full list for export — the same single ranking pass (PER-167: no second re-score of the
+  // catalog), materialised only when a feed is actually generated.
 
   // Generate product feed function
   const generateProductFeed = async (format: 'csv' | 'xlsx') => {
-    if (allPrioritizedProducts.length === 0) {
+    if (rankedCandidates.length === 0) {
       toast.error('Δεν υπάρχουν προϊόντα για feed generation');
       return;
     }
 
     // Use all prioritized products (sorted by composite score)
-    const feedProducts = allPrioritizedProducts;
+    const feedProducts = materializeRanked(rankedCandidates);
 
     // Standard product feed format
     const headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Composite Score', 'Priority Tag'];
@@ -1415,7 +1482,11 @@ export function WeightConfigurator({
         duration: duration === 'ongoing' ? 'Ongoing' : duration ? `${duration} ημέρες` : undefined,
         monthlyBudget: activeStrategy?.monthlyBudget ?? null,
         segments: rfmSegments,
-        channelRecommendation: activeStrategy?.channelRecommendation ?? null,
+        // Echo the saved AI rationale only when the export matches the saved strategy (same scenario, untouched weights).
+        channelRecommendation:
+          selectedScenario === activeStrategy?.scenarioId && !hasManualWeightChanges
+            ? activeStrategy?.channelRecommendation ?? null
+            : null,
       });
       toast.success('Strategy Plan exported!');
     } catch { toast.error('Export failed'); }
@@ -1857,8 +1928,8 @@ export function WeightConfigurator({
             }
             icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           />
-          <div className="-mx-2">
-            <table className="w-full table-fixed">
+          <div className="-mx-2 overflow-x-auto">
+            <table className="w-full table-fixed min-w-[760px]">
               <thead>
                 <tr className="text-left text-[11px] text-[#4A4A4A] border-b border-[#E5E5E5]">
                   {previewConfig.columns.map((col) => {
@@ -1885,6 +1956,20 @@ export function WeightConfigurator({
                           </Tooltip>
                         ) : (
                           col.label
+                        )}
+                        {col.id === 'sales_pos_neg' && (
+                          <span className="flex gap-1 mt-0.5">
+                            {([['30d', '30δ'], ['90d', '90δ'], ['lifetime', 'Όλα']] as const).map(([w, label]) => (
+                              <button
+                                key={w}
+                                type="button"
+                                onClick={() => setPosNegWindow(w)}
+                                className={`text-[9px] px-1 rounded ${posNegWindow === w ? 'bg-[#1A1A1A] text-white' : 'bg-[#F3F4F6] text-[#4A4A4A]'}`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </span>
                         )}
                       </th>
                     );
@@ -1917,6 +2002,7 @@ export function WeightConfigurator({
                             rank={rank}
                             rankDelta={movement.delta}
                             previousRank={movement.previousRank}
+                            posNeg={col.id === 'sales_pos_neg' ? posNegFor(product.sku || '') : undefined}
                           />
                         ))}
                       </motion.tr>
@@ -2016,6 +2102,9 @@ export function WeightConfigurator({
           newScenarioId={pendingScenarioChange}
           currentDuration={duration}
           newDuration={scenarios.find(s => s.id === pendingScenarioChange)?.duration ?? 'ongoing'}
+          profitMaxScope={pendingScenarioChange === 'profit_max' ? pendingProfitMaxScope : undefined}
+          onProfitMaxScopeChange={pendingScenarioChange === 'profit_max' ? setPendingProfitMaxScope : undefined}
+          profitMaxScopeOptions={pendingScenarioChange === 'profit_max' ? profitMaxScopeOptions : undefined}
           impactProductFilter={buildImpactProductFilter(
             pendingScenarioChange === 'sales_base' && pendingSalesBaseScope
               ? (p) => productParticipatesInSalesBase(salesBaseProductById.get(p.id) ?? p, pendingSalesBaseScope)
@@ -2026,10 +2115,17 @@ export function WeightConfigurator({
                       pendingPriceBenchmarkScope,
                       benchmarkLookupMap,
                     )
-                : undefined
+                : pendingScenarioChange === 'profit_max' && pendingProfitMaxScope
+                  ? (p) => productInProfitMaxScope(p, pendingProfitMaxScope)
+                  : undefined
           )}
           scoreContext={
-            pendingScenarioChange === 'price_benchmark' ? benchmarkScoreContext : undefined
+            pendingScenarioChange === 'price_benchmark'
+              ? benchmarkScoreContext
+              : pendingScenarioChange === 'sales_base' &&
+                  isPositiveSalesPreset(pendingSalesBaseScope?.preset)
+                ? { invertMomentum: true }
+                : undefined
           }
         />
       )}
@@ -2038,6 +2134,7 @@ export function WeightConfigurator({
         isOpen={salesBaseSetupOpen}
         onClose={() => setSalesBaseSetupOpen(false)}
         products={salesBaseProducts}
+        productsLoading={sourceProductsLoading}
         initialScope={
           activeStrategy?.scenarioId === 'sales_base'
             ? (activeStrategy as { salesBaseScope?: SalesBaseScope }).salesBaseScope
@@ -2054,7 +2151,6 @@ export function WeightConfigurator({
         hasFreshWindowedStats={skuStatsHasWindows}
         stockMovementBaselineDate={stockMovementBaselineDate}
         hasMovementWindows={hasMovementData}
-        hasProcurementCategories={hasProcurementCategories}
         onRefreshStats={async () => {
           const r = await refreshAggregates();
           if (r.ok) {
@@ -2118,7 +2214,7 @@ export function WeightConfigurator({
               {/* Content */}
               <div className="p-6 space-y-3">
                 <p className="text-sm text-[#4A4A4A] mb-4">
-                  Εξαγωγή feed με <strong>{allPrioritizedProducts.length}</strong> προϊόντα, ταξινομημένα βάσει της τρέχουσας στρατηγικής.
+                  Εξαγωγή feed με <strong>{rankedCandidates.length}</strong> προϊόντα, ταξινομημένα βάσει της τρέχουσας στρατηγικής.
                 </p>
 
                 <button

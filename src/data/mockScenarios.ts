@@ -251,7 +251,7 @@ export const channelRecommendations: Record<string, Record<string, ChannelRecomm
       primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)', 'Email Marketing'],
       secondary: ['Dynamic Remarketing', 'SMS Marketing'],
       budget_allocation: { google_shopping: 35, meta: 30, remarketing: 20, email: 15 },
-      rationale: 'Πελάτες: Champions — χρησιμοποιήστε τους για επανενεργοποίηση «νεκρών» SKU με bundled offers & VIP early access. || Κανάλια: Shopping/Meta για visibility σε SKU με 0 πρόσφατες πωλήσεις, email/SMS για owned push. || Αποτέλεσμα: Γρήγορη δοκιμή τιμής/προσφοράς σε προϊόντα με στάσιμη ζήτηση.'
+      rationale: 'Πελάτες: Champions — αξιοποιήστε τους για τα SKU του επιλεγμένου σεναρίου (επανενεργοποίηση στάσιμων ή ενίσχυση ταχυκίνητων) με bundled offers & VIP early access. || Κανάλια: Shopping/Meta για visibility, email/SMS για owned push. || Αποτέλεσμα: Γρήγορη δοκιμή τιμής/προσφοράς στα SKU του σεναρίου.'
     },
     loyal: {
       primary: ['Email Marketing', 'Google Shopping', 'Meta Ads (Facebook/Instagram)'],

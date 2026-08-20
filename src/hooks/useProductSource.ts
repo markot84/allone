@@ -4,7 +4,8 @@ import { useProcurement } from './useProcurement';
 import { usePlan } from './usePlan';
 import type { Product } from '../types';
 import { classifyProcurementInventoryRow } from '../utils/procurementInventoryClassify';
-import { excludeDemoProducts, normalizeSpreadsheetCellToFirstAvailableDate } from '../utils/productUtils';
+import { excludeNonStockedProducts, normalizeSpreadsheetCellToFirstAvailableDate } from '../utils/productUtils';
+import { useBrand } from './useBrand';
 
 /** First header matching a keyword (substring, case-insensitive); keyword order = priority. */
 function findColByKeywords(rows: Record<string, unknown>[], keywords: readonly string[]): string {
@@ -113,11 +114,16 @@ function parseNum(v: unknown): number {
 /** Unified product source: procurement inventory for Enterprise plans, else regular product import. */
 type UseProductSourceOptions = {
   maxProducts?: number;
+  /** Gate the (potentially ~222k-doc) catalog fetch. Defaults to true. PER-166 sets this false on
+   *  Channel Activation when the server PI aggregate is used, so the full catalog is never loaded. */
+  enabled?: boolean;
 };
 
 export function useProductSource(options: UseProductSourceOptions = {}) {
-  const productHook = useProducts({ maxDocs: options.maxProducts });
+  const enabled = options.enabled ?? true;
+  const productHook = useProducts({ maxDocs: options.maxProducts, enabled });
   const { isEnterprise } = usePlan();
+  const { currentBrand } = useBrand();
   const { data: procData, isLoading: procurementLoading } = useProcurement();
 
   const procProducts = useMemo((): Product[] => {
@@ -128,6 +134,19 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
 
     const pricingRows = ((procData?.pricing_policy ?? []) as unknown[]) as Record<string, unknown>[];
     const pricingBySku = buildPricingBySku(pricingRows);
+
+    // Grades usually live in the item_evaluation sheet, not the inventory sheet — join by code.
+    const evalRows = ((procData?.item_evaluation ?? []) as unknown[]) as Record<string, unknown>[];
+    const gradeBySku = new Map<string, string>();
+    if (evalRows.length) {
+      const evalCodeCol = findColByKeywords(evalRows, ['ΚΩΔΙΚΟΣ', 'MASTER']);
+      const evalGradeCol = findColByKeywords(evalRows, ['ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ', 'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ', 'ΑΞΙΟΛΟΓΗΣΗ']);
+      for (const row of evalRows) {
+        const code = String(row[evalCodeCol] ?? '').trim();
+        const grade = String(row[evalGradeCol] ?? '').trim();
+        if (code && grade && !gradeBySku.has(code)) gradeBySku.set(code, grade);
+      }
+    }
 
     // Some templates use «MASTER» instead of «ΚΩΔΙΚΟΣ» in the inventory sheet.
     const codeCol = findColByKeywords(invRows, ['ΚΩΔΙΚΟΣ', 'MASTER']);
@@ -157,12 +176,16 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
       if (pr) {
         const fromPricingPrice = pr.avg || pr.list || pr.corp || 0;
         if (invPriceRaw <= 0 && fromPricingPrice > 0) price = fromPricingPrice;
+        // Primary (purchase) cost first — ΣΥΝΟΛΙΚΟ includes overheads and flips margins negative.
         const costFromPricing =
-          pr.totalCost && pr.totalCost > 0 ? pr.totalCost : pr.primaryCost && pr.primaryCost > 0 ? pr.primaryCost : 0;
+          pr.primaryCost && pr.primaryCost > 0 ? pr.primaryCost : pr.totalCost && pr.totalCost > 0 ? pr.totalCost : 0;
         if (cost <= 0 && costFromPricing > 0) cost = costFromPricing;
       }
 
-      const evalGrade = String(row[evalCol] ?? 'B').trim().toUpperCase();
+      // No default grade (a 'B' default classified every ungraded row as excess).
+      const evalGrade =
+        String(row[evalCol] ?? '').trim().toUpperCase() ||
+        (code ? String(gradeBySku.get(code) ?? '').trim().toUpperCase() : '');
       const needsRefill = parseNum(row[refillCol]) > 0;
       const statusUpper = String(row[statusCol] ?? '').trim().toUpperCase();
       const group = String(row[groupCol] ?? '').trim();
@@ -190,14 +213,15 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
         stock_level: stock,
         stock_capacity: stock * 2,
         // Don't set stock_age_days: 0 — it was misread as a «new SKU, 0 days» in triage.
-        priority_tag: tag,
+        // tag=null (no grade) → omit priority_tag so counters skip the row instead of inflating excess.
+        ...(tag ? { priority_tag: tag } : {}),
         procurement_status: statusUpper || undefined,
         price,
         cost_price: cost,
         ...(first_available_date ? { first_available_date } : {}),
       } as Product;
     });
-  }, [isEnterprise, procData?.inventory, procData?.pricing_policy, options.maxProducts]);
+  }, [isEnterprise, procData?.inventory, procData?.pricing_policy, procData?.item_evaluation, options.maxProducts]);
 
   const usingProcurement = procProducts.length > 0;
   const importedProductsAreErp = useMemo(
@@ -216,12 +240,18 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
       : sourceKind === 'products_import'
         ? 'Products import'
         : 'Pending';
-  // Demo products are filtered here too so it applies across all aggregates.
-  const products = excludeDemoProducts(usingProcurement ? procProducts : productHook.products);
+  // Demo/non-merchandise products are filtered here too so it applies across all aggregates.
+  const products = excludeNonStockedProducts(
+    usingProcurement ? procProducts : productHook.products,
+    currentBrand?.nonMerchandise
+  );
 
-  /** Until procurement also finishes (Enterprise), don't show an empty «no products» page. */
+  /** Until procurement also finishes (Enterprise), don't show an empty «no products» page.
+   *  When the fetch is gated off (PER-166), it isn't loading — a disabled query stays `pending`. */
   const isLoading =
-    usingProcurement ? false : productHook.isLoading || (isEnterprise && procurementLoading);
+    !enabled ? false
+    : usingProcurement ? false
+    : productHook.isLoading || (isEnterprise && procurementLoading);
 
   return {
     products,

@@ -143,11 +143,19 @@ async function commitCampaignSliceAdaptive(campaigns: any[]): Promise<void> {
   }
 }
 
-async function commitCampaignsOneByOne(campaigns: any[]): Promise<void> {
+/** Returns how many single-doc writes failed, so a partly-failed fallback can't read as success. */
+async function commitCampaignsOneByOne(campaigns: any[]): Promise<number> {
+  let failed = 0;
   for (const campaign of campaigns) {
     const ref = getDb().collection('campaigns').doc(campaign.id);
-    await ref.set(campaign, { merge: true });
+    try {
+      await ref.set(campaign, { merge: true });
+    } catch (e) {
+      failed++;
+      logger.warn(`[GoogleAds] Single-doc write failed for campaign ${campaign.id}:`, { err: e });
+    }
   }
+  return failed;
 }
 
 async function deleteStaleGoogleAdsCampaignDocsForCustomer(
@@ -636,6 +644,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   `;
 
   let totalImported = 0;
+  let writeFailures = 0;
 
   // Helper: run a GAQL search with optional login-customer-id
   const searchUrl = `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/googleAds:search`;
@@ -1025,21 +1034,21 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       } while (geoNext);
       logger.info(`[GoogleAds] Fetched geo breakdown for ${geoByCampaign.size} campaigns`);
 
-      // Step 3: user_location_view — sub-national levels per campaign. The API often returns REGION (3)
-      // or other levels, not just CITY, so byCity can stay empty even when country aggregates exist.
-      const isCountryOnlyTarget = (raw: unknown): boolean => {
-        if (raw == null || raw === '') return false;
-        if (typeof raw === 'number' && Number.isFinite(raw)) return raw === 2;
-        const n = parseInt(String(raw), 10);
-        if (String(raw) === String(n) && !Number.isNaN(n)) return n === 2;
-        return String(raw).toUpperCase() === 'COUNTRY';
+      // Step 3: user_location_view (physical user location), city/region level per campaign. Geo comes
+      // from segments (geo_target_city/region → geoTargetConstants/{id}); you can't cross-select
+      // geo_target_constant fields from the view (PROHIBITED_RESOURCE_TYPE_IN_SELECT_CLAUSE), so resolve
+      // the ids → names in a separate batched geo_target_constant query.
+      const idFromResource = (raw: unknown): string => {
+        const s = String(raw ?? '').trim();
+        if (!s) return '';
+        return s.includes('/') ? s.split('/').pop()! : s;
       };
       const cityQuery = `
         SELECT
           campaign.id,
-          geo_target_constant.country_code,
-          geo_target_constant.name,
-          geo_target_constant.target_type,
+          user_location_view.country_criterion_id,
+          segments.geo_target_city,
+          segments.geo_target_region,
           metrics.impressions,
           metrics.clicks,
           metrics.conversions,
@@ -1048,6 +1057,12 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
         FROM user_location_view
         WHERE segments.date BETWEEN '${sinceStr}' AND '${untilStr}'
       `;
+      type CityRow = {
+        campaignId: string | number; geoId: string; cc: string;
+        impressions: number; clicks: number; conversions: number; conversion_value: number; amount_spent: number;
+      };
+      const cityRows: CityRow[] = [];
+      const geoIds = new Set<string>();
       let cityNext: string | undefined;
       try {
         do {
@@ -1065,33 +1080,80 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
           cityNext = page.nextPageToken;
           for (const row of page.results || []) {
             const campaignId = row.campaign?.id;
-            const gtc = row.geoTargetConstant;
-            if (!campaignId || !gtc?.name || isCountryOnlyTarget(gtc?.targetType)) continue;
-            const cc = String(gtc.countryCode || '').trim().toUpperCase() || '??';
-            const cityName = String(gtc.name || '').trim();
-            if (!cityName) continue;
-            const key = `${cc}|${cityName}`;
-
+            if (!campaignId) continue;
+            const seg = row.segments || {};
+            // Prefer city; fall back to region (the view often reports only region). Empty both = country-only row → skip.
+            const geoId = idFromResource(seg.geoTargetCity) || idFromResource(seg.geoTargetRegion);
+            if (!geoId) continue;
+            geoIds.add(geoId);
+            const countryId = idFromResource(row.userLocationView?.countryCriterionId);
+            const cc = (countryLookup.get(countryId)?.code || '').trim().toUpperCase();
             const m = row.metrics || {};
-            const impressions = Number(m.impressions) || 0;
-            const clicks = Number(m.clicks) || 0;
-            const conversions = Number(m.conversions) || 0;
-            const conversion_value = Number(m.conversionsValue) || 0;
-            const amount_spent = (Number(m.costMicros) || 0) / 1_000_000;
-
-            const perCampaign = geoCityByCampaign.get(campaignId) || {};
-            const entry = perCampaign[key] || {
-              impressions: 0, clicks: 0, conversions: 0, conversion_value: 0, amount_spent: 0,
-            };
-            entry.impressions += impressions;
-            entry.clicks += clicks;
-            entry.conversions += conversions;
-            entry.conversion_value += conversion_value;
-            entry.amount_spent += amount_spent;
-            perCampaign[key] = entry;
-            geoCityByCampaign.set(campaignId, perCampaign);
+            cityRows.push({
+              campaignId, geoId, cc,
+              impressions: Number(m.impressions) || 0,
+              clicks: Number(m.clicks) || 0,
+              conversions: Number(m.conversions) || 0,
+              conversion_value: Number(m.conversionsValue) || 0,
+              amount_spent: (Number(m.costMicros) || 0) / 1_000_000,
+            });
           }
         } while (cityNext);
+
+        // Resolve the collected geo_target_constant ids → name (+ country_code) in chunked IN queries.
+        const geoNames = new Map<string, { name: string; code: string }>();
+        const idList = [...geoIds];
+        const RESOLVE_CHUNK = 5000;
+        for (let i = 0; i < idList.length; i += RESOLVE_CHUNK) {
+          const chunk = idList.slice(i, i + RESOLVE_CHUNK);
+          const resolveQuery = `
+            SELECT geo_target_constant.id, geo_target_constant.name, geo_target_constant.country_code
+            FROM geo_target_constant
+            WHERE geo_target_constant.id IN (${chunk.join(',')})
+          `;
+          let rNext: string | undefined;
+          do {
+            const body: Record<string, unknown> = { query: resolveQuery };
+            if (rNext) body.pageToken = rNext;
+            const res = await fetch(
+              `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/googleAds:search`,
+              { method: 'POST', headers, body: JSON.stringify(body) }
+            );
+            if (!res.ok) {
+              logger.warn(`[GoogleAds] geo_target_constant resolve failed (${res.status})`);
+              break;
+            }
+            const page = await res.json();
+            rNext = page.nextPageToken;
+            for (const row of page.results || []) {
+              const id = String(row.geoTargetConstant?.id ?? '');
+              if (!id) continue;
+              geoNames.set(id, {
+                name: String(row.geoTargetConstant?.name || '').trim(),
+                code: String(row.geoTargetConstant?.countryCode || '').trim().toUpperCase(),
+              });
+            }
+          } while (rNext);
+        }
+
+        // Aggregate into geoCityByCampaign keyed `${countryCode}|${cityName}` (unchanged output shape).
+        for (const r of cityRows) {
+          const cityName = geoNames.get(r.geoId)?.name;
+          if (!cityName) continue;
+          const cc = r.cc || geoNames.get(r.geoId)?.code || '??';
+          const key = `${cc}|${cityName}`;
+          const perCampaign = geoCityByCampaign.get(r.campaignId) || {};
+          const entry = perCampaign[key] || {
+            impressions: 0, clicks: 0, conversions: 0, conversion_value: 0, amount_spent: 0,
+          };
+          entry.impressions += r.impressions;
+          entry.clicks += r.clicks;
+          entry.conversions += r.conversions;
+          entry.conversion_value += r.conversion_value;
+          entry.amount_spent += r.amount_spent;
+          perCampaign[key] = entry;
+          geoCityByCampaign.set(r.campaignId, perCampaign);
+        }
         logger.info(`[GoogleAds] Fetched city-level geo for ${geoCityByCampaign.size} campaigns`);
       } catch (cityErr) {
         logger.warn(`[GoogleAds] user_location_view query error, skipping:`, { err: cityErr });
@@ -1248,7 +1310,13 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
         `[GoogleAds] Batched writes failed for ${customerId}, falling back to sequential single-doc writes:`,
         { err: writeErr }
       );
-      await commitCampaignsOneByOne(prepared);
+      writeFailures = await commitCampaignsOneByOne(prepared);
+      if (writeFailures > 0) {
+        logger.warnAlert(
+          `[GoogleAds] ${writeFailures}/${prepared.length} campaign writes failed for customer ${customerId} after batch fallback`,
+          { alertKey: ALERT.googleAdsSyncFailed }
+        );
+      }
     }
     if (prepared.length > 0) {
       totalImported = prepared.length;
@@ -1270,10 +1338,10 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     brandId,
     type: 'campaigns',
     source: 'google_ads_api',
-    status: 'completed',
+    status: writeFailures ? 'partial' : 'completed',
     imported: totalImported,
-    failed: 0,
-    errors: [],
+    failed: writeFailures,
+    errors: writeFailures ? [`${writeFailures} campaign writes failed`] : [],
     createdAt: FieldValue.serverTimestamp(),
   });
 
@@ -1290,7 +1358,9 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     { merge: true }
   );
 
-  return { success: true, imported: totalImported };
+  return writeFailures
+    ? { success: false, imported: totalImported, error: `${writeFailures} campaign writes failed` }
+    : { success: true, imported: totalImported };
 }
 
 /** Fetch search terms and keywords from Google Ads (last 90 days). */

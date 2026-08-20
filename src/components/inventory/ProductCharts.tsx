@@ -127,11 +127,11 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
     });
 
     const result = [
-      { name: 'Φυσιολογικό απόθεμα', value: healthy, color: '#22C55E' },
-      { name: 'Χαμηλό απόθεμα', value: low, color: '#8B5CF6' },
-      { name: 'Υπερβολικό απόθεμα', value: excess, color: '#F59E0B' },
-      { name: 'Νεκρό απόθεμα', value: dead, color: '#EF4444' },
-      { name: 'No stock', value: noStock, color: '#94A3B8' }
+      { name: 'Healthy Stock', value: healthy, color: '#22C55E' },
+      { name: 'Low Stock', value: low, color: '#8B5CF6' },
+      { name: 'Excess Stock', value: excess, color: '#F59E0B' },
+      { name: 'Dead Stock', value: dead, color: '#EF4444' },
+      { name: 'No Stock', value: noStock, color: '#94A3B8' }
     ];
     logger.debug('[ProductCharts] Stock status:', { result });
     return aggregateCharts?.stockStatus ?? result;

@@ -875,7 +875,7 @@ export function GA4Analytics() {
                 <th className="pb-2 font-medium text-right">Χρήστες</th>
                 <th className="pb-2 font-medium text-right">Νέοι χρήστες</th>
                 <th className="pb-2 font-medium text-right">Μετατροπές</th>
-                <th className="pb-2 font-medium text-right">Έσοδα (GA4)</th>
+                <th className="pb-2 font-medium text-right">Revenue (GA4)</th>
                 <th className="pb-2 font-medium text-right">Έσοδο / μετ.</th>
                 <th className="pb-2 font-medium text-right">Conv. rate</th>
                 <th className="pb-2 font-medium text-right">Μερίδιο</th>

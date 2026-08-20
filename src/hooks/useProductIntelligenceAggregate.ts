@@ -37,6 +37,9 @@ export function useProductIntelligenceAggregateDoc() {
     isLoading: aggregateQuery.isPending,
     isBuilding: aggregateQuery.data?.status === 'running',
     error: aggregateQuery.error,
+    // A failed build must not render as "nothing imported yet".
+    buildFailed: aggregateQuery.data?.status === 'failed',
+    buildError: String(aggregateQuery.data?.error || ''),
   };
 }
 
@@ -80,6 +83,7 @@ export function useProductIntelligenceAggregate(
           totalPages: aggregate.pagesByBucket?.[bucket] ?? 1,
           bucket,
           products: pageDoc.products,
+          summary: aggregate.summary, // static (unfiltered) path → whole-catalog summary
         };
         return result;
       }
@@ -103,6 +107,8 @@ export function useProductIntelligenceAggregate(
     isLoading: docHook.isLoading || (!!aggregate && pageQuery.isPending),
     isBuilding: docHook.isBuilding,
     error: docHook.error ?? pageQuery.error,
+    buildFailed: docHook.buildFailed,
+    buildError: docHook.buildError,
   };
 }
 

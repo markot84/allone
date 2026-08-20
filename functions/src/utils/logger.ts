@@ -47,13 +47,14 @@ function serializeError(err: unknown): Record<string, unknown> {
   return { message: redactString(String(err)) };
 }
 
-/** Scrub API-key shapes / obvious secrets out of a free-text string. */
-function redactString(s: string): string {
+/** Scrub API-key shapes, obvious secrets, and email addresses out of a free-text string. */
+export function redactString(s: string): string {
   return String(s ?? '')
     .replace(/\bAIza[0-9A-Za-z_-]{20,}\b/g, '[key]')
     .replace(/\bsk-[a-zA-Z0-9]{20,}\b/g, '[key]')
     .replace(/\bBearer\s+[A-Za-z0-9._-]{10,}\b/gi, 'Bearer [token]')
-    .replace(/\benc:v1:[A-Za-z0-9+/=:]+/g, 'enc:v1:[token]');
+    .replace(/\benc:v1:[A-Za-z0-9+/=:]+/g, 'enc:v1:[token]')
+    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, (m) => redactEmail(m));
 }
 
 /**
@@ -145,7 +146,8 @@ function emit(
       }
     : { ...ambient, ...safe };
   // firebase-functions/v2 logger emits structured jsonPayload when passed an object arg.
-  fnLogger[level](message, payload);
+  // The message string is redacted too — interpolated emails/tokens must never reach Cloud Logging.
+  fnLogger[level](redactString(message), payload);
 }
 
 export const logger = {

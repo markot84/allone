@@ -436,7 +436,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
                   <Megaphone size={18} className="text-amber-600" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-[#6B7280]">Έσοδα καμπανιών</p>
+                  <p className="text-xs text-[#6B7280]">Revenue καμπανιών</p>
                   <p className="text-lg font-bold font-mono tabular-nums text-[#111827]">
                     {formatCurrencyCompact(eshopTotals.campaigns)}
                   </p>
@@ -514,7 +514,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[#6B7280]">
-                <span>Τζίρος: <span className="font-semibold text-[#374151] font-mono">{formatCurrencyCompact(dashboardTotalRevenueFinance)}</span></span>
+                <span>Revenue: <span className="font-semibold text-[#374151] font-mono">{formatCurrencyCompact(dashboardTotalRevenueFinance)}</span></span>
                 <span>Κόστη: <span className="font-semibold text-[#374151] font-mono">−{formatCurrencyCompact(plTotalMonthly * periodMonths)}</span></span>
               </div>
             </Card>
@@ -533,7 +533,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
               <thead>
                 <tr className="text-left text-xs text-[#4A4A4A] border-b border-[#E5E5E5]">
                   <th className="pb-3 font-medium">Περίοδος</th>
-                  <th className="pb-3 font-medium text-right">Οργανικά Έσοδα</th>
+                  <th className="pb-3 font-medium text-right">Organic Revenue</th>
                 </tr>
               </thead>
               <tbody>

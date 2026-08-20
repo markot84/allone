@@ -28,7 +28,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { XMLParser } from 'fast-xml-parser';
-import { previewFileForProducts, isCustomerLevelData } from './import';
+import { previewFileForProducts, isCustomerLevelData, parseCSV, detectDelimiter, isHeaderlessStatSheet, validateProduct } from './import';
 import { makeProduct } from '../test/helpers';
 
 // ── Minimal DOMParser polyfill (DOM surface used by the two XML parsers) ──────
@@ -459,5 +459,81 @@ describe('import.ts — product feed parsing & routing (previewFileForProducts)'
       ];
       expect(isCustomerLevelData(rows)).toBe(true);
     });
+  });
+});
+
+describe('parseCSV — delimiter auto-detection (Real Peach corruption, PER-277)', () => {
+  it('detects semicolon delimiter (Greek/EU Excel export)', () => {
+    expect(detectDelimiter('sku;name;stock\n105417;Alfa Care;12')).toBe(';');
+  });
+
+  it('defaults to comma for a plain comma CSV', () => {
+    expect(detectDelimiter('sku,name,stock\nA1,Widget,5')).toBe(',');
+  });
+
+  it('semicolon file with EU-decimal commas in fields parses into aligned columns', () => {
+    // The exact failure mode: comma-split shredded these rows (sku became ",105417").
+    const csv = 'sku;name;price;stock\n105417;Alfa Care AC 400;198,50;12';
+    const rows = parseCSV(csv);
+    expect(rows[0]).toEqual(['sku', 'name', 'price', 'stock']);
+    expect(rows[1]).toEqual(['105417', 'Alfa Care AC 400', '198,50', '12']);
+  });
+
+  it('comma still works and respects quoted commas', () => {
+    const rows = parseCSV('sku,name,stock\nA1,"Widget, blue",5');
+    expect(rows[1]).toEqual(['A1', 'Widget, blue', '5']);
+  });
+
+  it('tab-delimited file is detected', () => {
+    const rows = parseCSV('sku\tname\tstock\nA1\tWidget\t5');
+    expect(rows[1]).toEqual(['A1', 'Widget', '5']);
+  });
+});
+
+/** PER-186: the statistics sheet is a headerless «δείκτης | τιμή» list. detectHeaderRow scored every
+ *  row identically (one text cell each), so row 0 won on order alone and was eaten as the header —
+ *  naming the value column "929" and losing that metric entirely. */
+describe('isHeaderlessStatSheet', () => {
+  it('detects the real safeblock statistics sheet (text | number from row 0)', () => {
+    expect(isHeaderlessStatSheet([
+      ['ΠΛΗΘΟΣ ΕΝΕΡΓΟΥ ΚΩΔΙΚΟΛΟΓΙΟΥ', '929'],
+      ['ΣΥΝΟΛΙΚΗ ΑΞΙΑ ΑΠΟΘΕΜΑΤΟΣ', '307159.53'],
+    ])).toBe(true);
+  });
+
+  it('leaves a real header row alone (text | text)', () => {
+    expect(isHeaderlessStatSheet([
+      ['ΔΕΙΚΤΗΣ', 'ΤΙΜΗ'],
+      ['ΣΥΝΟΛΙΚΗ ΑΞΙΑ ΑΠΟΘΕΜΑΤΟΣ', '307159.53'],
+    ])).toBe(false);
+  });
+
+  it('accepts Greek decimal values', () => {
+    expect(isHeaderlessStatSheet([['ΜΕΣΗ ΒΑΘΜΟΛΟΓΙΑ', '2,21']])).toBe(true);
+  });
+
+  it('is conservative about anything that is not a 2-cell pair', () => {
+    expect(isHeaderlessStatSheet([['A', 'B', 'C']])).toBe(false);
+    expect(isHeaderlessStatSheet([['A']])).toBe(false);
+    expect(isHeaderlessStatSheet([[]])).toBe(false);
+    expect(isHeaderlessStatSheet([])).toBe(false);
+  });
+});
+
+describe('Greek stock header aliases', () => {
+  // Headers reach validateProduct normalized (lowercase, spaces→underscores).
+  const row = (h: Record<string, string>) => validateProduct(h, 0);
+
+  it('maps "Υπόλοιπο Φαρμακείου" to stock_level', () => {
+    const r = row({ sku: 'ABC1', name: 'Test Product', 'υπόλοιπο_φαρμακείου': '12', 'τιμή_πώλησης_με_φπα': '350' });
+    expect(r.valid).toBe(true);
+    expect(r.data?.stock_level).toBe(12);
+    expect(r.data?.price).toBe(350);
+  });
+
+  it('still maps the previously supported Greek stock headers', () => {
+    expect(row({ sku: 'ABC1', name: 'Test Product', 'διαθεσιμότητα': '7' }).data?.stock_level).toBe(7);
+    expect(row({ sku: 'ABC2', name: 'Test Product', 'δυναμικό_υπόλοιπο': '9' }).data?.stock_level).toBe(9);
+    expect(row({ sku: 'ABC3', name: 'Test Product', 'απόθεμα': '4' }).data?.stock_level).toBe(4);
   });
 });

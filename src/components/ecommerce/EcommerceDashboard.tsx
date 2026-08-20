@@ -39,10 +39,11 @@ import {
 } from 'recharts';
 import { Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
 import { useEcommerceSummary, type EcommerceTopProduct } from '../../hooks/useEcommerceSummary';
+import { useEcommerceChannelDaily, sumChannelDailyWindow } from '../../hooks/useEcommerceChannelDaily';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import { aggregateOrderLinesForTopProducts } from '../../utils/productLineStats';
 import { resolveParentSku, hasDerivedParentSku } from '../../utils/parentSku';
-import { useMagentoProductEnrichment } from '../../hooks/useMagentoProductEnrichment';
+import { useMagentoParentLinks } from '../../hooks/useMagentoParentLinks';
 import { paymentChartLabelForEcommerceOrder } from '../../utils/magentoPaymentChart';
 import { getBrandHistoryStartISO } from '../../utils/brandHistoryStart';
 import type { KPICardData } from '../common/KPICard';
@@ -110,7 +111,7 @@ function padSparklineForChart(values: number[]): number[] {
 }
 
 function normalizeMethodLabel(value: string | null | undefined): string {
-  let s = String(value || '')
+  const s = String(value || '')
     .replace(/\r\n/g, '\n')
     .trim();
   const firstPara = s.split(/\n+/)[0] ?? s;
@@ -249,18 +250,27 @@ export function EcommerceDashboard() {
   // This page reads only orders/breakdowns/topProducts/recentOrders, never SKU stats or
   // stock-movement — opt out of those heavy multi-MB chunk loads (same as DashboardOverview).
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
+  const channelDaily = useEcommerceChannelDaily();
 
-  // Catalog parent SKUs (Magento itemGroupId) group reliably where a catalog exists; otherwise the
-  // resolver falls back to a conservative suffix-strip.
-  const productEnrichment = useMagentoProductEnrichment();
+  const [prodScope, setProdScopeState] = useState<ProductScope>(() =>
+    typeof window !== 'undefined' && window.localStorage.getItem('pp.ecommerce.prodScope') === 'parents_only' ? 'parents_only' : 'all'
+  );
+  const setProdScope = (next: ProductScope) => {
+    setProdScopeState(next);
+    try { window.localStorage.setItem('pp.ecommerce.prodScope', next); } catch { /* private mode */ }
+  };
+
+  // Parent SKUs come only from declared catalog relations (Magento itemGroupId) — no heuristics.
+  // PER-307: slim precomputed {childSku → parentSku} doc instead of the full magento_products download.
+  const parentLinks = useMagentoParentLinks();
   const parentSkuOf = useMemo(() => {
-    const bySku = productEnrichment.bySku;
-    return (sku: string | null | undefined) => resolveParentSku(sku, bySku.get(String(sku || '').trim())?.itemGroupId);
-  }, [productEnrichment.bySku]);
+    const links = parentLinks.links;
+    return (sku: string | null | undefined) => resolveParentSku(sku, links[String(sku || '').trim()]);
+  }, [parentLinks.links]);
   const hasParentOf = useMemo(() => {
-    const bySku = productEnrichment.bySku;
-    return (sku: string | null | undefined) => hasDerivedParentSku(sku, bySku.get(String(sku || '').trim())?.itemGroupId);
-  }, [productEnrichment.bySku]);
+    const links = parentLinks.links;
+    return (sku: string | null | undefined) => hasDerivedParentSku(sku, links[String(sku || '').trim()]);
+  }, [parentLinks.links]);
 
   // Same global date range as Dashboard/ROI — no session-local override (that caused the E-commerce and Dashboard periods to diverge).
   const {
@@ -308,6 +318,8 @@ export function EcommerceDashboard() {
             sinceDate: effectiveFrom,
             untilDate: effectiveTo,
             revenueMode: 'classified',
+            // PER-307: revisits read the SDK cache (empty-cache falls back to server inside the service).
+            cacheFirst: true,
           })
         : Promise.resolve([]),
     enabled: !!brandId && ecomm.connectedPlatforms.length > 0,
@@ -324,7 +336,6 @@ export function EcommerceDashboard() {
   const [orderRows, setOrderRows] = useState<RowsPerPage>(20);
   const [orderPage, setOrderPage] = useState(1);
   const [prodSearch, setProdSearch] = useState('');
-  const [prodScope, setProdScope] = useState<ProductScope>('all');
   const [prodRows, setProdRows] = useState<RowsPerPage>(20);
   const [prodPage, setProdPage] = useState(1);
 
@@ -443,35 +454,24 @@ export function EcommerceDashboard() {
         : ecomm.platformBreakdown,
     [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.platformBreakdown],
   );
+  // PER-307: pct against the breakdown's own total — the fallback rows are all-window, ÷ period revenue gave 10000%+ shares.
+  const displayPlatformTotal = useMemo(
+    () => displayPlatformBreakdown.reduce((s, p) => s + (p.revenue || 0), 0),
+    [displayPlatformBreakdown],
+  );
 
-  const displaySalesChannelBreakdown = useMemo<SalesChannelBreakdownRow[]>(() => {
-    if (rawOrdersLoaded && periodMetricsFromRawOrders) {
-      return periodMetricsFromRawOrders.salesChannelBreakdown;
-    }
-    const channels = new Set<string>([
-      ...Object.keys(ecomm.revenueBySalesChannel),
-      ...Object.keys(ecomm.ordersBySalesChannel),
-      ...Object.keys(ecomm.includedRevenueBySalesChannel),
-      ...Object.keys(ecomm.includedOrdersBySalesChannel),
-    ]);
-    return [...channels]
-      .map((channel) => ({
-        channel: channel as EcommerceSalesChannel,
-        label: salesChannelLabel(channel),
-        revenue: ecomm.revenueBySalesChannel[channel] || 0,
-        orders: ecomm.ordersBySalesChannel[channel] || 0,
-        includedRevenue: ecomm.includedRevenueBySalesChannel[channel] || 0,
-        includedOrders: ecomm.includedOrdersBySalesChannel[channel] || 0,
-        excludedRevenue: Math.max(0, (ecomm.revenueBySalesChannel[channel] || 0) - (ecomm.includedRevenueBySalesChannel[channel] || 0)),
-        excludedOrders: Math.max(0, (ecomm.ordersBySalesChannel[channel] || 0) - (ecomm.includedOrdersBySalesChannel[channel] || 0)),
-      }))
-      .filter((row) => row.orders > 0)
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [
-    rawOrdersLoaded, periodMetricsFromRawOrders,
-    ecomm.revenueBySalesChannel, ecomm.ordersBySalesChannel,
-    ecomm.includedRevenueBySalesChannel, ecomm.includedOrdersBySalesChannel,
-  ]);
+  // ECOM Phase 2 (PER-170): the period-correct channel split is summed client-side from the server
+  // per-day-per-channel rollup (ecommerce_channel_daily) over the picker window — NO raw-orders fetch,
+  // so it renders on large brands (e.g. 80k+ orders) where the client order fetch never completes and
+  // the card went blank under Phase 1. Backward-compat: if the rollup doc isn't built yet, fall back to
+  // the Phase-1 raw-orders period breakdown (never an all-time number — that misled as period data).
+  const displaySalesChannelBreakdown = useMemo<SalesChannelBreakdownRow[]>(
+    () =>
+      sumChannelDailyWindow(channelDaily, effectiveFrom, effectiveTo) ??
+      periodMetricsFromRawOrders?.salesChannelBreakdown ??
+      [],
+    [channelDaily, effectiveFrom, effectiveTo, periodMetricsFromRawOrders],
+  );
 
   const kpis: KPICardData[] = useMemo(() => {
     const last30 = filteredDailyRevenue.slice(-30);
@@ -483,7 +483,7 @@ export function EcommerceDashboard() {
     });
     return [
       {
-        label: 'Καθαρός τζίρος e-shop',
+        label: 'Net Revenue e-shop',
         value: formatCurrencyCompact(filteredTotalRevenue),
         tooltip: 'Καθαρά έσοδα e-commerce (χωρίς ΦΠΑ) για το επιλεγμένο διάστημα. Εξαιρούνται cancelled/refunded statuses, demo line items και κανάλια που έχουν οριστεί ως μη-core (π.χ. ενδοομιλικά).',
         sparklineData: padSparklineForChart(last30.map((d) => d.revenue)),
@@ -552,16 +552,11 @@ export function EcommerceDashboard() {
     };
   }, [rawOrdersLoaded, oftState, revenueOrdersForTables]);
 
+  // No server-summary fallback: its window differs from the selected period, so the amounts would
+  // silently swap once the accurate aggregation lands — show loading instead of misleading figures.
+  const topProductsPending = !rawOrdersLoaded || topProductAgg == null;
   const topProductsForTables = useMemo<TopProductRow[]>(() => {
-    // While the chunked aggregation is in flight (or before raw orders load), fall back to the
-    // server `ecomm.topProducts` summary — same as the previous !rawOrdersLoaded branch.
-    if (!rawOrdersLoaded || topProductAgg == null) {
-      return ecomm.topProducts.map((product) => ({
-        ...product,
-        parentSku: parentSkuOf(product.sku),
-        hasDerivedParent: hasParentOf(product.sku),
-      }));
-    }
+    if (!rawOrdersLoaded || topProductAgg == null) return [];
     return topProductAgg
       .map((data) => ({
         sku: data.sku,
@@ -572,10 +567,9 @@ export function EcommerceDashboard() {
         hasDerivedParent: hasParentOf(data.sku),
       }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, [rawOrdersLoaded, topProductAgg, ecomm.topProducts, parentSkuOf, hasParentOf]);
+  }, [rawOrdersLoaded, topProductAgg, parentSkuOf, hasParentOf]);
 
-  /** Parent SKU only: group by catalog itemGroupId (Magento); where missing, conservatively strip a
-   * recognized size/gauge suffix (see resolveParentSku). */
+  /** Parent SKU only: group by declared catalog itemGroupId (Magento); no heuristic fallback. */
   const parentProductsForTables = useMemo<TopProductRow[]>(() => {
     const parentMap = new Map<string, { revenue: number; quantity: number; name: string }>();
     for (const product of topProductsForTables) {
@@ -823,7 +817,7 @@ export function EcommerceDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Revenue Trend */}
         <Card className="xl:col-span-2">
-          <CardHeader title="Έσοδα ανά ημέρα" subtitle={`${effectiveFrom} — ${effectiveTo}`} />
+          <CardHeader title="Revenue ανά ημέρα" subtitle={`${effectiveFrom} — ${effectiveTo}`} />
           <div className="px-5 pb-5">
             {filteredDailyRevenue.length > 0 ? (
               <ResponsiveContainer width="100%" height={280}>
@@ -851,7 +845,7 @@ export function EcommerceDashboard() {
                   <RechartsTooltip
                     contentStyle={TOOLTIP_STYLE}
                     labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
-                    formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Έσοδα']}
+                    formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Revenue']}
                   />
                   <Area type="monotone" dataKey="revenue" stroke="var(--nts-accent)" fill="url(#ecommRevGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
                 </AreaChart>
@@ -884,7 +878,7 @@ export function EcommerceDashboard() {
                     <RechartsTooltip
                       contentStyle={TOOLTIP_STYLE}
                       labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
-                      formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Έσοδα']}
+                      formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Revenue']}
                       labelFormatter={(l: string) => PLATFORM_LABELS[l] || l}
                     />
                     <Bar dataKey="revenue" radius={[0, 6, 6, 0]}>
@@ -896,7 +890,7 @@ export function EcommerceDashboard() {
                 </ResponsiveContainer>
                 <div className="mt-4 space-y-2.5">
                   {displayPlatformBreakdown.map((p) => {
-                    const pct = filteredTotalRevenue > 0 ? (p.revenue / filteredTotalRevenue) * 100 : 0;
+                    const pct = displayPlatformTotal > 0 ? (p.revenue / displayPlatformTotal) * 100 : 0;
                     return (
                       <div key={p.platform}>
                         <div className="flex items-center justify-between text-xs mb-1">
@@ -927,10 +921,10 @@ export function EcommerceDashboard() {
         </Card>
       </div>
 
-      {displaySalesChannelBreakdown.length > 0 && (
+      {(displaySalesChannelBreakdown.length > 0 || rawOrdersLoading) && (
         <Card>
           <CardHeader
-            title="Καθαρός τζίρος & εξαιρέσεις"
+            title="Net Revenue & εξαιρέσεις"
             subtitle={`${effectiveFrom} — ${effectiveTo}`}
           />
           <div className="px-5 pb-5">
@@ -938,10 +932,18 @@ export function EcommerceDashboard() {
               Core revenue = τζίρος που μετρά στα e-shop KPI/ROI. Τα εξαιρούμενα ποσά είναι πραγματικές
               παραγγελίες του καναλιού, αλλά δεν μπαίνουν στον καθαρό τζίρο e-shop.
             </p>
+            {displaySalesChannelBreakdown.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-[#E5E7EB] bg-white p-5 text-sm text-[#6B7280]">
+                Φόρτωση ανάλυσης καναλιών για το επιλεγμένο διάστημα…
+              </div>
+            ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {displaySalesChannelBreakdown.map((row) => {
                 const color = SALES_CHANNEL_COLORS[row.channel] || '#6B7280';
                 const includedPct = row.revenue > 0 ? (row.includedRevenue / row.revenue) * 100 : 0;
+                // ECOM Phase 3.5: a fully-excluded channel made money but contributes €0 to the KPI —
+                // don't headline a bare €0 (reads as "no sales"); show its real revenue, marked excluded.
+                const fullyExcluded = row.includedRevenue <= 0 && row.revenue > 0;
                 return (
                   <div key={row.channel} className="rounded-xl border border-[#E5E7EB] bg-white p-3">
                     <div className="flex items-center justify-between gap-2 mb-2">
@@ -951,25 +953,40 @@ export function EcommerceDashboard() {
                       </div>
                       <span className="text-[10px] text-[#6B7280] whitespace-nowrap">{formatNumber(row.orders)} total orders</span>
                     </div>
-                    <p className="mb-0.5 text-[10px] text-[#6B7280]">Μετράει στα e-shop KPI</p>
-                    <div className="text-sm font-bold text-[#111827] tabular-nums">
-                      {formatCurrencyCompact(row.includedRevenue)}
-                    </div>
-                    <p className="mt-0.5 text-[10px] text-[#9CA3AF]">
-                      {formatNumber(row.includedOrders)} core orders
-                    </p>
-                    <div className="mt-2 h-1.5 bg-[#F3F4F6] rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${includedPct}%`, backgroundColor: color }} />
-                    </div>
-                    {row.excludedOrders > 0 && (
-                      <p className="mt-1.5 text-[10px] text-[#9CA3AF]">
-                        Εξαιρείται από KPI: {formatCurrencyCompact(row.excludedRevenue)} / {formatNumber(row.excludedOrders)} orders
-                      </p>
+                    {fullyExcluded ? (
+                      <>
+                        <p className="mb-0.5 text-[10px] text-[#9CA3AF]">Εξαιρείται από e-shop KPI</p>
+                        <div className="text-sm font-bold text-[#9CA3AF] tabular-nums">
+                          {formatCurrencyCompact(row.revenue)}
+                        </div>
+                        <p className="mt-0.5 text-[10px] text-[#9CA3AF]">
+                          {formatNumber(row.orders)} orders · €0 στα KPI
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mb-0.5 text-[10px] text-[#6B7280]">Μετράει στα e-shop KPI</p>
+                        <div className="text-sm font-bold text-[#111827] tabular-nums">
+                          {formatCurrencyCompact(row.includedRevenue)}
+                        </div>
+                        <p className="mt-0.5 text-[10px] text-[#9CA3AF]">
+                          {formatNumber(row.includedOrders)} core orders
+                        </p>
+                        <div className="mt-2 h-1.5 bg-[#F3F4F6] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${includedPct}%`, backgroundColor: color }} />
+                        </div>
+                        {row.excludedOrders > 0 && (
+                          <p className="mt-1.5 text-[10px] text-[#9CA3AF]">
+                            Εξαιρείται από KPI: {formatCurrencyCompact(row.excludedRevenue)} / {formatNumber(row.excludedOrders)} orders
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 );
               })}
             </div>
+            )}
           </div>
         </Card>
       )}
@@ -1066,7 +1083,7 @@ export function EcommerceDashboard() {
         <Card>
           <CardHeader
             title="Top Products"
-            subtitle={`Κατά έσοδα (${effectiveFrom} — ${effectiveTo})`}
+            subtitle={`Κατά Revenue (${effectiveFrom} — ${effectiveTo})`}
             icon={<Package size={16} />}
           />
           <div className="px-5 pb-5">
@@ -1106,11 +1123,15 @@ export function EcommerceDashboard() {
                 <option value="100">100 / σελίδα</option>
                 <option value="all">Προβολή όλων</option>
               </select>
-              <Tooltip content="Όλα τα SKUs: κάθε προϊόν όπως πωλήθηκε (parent+child ενοποιημένα). Μόνο Parent SKUs: ομαδοποίηση παραλλαγών — πρώτα από τον κατάλογο (Magento item_group_id), αλλιώς κόβεται μόνο αναγνωρισμένο μέγεθος/gauge (π.χ. -1.30mm, -L3, -XL).">
+              <Tooltip content="Όλα τα SKUs: κάθε προϊόν όπως πωλήθηκε. Μόνο Parent SKUs: ομαδοποίηση παραλλαγών με βάση τις δηλωμένες σχέσεις parent/variant του καταλόγου Magento (item_group_id) — προϊόντα χωρίς δηλωμένη σχέση εμφανίζονται ως έχουν.">
                 <span className="text-[11px] text-[#9CA3AF]">Filters</span>
               </Tooltip>
             </div>
-            {pagedProducts.length > 0 ? (
+            {topProductsPending ? (
+              <p className="text-xs text-[#6B7280] py-6 text-center">Υπολογισμός ακριβών στοιχείων περιόδου…</p>
+            ) : prodScope === 'parents_only' && parentLinks.isLoading ? (
+              <p className="text-xs text-[#6B7280] py-6 text-center">Φόρτωση καταλόγου για ομαδοποίηση Parent SKU…</p>
+            ) : pagedProducts.length > 0 ? (
               <div className="overflow-x-auto -mx-5 px-5">
                 <table className="w-full text-left text-xs" style={{ minWidth: 340 }}>
                   <thead>
@@ -1121,7 +1142,7 @@ export function EcommerceDashboard() {
                         onClick={() => toggleProdSort('revenue')}
                       >
                         <span className="inline-flex items-center gap-0.5 hover:text-[#111827] transition-colors">
-                          Έσοδα <SortIcon active={prodSort.field === 'revenue'} dir={prodSort.dir} />
+                          Revenue <SortIcon active={prodSort.field === 'revenue'} dir={prodSort.dir} />
                         </span>
                       </th>
                       <th
@@ -1280,7 +1301,7 @@ export function EcommerceDashboard() {
                         </span>
                       </th>
                       <th className="pb-2.5 font-medium text-[#6B7280]">Κανάλι</th>
-                      <th className="pb-2.5 font-medium text-[#6B7280]">Status</th>
+                      <th className="pb-2.5 font-medium text-[#6B7280]">Κατάσταση</th>
                       <th
                         className="pb-2.5 font-medium text-[#6B7280] text-right cursor-pointer select-none whitespace-nowrap"
                         onClick={() => toggleOrderSort('total')}

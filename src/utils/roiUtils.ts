@@ -204,15 +204,24 @@ export function calculateTotalRevenue(
 }
 
 /** Extract date from campaign for month grouping */
+/** Parse an ISO date string (YYYY-MM-DD) as local midnight so callers using
+ * getFullYear/getMonth/getDate get the correct calendar date regardless of timezone. */
+function parseLocalDate(s: string): Date | null {
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+  const parsed = new Date(s);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export function getCampaignDateForMonth(c: Campaign): Date | null {
   const d = c.start_date || c.end_date;
   if (d && d.trim()) {
-    const parsed = new Date(d.trim());
-    if (!isNaN(parsed.getTime())) return parsed;
+    const parsed = parseLocalDate(d.trim());
+    if (parsed) return parsed;
   }
   if (c.period && c.period.trim()) {
     const rangeMatch = c.period.match(/(\d{4}-\d{2}-\d{2})\s*[-–to]\s*(\d{4}-\d{2}-\d{2})/i);
-    if (rangeMatch) return new Date(rangeMatch[1]);
+    if (rangeMatch) return parseLocalDate(rangeMatch[1]);
     const monthMatch = c.period.match(/(\w+)\s+(\d{4})/);
     if (monthMatch) {
       const parsed = new Date(`${monthMatch[1]} 1, ${monthMatch[2]}`);
@@ -763,7 +772,7 @@ export function getCampaignMonthlyAttributedValueInPeriod(
       const frac = bucketOverlapFraction(dateKey, fromDate, toDate, { metaMonthBuckets });
       if (frac <= 0) continue;
       const val = attributedRevenueFromDailyRow(raw, usePurchase) * frac;
-      let ym = dateKey.slice(0, 7);
+      const ym = dateKey.slice(0, 7);
       if (!/^\d{4}-\d{2}$/.test(ym)) continue;
       out.set(ym, (out.get(ym) || 0) + val);
     }

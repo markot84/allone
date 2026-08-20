@@ -1,5 +1,6 @@
 /** Magento product enrichment for the Ads Feed: builds a per-SKU lookup from `magento_products`
  * + `connectors/{brandId}.magento`; doesn't touch `products` (merge happens in the UI). */
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -81,7 +82,9 @@ function inferMagentoMediaBaseUrl(configuredMediaBaseUrl: string, storeUrl: stri
   return `${storeUrl.replace(/\/+$/, '')}/media`;
 }
 
-export function useMagentoProductEnrichment() {
+/** `enabled: false` skips the full magento_products download for pages that only conditionally need it (PER-307). */
+export function useMagentoProductEnrichment(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
 
@@ -106,7 +109,7 @@ export function useMagentoProductEnrichment() {
         lastSyncStatus: String(m.lastSyncStatus || ''),
       };
     },
-    enabled: !!brandId,
+    enabled: enabled && !!brandId,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
@@ -117,47 +120,52 @@ export function useMagentoProductEnrichment() {
       if (!brandId) return [];
       return FirestoreService.getDocuments<RawMagentoProductDoc>('magento_products', [], brandId);
     },
-    enabled: !!brandId && (connectorQuery.data?.connected ?? false) && connectorQuery.data?.productCatalogAccess !== false,
+    enabled: enabled && !!brandId && (connectorQuery.data?.connected ?? false) && connectorQuery.data?.productCatalogAccess !== false,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
 
   const config = connectorQuery.data ?? { storeWebUrl: '', mediaBaseUrl: '', storeUrl: '', connected: false };
-  const rawProducts = productsQuery.data ?? [];
+  const rawProducts = productsQuery.data;
 
-  const bySku = new Map<string, MagentoProductEnrichment>();
-  const bySkuLower = new Map<string, MagentoProductEnrichment>();
-  const byItemGroupId = new Map<string, MagentoProductEnrichment>();
-  const byItemGroupIdLower = new Map<string, MagentoProductEnrichment>();
+  // PER-307: memoized — this O(catalog) loop used to re-run on every render of the consumer.
+  const maps = useMemo(() => {
+    const bySku = new Map<string, MagentoProductEnrichment>();
+    const bySkuLower = new Map<string, MagentoProductEnrichment>();
+    const byItemGroupId = new Map<string, MagentoProductEnrichment>();
+    const byItemGroupIdLower = new Map<string, MagentoProductEnrichment>();
 
-  for (const p of rawProducts) {
-    const sku = String(p.sku || '').trim();
-    if (!sku) continue;
-    const enrichment: MagentoProductEnrichment = {
-      sku,
-      productId: String(p.productId || ''),
-      imageLink: buildImageLink(config.mediaBaseUrl, p.imageRelative || ''),
-      link: buildProductLink(config.storeWebUrl, p.urlKey || '', sku),
-      description: String(p.description || p.shortDescription || ''),
-      shortDescription: String(p.shortDescription || ''),
-      gtin: String(p.gtin || ''),
-      mpn: String(p.mpn || ''),
-      color: String(p.color || ''),
-      size: String(p.size || ''),
-      manufacturer: String(p.manufacturer || ''),
-      itemGroupId: String(p.itemGroupId || ''),
-      categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds.map(String) : [],
-      type: String(p.type || ''),
-      visibility: Number(p.visibility ?? 0),
-    };
-    bySku.set(sku, enrichment);
-    bySkuLower.set(sku.toLowerCase(), enrichment);
-    if (enrichment.itemGroupId && enrichment.imageLink) {
-      if (!byItemGroupId.has(enrichment.itemGroupId)) byItemGroupId.set(enrichment.itemGroupId, enrichment);
-      const lower = enrichment.itemGroupId.toLowerCase();
-      if (!byItemGroupIdLower.has(lower)) byItemGroupIdLower.set(lower, enrichment);
+    for (const p of rawProducts ?? []) {
+      const sku = String(p.sku || '').trim();
+      if (!sku) continue;
+      const enrichment: MagentoProductEnrichment = {
+        sku,
+        productId: String(p.productId || ''),
+        imageLink: buildImageLink(config.mediaBaseUrl, p.imageRelative || ''),
+        link: buildProductLink(config.storeWebUrl, p.urlKey || '', sku),
+        description: String(p.description || p.shortDescription || ''),
+        shortDescription: String(p.shortDescription || ''),
+        gtin: String(p.gtin || ''),
+        mpn: String(p.mpn || ''),
+        color: String(p.color || ''),
+        size: String(p.size || ''),
+        manufacturer: String(p.manufacturer || ''),
+        itemGroupId: String(p.itemGroupId || ''),
+        categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds.map(String) : [],
+        type: String(p.type || ''),
+        visibility: Number(p.visibility ?? 0),
+      };
+      bySku.set(sku, enrichment);
+      bySkuLower.set(sku.toLowerCase(), enrichment);
+      if (enrichment.itemGroupId && enrichment.imageLink) {
+        if (!byItemGroupId.has(enrichment.itemGroupId)) byItemGroupId.set(enrichment.itemGroupId, enrichment);
+        const lower = enrichment.itemGroupId.toLowerCase();
+        if (!byItemGroupIdLower.has(lower)) byItemGroupIdLower.set(lower, enrichment);
+      }
     }
-  }
+    return { bySku, bySkuLower, byItemGroupId, byItemGroupIdLower };
+  }, [rawProducts, config.mediaBaseUrl, config.storeWebUrl]);
+  const { bySku, bySkuLower, byItemGroupId, byItemGroupIdLower } = maps;
 
   return {
     config,
@@ -165,7 +173,8 @@ export function useMagentoProductEnrichment() {
     bySkuLower,
     byItemGroupId,
     byItemGroupIdLower,
-    isLoading: connectorQuery.isPending || productsQuery.isPending,
+    // isPending alone stays true forever on disabled queries — require an actual in-flight fetch.
+    isLoading: (connectorQuery.isPending && connectorQuery.isFetching) || (productsQuery.isPending && productsQuery.isFetching),
     isConnected: config.connected,
     productCatalogAccess: config.productCatalogAccess,
     lastSyncProducts: config.lastSyncProducts ?? 0,

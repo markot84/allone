@@ -173,7 +173,7 @@ export function StrategyPackage(props: StrategyPackageProps) {
                 <div className="p-3 rounded-lg bg-[#FAFAFA]">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <Users size={12} className="text-[#8B5CF6]" />
-                    <span className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">Τμήματα πελατών</span>
+                    <span className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">Segments</span>
                   </div>
                   {idealSegs.length > 0 && (
                     <p className="text-sm text-[#1A1A1A]">{idealSegs.join(', ')}</p>

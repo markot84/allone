@@ -21,6 +21,7 @@ export type ProductIntelligenceAggregate = {
   pageSize: number;
   pagesByBucket: Record<ProductIntelligenceBucket, number>;
   categories: Array<{ name: string; count: number }>;
+  brands?: Array<{ name: string; count: number }>;
   summary: InventorySummary;
   charts?: ProductIntelligenceCharts;
   error?: string;
@@ -50,6 +51,7 @@ export type ProductIntelligenceQuery = {
   bucket?: ProductIntelligenceBucket;
   search?: string;
   categories?: string[];
+  brands?: string[];
   tags?: string[];
   margin?: 'all' | 'high' | 'medium' | 'low';
   stockAge?: 'all' | 'dead' | 'near-dead' | 'high-margin-low-stock';
@@ -59,6 +61,8 @@ export type ProductIntelligenceQuery = {
   dateTo?: string;
   dateMode?: 'imported' | 'first_available';
   includeNoStock?: boolean;
+  /** Collapse variants sharing a declared parent SKU into one row per parent. */
+  groupByParent?: boolean;
 };
 
 export type ProductIntelligenceQueryResult = {
@@ -73,6 +77,14 @@ export type ProductIntelligenceQueryResult = {
   totalPages: number;
   bucket: ProductIntelligenceBucket;
   products: Product[];
+  /** Summary over the full filtered set — lets the cards follow active filters (PER-178). */
+  summary?: InventorySummary;
+  /** PER-188: actionable dropdown options (absent on the static first-page path). */
+  facets?: {
+    categories: Array<{ id: string; count: number }>;
+    brands: Array<{ id: string; count: number }>;
+    tags: Array<{ id: string; count: number }>;
+  };
 };
 
 function isAggregateReady(value: unknown): value is ProductIntelligenceAggregate {

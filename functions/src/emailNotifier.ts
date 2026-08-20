@@ -96,7 +96,7 @@ export async function sendNotificationEmail(
       subject: `[Performance+] ${notification.title.replace(/[\r\n]+/g, ' ')}`,
       html,
     });
-    logger.info(`Email sent to ${toEmail} for notification: ${notification.title}`);
+    logger.info('Email sent for notification', { email: toEmail, title: notification.title });
   } catch (err) {
     logger.error('Failed to send email:', { alertKey: ALERT.emailSendFailed, err });
     throw err;

@@ -338,7 +338,7 @@ function ScenarioKpis({
           onClick={() => onFilterChange('neutral')}
         />
         <MiniKpi
-          label="Καθαρή επίδραση τζίρου"
+          label="Καθαρή επίδραση Revenue"
           tooltip="Το τελικό αποτέλεσμα: πόσα € κερδίθηκαν ή χάθηκαν συνολικά από όλες τις αλλαγές. Υπολογίζεται ως: τζίρος μετά την αλλαγή μείον τζίρος πριν."
           value={formatSignedCurrency(summary.netRevenueDelta)}
           sub={`${formatEuro(summary.totalRevenueBefore)} → ${formatEuro(summary.totalRevenueAfter)}`}
@@ -615,7 +615,7 @@ function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceC
               Πωληθέντα Τεμ.
             </Tooltip>
           </th>
-          <th className="px-3 py-2 text-right">Τζίρος</th>
+          <th className="px-3 py-2 text-right">Revenue</th>
           {showMargin && <th className="px-3 py-2 text-right">Margin</th>}
           <th className="px-3 py-2 text-center">Επίδραση</th>
         </tr>

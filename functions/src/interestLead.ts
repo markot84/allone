@@ -150,7 +150,7 @@ async function sendInterestLeadEmails(
       },
     });
     teamNotified = true;
-    logger.info(`[interestLead] Team notify email sent to ${teamTo.join(', ')}`);
+    logger.info('[interestLead] Team notify email sent', { email: teamTo.join(', ') });
   } catch (e) {
     logger.error('[interestLead] Team notify email failed', { alertKey: ALERT.interestLeadFailed, err: e });
   }
@@ -169,7 +169,7 @@ async function sendInterestLeadEmails(
       },
     });
     userConfirmed = true;
-    logger.info(`[interestLead] User confirmation email sent to ${data.email}`);
+    logger.info('[interestLead] User confirmation email sent', { email: data.email });
   } catch (e) {
     logger.error('[interestLead] User confirmation email failed', { alertKey: ALERT.interestLeadFailed, err: e });
   }
@@ -258,7 +258,7 @@ export async function persistInterestLead(
     ipHint: meta.forwardedFor?.split(',')[0]?.trim()?.slice(0, 45) || null,
   });
 
-  logger.info(`[interestLead] Saved lead from ${email}`);
+  logger.info('[interestLead] Saved lead', { email });
 
   const emailResult = await sendInterestLeadEmailsBestEffort(
     db,

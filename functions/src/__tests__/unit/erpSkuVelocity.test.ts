@@ -43,6 +43,15 @@ describe('accumulateErpInvoiceVelocity', () => {
     expect(a.sold.has('D')).toBe(false);
   });
 
+  it('tracks the positive-only split so returns derive as pos − net', () => {
+    const a = emptyErpVelocityAccum();
+    accumulateErpInvoiceVelocity(a, { kind: 'sales_invoice', date: dayAgo(5), lineItems: [{ sku: 'F', quantity: 10 }] }, NOW);
+    accumulateErpInvoiceVelocity(a, { kind: 'credit_note', date: dayAgo(4), lineItems: [{ sku: 'F', quantity: 3 }] }, NOW);
+    expect(a.pos.get('F')).toBe(10);
+    expect(a.pos30.get('F')).toBe(10);
+    expect(a.sold.get('F')).toBe(7); // returns = 10 − 7 = 3
+  });
+
   it('treats a document with no kind as a sale (back-compat)', () => {
     const a = emptyErpVelocityAccum();
     accumulateErpInvoiceVelocity(a, { date: dayAgo(2), lineItems: [{ sku: 'E', quantity: 4 }] }, NOW);

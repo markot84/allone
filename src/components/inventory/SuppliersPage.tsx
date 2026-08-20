@@ -15,26 +15,30 @@ import {
   ArrowDown,
   ArrowUpDown,
 } from 'lucide-react';
-import { Card, Button, Spinner, useToast } from '../common';
+import { Card, Button, Spinner, useToast, Tooltip } from '../common';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { useBrand } from '../../hooks/useBrand';
 import { SuppliersService } from '../../services/firestore';
-import { DEFAULT_TOD } from '../../utils/productUtils';
+import {
+  DEFAULT_TOD,
+  DEFAULT_LEAD_TIME_DAYS,
+  DEFAULT_REORDER_MULTIPLIER,
+  getReorderPointDays,
+} from '../../utils/productUtils';
 // format utility — currently unused but available for future formatting needs
 import type { Supplier } from '../../types';
 import * as XLSX from 'xlsx';
 import { logger } from '../../utils/logger';
-
-function sanitizeDocId(raw: string): string {
-  return raw
-    .replace(/[/\\#$.[\]]/g, '_')
-    .replace(/\s+/g, '_')
-    .slice(0, 120);
-}
+import { supplierDocId } from '../../utils/supplierDocId';
+import { sanitizeRow } from '../../utils/spreadsheetSafe';
 
 export function SuppliersPage() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
+  const brandDefaultTod = currentBrand?.inventoryThresholds?.defaultTod ?? DEFAULT_TOD;
+  const brandDefaultLead = currentBrand?.inventoryThresholds?.defaultLeadTimeDays ?? DEFAULT_LEAD_TIME_DAYS;
+  const reorderMultiplier =
+    currentBrand?.inventoryThresholds?.reorderWarningMultiplier ?? DEFAULT_REORDER_MULTIPLIER;
   const { suppliers, isLoading, invalidate } = useSuppliers();
   // queryClient available for manual cache ops if needed
   const toast = useToast();
@@ -94,7 +98,7 @@ export function SuppliersPage() {
       if (q && !(s.name.toLowerCase().includes(q) || (s.contact || '').toLowerCase().includes(q))) return false;
       if (fn && !s.name.toLowerCase().includes(fn)) return false;
       if (fc && !(s.contact || '').toLowerCase().includes(fc)) return false;
-      if (!matchNumeric(s.tod || 0, filterTod)) return false;
+      if (!matchNumeric(s.tod ?? brandDefaultTod, filterTod)) return false;
       if (!matchNumeric(s.lead_time || 0, filterLead)) return false;
       return true;
     });
@@ -106,7 +110,7 @@ export function SuppliersPage() {
       let bv: string | number = '';
       switch (sortBy) {
         case 'name': av = a.name.toLowerCase(); bv = b.name.toLowerCase(); break;
-        case 'tod': av = a.tod || 0; bv = b.tod || 0; break;
+        case 'tod': av = a.tod ?? brandDefaultTod; bv = b.tod ?? brandDefaultTod; break;
         case 'lead': av = a.lead_time || 0; bv = b.lead_time || 0; break;
         case 'contact': av = (a.contact || '').toLowerCase(); bv = (b.contact || '').toLowerCase(); break;
       }
@@ -164,14 +168,17 @@ export function SuppliersPage() {
       for (const row of rows) {
         const name = pickCol(row, 'supplier', 'name', 'supplier_name', 'vendor', 'vendor_name', 'προμηθευτής', 'όνομα');
         if (!name) continue;
-        const todVal = parseInt(pickCol(row, 'tod', 'target_days', 'target_days_of_stock', 'days_of_stock', 'στόχος_ημερών') || String(DEFAULT_TOD), 10) || DEFAULT_TOD;
-        const leadTime = parseInt(pickCol(row, 'lead_time', 'lead_time_days', 'delivery_days', 'χρόνος_παράδοσης') || '0', 10) || 0;
+        // Only fields present in the sheet are written — absent/empty cells leave stored values untouched (PER-183).
+        const todRaw = pickCol(row, 'tod', 'target_days', 'target_days_of_stock', 'days_of_stock', 'στόχος_ημερών');
+        const leadRaw = pickCol(row, 'lead_time', 'lead_time_days', 'delivery_days', 'χρόνος_παράδοσης');
         const contact = pickCol(row, 'contact', 'email', 'phone', 'επικοινωνία');
 
-        items.push({
-          id: sanitizeDocId(name),
-          data: { name, tod: todVal, lead_time: leadTime, contact },
-        });
+        const data: Record<string, unknown> = { name };
+        if (todRaw && Number.isFinite(parseInt(todRaw, 10))) data.tod = parseInt(todRaw, 10);
+        if (leadRaw && Number.isFinite(parseInt(leadRaw, 10))) data.lead_time = parseInt(leadRaw, 10);
+        if (contact) data.contact = contact;
+
+        items.push({ id: supplierDocId(brandId, name), data });
       }
 
       if (items.length === 0) {
@@ -191,9 +198,22 @@ export function SuppliersPage() {
     }
   }, [brandId, invalidate, toast]);
 
+  // PER-184 — headers match the importer's aliases exactly, so export → edit → upload round-trips.
+  // Stored values only: blank TOD/Lead_Time cells stay blank so re-import doesn't materialize defaults.
+  const handleExport = () => {
+    const rows = [
+      ['Supplier', 'TOD', 'Lead_Time', 'Contact'],
+      ...suppliers.map(s => sanitizeRow([s.name, s.tod ?? '', s.lead_time ?? '', s.contact ?? ''])),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Suppliers');
+    XLSX.writeFile(wb, `suppliers-${currentBrand?.name ?? 'brand'}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const handleStartEdit = (s: Supplier) => {
     setEditingId(s.id);
-    setEditTod(s.tod);
+    setEditTod(s.tod ?? brandDefaultTod);
     setEditLeadTime(s.lead_time || 0);
   };
 
@@ -227,7 +247,7 @@ export function SuppliersPage() {
       return;
     }
     try {
-      const id = sanitizeDocId(newName.trim());
+      const id = supplierDocId(brandId, newName.trim());
       await SuppliersService.create(id, {
         name: newName.trim(),
         tod: newTod,
@@ -262,7 +282,7 @@ export function SuppliersPage() {
         <div>
           <h2 className="text-xl font-bold text-[var(--nts-charcoal)]">Προμηθευτές</h2>
           <p className="text-sm text-[var(--nts-medium-gray)] mt-1">
-            Διαχείριση προμηθευτών & Target Days of Stock (TOD) ανά προμηθευτή
+            Προμηθευτές με TOD & Lead Time ανά προμηθευτή — τροφοδοτούν την κατηγοριοποίηση αποθέματος
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -273,6 +293,14 @@ export function SuppliersPage() {
           >
             <Plus size={14} className="mr-1" />
             Προσθήκη
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleExport}
+          >
+            <FileSpreadsheet size={14} className="mr-1" />
+            Export Excel
           </Button>
           <Button
             variant="primary"
@@ -301,12 +329,15 @@ export function SuppliersPage() {
             <p className="font-medium mb-1">Μορφή αρχείου εισαγωγής</p>
             <p className="text-[var(--nts-medium-gray)]">
               Στήλες: <code className="text-xs bg-white px-1 py-0.5 rounded">Supplier</code> (υποχρεωτικό), 
-              <code className="text-xs bg-white px-1 py-0.5 rounded ml-1">TOD</code> (ημέρες, default {DEFAULT_TOD}), 
-              <code className="text-xs bg-white px-1 py-0.5 rounded ml-1">Lead_Time</code> (ημέρες), 
+              <code className="text-xs bg-white px-1 py-0.5 rounded ml-1">TOD</code> (ημέρες, default {brandDefaultTod}),
+              <code className="text-xs bg-white px-1 py-0.5 rounded ml-1">Lead_Time</code> (ημέρες, default {brandDefaultLead}),
               <code className="text-xs bg-white px-1 py-0.5 rounded ml-1">Contact</code>
             </p>
             <p className="text-[var(--nts-medium-gray)] mt-1">
               Τα προϊόντα συνδέονται με προμηθευτή μέσω της στήλης <code className="text-xs bg-white px-1 py-0.5 rounded">Supplier</code> στο product import.
+            </p>
+            <p className="text-[var(--nts-medium-gray)] mt-1">
+              Για μαζική ενημέρωση: Export Excel → επεξεργασία → Import του ίδιου αρχείου. Κενά κελιά δεν αλλάζουν τις αποθηκευμένες τιμές.
             </p>
           </div>
         </div>
@@ -334,7 +365,10 @@ export function SuppliersPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-[var(--nts-medium-gray)] mb-1 block">TOD (ημέρες)</label>
+                  <label className="text-xs text-[var(--nts-medium-gray)] mb-1 flex items-center gap-1">
+                    Target Days of Stock — TOD (ημέρες)
+                    <Tooltip content="Στοχευμένες ημέρες κάλυψης αποθέματος για τον προμηθευτή (πόσων ημερών απόθεμα θέλετε να κρατάτε)." size={11} />
+                  </label>
                   <input
                     type="number"
                     value={newTod}
@@ -344,7 +378,10 @@ export function SuppliersPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-[var(--nts-medium-gray)] mb-1 block">Lead Time (ημέρες)</label>
+                  <label className="text-xs text-[var(--nts-medium-gray)] mb-1 flex items-center gap-1">
+                    Lead Time (ημέρες)
+                    <Tooltip content="Χρόνος παράδοσης προμηθευτή (ημέρες από παραγγελία έως παραλαβή). Χρησιμοποιείται στο σημείο αναπαραγγελίας: προϊόν γίνεται Low όταν το απόθεμα δεν καλύπτει τη ζήτηση μέχρι να φτάσει η επόμενη παραλαβή." size={11} />
+                  </label>
                   <input
                     type="number"
                     value={newLeadTime}
@@ -379,7 +416,7 @@ export function SuppliersPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {[
           { icon: <Truck size={16} />, color: 'text-[var(--nts-accent-text)]', bg: 'bg-[var(--nts-accent)]/10', value: suppliers.length, label: 'Προμηθευτές' },
-          { icon: <Clock size={16} />, color: 'text-blue-500', bg: 'bg-blue-50', value: suppliers.length > 0 ? Math.round(suppliers.reduce((s, x) => s + x.tod, 0) / suppliers.length) : DEFAULT_TOD, label: 'Μέσο TOD' },
+          { icon: <Clock size={16} />, color: 'text-blue-500', bg: 'bg-blue-50', value: suppliers.length > 0 ? Math.round(suppliers.reduce((s, x) => s + (x.tod ?? brandDefaultTod), 0) / suppliers.length) : DEFAULT_TOD, label: 'Μέσο TOD' },
           { icon: <Clock size={16} />, color: 'text-amber-500', bg: 'bg-amber-50', value: suppliers.length > 0 ? Math.round(suppliers.filter(s => (s.lead_time || 0) > 0).reduce((s, x) => s + (x.lead_time || 0), 0) / Math.max(suppliers.filter(s => (s.lead_time || 0) > 0).length, 1)) : 0, label: 'Μέσο Lead Time' },
         ].map((stat, i) => (
           <Card key={i} className="px-3 py-3 sm:px-4">
@@ -477,10 +514,24 @@ export function SuppliersPage() {
                     Προμηθευτής <SortIcon col="name" />
                   </th>
                   <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap w-24 cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('tod')}>
-                    TOD <SortIcon col="tod" />
+                    <span className="inline-flex items-center gap-1">
+                      TOD
+                      <Tooltip content="Target Days of Stock: στοχευμένες ημέρες κάλυψης αποθέματος για τον προμηθευτή (πόσων ημερών απόθεμα θέλετε να κρατάτε)." size={11} />
+                      <SortIcon col="tod" />
+                    </span>
                   </th>
                   <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap w-28 hidden sm:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('lead')}>
-                    Lead Time <SortIcon col="lead" />
+                    <span className="inline-flex items-center gap-1">
+                      Lead Time
+                      <Tooltip content="Χρόνος παράδοσης προμηθευτή (ημέρες από παραγγελία έως παραλαβή). Τροφοδοτεί το σημείο αναπαραγγελίας για την ένδειξη Low." size={11} />
+                    </span>
+                    <SortIcon col="lead" />
+                  </th>
+                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap w-32 hidden md:table-cell">
+                    <span className="inline-flex items-center gap-1">
+                      Reorder Point
+                      <Tooltip content={`Σημείο επαναπαραγγελίας: όταν το απόθεμα καλύπτει λιγότερες από τόσες ημέρες, ήρθε η ώρα να παραγγείλετε ξανά. Υπολογίζεται ως Lead Time × ${reorderMultiplier}, ώστε η παραλαβή να προλάβει το μηδενικό απόθεμα.`} size={11} />
+                    </span>
                   </th>
                   <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap hidden md:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('contact')}>
                     Επικοινωνία <SortIcon col="contact" />
@@ -514,7 +565,7 @@ export function SuppliersPage() {
                           />
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]">
-                            {s.tod}d
+                            {s.tod ?? brandDefaultTod} ημέρες
                           </span>
                         )}
                       </td>
@@ -529,9 +580,14 @@ export function SuppliersPage() {
                           />
                         ) : (
                           <span className="text-xs text-[var(--nts-medium-gray)]">
-                            {s.lead_time ? `${s.lead_time}d` : '—'}
+                            {s.lead_time ? `${s.lead_time} ημέρες` : '—'}
                           </span>
                         )}
+                      </td>
+                      <td className="px-3 py-2 text-center hidden md:table-cell">
+                        <span className="text-xs text-[var(--nts-medium-gray)]">
+                          {getReorderPointDays(s.lead_time, brandDefaultLead, reorderMultiplier)} ημέρες
+                        </span>
                       </td>
                       <td className="px-3 py-2 text-xs text-[var(--nts-medium-gray)] truncate hidden md:table-cell">{s.contact || '—'}</td>
                       <td className="px-3 py-2 text-right">
@@ -564,11 +620,17 @@ export function SuppliersPage() {
         )}
       </Card>
 
-      {/* Default TOD info */}
-      <Card className="p-4 bg-gray-50/50">
+      {/* Defaults & how they're used */}
+      <Card className="p-4 bg-gray-50/50 space-y-2">
         <p className="text-xs text-[var(--nts-medium-gray)]">
-          <strong>Default TOD:</strong> Προϊόντα χωρίς αντιστοιχισμένο προμηθευτή χρησιμοποιούν TOD = {DEFAULT_TOD} ημέρες.
-          Η κατηγοριοποίηση stock health (Healthy / Excess / Low / Dead) βασίζεται στο TOD κάθε προμηθευτή.
+          <strong>Προεπιλογές:</strong> Οι προεπιλογές <strong>TOD ({brandDefaultTod} ημέρες)</strong> και
+          <strong> Lead Time ({brandDefaultLead} ημέρες)</strong> ορίζονται στα «Όρια υγείας αποθέματος».
+          Κάθε προμηθευτής μπορεί να τις υπερισχύσει συμπληρώνοντας δική του τιμή εδώ· κενό κελί σημαίνει «χρήση προεπιλογής».
+        </p>
+        <p className="text-xs text-[var(--nts-medium-gray)]">
+          <strong>Πού χρησιμοποιούνται:</strong> Το <strong>TOD</strong> καθορίζει την κατηγορία αποθέματος
+          (Low ≤ TOD/2, Excess &gt; TOD×2). Το <strong>Lead Time</strong> ανεβάζει το σημείο αναπαραγγελίας:
+          προϊόν γίνεται Low όταν το απόθεμα δεν καλύπτει τη ζήτηση μέχρι την επόμενη παραλαβή.
         </p>
       </Card>
     </div>

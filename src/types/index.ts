@@ -105,6 +105,21 @@ export interface Brand {
     excessDaysOfCover?: number;
     /** Grace days after receipt before unsold stock counts as "dead". Default 60. */
     newStockGraceDays?: number;
+    /** Brand-wide fallback supplier lead time (days), used when a supplier has no lead_time. Default 30. */
+    defaultLeadTimeDays?: number;
+    /** Brand-wide fallback Target Days of Stock, used when a supplier has no tod. Default 60. */
+    defaultTod?: number;
+    /** Reorder point as a multiple of the supplier lead time (1.5 = warn 50% before it runs out). Default 1.5. */
+    reorderWarningMultiplier?: number;
+    /** Send the weekly Monday reorder email (Low Stock grouped by supplier) to daily-digest recipients. Default false. */
+    reorderEmailEnabled?: boolean;
+  };
+  /** PER-293 non-merchandise (services/vouchers/made-to-order): out of stock analytics, revenue kept; extends the built-in shipping/discount rule; unset = unchanged. */
+  nonMerchandise?: {
+    /** Exact category match (accent/case-insensitive), e.g. 'plejimo'. Not a substring. */
+    categories?: string[];
+    /** Product-name substring (accent/case-insensitive), e.g. 'Court Cards', 'Unstrung'. */
+    nameContains?: string[];
   };
 }
 
@@ -229,6 +244,10 @@ export interface Scenario {
 /** Predefined SKU filtering scenarios for Sales Optimization (sales_base). */
 export type SalesBasePresetId =
   | 'all'
+  | 'sold_last_30d'
+  | 'sold_last_90d'
+  | 'sold_lifetime'
+  | 'fast_low_cover'
   | 'never_sold'
   | 'zero_last_7d'
   | 'zero_last_30d'
@@ -251,6 +270,13 @@ export interface SalesBaseScope {
   excludedCategories?: string[];
   /** Category source: 'product' = from imported products, 'procurement' = from procurement_inventory. */
   categorySource?: SalesBaseCategorySource;
+}
+
+/** Scope filter for Profit Maximization: '' = no filter on that dimension. */
+export interface ProfitMaxScope {
+  brandFilter: string;
+  subcategoryFilter: string;
+  productTypeFilter: string;
 }
 
 /** Preset filter for the Price Benchmarking (GMC) strategy. */
@@ -303,6 +329,8 @@ export interface BehavioralProfile {
   /** Catalog-backed category (platform + ERP). */
   category_affinity_catalog?: CategoryAffinity[];
   brand_affinity?: CategoryAffinity[];
+  /** Present only for brands with a configured product-type source. */
+  product_type_affinity?: CategoryAffinity[];
   subcategory_affinity?: CategoryAffinity[];
   sku_affinity?: CategoryAffinity[];
   /** Percentage of line turnover matched to catalog (not line_fallback). */
@@ -366,8 +394,8 @@ export interface SegmentCategoryData {
 export interface Supplier {
   id: string;
   name: string;
-  /** Target Days of Stock — ideal stock duration in days */
-  tod: number;
+  /** Target Days of Stock — ideal stock duration in days; absent = platform default */
+  tod?: number;
   /** Optional lead time in days */
   lead_time?: number;
   /** Optional contact info */
@@ -420,6 +448,8 @@ export interface Product {
   supplier?: string;
   /** Commercial brand (Brand column in import) — optional */
   brand?: string;
+  /** Per-brand-configured product type (e.g. Clothes, Shoes). */
+  product_type?: string;
   /** Product barcode / GTIN from ERP. */
   barcode?: string;
   gtin?: string;

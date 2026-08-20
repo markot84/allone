@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../hooks/useBrand';
+import { useIsBrandOwnerOrAdmin } from '../../hooks/useIsBrandOwnerOrAdmin';
 import { useRefreshProcurementSignals } from '../../hooks/useProcurementSignals';
 import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink, Package, Users, BarChart3, Euro, ClipboardList } from 'lucide-react';
 import { Card, Button, Spinner, ProgressBar, useToast, Badge, PageHeader } from '../common';
@@ -118,6 +119,7 @@ function ProcurementApiInfo() {
 
 export function DataImport({ initialType }: DataImportProps = {}) {
   const { currentBrand } = useBrand();
+  const canManageCatalog = useIsBrandOwnerOrAdmin();
   const [selectedType, setSelectedType] = useState<ImportType>(initialType ?? 'products');
 
   useEffect(() => {
@@ -149,7 +151,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
     { value: 'products', label: 'Προϊόντα', icon: <Package size={16} /> },
     { value: 'segments', label: 'Segments (RFM)', icon: <Users size={16} /> },
     { value: 'campaigns', label: 'Καμπάνιες', icon: <BarChart3 size={16} /> },
-    { value: 'organic', label: 'Οργανικά Έσοδα', icon: <Euro size={16} /> },
+    { value: 'organic', label: 'Organic Revenue', icon: <Euro size={16} /> },
     { value: 'procurement', label: 'Procurement (7 καρτέλες)', icon: <ClipboardList size={16} /> },
   ];
 
@@ -313,6 +315,10 @@ export function DataImport({ initialType }: DataImportProps = {}) {
       toast.error('Επιλέξτε ή δημιουργήστε brand πριν την εισαγωγή.');
       return;
     }
+    if (!canManageCatalog) {
+      toast.error('Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να κάνει εισαγωγή δεδομένων.');
+      return;
+    }
 
     const total = selectedFiles.length;
     const results: ImportResult[] = [];
@@ -394,6 +400,21 @@ export function DataImport({ initialType }: DataImportProps = {}) {
         if (typesImported.has('products')) {
           queryClient.invalidateQueries({ queryKey: ['products', brandId] });
           queryClient.invalidateQueries({ queryKey: ['products'] });
+          // Product Intelligence is server-built, so imported products stay invisible without a rebuild.
+          const piBrandId = brandId;
+          if (piBrandId) {
+            void refreshProductIntelligenceOnServer(piBrandId)
+              .then(() => {
+                queryClient.invalidateQueries({ queryKey: ['productIntelligenceAggregate', piBrandId] });
+                queryClient.invalidateQueries({ queryKey: ['productIntelligencePage', piBrandId] });
+                queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', piBrandId] });
+              })
+              .catch((err: unknown) => {
+                if (import.meta.env.MODE === 'development') {
+                  logger.warn('[DataImport] product intelligence refresh failed:', { err });
+                }
+              });
+          }
         }
         if (typesImported.has('segments')) {
           queryClient.invalidateQueries({ queryKey: ['segments', brandId] });

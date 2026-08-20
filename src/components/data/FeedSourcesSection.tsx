@@ -6,12 +6,14 @@ import { useBrand } from '../../hooks/useBrand';
 import { FEED_SOURCE_OPTIONS } from '../../data/feedSourceConfig';
 import { FeedSourcesService } from '../../services/feedSources';
 import { importFile } from '../../services/import';
+import { useIsBrandOwnerOrAdmin } from '../../hooks/useIsBrandOwnerOrAdmin';
 import { auth, buildFunctionUrl, getAppCheckHeader } from '../../config/firebase';
 import { useQueryClient } from '@tanstack/react-query';
 import type { FeedSource } from '../../types';
 
 export function FeedSourcesSection() {
   const { currentBrand } = useBrand();
+  const canManageCatalog = useIsBrandOwnerOrAdmin();
   const { feedSources, isLoading, create, update, remove, isCreating, isDeleting } = useFeedSources();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -36,6 +38,10 @@ export function FeedSourcesSection() {
       toast.error('Συμπληρώστε όνομα και URL');
       return;
     }
+    if (!canManageCatalog) {
+      toast.error('Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί feed προϊόντων.');
+      return;
+    }
     try {
       if (editingId) {
         await update({ id: editingId, data: { name: formName.trim(), url: formUrl.trim(), type: formType } });
@@ -57,6 +63,10 @@ export function FeedSourcesSection() {
 
   const handleSync = async (source: FeedSource) => {
     if (!currentBrand?.id) return;
+    if (!canManageCatalog) {
+      toast.error('Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να συγχρονίσει feed προϊόντων.');
+      return;
+    }
     setSyncingId(source.id);
     try {
       // Fetch server-side: most feed hosts don't allow cross-origin browser
@@ -128,6 +138,10 @@ export function FeedSourcesSection() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!canManageCatalog) {
+      toast.error('Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαγράψει feed προϊόντων.');
+      return;
+    }
     if (!confirm('Διαγραφή feed source;')) return;
     try {
       await remove(id);
@@ -158,7 +172,8 @@ export function FeedSourcesSection() {
               size="sm"
               icon={<Plus size={14} />}
               onClick={() => { resetForm(); setShowForm(true); }}
-              disabled={!currentBrand}
+              disabled={!currentBrand || !canManageCatalog}
+              title={canManageCatalog ? undefined : 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να προσθέσει feed'}
               className="min-h-[36px] w-full sm:w-auto"
             >
               Προσθήκη
@@ -258,16 +273,17 @@ export function FeedSourcesSection() {
                   </Button>
                   <button
                     onClick={() => handleEdit(s)}
-                    className="p-2 rounded-lg hover:bg-[#F5F5F5] text-[#6B7280]"
-                    title="Επεξεργασία"
+                    disabled={!canManageCatalog}
+                    className="p-2 rounded-lg hover:bg-[#F5F5F5] text-[#6B7280] disabled:opacity-40"
+                    title={canManageCatalog ? 'Επεξεργασία' : 'Μόνο ιδιοκτήτης ή διαχειριστής'}
                   >
                     <Pencil size={16} />
                   </button>
                   <button
                     onClick={() => handleDelete(s.id)}
-                    className="p-2 rounded-lg hover:bg-red-50 text-[#6B7280] hover:text-red-600"
-                    title="Διαγραφή"
-                    disabled={isDeleting}
+                    className="p-2 rounded-lg hover:bg-red-50 text-[#6B7280] hover:text-red-600 disabled:opacity-40"
+                    title={canManageCatalog ? 'Διαγραφή' : 'Μόνο ιδιοκτήτης ή διαχειριστής'}
+                    disabled={isDeleting || !canManageCatalog}
                   >
                     <Trash2 size={16} />
                   </button>

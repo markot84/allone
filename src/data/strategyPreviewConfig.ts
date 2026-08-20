@@ -13,6 +13,7 @@ export type PreviewColumnId =
   | 'priority_tag'
   | 'revenue_potential'
   | 'sales_signal'
+  | 'sales_pos_neg'
   | 'benchmark_signal'
   | 'score';
 
@@ -61,7 +62,7 @@ const SCORE_TOOLTIPS: Record<string, string> = {
 Προτεραιότητα δίνεται σε προϊόντα με ισχυρό δυναμικό εσόδων.`,
 
   sales_base: `Η βαθμολογία «Βελτιστοποίηση βάσει πωλήσεων» βασίζεται κυρίως στη δυναμική ζήτησης:
-• Προτεραιότητα σε SKU χωρίς πρόσφατες ή με στάσιμες πωλήσεις, βάσει 7/30/90 ημερών, last_sale_at και lifetime.
+• Η προτεραιότητα ακολουθεί το επιλεγμένο σενάριο: στα αρνητικά προηγούνται SKU χωρίς πρόσφατες ή με στάσιμες πωλήσεις, στα θετικά τα SKU με τις περισσότερες πωλήσεις — βάσει 7/30/90 ημερών, last_sale_at και lifetime.
 • Συνδυάζεται με περιθώριο, απόθεμα, στρατηγικές ενδείξεις, proxy εσόδων και συνάφεια segment.
 Για ακριβέστερο διαχωρισμό «δεν πούλησε ποτέ» έναντι «σταμάτησε να πουλά», συμπληρώστε τα πεδία qty_sold_lifetime, qty_sold_last_7d/30d/90d και last_sale_at.`,
 
@@ -78,7 +79,7 @@ export const strategyPreviewConfigs: Record<string, StrategyPreviewConfig> = {
       { id: 'rank', label: 'Θέση' },
       { id: 'product', label: 'Προϊόν' },
       { id: 'category', label: 'Κατηγορία' },
-      { id: 'margin', label: 'Περιθώριο' },
+      { id: 'margin', label: 'Margin' },
       { id: 'stock', label: 'Απόθεμα' },
       { id: 'score', label: 'Βαθμολογία', tooltip: SCORE_TOOLTIPS.profit_max },
     ],
@@ -104,7 +105,7 @@ export const strategyPreviewConfigs: Record<string, StrategyPreviewConfig> = {
       { id: 'product', label: 'Προϊόν' },
       { id: 'category', label: 'Κατηγορία' },
       { id: 'priority_tag', label: 'Προτεραιότητα' },
-      { id: 'margin', label: 'Περιθώριο' },
+      { id: 'margin', label: 'Margin' },
       { id: 'score', label: 'Βαθμολογία', tooltip: SCORE_TOOLTIPS.brand_launch },
     ],
     scoreTooltip: SCORE_TOOLTIPS.brand_launch,
@@ -129,6 +130,7 @@ export const strategyPreviewConfigs: Record<string, StrategyPreviewConfig> = {
       { id: 'category', label: 'Κατηγορία' },
       { id: 'stock', label: 'Απόθεμα' },
       { id: 'sales_signal', label: 'Πωλήσεις' },
+      { id: 'sales_pos_neg', label: 'Πωλήσεις ±', tooltip: 'Πωλήσεις / επιστροφές (τεμάχια) στην επιλεγμένη περίοδο, από τα παραστατικά του ERP. «—» όταν η πηγή δεν διαχωρίζει επιστροφές.' },
       { id: 'margin', label: 'Περιθώριο' },
       { id: 'score', label: 'Βαθμολογία', tooltip: SCORE_TOOLTIPS.sales_base },
     ],

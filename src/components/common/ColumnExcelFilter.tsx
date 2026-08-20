@@ -84,8 +84,9 @@ export function ColumnExcelFilter({
       else setDraftValue([...next]);
       return;
     }
+    // [] means "none selected" (pick-to-include) — clicking adds to it; only null means "all".
     const startSelected =
-      draftValue == null || draftValue.length === 0
+      draftValue == null
         ? new Set(allIds)
         : new Set(draftValue.filter((x) => allIds.includes(x)));
     const next = new Set(startSelected);
@@ -157,6 +158,21 @@ export function ColumnExcelFilter({
           className="w-full rounded-md border border-[#E5E7EB] px-2 py-1.5 text-xs focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
         />
       </div>
+      {selectionMode !== 'additive' && (
+        // Master toggle: clear all → pick only what to include (or select all back). Excel-style.
+        <label className="flex cursor-pointer items-center gap-2 border-b border-[#F0F0F0] px-3 py-1.5 text-sm font-medium text-[#374151] hover:bg-[#F9FAFB]">
+          <input
+            type="checkbox"
+            ref={(el) => {
+              if (el) el.indeterminate = draftSelected.size > 0 && draftSelected.size < allIds.length;
+            }}
+            checked={allIds.length > 0 && draftSelected.size === allIds.length}
+            onChange={() => setDraftValue(draftSelected.size === allIds.length ? [] : null)}
+            className="rounded border-[#D1D5DB] text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]/30"
+          />
+          <span>Επιλογή όλων</span>
+        </label>
+      )}
       <div className="max-h-52 overflow-y-auto p-1">
         {filteredOpts.map((o) => (
           <label

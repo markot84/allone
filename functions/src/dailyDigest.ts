@@ -21,25 +21,6 @@ interface AlertDoc {
   createdAt: string;
 }
 
-interface ProductAgg {
-  totalSkus: number;
-  deadStock: { count: number; value: number };
-  totalInventoryValue: number;
-}
-
-interface SegmentAgg {
-  totalCustomers: number;
-  atRiskPercentage: number;
-  championsPercentage: number;
-}
-
-interface CampaignAgg {
-  totalCampaigns: number;
-  totalSpend: number;
-  totalRevenue: number;
-  avgRoas: number;
-}
-
 interface PeriodMetrics {
   dateKey: string;
   label: string;
@@ -271,7 +252,7 @@ async function sendDigestForBrand(brandId: string, brandName: string, transporte
       });
 
       sent++;
-      logger.info(`[Digest] Sent to ${email} for brand ${brandName}`);
+      logger.info('[Digest] Sent digest', { email, brandName });
     } catch (err) {
       logger.warnAlert(`[Digest] Failed for user ${userId}:`, { alertKey: ALERT.dailyDigestFailed, err });
     }

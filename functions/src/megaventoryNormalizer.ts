@@ -1,4 +1,5 @@
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
+import { supplierDocId } from './erpConnectorFirestore';
 import { logger } from './utils/logger';
 
 const WRITE_BATCH_SIZE = 500;
@@ -94,6 +95,15 @@ function marginTier(rawTier: string, marginPct?: number): 'high' | 'medium' | 'l
   return 'low';
 }
 
+/** Days of cover from Qty_Sold_Period over the report window; undefined when unknowable (Megaventory has no such column). */
+function daysOfCover(stock: number, qtySold: number | undefined, periodDays: number | undefined): number | undefined {
+  if (!periodDays || periodDays <= 0) return undefined;
+  if (!qtySold || qtySold <= 0) return undefined;
+  const perDay = qtySold / periodDays;
+  if (!Number.isFinite(perDay) || perDay <= 0) return undefined;
+  return Math.min(Math.round(stock / perDay), 9999);
+}
+
 function priorityTag(priority: string, abcClass: string): string | undefined {
   const p = priority || abcClass;
   if (!p) return undefined;
@@ -146,10 +156,12 @@ export async function normalizeMegaventoryCustomReportRows(
   db: Firestore,
   brandId: string,
   reportRows: Record<string, unknown>[],
+  options?: { periodDays?: number },
 ): Promise<MegaventoryNormalizationCounts> {
+  const periodDays = options?.periodDays;
+  // suppliers deliberately NOT delete-recreated: user-edited tod/lead_time must survive syncs (PER-183)
   const collections = [
     'products',
-    'suppliers',
     'procurement_inventory',
     'procurement_pricing_policy',
     'procurement_item_evaluation',
@@ -235,13 +247,14 @@ export async function normalizeMegaventoryCustomReportRows(
         ΚΑΤΗΓΟΡΙΑ: procurementCategory || category,
         ΠΡΟΜΗΘΕΥΤΗΣ: supplier,
         ΟΜΑΔΑ_ΡΟΗΣ: flowGroup,
-        ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ: abcClass || priority,
-        STATUS_ΚΩΔΙΚΟΥ: status,
+        // Omitted, not '': '' reads downstream as a real empty grade and kills classification.
+        ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ: abcClass || priority || undefined,
+        STATUS_ΚΩΔΙΚΟΥ: status || undefined,
         ΠΡΩΤΟΓΕΝΕΣ_ΚΟΣΤΟΣ_Μ_Μ: costPrice ?? '',
         ΔΙΑΘΕΣΙΜΟ_ΥΠΟΛΟΙΠΟ: availableStock ?? stockOnHand ?? '',
         ΔΥΝΑΜΙΚΟ_ΥΠΟΛΟΙΠΟ: stockOnHand ?? availableStock ?? '',
         ΣΥΝΟΛΙΚΕΣ_ΠΩΛΗΣΕΙΣ: qtySold ?? '',
-        ΗΜΕΡΕΣ_ΕΠΑΡΚΕΙΑΣ_ΔΙΑΘΕΣΙΜΟΥ_ΑΠΟΘΕΜΑΤΟΣ: '',
+        ΗΜΕΡΕΣ_ΕΠΑΡΚΕΙΑΣ_ΔΙΑΘΕΣΙΜΟΥ_ΑΠΟΘΕΜΑΤΟΣ: daysOfCover(stock, qtySold, periodDays),
         ΠΟΣΟΤΗΤΑ_ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ: reorderQty ?? '',
         ΑΞΙΑ_ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ: costPrice !== undefined && reorderQty !== undefined ? +(costPrice * reorderQty).toFixed(2) : '',
         Reorder_Point: reorderPoint ?? '',
@@ -258,7 +271,7 @@ export async function normalizeMegaventoryCustomReportRows(
         ΚΟΣΤΟΣ_ΑΓΟΡΑΣ: costPrice ?? '',
         ΠΡΩΤΟΓΕΝΕΣ_ΚΟΣΤΟΣ: costPrice ?? '',
         ΣΥΝΟΛΙΚΟ_ΚΟΣΤΟΣ: costPrice ?? '',
-        ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ: abcClass || priority,
+        ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ: abcClass || priority || undefined,
         ΜΕΣΗ_ΤΙΜΗ_ΠΩΛΗΣΗΣ: sellPrice ?? '',
         ΤΙΜΟΚΑΤΑΛΟΓΟΣ_ΒΑΣΗΣ: listPrice ?? sellPrice ?? '',
         ΕΤΑΙΡΙΚΟΣ_ΚΑΤΑΛΟΓΟΣ: sellPrice ?? '',
@@ -271,7 +284,7 @@ export async function normalizeMegaventoryCustomReportRows(
       id: `mv_report_eval_${brandId}_${sku}`,
       data: {
         ΚΩΔΙΚΟΣ: sku,
-        ΑΞΙΟΛΟΓΗΣΗ: abcClass || priority || resolvedMarginTier || '',
+        ΑΞΙΟΛΟΓΗΣΗ: abcClass || priority || resolvedMarginTier || undefined,
         ΒΑΘΜΟΛΟΓΙΑ: evaluationScore(abcClass, priority, marginPct),
         ABC_Class: abcClass,
         Priority_Flag: priority,
@@ -283,13 +296,8 @@ export async function normalizeMegaventoryCustomReportRows(
       const supplierKey = supplier.toLocaleUpperCase('el-GR');
       if (!suppliers.has(supplierKey)) {
         suppliers.set(supplierKey, {
-          id: `mv_report_supplier_${brandId}_${supplier}`,
-          data: {
-            name: supplier,
-            contact: '',
-            tod: 60,
-            lead_time: 0,
-          },
+          id: supplierDocId(brandId, supplier),
+          data: { name: supplier },
         });
       }
     }

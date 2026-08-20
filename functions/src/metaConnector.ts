@@ -106,15 +106,7 @@ function toYmd(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-function fromYmd(ymd: string): Date {
-  return new Date(`${ymd}T00:00:00.000Z`);
-}
 
-function addDays(ymd: string, days: number): string {
-  const d = fromYmd(ymd);
-  d.setUTCDate(d.getUTCDate() + days);
-  return toYmd(d);
-}
 
 function isRetriableFirestoreWriteError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
@@ -489,8 +481,109 @@ async function listAdAccounts(accessToken: string): Promise<{ id: string; name: 
   }
 }
 
-/** Fetch campaign insights from Meta Marketing API. */
+export interface MetaSystemUserResult {
+  success: boolean;
+  error?: string;
+  warning?: string;
+  data?: {
+    /** ms epoch, or null when the token never expires (System User token). */
+    accessToken: string;
+    expiresAt: number | null;
+    availableAccounts: AdAccount[];
+    needsSelection: boolean;
+  };
+}
+
+/** PER-172: connect Meta via a pasted System User token (durable, no 60-day OAuth expiry). */
+export async function connectMetaSystemUserToken(
+  brandId: string,
+  rawToken: string
+): Promise<MetaSystemUserResult> {
+  const token = (rawToken || '').trim();
+  if (!token) return { success: false, error: 'Λείπει το token.' };
+  const { appId, appSecret } = getCredentials();
+
+  let expiresAt: number | null = null;
+  let warning: string | undefined;
+
+  // validate via debug_token (is_valid, correct app, ads_read, expiry)
+  if (appId && appSecret) {
+    try {
+      const appToken = `${appId}|${appSecret}`;
+      const dbgRes = await fetch(
+        `${META_GRAPH_URL}/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(appToken)}`
+      );
+      const dbg = await dbgRes.json();
+      const d = dbg?.data;
+      if (!d || d.is_valid !== true) {
+        return { success: false, error: 'Το token δεν είναι έγκυρο. Έλεγξε ότι το αντέγραψες ολόκληρο και σωστά.' };
+      }
+      if (d.app_id && String(d.app_id) !== String(appId)) {
+        return { success: false, error: 'Το token ανήκει σε άλλη εφαρμογή Meta. Δημιούργησέ το για τη σωστή εφαρμογή.' };
+      }
+      const scopes: string[] = Array.isArray(d.scopes) ? d.scopes : [];
+      if (!scopes.includes('ads_read')) {
+        return { success: false, error: 'Το token δεν έχει δικαίωμα ads_read. Πρόσθεσε το permission στον System User και ξαναδημιούργησέ το.' };
+      }
+      const ea = Number(d.expires_at || 0); // 0 = never expires
+      if (ea > 0) {
+        expiresAt = ea * 1000;
+        warning = `Προσοχή: αυτό το token λήγει στις ${new Date(ea * 1000).toLocaleDateString('el-GR')}. Για μόνιμη σύνδεση δημιούργησε token System User χωρίς ημερομηνία λήξης ("Never").`;
+      }
+    } catch (err) {
+      logger.warn('[Meta] debug_token check failed; falling back to ad-account probe', { err });
+    }
+  }
+
+  // must resolve ad accounts (also the validity check when debug_token is skipped)
+  const accounts = await listAdAccounts(token);
+  if (accounts.length === 0) {
+    return {
+      success: false,
+      error:
+        'Δεν βρέθηκαν διαφημιστικοί λογαριασμοί για αυτό το token. Βεβαιώσου ότι ο System User έχει ανατεθεί σε Ad Account με δικαίωμα ads_read.',
+    };
+  }
+
+  logger.info(`[Meta] System User token validated for brand ${brandId}: ${accounts.length} ad accounts`);
+  return {
+    success: true,
+    warning,
+    data: { accessToken: token, expiresAt, availableAccounts: accounts, needsSelection: accounts.length > 1 },
+  };
+}
+
+/** PER-172: run the sync, then persist the health outcome (lastSyncAttemptAt/Status/Error) on every
+ *  exit so the card reflects reality without a manual Sync click. */
 export async function fetchMetaCampaigns(brandId: string): Promise<{
+  success: boolean;
+  imported: number;
+  error?: string;
+}> {
+  let result: { success: boolean; imported: number; error?: string };
+  try {
+    result = await runMetaCampaignsSync(brandId);
+  } catch (err) {
+    result = { success: false, imported: 0, error: err instanceof Error ? err.message : String(err) };
+  }
+  try {
+    await getDb().doc(`connectors/${brandId}`).set(
+      {
+        meta: {
+          lastSyncAttemptAt: Date.now(),
+          lastSyncStatus: result.success ? 'ok' : 'error',
+          lastSyncError: result.success ? FieldValue.delete() : result.error || 'Άγνωστο σφάλμα Meta',
+        },
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    logger.warn('[Meta] failed to record sync outcome', { err });
+  }
+  return result;
+}
+
+async function runMetaCampaignsSync(brandId: string): Promise<{
   success: boolean;
   imported: number;
   error?: string;
@@ -515,6 +608,9 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
   await deleteStaleMetaCampaignDocsForAccounts(brandId, adAccountIds);
 
   let totalImported = 0;
+  // Breakdown/status sections degrade independently of campaign imports; without this a single
+  // successful campaign write reports a clean sync and clears lastImportError.
+  const degraded: string[] = [];
   const accessToken = decryptToken(connector.accessToken);
   if (!accessToken) {
     return { success: false, imported: 0, error: 'Meta token unavailable — reconnect required' };
@@ -673,6 +769,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         logger.info(`[Meta] Geo breakdown aggregated for ${geoByCampaign.size} campaigns`);
       } catch (e) {
         logger.warn(`[Meta] Geo breakdown call failed: ${e}`);
+        degraded.push('geo breakdown');
       }
 
       // ── Geographic sub-country: country + region (Meta naming: "region" ≈ area, not always a city) ──
@@ -742,6 +839,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         logger.info(`[Meta] Country+region geo aggregated for ${geoCityByCampaign.size} campaigns`);
       } catch (e) {
         logger.warn(`[Meta] Geo country+region breakdown failed: ${e}`);
+        degraded.push('geo country/region breakdown');
       }
 
       // Fetch campaign statuses (effective_status) from the Campaigns API
@@ -764,6 +862,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         logger.info(`[Meta] Fetched statuses for ${campaignStatusMap.size} campaigns in ${actAccountId}`);
       } catch (e) {
         logger.warn(`[Meta] Failed to fetch campaign statuses for ${actAccountId}: ${e}`);
+        degraded.push('campaign statuses');
       }
 
       // Fallback: if monthly daily insights returned empty, fetch a compact account-level snapshot.
@@ -796,6 +895,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           logger.info(`[Meta] Fallback fetched ${allRows.length} rows for ${actAccountId}`);
         } catch (e) {
           logger.warn(`[Meta] Fallback call failed for ${actAccountId}: ${e}`);
+          degraded.push('fallback insights');
         }
       }
 
@@ -1098,22 +1198,24 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       }
     } catch (err) {
       logger.error(`[Meta] Error for account ${accountId}:`, { alertKey: ALERT.metaSyncFailed, err });
+      degraded.push(`account ${accountId}`);
     }
   }
 
-  const importStatus = totalImported > 0 ? 'completed' : 'failed';
+  const importStatus = totalImported > 0 ? (degraded.length ? 'partial' : 'completed') : 'failed';
   await getDb().collection('import_jobs').add({
     brandId,
     type: 'campaigns',
     source: 'meta_api',
     status: importStatus,
     imported: totalImported,
-    failed: totalImported > 0 ? 0 : 1,
-    errors: totalImported > 0 ? [] : ['Meta sync produced no campaign writes (check logs / Firestore limits)'],
+    failed: totalImported > 0 ? degraded.length : 1,
+    errors: totalImported > 0 ? degraded : ['Meta sync produced no campaign writes (check logs / Firestore limits)'],
     createdAt: FieldValue.serverTimestamp(),
   });
 
   if (totalImported > 0) {
+    const partialMsg = degraded.length ? `Meta synced with missing sections: ${degraded.join(', ')}` : '';
     await getDb().doc(`connectors/${brandId}`).set(
       {
         meta: {
@@ -1121,11 +1223,17 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           historyLoadedUntilYear: historyLoaded
             ? Number(connector.historyLoadedUntilYear) || historyStartYear
             : historyStartYear,
-          lastImportError: FieldValue.delete(),
+          ...(partialMsg
+            ? { lastImportError: partialMsg, lastImportErrorAt: Date.now() }
+            : { lastImportError: FieldValue.delete() }),
         },
       },
       { merge: true }
     );
+    if (partialMsg) {
+      logger.warnAlert(`[Meta] ${partialMsg} (brand ${brandId})`, { alertKey: ALERT.metaSyncFailed });
+      return { success: false, imported: totalImported, error: partialMsg };
+    }
     return { success: true, imported: totalImported };
   }
 

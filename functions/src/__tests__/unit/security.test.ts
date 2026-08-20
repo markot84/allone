@@ -20,6 +20,9 @@ vi.mock('firebase-admin/firestore', () => ({
   },
 }));
 
+const verifyTokenMock = vi.fn();
+vi.mock('firebase-admin/app-check', () => ({ getAppCheck: () => ({ verifyToken: verifyTokenMock }) }));
+
 vi.mock('firebase-functions/v2', () => ({
   logger: {
     warn: vi.fn(),
@@ -30,6 +33,7 @@ vi.mock('firebase-functions/v2', () => ({
 
 // Import after mocks are registered.
 import {
+  appCheckDenied,
   applyStrictCors,
   enforceRateLimit,
   getClientIp,
@@ -162,12 +166,12 @@ describe('resolveAllowedOrigin', () => {
 // --- applyStrictCors -------------------------------------------------------
 
 describe('applyStrictCors', () => {
-  it('sets CORS headers and does NOT short-circuit for an allow-listed POST', () => {
+  it('sets CORS headers and does NOT short-circuit for an allow-listed POST', async () => {
     const origin = `https://${PROJECT_ID}.web.app`;
     const req = makeReq({ origin, method: 'POST' });
     const res = makeRes();
 
-    const handled = applyStrictCors(req, res as unknown as Response);
+    const handled = await applyStrictCors(req, res as unknown as Response);
 
     expect(handled).toBe(false); // caller continues processing
     expect(res.set).toHaveBeenCalledWith('Access-Control-Allow-Origin', origin);
@@ -175,11 +179,11 @@ describe('applyStrictCors', () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it('blocks a foreign origin with 403 and short-circuits', () => {
+  it('blocks a foreign origin with 403 and short-circuits', async () => {
     const req = makeReq({ origin: 'https://evil.example', method: 'POST' });
     const res = makeRes();
 
-    const handled = applyStrictCors(req, res as unknown as Response);
+    const handled = await applyStrictCors(req, res as unknown as Response);
 
     expect(handled).toBe(true); // caller must return
     expect(res.set).not.toHaveBeenCalledWith(
@@ -190,22 +194,22 @@ describe('applyStrictCors', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'Origin not allowed' });
   });
 
-  it('allows a server-to-server POST with no origin header (not short-circuited)', () => {
+  it('allows a server-to-server POST with no origin header (not short-circuited)', async () => {
     const req = makeReq({ method: 'POST' }); // no origin header
     const res = makeRes();
 
-    const handled = applyStrictCors(req, res as unknown as Response);
+    const handled = await applyStrictCors(req, res as unknown as Response);
 
     expect(handled).toBe(false);
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it('answers an allow-listed OPTIONS preflight with 204 and short-circuits', () => {
+  it('answers an allow-listed OPTIONS preflight with 204 and short-circuits', async () => {
     const origin = `https://${PROJECT_ID}.firebaseapp.com`;
     const req = makeReq({ origin, method: 'OPTIONS' });
     const res = makeRes();
 
-    const handled = applyStrictCors(req, res as unknown as Response);
+    const handled = await applyStrictCors(req, res as unknown as Response);
 
     expect(handled).toBe(true);
     expect(res.set).toHaveBeenCalledWith('Access-Control-Allow-Origin', origin);
@@ -213,11 +217,11 @@ describe('applyStrictCors', () => {
     expect(res.send).toHaveBeenCalledWith('');
   });
 
-  it('answers a foreign-origin OPTIONS preflight with 403 and short-circuits', () => {
+  it('answers a foreign-origin OPTIONS preflight with 403 and short-circuits', async () => {
     const req = makeReq({ origin: 'https://evil.example', method: 'OPTIONS' });
     const res = makeRes();
 
-    const handled = applyStrictCors(req, res as unknown as Response);
+    const handled = await applyStrictCors(req, res as unknown as Response);
 
     expect(handled).toBe(true);
     expect(res.status).toHaveBeenCalledWith(403);
@@ -420,5 +424,43 @@ describe('enforceRateLimit', () => {
       // Unsafe chars (/, space, !) replaced with underscores; safe ip:.- kept.
       expect(path).toBe('rate_limits/ip:1.2.3.4_.._weird_key_');
     });
+  });
+});
+
+describe('appCheckDenied (PER-62)', () => {
+  const call = (headers: Record<string, string>) => {
+    const req = makeReq({ method: 'POST' });
+    Object.assign(req.headers, headers);
+    const res = makeRes();
+    return { res, done: appCheckDenied(req, res as unknown as Response) };
+  };
+
+  afterEach(() => {
+    delete process.env.APP_CHECK_ENFORCE;
+    verifyTokenMock.mockReset();
+  });
+
+  it('is a no-op while enforcement is off — the default', async () => {
+    const { res, done } = call({});
+    expect(await done).toBe(false);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(verifyTokenMock).not.toHaveBeenCalled();
+  });
+
+  it('denies a missing token once enforced', async () => {
+    process.env.APP_CHECK_ENFORCE = 'true';
+    const { res, done } = call({});
+    expect(await done).toBe(true);
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  it('allows a valid token and denies a rejected one', async () => {
+    process.env.APP_CHECK_ENFORCE = 'true';
+    verifyTokenMock.mockResolvedValueOnce({ appId: 'app' });
+    expect(await call({ 'x-firebase-appcheck': 'good' }).done).toBe(false);
+    verifyTokenMock.mockRejectedValueOnce(new Error('bad token'));
+    const bad = call({ 'x-firebase-appcheck': 'bad' });
+    expect(await bad.done).toBe(true);
+    expect(bad.res.status).toHaveBeenCalledWith(401);
   });
 });

@@ -42,7 +42,7 @@ describe('stockBucket via productFromRow — dead vs new', () => {
 });
 
 describe('stockBucket — shelf-age (real receipt date)', () => {
-  // signature: stockBucket(stock, qtySoldPeriod, qtySoldLifetime, shelfAgeDays, thresholds)
+  // signature: stockBucket(stock, qtySoldPeriod, qtySoldLifetime, shelfAgeDays, leadDays, thresholds)
   it('no recent sales + shelf age beyond grace → dead', () => {
     expect(stockBucket(5, 0, 0, 200)).toBe('dead'); // 200 days on the shelf, never sold → genuinely dead
   });
@@ -59,5 +59,22 @@ describe('stockBucket — shelf-age (real receipt date)', () => {
     expect(stockBucket(5, 0, 12, null)).toBe('dead'); // sold before, stopped, no age signal
     expect(stockBucket(5, 0, 0, null)).toBe('healthy'); // never sold, no age signal → not dead
     expect(stockBucket(5, null, 0, null)).toBe('healthy'); // no period signal at all → healthy
+  });
+});
+
+describe('stockBucket — lead-time reorder point (PER-276)', () => {
+  // low = days-of-cover ≤ lowDaysOfCover(30) + leadDays. Defaults: window 30, low 30, excess 120.
+  it("PER-276 example: 11 units, 10 sold/30d, lead 15 → low (cover 33d ≤ 45d)", () => {
+    expect(stockBucket(11, 10)).toBe('healthy'); // no lead → 33d cover > 30 → healthy (baseline)
+    expect(stockBucket(11, 10, 0, null, 15)).toBe('low'); // +15d lead → threshold 45 → low
+  });
+
+  it('lead 0 preserves the old flat-30 low threshold', () => {
+    expect(stockBucket(9, 10)).toBe('low'); // 27d cover ≤ 30 → low regardless of lead
+    expect(stockBucket(40, 10, 0, null, 0)).toBe('healthy'); // 120d cover, no lead → healthy
+  });
+
+  it('lead does not push a well-covered SKU below excess', () => {
+    expect(stockBucket(50, 10, 0, null, 15)).toBe('excess'); // 150d cover > 120 → excess, lead irrelevant
   });
 });

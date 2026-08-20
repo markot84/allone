@@ -3,13 +3,16 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": "22"
+  },
   "scripts": {
     "predev": "node scripts/generate-build-info.mjs",
     "dev": "vite",
     "prebuild": "node scripts/generate-build-info.mjs",
     "build": "tsc -b && vite build --mode staging",
     "build:production": "node scripts/generate-build-info.mjs && tsc -b && vite build --mode production",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 415",
     "pretest": "node scripts/generate-build-info.mjs",
     "preview": "vite preview",
     "test": "vitest run",

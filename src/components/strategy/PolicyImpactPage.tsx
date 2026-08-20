@@ -644,7 +644,7 @@ function DecisionDetail({
           positive={impact.verdict === 'winning'}
         />
         <MetricTile
-          label={skuPerformance ? 'Τζίρος SKU' : 'Τζίρος περιόδου'}
+          label={skuPerformance ? 'Revenue SKU' : 'Revenue περιόδου'}
           value={formatCurrency(impact.periodRevenue, 0)}
           sub={
             impact.revenueChangePct != null

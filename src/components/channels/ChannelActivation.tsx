@@ -43,6 +43,7 @@ import { Card, CardHeader, Badge, Button, Spinner, PageHeader, ModalHeader, Prod
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import { useToast } from '../common/Toast';
 import { useProductSource } from '../../hooks/useProductSource';
+import { useChannelActivationInsight } from '../../hooks/useChannelActivationInsight';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useBrand } from '../../hooks/useBrand';
 import { CommercialInfoBanner } from '../commercial-info/CommercialInfoBanner';
@@ -261,7 +262,13 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     [brandProfileText]
   );
   const pageTitle = getModuleLabel('channels', effectiveBrandTypeForModules(currentBrand));
-  const { products } = useProductSource();
+  const inventoryPlayContext = useInventoryPlayContext();
+  // PER-166: the server PI aggregate drives the dead-stock list + the Ads-feed counts, so the page
+  // no longer loads the ~222k-product catalog on mount. The local source is fetched only as a
+  // fallback when the aggregate isn't ready (e.g. a brand with no Product Intelligence).
+  const channelInsight = useChannelActivationInsight({ loadDead: inventoryPlayContext === 'dead_stock' });
+  const useLocalFallback = !channelInsight.isLoading && !channelInsight.ready;
+  const { products, isLoading: productsLoading } = useProductSource({ enabled: useLocalFallback });
   const { isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
   const { segments: rfmSegments, dataCoverage } = useSegments();
   const {
@@ -284,7 +291,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const { coverage: signalCoverage } = useProductSignals(products);
 
   const playContext = usePlayContext();
-  const inventoryPlayContext = useInventoryPlayContext();
   const [playDismissed, setPlayDismissed] = useState(false);
   // Reset dismiss when playContext changes (new navigation from AI insights)
   useEffect(() => { if (playContext) setPlayDismissed(false); }, [playContext]);
@@ -320,15 +326,35 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   );
 
   const deadStockActionProducts = useMemo(
-    () => activeStockProducts.filter((p) => {
-      const tag = String(p.priority_tag || '').toLowerCase();
-      if (tag === 'dead' || tag === 'low' || tag === 'healthy' || tag === 'excess') return tag === 'dead';
-      return classifyStockHealth(p) === 'dead';
-    }),
-    [activeStockProducts]
+    () => {
+      // PER-166: prefer the server PI `dead` bucket — it matches the dashboard's dead-stock count.
+      // The local fallback can't (raw products carry no qty_sold_period → it tags all stock as dead).
+      if (channelInsight.ready) return channelInsight.deadProducts;
+      return activeStockProducts.filter((p) => {
+        const tag = String(p.priority_tag || '').toLowerCase();
+        if (tag === 'dead' || tag === 'low' || tag === 'healthy' || tag === 'excess') return tag === 'dead';
+        return classifyStockHealth(p) === 'dead';
+      });
+    },
+    [channelInsight.ready, channelInsight.deadProducts, activeStockProducts]
   );
 
-  const feedProducts = inventoryPlayContext === 'dead_stock' ? deadStockActionProducts : activeStockProducts;
+  // True while the active dead-stock source is still loading (server aggregate, or the local fallback).
+  const deadStockLoading = channelInsight.isLoading
+    || (channelInsight.ready ? channelInsight.deadLoading : productsLoading);
+
+  // PER-166: the Ads-feed «active» products come from the server in-stock bucket pages (bounded,
+  // loaded on demand) when the aggregate is ready; otherwise from the local catalog fallback.
+  const adsFeedProducts = channelInsight.ready ? channelInsight.feedProducts : activeStockProducts;
+  const feedProducts = inventoryPlayContext === 'dead_stock' ? deadStockActionProducts : adsFeedProducts;
+  // Instant «active variants with stock» count from the summary — shown before the feed rows load.
+  const adsFeedCount = channelInsight.ready ? channelInsight.activeStockCount : activeStockProducts.length;
+
+  // Load the bounded in-stock feed once, only when it's actually needed (normal/Ads-feed view).
+  const { ready: insightReady, requestFeed: requestInsightFeed } = channelInsight;
+  useEffect(() => {
+    if (insightReady && inventoryPlayContext !== 'dead_stock') requestInsightFeed();
+  }, [insightReady, inventoryPlayContext, requestInsightFeed]);
   const decisionProductRows = useMemo(
     () => groupProductsForDecisionExport(feedProducts, lookupMagentoEnrichment),
     [feedProducts, lookupMagentoEnrichment]
@@ -355,10 +381,14 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     if (silent) setIsSilentUpgrading(true);
     else setAiGenerating(true);
     try {
-      const topCats = [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
+      // PER-166: categories/count come from the server aggregate when the local catalog isn't loaded.
+      const topCats = channelInsight.ready
+        ? channelInsight.categories.map(c => c.name).filter(Boolean).slice(0, 5)
+        : [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
       const savedTriage = (activeStrategy as { triageOrigin?: TriageOrigin } | null)?.triageOrigin ?? null;
       const triagePromptCtx = buildTriagePromptContext(savedTriage);
-      const provenancePromptCtx = buildProvenancePromptContext(signalCoverage, products.length);
+      const productCountForPrompt = channelInsight.ready ? channelInsight.totalCount : products.length;
+      const provenancePromptCtx = buildProvenancePromptContext(signalCoverage, productCountForPrompt);
       // Critical: pass ALL ranked segments (ideal+good) so the AI doesn't arbitrarily
       // pick a single segment. We use the active strategy's weights.
       const strategyWeights =
@@ -414,7 +444,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       if (silent) setIsSilentUpgrading(false);
       else setAiGenerating(false);
     }
-  }, [strategyId, scenarioId, currentBrand, brandProfileText, rfmSegments, products, queryClient, toast, activeStrategy, signalCoverage, dataCoverage]);
+  }, [strategyId, scenarioId, currentBrand, brandProfileText, rfmSegments, products, queryClient, toast, activeStrategy, signalCoverage, dataCoverage, channelInsight.ready, channelInsight.categories, channelInsight.totalCount]);
 
   useEffect(() => {
     if (autoGenTriggered.current) return;
@@ -650,7 +680,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           const mpn = String(enrichment?.mpn || '').trim();
           const brandValue = String(p.brand || enrichment?.manufacturer || '').trim();
           const identifierExists = (gtin || mpn || brandValue) ? 'yes' : 'no';
-          const productType = [p.category, p.subcategory].filter(Boolean).join(' > ');
+          // ERP product-type hierarchy first (CF1 > CF3); storefront category path as fallback.
+          const productType = [p.product_type || p.category, p.subcategory].filter(Boolean).join(' > ');
           const inStock = (p.stock_level || 0) > 0;
           const priceFmt = `${formatCurrency(p.price || 0, 2)} EUR`;
           const salePrice = (typeof p.compare_at_price === 'number' && p.compare_at_price > 0 && p.compare_at_price > p.price)
@@ -1048,7 +1079,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <Card padding="lg" className="border-amber-200 bg-amber-50/50">
           <CardHeader
             title="Dead stock action products"
-            subtitle={`${formatNumber(decisionProductRows.length)} parent/model rows από ${formatNumber(feedProducts.length)} ενεργά variants με απόθεμα`}
+            subtitle={deadStockLoading
+              ? 'Φόρτωση προϊόντων…'
+              : `${formatNumber(decisionProductRows.length)} parent/model rows από ${formatNumber(feedProducts.length)} ενεργά variants με απόθεμα`}
             icon={<Package size={18} className="text-amber-700" />}
             action={
               <div className="flex flex-wrap gap-2">
@@ -1064,7 +1097,13 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           <p className="mb-4 text-xs leading-relaxed text-[#6B7280]">
             Η λίστα είναι decision-level: αποκλείει zero-stock / inactive ιστορικά SKUs και ομαδοποιεί sizes κάτω από parent/model ώστε η ομάδα να βλέπει τι πρέπει να ξεστοκάρει πραγματικά.
           </p>
-          {decisionProductRows.length === 0 ? (
+          {deadStockLoading ? (
+            <div className="space-y-2 rounded-xl border border-amber-100 bg-white p-4">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          ) : decisionProductRows.length === 0 ? (
             <div className="rounded-xl border border-dashed border-amber-200 bg-white p-5 text-sm text-[#6B7280]">
               Δεν βρέθηκαν ενεργά dead-stock προϊόντα με διαθέσιμο απόθεμα για αυτή την ενέργεια.
             </div>
@@ -1710,7 +1749,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               <div className="space-y-2 text-sm text-[#4A4A4A]">
                 <div className="flex justify-between">
                   <span>{feed === 'Ads Feed' ? 'Active variants' : 'Parent/model rows'}</span>
-                  <span className="font-mono">{formatNumber(feed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)}</span>
+                  <span className="font-mono">{formatNumber(feed === 'Ads Feed' ? adsFeedCount : decisionProductRows.length)}</span>
                 </div>
                 <div className="text-[11px] text-[#9CA3AF] leading-snug">
                   Default export excludes zero-stock / inactive historical SKUs.
@@ -1795,7 +1834,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 title={<h2 className="text-xl font-bold text-[var(--text-heading)]">Προεπισκόπηση feed</h2>}
                 description={
                   <p className="text-sm text-[#4A4A4A]">
-                    {previewFeed} · {formatNumber(previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} ενεργές γραμμές · δείγμα {Math.min(8, previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} γραμμών
+                    {previewFeed} · {formatNumber(previewFeed === 'Ads Feed' ? adsFeedCount : decisionProductRows.length)} ενεργές γραμμές · δείγμα {Math.min(8, previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} γραμμών
                   </p>
                 }
                 actions={

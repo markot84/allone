@@ -11,6 +11,7 @@ import type {
   PLCostCategory,
   PriceBenchmarkStrategyScope,
   SalesBaseScope,
+  ProfitMaxScope,
 } from '../types';
 import type { ContentSuggestionsResult } from '../services/aiContentSuggestions';
 import type { SeasonalDiscountConfig } from '../components/strategy/SeasonalDiscountPanel';
@@ -56,6 +57,8 @@ export interface ActiveStrategy {
   salesBaseScope?: SalesBaseScope;
   /** SKU participation filter for Price Benchmarking (price_benchmark) */
   priceBenchmarkScope?: PriceBenchmarkStrategyScope;
+  /** Scope filter for Profit Maximization (profit_max) */
+  profitMaxScope?: ProfitMaxScope;
   /** Seasonal/discount period parameters (seasonal_discount) */
   seasonalDiscount?: SeasonalDiscountConfig;
   /** Parallel seasonal proposal running alongside the main commercial policy. */
@@ -150,6 +153,7 @@ export function useActiveStrategy() {
       channelRecommendation?: ChannelRecommendation;
       salesBaseScope?: SalesBaseScope;
       priceBenchmarkScope?: PriceBenchmarkStrategyScope;
+      profitMaxScope?: ProfitMaxScope;
       seasonalDiscount?: SeasonalDiscountConfig;
       seasonalProposal?: SeasonalProposal;
       triageOrigin?: TriageOrigin;
@@ -194,6 +198,10 @@ export function useActiveStrategy() {
 
       if (strategy.priceBenchmarkScope) {
         strategyData.priceBenchmarkScope = JSON.parse(JSON.stringify(strategy.priceBenchmarkScope));
+      }
+
+      if (strategy.profitMaxScope) {
+        strategyData.profitMaxScope = JSON.parse(JSON.stringify(strategy.profitMaxScope));
       }
 
       if (strategy.seasonalDiscount) {

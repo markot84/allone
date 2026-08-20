@@ -9,6 +9,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
 } from 'firebase/firestore';
@@ -361,29 +362,80 @@ describe('F. self-join and invite forging', () => {
 // G. brandId is immutable on update
 
 describe('G. brandId immutability on update', () => {
-  it('denies a member re-homing a doc to another brand by changing brandId', async () => {
-    const db = authed(MEMBER_A);
+  // products writes are owner/admin-tier, so brandIdUnchanged() is probed with ADMIN_A —
+  // a plain member is denied one step earlier (see W. write tiers).
+  it('denies an admin re-homing a doc to another brand by changing brandId', async () => {
+    const db = authed(ADMIN_A);
     // brandIdUnchanged() pins request.resource.data.brandId == resource.data.brandId.
     await assertFails(
       updateDoc(doc(db, 'products/prodA'), { brandId: BRAND_B }),
     );
   });
 
-  it('allows a member updating other fields while keeping brandId the same', async () => {
-    const db = authed(MEMBER_A);
+  it('allows an admin updating other fields while keeping brandId the same', async () => {
+    const db = authed(ADMIN_A);
     await assertSucceeds(
       updateDoc(doc(db, 'products/prodA'), { name: 'renamed', brandId: BRAND_A }),
     );
   });
 
   it('denies changing brandId even when the new brand is also one the user belongs to', async () => {
-    // Seed a user who is a member of BOTH brands, then try to move prodA → BRAND_B.
+    // Seed an admin of BOTH brands, then try to move prodA → BRAND_B.
     await seed(async (db) => {
-      await seedMember(db, BRAND_B, MEMBER_A, 'member');
+      await seedMember(db, BRAND_B, ADMIN_A, 'admin');
     });
-    const db = authed(MEMBER_A);
+    const db = authed(ADMIN_A);
     await assertFails(
       updateDoc(doc(db, 'products/prodA'), { brandId: BRAND_B }),
+    );
+  });
+});
+
+// G1b. Entitlement immutability on brands — `plan`/`enabledModules` are super-admin-only
+// (paid Enterprise + server procurement-catalog switch); `type` stays owner-editable.
+describe('G1b. brands entitlement immutability (plan / enabledModules)', () => {
+  it('denies an owner self-upgrading plan to enterprise', async () => {
+    const db = authed(OWNER_A);
+    await assertFails(updateDoc(doc(db, `brands/${BRAND_A}`), { plan: 'enterprise' }));
+  });
+
+  it('denies an owner presetting enabledModules overrides', async () => {
+    const db = authed(OWNER_A);
+    await assertFails(
+      updateDoc(doc(db, `brands/${BRAND_A}`), { enabledModules: { procurement: true } }),
+    );
+  });
+
+  it('allows an owner editing name/type/logo (no entitlement change)', async () => {
+    const db = authed(OWNER_A);
+    await assertSucceeds(
+      updateDoc(doc(db, `brands/${BRAND_A}`), { name: 'Renamed A', type: 'B2B', logoUrl: 'x' }),
+    );
+  });
+
+  it('allows a super-admin to change plan to enterprise', async () => {
+    const db = authed(SUPER_ADMIN);
+    await assertSucceeds(updateDoc(doc(db, `brands/${BRAND_A}`), { plan: 'enterprise' }));
+  });
+
+  it('denies a self-service create pre-set to enterprise', async () => {
+    const db = authed(OUTSIDER);
+    await assertFails(
+      setDoc(doc(db, 'brands/brandNew'), { name: 'New', createdBy: OUTSIDER, plan: 'enterprise' }),
+    );
+  });
+
+  it('allows a self-service create on the default plan', async () => {
+    const db = authed(OUTSIDER);
+    await assertSucceeds(
+      setDoc(doc(db, 'brands/brandNew'), { name: 'New', createdBy: OUTSIDER, plan: 'growth' }),
+    );
+  });
+
+  it('allows a super-admin to mint an enterprise brand', async () => {
+    const db = authed(SUPER_ADMIN);
+    await assertSucceeds(
+      setDoc(doc(db, 'brands/brandEnt'), { name: 'Ent', createdBy: SUPER_ADMIN, plan: 'enterprise' }),
     );
   });
 });
@@ -593,5 +645,218 @@ describe('L. member create userId pin', () => {
     await assertFails(
       setDoc(doc(db, `brands/${BRAND_C}/members/${CREATOR_C}`), { userId: OUTSIDER, role: 'owner' }),
     );
+  });
+});
+
+// W. write tiers on business-critical collections (PER-70): reads stay member-level,
+// destructive/bulk writes require owner/admin. Members must keep working where the
+// product intends member-level action (commercial_actions create/update).
+
+describe('W. write tiers: products (owner/admin only)', () => {
+  it('denies a plain member creating a product', async () => {
+    const db = authed(MEMBER_A);
+    await assertFails(
+      setDoc(doc(db, 'products/newProd'), { brandId: BRAND_A, name: 'sneaked in' }),
+    );
+  });
+
+  it('denies a plain member updating a product', async () => {
+    const db = authed(MEMBER_A);
+    await assertFails(
+      updateDoc(doc(db, 'products/prodA'), { name: 'renamed', brandId: BRAND_A }),
+    );
+  });
+
+  it('denies a plain member deleting a product (catalog wipe)', async () => {
+    const db = authed(MEMBER_A);
+    await assertFails(deleteDoc(doc(db, 'products/prodA')));
+  });
+
+  it('still lets a plain member READ products', async () => {
+    const db = authed(MEMBER_A);
+    await assertSucceeds(getDoc(doc(db, 'products/prodA')));
+  });
+
+  for (const [label, uid] of [['admin', ADMIN_A], ['owner', OWNER_A]] as const) {
+    it(`lets an ${label} create, update and delete products`, async () => {
+      const db = authed(uid);
+      await assertSucceeds(setDoc(doc(db, `products/new_${uid}`), { brandId: BRAND_A, name: 'ok' }));
+      await assertSucceeds(updateDoc(doc(db, 'products/prodA'), { name: 'ok', brandId: BRAND_A }));
+      await assertSucceeds(deleteDoc(doc(db, 'products/prodA')));
+    });
+  }
+
+  it("denies another brand's owner writing our products", async () => {
+    const db = authed(MEMBER_B); // owner/creator of BRAND_B
+    await assertFails(updateDoc(doc(db, 'products/prodA'), { name: 'x', brandId: BRAND_A }));
+  });
+});
+
+describe('W2. write tiers: orders (owner/admin only; connectors write via Admin SDK)', () => {
+  beforeEach(async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, 'orders/orderA'), { brandId: BRAND_A, total: 10 });
+    });
+  });
+
+  it('denies a plain member creating, updating or deleting an order', async () => {
+    const db = authed(MEMBER_A);
+    await assertFails(setDoc(doc(db, 'orders/newOrder'), { brandId: BRAND_A, total: 1 }));
+    await assertFails(updateDoc(doc(db, 'orders/orderA'), { total: 999, brandId: BRAND_A }));
+    await assertFails(deleteDoc(doc(db, 'orders/orderA')));
+  });
+
+  it('lets an admin write orders and a member still read them', async () => {
+    await assertSucceeds(updateDoc(doc(authed(ADMIN_A), 'orders/orderA'), { total: 20, brandId: BRAND_A }));
+    await assertSucceeds(getDoc(doc(authed(MEMBER_A), 'orders/orderA')));
+  });
+});
+
+describe('W3. write tiers: commercial_actions (member create/update, owner-admin delete)', () => {
+  it('lets a plain member create and update a commercial action', async () => {
+    const db = authed(MEMBER_A);
+    await assertSucceeds(setDoc(doc(db, 'commercial_actions/caNew'), { brandId: BRAND_A, payload: 'x' }));
+    await assertSucceeds(updateDoc(doc(db, 'commercial_actions/caA'), { payload: 'y', brandId: BRAND_A }));
+  });
+
+  it('denies a plain member deleting a commercial action', async () => {
+    const db = authed(MEMBER_A);
+    await assertFails(deleteDoc(doc(db, 'commercial_actions/caA')));
+  });
+
+  it('lets an admin delete a commercial action', async () => {
+    const db = authed(ADMIN_A);
+    await assertSucceeds(deleteDoc(doc(db, 'commercial_actions/caA')));
+  });
+});
+
+// X. connector / automation write tier: reading config is member-level, but changing
+// credentials or automation (which can drive ad spend) is owner/admin/creator only
+// (canManageBrandConnectors).
+
+describe('X. write tiers: connectors, connector_rules, automation_settings', () => {
+  const CONFIG_DOCS = ['connectors', 'connector_rules', 'automation_settings'] as const;
+
+  beforeEach(async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, `connector_rules/${BRAND_A}`), { salesChannels: [] });
+      await setDoc(doc(db, `automation_settings/${BRAND_A}`), { enabled: false });
+    });
+  });
+
+  for (const coll of CONFIG_DOCS) {
+    it(`${coll}: a plain member can read but NOT write`, async () => {
+      const db = authed(MEMBER_A);
+      await assertSucceeds(getDoc(doc(db, `${coll}/${BRAND_A}`)));
+      await assertFails(setDoc(doc(db, `${coll}/${BRAND_A}`), { hijacked: true }));
+    });
+
+    it(`${coll}: an admin may write`, async () => {
+      const db = authed(ADMIN_A);
+      await assertSucceeds(setDoc(doc(db, `${coll}/${BRAND_A}`), { touched: 'admin' }, { merge: true }));
+    });
+
+    it(`${coll}: the brand owner/creator may write`, async () => {
+      const db = authed(OWNER_A);
+      await assertSucceeds(setDoc(doc(db, `${coll}/${BRAND_A}`), { touched: 'owner' }, { merge: true }));
+    });
+
+    it(`${coll}: another brand's owner may neither read nor write`, async () => {
+      const db = authed(MEMBER_B);
+      await assertFails(getDoc(doc(db, `${coll}/${BRAND_A}`)));
+      await assertFails(setDoc(doc(db, `${coll}/${BRAND_A}`), { hijacked: true }));
+    });
+  }
+});
+
+// Y. server-write-only collections: written by Cloud Functions via the Admin SDK
+// (which bypasses rules); NO client identity may write them, not even owner or super-admin.
+
+describe('Y. server-write-only aggregates are client-immutable', () => {
+  // One representative per family: brand-keyed aggregate, field-keyed page doc,
+  // connector mirror, and a chunk subcollection.
+  const SERVER_ONLY_BRAND_KEYED = [
+    'ecommerce_summary',
+    'data_analysis_rfm',
+    'product_intelligence',
+    'erp_sku_velocity',
+    'procurement_signals',
+    'magento_parent_links',
+  ] as const;
+
+  beforeEach(async () => {
+    await seed(async (db) => {
+      for (const coll of SERVER_ONLY_BRAND_KEYED) {
+        await setDoc(doc(db, `${coll}/${BRAND_A}`), { seeded: true });
+      }
+      await setDoc(doc(db, 'product_intelligence_pages/pageA'), { brandId: BRAND_A, rows: [] });
+      await setDoc(doc(db, 'magento_products/mag_1'), { brandId: BRAND_A, sku: 'X' });
+      await setDoc(doc(db, `magento_parent_links/${BRAND_A}/chunks/0`), { skuStatsJson: '{}' });
+    });
+  });
+
+  it('magento_parent_links chunks: member reads, cross-brand and writes denied', async () => {
+    await assertSucceeds(getDoc(doc(authed(MEMBER_A), `magento_parent_links/${BRAND_A}/chunks/0`)));
+    await assertFails(getDoc(doc(authed(MEMBER_B), `magento_parent_links/${BRAND_A}/chunks/0`)));
+    await assertFails(setDoc(doc(authed(OWNER_A), `magento_parent_links/${BRAND_A}/chunks/0`), { skuStatsJson: '{"x":"y"}' }));
+  });
+
+  for (const coll of SERVER_ONLY_BRAND_KEYED) {
+    it(`${coll}: member reads, but owner/admin/super-admin all fail to write`, async () => {
+      await assertSucceeds(getDoc(doc(authed(MEMBER_A), `${coll}/${BRAND_A}`)));
+      for (const uid of [MEMBER_A, ADMIN_A, OWNER_A, SUPER_ADMIN]) {
+        await assertFails(setDoc(doc(authed(uid), `${coll}/${BRAND_A}`), { tampered: true }, { merge: true }));
+      }
+      await assertFails(deleteDoc(doc(authed(OWNER_A), `${coll}/${BRAND_A}`)));
+    });
+  }
+
+  it('product_intelligence_pages: readable by a member, never client-writable', async () => {
+    await assertSucceeds(getDoc(doc(authed(MEMBER_A), 'product_intelligence_pages/pageA')));
+    await assertFails(
+      updateDoc(doc(authed(OWNER_A), 'product_intelligence_pages/pageA'), { rows: ['tampered'] }),
+    );
+  });
+
+  it('magento_products (connector mirror): readable by a member, never client-writable', async () => {
+    await assertSucceeds(getDoc(doc(authed(MEMBER_A), 'magento_products/mag_1')));
+    await assertFails(updateDoc(doc(authed(ADMIN_A), 'magento_products/mag_1'), { sku: 'tampered' }));
+  });
+
+  it('denies a cross-brand member reading a server-written aggregate', async () => {
+    await assertFails(getDoc(doc(authed(MEMBER_B), `product_intelligence/${BRAND_A}`)));
+  });
+});
+
+// W4. feed_sources: a feed source drives catalog imports, so managing one is the same
+// owner/admin tier as importing (PER-70 follow-up).
+
+describe('W4. write tiers: feed_sources (owner/admin only)', () => {
+  beforeEach(async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, 'feed_sources/fsA'), { brandId: BRAND_A, name: 'A feed', url: 'https://x/feed.xml' });
+    });
+  });
+
+  it('lets a plain member read feed sources', async () => {
+    await assertSucceeds(getDoc(doc(authed(MEMBER_A), 'feed_sources/fsA')));
+  });
+
+  it('denies a plain member creating, editing or deleting a feed source', async () => {
+    const db = authed(MEMBER_A);
+    await assertFails(setDoc(doc(db, 'feed_sources/fsNew'), { brandId: BRAND_A, name: 'sneaked', url: 'https://x' }));
+    await assertFails(updateDoc(doc(db, 'feed_sources/fsA'), { url: 'https://evil/feed.xml', brandId: BRAND_A }));
+    await assertFails(deleteDoc(doc(db, 'feed_sources/fsA')));
+  });
+
+  it('lets an admin manage feed sources', async () => {
+    const db = authed(ADMIN_A);
+    await assertSucceeds(setDoc(doc(db, 'feed_sources/fsNew'), { brandId: BRAND_A, name: 'ok', url: 'https://x' }));
+    await assertSucceeds(updateDoc(doc(db, 'feed_sources/fsA'), { url: 'https://ok/feed.xml', brandId: BRAND_A }));
+    await assertSucceeds(deleteDoc(doc(db, 'feed_sources/fsA')));
+  });
+
+  it("denies another brand's member touching our feed sources", async () => {
+    await assertFails(updateDoc(doc(authed(MEMBER_B), 'feed_sources/fsA'), { url: 'https://x', brandId: BRAND_A }));
   });
 });

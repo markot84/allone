@@ -2,6 +2,8 @@ import * as admin from 'firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { beforeUserCreated, HttpsError as IdentityHttpsError } from 'firebase-functions/v2/identity';
+import { signupAllowed, type InviteLike } from './signupPolicy';
 import { logger } from './utils/logger';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -18,6 +20,7 @@ const SMTP_PASSWORD_SECRET = defineSecret('SMTP_PASSWORD');
 // attached until one is created in this project and named below.
 const OPENCART_EGRESS_OPTIONS: { vpcConnector?: string; vpcConnectorEgressSettings?: 'ALL_TRAFFIC' } = {};
 import { nestDottedKeys } from './firestorePatch';
+import { supplierDocId } from './erpConnectorFirestore';
 import { sanitizeOAuthReturnOrigin } from './oauthRedirect';
 import { validateImportUrl, safeFetch } from './urlValidator';
 import { verifyState } from './oauthState';
@@ -36,6 +39,7 @@ import {
   handleMetaCallback,
   fetchMetaCampaigns,
   selectMetaAccount,
+  connectMetaSystemUserToken,
   setDb as setMetaDb,
 } from './metaConnector';
 import { sendNotificationEmail, setDb as setEmailDb } from './emailNotifier';
@@ -53,6 +57,7 @@ import {
 import { computeAggregatesForBrand, computeAggregatesForAllBrands } from './aggregateStats';
 import { evaluateAllBrandsServerSide } from './serverAlerts';
 import { sendDigestForAllBrands } from './dailyDigest';
+import { sendReorderEmailForBrand, sendReorderEmailsForAllBrands } from './reorderEmail';
 import { createTransporter, SENDER } from './smtpConfig';
 import {
   getShopifyAuthUrl,
@@ -77,6 +82,7 @@ import {
   saveMagentoCredentials,
   fetchMagentoData,
   updateMagentoSyncScope,
+  backfillMagentoRefunds,
   setDb as setMagentoDb,
 } from './magentoConnector';
 import {
@@ -84,11 +90,14 @@ import {
   fetchMegaventoryData,
   updateMegaventoryConnectorSettings,
   listMegaventoryLocations,
+  sampleMegaventoryCustomFields,
   recomputeMegaventoryProductTotals,
   mergeMegaventoryApiCatalogProducts,
+  backfillMegaventoryReceiptDates,
   setDb as setMegaventoryDb,
 } from './megaventoryConnector';
 import { decideStaleRecovery, isJobWriteOwned, MAX_STALE_RESUMES } from './megaventorySyncPlan';
+import { CONNECTOR_DOC_KEY, persistConnectorSyncError } from './connectorSyncStatus';
 import { randomUUID } from 'crypto';
 import {
   saveSoftOneCredentials,
@@ -133,6 +142,7 @@ import {
   refreshProcurementSignals,
   setDb as setProcurementSignalsDb,
 } from './procurementSignals';
+import { refreshMarketingPlanInsightAggregate } from './marketingPlan/aggregate';
 import {
   getGA4AuthUrl,
   handleGA4Callback,
@@ -154,7 +164,7 @@ import {
   setDb as setTikTokDb,
 } from './tiktokConnector';
 import { persistInterestLead } from './interestLead';
-import { applyStrictCors, enforceRateLimit, getClientIp, sendRateLimitExceeded } from './security';
+import { applyStrictCors, denyAndLog, enforceRateLimit, getClientIp, sendRateLimitExceeded } from './security';
 import { ALERT } from './utils/alertKeys';
 import { runWithLogContext } from './utils/logContext';
 import { getRequestId } from './utils/requestContext';
@@ -457,12 +467,18 @@ async function importProducts(
     } catch (e) {
       logger.warn(`[importProducts] stock movement refresh failed for ${brandId}:`, { err: e });
     }
+    // Nightly PI rebuilds are connector-gated, so an imported catalog refreshes only here.
+    try {
+      await refreshProductIntelligenceAggregate(brandId);
+    } catch (e) {
+      logger.warn(`[importProducts] product intelligence refresh failed for ${brandId}:`, { err: e });
+    }
   }
 
   if (suppliers.size > 0) {
     const supplierItems = Array.from(suppliers.values()).map((name) => ({
-      id: name.replace(/[/\\]/g, '_').trim(),
-      data: { name, tod: 60, lead_time: 0 } as Record<string, unknown>,
+      id: supplierDocId(brandId, name),
+      data: { name } as Record<string, unknown>,
     }));
     await batchWrite('suppliers', supplierItems, brandId);
     logger.info(`Auto-created ${supplierItems.length} suppliers`);
@@ -539,7 +555,7 @@ export const importData = onRequest(
     maxInstances: 5,
   },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed. Use POST.' });
       return;
@@ -547,18 +563,31 @@ export const importData = onRequest(
 
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Missing Authorization header. Use: Bearer {API_KEY}' });
+      denyAndLog(res, 401, 'Missing Authorization header. Use: Bearer {API_KEY}');
+      return;
+    }
+
+    // Per-IP throttle BEFORE key verification — blunts key-guessing sprays.
+    const ipRl = await enforceRateLimit({ key: `importData:ip:${getClientIp(req)}`, limit: 30, windowSeconds: 300 });
+    if (!ipRl.allowed) {
+      sendRateLimitExceeded(res, ipRl.resetInSeconds, 'importData');
       return;
     }
 
     const apiKey = authHeader.slice(7).trim();
     const auth = await verifyApiKey(apiKey);
     if (!auth) {
-      res.status(403).json({ error: 'Invalid or inactive API key' });
+      denyAndLog(res, 403, 'Invalid or inactive API key');
       return;
     }
 
     const { brandId } = auth;
+    // Per-brand throttle — a valid (member-mintable) key no longer permits unlimited imports.
+    const brandRl = await enforceRateLimit({ key: `importData:${brandId}`, limit: 20, windowSeconds: 300 });
+    if (!brandRl.allowed) {
+      sendRateLimitExceeded(res, brandRl.resetInSeconds, 'importData');
+      return;
+    }
     logger.info(`Import request for brand: ${brandId}`);
 
     try {
@@ -633,23 +662,31 @@ export const importData = onRequest(
         return;
       }
 
-      // Multipart form data
-      const bb = Busboy({ headers: req.headers, limits: { fileSize: 50 * 1024 * 1024, files: 1 } });
+      // Multipart form data — full busboy limits so a crafted body can't inflate memory:
+      // one file, few small fields, and every limit event is a hard 413, never silent truncation.
+      const bb = Busboy({
+        headers: req.headers,
+        limits: { fileSize: 50 * 1024 * 1024, files: 1, fields: 20, parts: 25, fieldSize: 10 * 1024 },
+      });
       let fileBuffer: Buffer | null = null;
       let fileName = 'import.csv';
       let importType: ImportType = 'products';
-      let channelOverride: string | undefined;
+      let limitHit: string | null = null;
 
       const fields: Record<string, string> = {};
 
       bb.on('field', (name: string, val: string) => {
         fields[name] = val;
       });
+      bb.on('fieldsLimit', () => { limitHit = 'too many fields'; });
+      bb.on('partsLimit', () => { limitHit = 'too many parts'; });
+      bb.on('filesLimit', () => { limitHit = 'too many files'; });
 
       bb.on('file', (_fieldname: string, file: NodeJS.ReadableStream, info: { filename: string }) => {
         fileName = info.filename || 'import.csv';
         const chunks: Buffer[] = [];
         file.on('data', (chunk: Buffer) => chunks.push(chunk));
+        file.on('limit', () => { limitHit = 'file too large (max 50MB)'; });
         file.on('end', () => {
           fileBuffer = Buffer.concat(chunks);
         });
@@ -661,8 +698,13 @@ export const importData = onRequest(
         bb.end(req.rawBody);
       });
 
+      if (limitHit) {
+        res.status(413).json({ error: `Upload rejected: ${limitHit}` });
+        return;
+      }
+
       importType = (fields.type as ImportType) || 'products';
-      channelOverride = fields.channel;
+      const channelOverride: string | undefined = fields.channel;
 
       if (!fileBuffer) {
         res.status(400).json({ error: 'No file uploaded' });
@@ -692,7 +734,6 @@ export const importData = onRequest(
 
       res.status(200).json(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       logger.error('Import failed:', { alertKey: ALERT.importDataFailed, err: error });
       res.status(500).json({ error: 'Import failed — check file format and try again' });
     }
@@ -704,7 +745,7 @@ export const importData = onRequest(
 export const fetchImportUrl = onRequest(
   { region: 'europe-west1', timeoutSeconds: 60, memory: '256MiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
       return;
@@ -712,7 +753,7 @@ export const fetchImportUrl = onRequest(
 
     const authHeader = req.headers.authorization || '';
     if (!authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Missing Authorization header' });
+      denyAndLog(res, 401, 'Missing Authorization header');
       return;
     }
     let uid = '';
@@ -720,7 +761,7 @@ export const fetchImportUrl = onRequest(
       const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
       uid = decoded.uid;
     } catch {
-      res.status(401).json({ error: 'Invalid or expired token' });
+      denyAndLog(res, 401, 'Invalid or expired token');
       return;
     }
 
@@ -770,7 +811,7 @@ export const fetchImportUrl = onRequest(
 export const generateApiKey = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Use POST' });
       return;
@@ -778,7 +819,7 @@ export const generateApiKey = onRequest(
 
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Missing Firebase ID token' });
+      denyAndLog(res, 401, 'Missing Firebase ID token');
       return;
     }
 
@@ -794,7 +835,7 @@ export const generateApiKey = onRequest(
         }
 
         if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-          res.status(403).json({ error: 'Not a member of this brand' });
+          denyAndLog(res, 403, 'Not a member of this brand');
           return;
         }
 
@@ -813,7 +854,6 @@ export const generateApiKey = onRequest(
         res.status(200).json({ apiKey: key, brandId });
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       logger.error('Generate API key failed:', { alertKey: ALERT.generateApiKeyFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -840,7 +880,7 @@ function clientErrorFlooding(identity: string, now: number): boolean {
 export const logClientError = onRequest(
   { region: 'europe-west1', timeoutSeconds: 10, memory: '256MiB', maxInstances: 10 },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Use POST' });
       return;
@@ -874,6 +914,7 @@ export const logClientError = onRequest(
 
         // Re-emit through the structured logger so it hits the alertable metric. `source: 'client'`
         // lets operators filter browser-origin alerts from backend ones.
+        const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
         logger.error(message, {
           alertKey,
           source: 'client',
@@ -883,6 +924,10 @@ export const logClientError = onRequest(
           name: cap(ctx.name, 120),
           code: cap(ctx.code, 120),
           stack: cap(ctx.stack, 4000),
+          // Source location (window.onerror without an Error object → no stack): the only triage handle.
+          fileName: cap(ctx.source, 300),
+          line: num(ctx.line),
+          col: num(ctx.col),
         });
 
         res.status(200).json({ ok: true, dropped: false });
@@ -901,11 +946,11 @@ export const connectorAuth = onRequest(
   // CONNECTOR_TOKEN_KEY: used by signState() to HMAC-sign the OAuth state.
   { region: 'europe-west1', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -927,7 +972,7 @@ export const connectorAuth = onRequest(
       }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors');
         return;
       }
 
@@ -1045,7 +1090,6 @@ export const connectorAuth = onRequest(
       res.status(200).json({ authUrl });
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('Request failed:', { alertKey: ALERT.connectorAuthFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -1214,11 +1258,11 @@ export const connectorCallback = onRequest(
 export const connectorDisconnect = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -1229,9 +1273,16 @@ export const connectorDisconnect = onRequest(
       if (!brandId || !provider) { res.status(400).json({ error: 'Missing params' }); return; }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors');
         return;
       }
+
+      // Success-path audit: high-value credential change, attributed to actor/brand/provider.
+      // A finish hook covers every 200 exit of this handler (Admin-SDK writes bypass rules history).
+      res.once('finish', () => {
+        if (res.statusCode === 200) logger.info('[audit] connector disconnected', { brandId, provider, actorUid: decoded.uid });
+      });
+
 
       const clearPayload: Record<string, unknown> = {
         connected: false,
@@ -1324,7 +1375,6 @@ export const connectorDisconnect = onRequest(
       res.status(200).json({ success: true });
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('Request failed:', { alertKey: ALERT.connectorDisconnectFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -1337,11 +1387,11 @@ export const connectorDisconnect = onRequest(
 export const connectorSelectAccount = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -1358,7 +1408,7 @@ export const connectorSelectAccount = onRequest(
       }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors');
         return;
       }
 
@@ -1368,10 +1418,7 @@ export const connectorSelectAccount = onRequest(
       if (sub?.pendingAccountSelection) {
         const owner = sub.oauthInitiatedByUid as string | undefined;
         if (!owner || owner !== decoded.uid) {
-          res.status(403).json({
-            error:
-              'Η επιλογή λογαριασμού δεν ταιριάζει με τον τρέχοντα χρήστη. Αποσυνδέστε ή ξανασυνδέστε το connector από Συνδέσεις.',
-          });
+          denyAndLog(res, 403, 'Η επιλογή λογαριασμού δεν ταιριάζει με τον τρέχοντα χρήστη. Αποσυνδέστε ή ξανασυνδέστε το connector από Συνδέσεις.');
           return;
         }
       }
@@ -1423,7 +1470,6 @@ export const connectorSelectAccount = onRequest(
       res.status(200).json(result);
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('Request failed:', { alertKey: ALERT.connectorSelectAccountFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -1436,11 +1482,11 @@ export const connectorSelectAccount = onRequest(
 export const connectorSync = onRequest(
   { region: 'europe-west1', timeoutSeconds: 1200, memory: '4GiB', cpu: 2, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     let brandId = '';
     let provider = '';
@@ -1456,7 +1502,7 @@ export const connectorSync = onRequest(
       if (!brandId || !provider) { res.status(400).json({ error: 'Missing params' }); return; }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors');
         return;
       }
 
@@ -1596,10 +1642,10 @@ export const ga4PeriodTotals = onRequest(
   // CONNECTOR_TOKEN_KEY: decryptToken needs it for the GA4 refresh token, else "GA4 token unavailable".
   { region: 'europe-west1', secrets: ['GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
@@ -1611,7 +1657,7 @@ export const ga4PeriodTotals = onRequest(
       if (!brandId || !startDate || !endDate) { res.status(400).json({ error: 'Missing params' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'forbidden' });
+        denyAndLog(res, 403, 'forbidden');
         return;
       }
 
@@ -1969,6 +2015,12 @@ export const processMegaventorySyncJobs = onSchedule(
           logger.info(
             `[MegaventoryJob] Product intelligence refreshed for ${job.brandId}: totalCount=${piResult.totalCount ?? 0}`
           );
+          // PER-157: rebuild the marketing_plan_insight aggregate now that products + signals have
+          // settled. Non-fatal — a marketing-plan hiccup must never fail the PI handoff; the page
+          // falls back to local compute when the doc is stale.
+          await refreshMarketingPlanInsightAggregate(job.brandId).catch((e) =>
+            logger.warn(`[MegaventoryJob] marketing_plan_insight refresh failed for ${job.brandId} (non-fatal):`, { err: e }),
+          );
         } catch (e) {
           piError = e instanceof Error ? e.message : String(e);
           logger.warnAlert(`[MegaventoryJob] post-refresh-only PI refresh failed for ${job.brandId}:`, { alertKey: ALERT.syncJobProcessingFailed, err: e });
@@ -2133,13 +2185,13 @@ export const processMegaventorySyncJobs = onSchedule(
 
 /** POST /connectorSaveCredentials — Body: { brandId, provider, ...provider-specific credentials }. */
 export const connectorSaveCredentials = onRequest(
-  { region: 'europe-west1', secrets: ['CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
+  { region: 'europe-west1', secrets: ['CONNECTOR_TOKEN_KEY', 'META_APP_ID', 'META_APP_SECRET'], ...OPENCART_EGRESS_OPTIONS },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -2156,11 +2208,49 @@ export const connectorSaveCredentials = onRequest(
       }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors');
         return;
       }
 
-      if (provider === 'woocommerce') {
+      // Success-path audit: high-value credential change, attributed to actor/brand/provider.
+      // A finish hook covers every 200 exit of this handler (Admin-SDK writes bypass rules history).
+      res.once('finish', () => {
+        if (res.statusCode === 200) logger.info('[audit] connector credentials saved', { brandId, provider, actorUid: decoded.uid });
+      });
+
+
+      if (provider === 'meta') {
+        // PER-172: store a pasted System User token, encrypted, with no expiresAt (durable).
+        const { token } = req.body as { token?: string };
+        if (!token) { res.status(400).json({ error: 'Λείπει το token' }); return; }
+        const result = await connectMetaSystemUserToken(brandId, token);
+        if (!result.success || !result.data) {
+          res.status(400).json({ error: result.error || 'Αποτυχία σύνδεσης Meta' });
+          return;
+        }
+        const { accessToken, expiresAt, availableAccounts, needsSelection } = result.data;
+        await admin.firestore().doc(`connectors/${brandId}`).set(
+          {
+            meta: {
+              connected: !needsSelection,
+              pendingAccountSelection: needsSelection,
+              accessToken: encryptToken(accessToken),
+              tokenType: 'system_user',
+              // null = never expires; drop any stale OAuth expiry
+              expiresAt: expiresAt ?? FieldValue.delete(),
+              availableAccounts,
+              adAccountIds: needsSelection ? [] : availableAccounts.map((a) => a.id),
+              adAccountNames: needsSelection ? [] : availableAccounts.map((a) => a.name),
+              connectedAt: FieldValue.serverTimestamp(),
+              oauthInitiatedByUid: needsSelection ? decoded.uid : FieldValue.delete(),
+              lastSyncError: FieldValue.delete(),
+            },
+          },
+          { merge: true }
+        );
+        res.status(200).json({ success: true, needsSelection, availableAccounts, warning: result.warning });
+        return;
+      } else if (provider === 'woocommerce') {
         if (!storeUrl || !consumerKey || !consumerSecret) {
           res.status(400).json({ error: 'Missing storeUrl, consumerKey, or consumerSecret' });
           return;
@@ -2248,13 +2338,16 @@ export const connectorSaveCredentials = onRequest(
         });
         res.status(200).json(result);
       } else if (provider === 'megaventory') {
-        const { apiKey: mvKey, megaventorySettingsOnly, customReportId, customReportEnabled, stockLocations, stockLocationLabels } = req.body as {
+        const { apiKey: mvKey, megaventorySettingsOnly, customReportId, customReportEnabled, stockLocations, stockLocationLabels, brandCustomField, productTypeCustomField, productSubtypeCustomField } = req.body as {
           apiKey?: string;
           megaventorySettingsOnly?: boolean;
           customReportId?: string;
           customReportEnabled?: boolean;
           stockLocations?: string[];
           stockLocationLabels?: string[];
+          brandCustomField?: number | null;
+          productTypeCustomField?: number | null;
+          productSubtypeCustomField?: number | null;
         };
         if (megaventorySettingsOnly) {
           const updated = await updateMegaventoryConnectorSettings(brandId, {
@@ -2262,16 +2355,36 @@ export const connectorSaveCredentials = onRequest(
             customReportEnabled: customReportEnabled !== undefined ? customReportEnabled : undefined,
             stockLocations: stockLocations !== undefined ? stockLocations : undefined,
             stockLocationLabels: stockLocationLabels !== undefined ? stockLocationLabels : undefined,
+            brandCustomField: brandCustomField !== undefined ? brandCustomField : undefined,
+            productTypeCustomField: productTypeCustomField !== undefined ? productTypeCustomField : undefined,
+            productSubtypeCustomField: productSubtypeCustomField !== undefined ? productSubtypeCustomField : undefined,
           });
           if (!updated.ok) {
             res.status(400).json({ success: false, error: updated.error || 'Αποτυχία ενημέρωσης' });
             return;
           }
           let recomputeQueued = false;
-          if (updated.stockLocationsChanged) {
+          let resyncQueued = false;
+          // A CF-source change (brand/type/sub-type) only lands on a fresh ProductGet walk → reset + full re-sync.
+          if (updated.brandCustomFieldChanged || updated.productTypeCustomFieldChanged || updated.productSubtypeCustomFieldChanged) {
+            await resetMegaventoryResumableState(admin.firestore(), brandId);
+            const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+            await admin.firestore().collection('connector_sync_jobs').doc(jobId).set({
+              brandId,
+              provider,
+              status: 'pending',
+              requestedBy: decoded.uid,
+              requestedAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+              mode: 'manual_full_refresh',
+            }, { merge: true });
+            resyncQueued = true;
+          }
+          if (updated.stockLocationsChanged && !resyncQueued) {
             // The warehouse filter only changes the per-product roll-up — the per-location data is
             // already in megaventory_stock. Enqueue a LIGHT recompute (no ERP re-ingest): re-derive
             // totals from megaventory_stock → gap-fill → summary → PI. Minutes, not a full re-sync.
+            // (Skipped when a full re-sync is already queued for a brand-field change — it supersedes.)
             const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
             await admin.firestore().collection('connector_sync_jobs').doc(jobId).set({
               brandId,
@@ -2284,7 +2397,7 @@ export const connectorSaveCredentials = onRequest(
             }, { merge: true });
             recomputeQueued = true;
           }
-          res.status(200).json({ success: true, recomputeQueued });
+          res.status(200).json({ success: true, recomputeQueued, resyncQueued });
           return;
         }
         if (!mvKey) {
@@ -2388,7 +2501,6 @@ export const connectorSaveCredentials = onRequest(
       }
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('Request failed:', { alertKey: ALERT.connectorSaveCredentialsFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -2401,11 +2513,11 @@ export const connectorSaveCredentials = onRequest(
 export const importMagentoSearchTerms = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -2423,7 +2535,7 @@ export const importMagentoSearchTerms = onRequest(
       }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να εισάγει Magento search terms' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να εισάγει Magento search terms');
         return;
       }
 
@@ -2464,7 +2576,6 @@ export const importMagentoSearchTerms = onRequest(
       res.status(200).json({ success: true, imported: cleaned.length });
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[Magento] Admin search terms import failed:', { alertKey: ALERT.importMagentoSearchTermsFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -2481,7 +2592,8 @@ type NightlyJobKey =
   | 'scheduledSyncFollowups'
   | 'scheduledAggregates'
   | 'scheduledAlerts'
-  | 'scheduledDigest';
+  | 'scheduledDigest'
+  | 'scheduledReorderEmail';
 
 async function markNightlyJob(
   job: NightlyJobKey,
@@ -2535,6 +2647,7 @@ const NIGHTLY_JOB_KEYS: NightlyJobKey[] = [
   'scheduledAggregates',
   'scheduledAlerts',
   'scheduledDigest',
+  'scheduledReorderEmail',
 ];
 
 /** A job that hasn't succeeded in this long is considered stale (jobs run daily). */
@@ -2741,19 +2854,31 @@ async function executeBrandNightlyWave(
     const wrap = (label: string, p: Promise<unknown>) =>
       tasks.push(
         p
-          .then((r) => {
-            const result = r as { imported?: number; success?: boolean; error?: string } | undefined;
+          .then(async (r) => {
+            const result = r as
+              | { imported?: number; success?: boolean; error?: string; partial?: boolean; needsContinuation?: boolean }
+              | undefined;
             const imported = result?.imported;
+            const key = CONNECTOR_DOC_KEY[label];
             if (result?.success === false || result?.error) {
               logger.warnAlert(
                 `[ScheduledSync/${wave}] ${label} for ${brandId}: imported ${imported ?? 0}, error: ${result.error || 'unknown'}`,
                 { alertKey: ALERT.nightlyWaveFailed }
               );
+              if (key) await persistConnectorSyncError(brandId, key, result.error || `${label} sync failed`);
             } else {
               logger.info(`[ScheduledSync/${wave}] ${label} for ${brandId}: imported ${imported ?? '—'}`);
+              // Don't clear on partial/continuation — e.g. OpenCart page-cap self-writes lastSyncError; a blind clear would erase it.
+              if (key && !result?.partial && !result?.needsContinuation) {
+                await persistConnectorSyncError(brandId, key, null);
+              }
             }
           })
-          .catch((err) => logger.error(`[ScheduledSync/${wave}] ${label} failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err }))
+          .catch(async (err) => {
+            logger.error(`[ScheduledSync/${wave}] ${label} failed for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
+            const key = CONNECTOR_DOC_KEY[label];
+            if (key) await persistConnectorSyncError(brandId, key, err instanceof Error ? err.message : String(err));
+          })
       );
     return { tasks, wrap };
   };
@@ -3069,19 +3194,47 @@ export const scheduledProductIntelligence = onSchedule(
 /** POST /geminiProxy (Bearer FIREBASE_ID_TOKEN) — { systemPrompt, userPrompt, model?, temperature? }
  * → { text }. The API key stays server-side (Firebase Secret). */
 
+/** Server-side invite-only signup gate, all providers (password + Google). The AuthContext check
+ * is advisory UX; this blocks account creation unless open mode (PUBLIC_SIGNUP_MODE=open),
+ * super-admin email, or a pending invite (addressed to the email, or an open one). */
+export const signupGate = beforeUserCreated({ region: 'europe-west1' }, async (event) => {
+  if ((process.env.PUBLIC_SIGNUP_MODE || '').trim() === 'open') return;
+  const email = (event.data?.email || '').trim().toLowerCase();
+  const { emails: superAdminEmails } = await loadSuperAdmins();
+  const inviteDocs = (snap: FirebaseFirestore.QuerySnapshot | null): InviteLike[] =>
+    snap ? snap.docs.map((d) => d.data() as InviteLike) : [];
+  const [matching, open] = await Promise.all([
+    email ? db.collection('invites').where('email', '==', email).limit(50).get() : Promise.resolve(null),
+    db.collection('invites').where('email', '==', '').limit(50).get(),
+  ]);
+  const allowed = signupAllowed({
+    mode: undefined,
+    email,
+    superAdminEmails,
+    matchingInvites: inviteDocs(matching),
+    openInvites: inviteDocs(open),
+  });
+  if (allowed) return;
+  logger.warn('[signupGate] blocked signup without invite', {
+    email: email.replace(/^(.).*(@.*)$/, '$1***$2'),
+    provider: event.data?.providerData?.[0]?.providerId ?? 'unknown',
+  });
+  throw new IdentityHttpsError('permission-denied', 'Signups are invite-only. Ask a brand admin for an invite.');
+});
+
 /** Server-side brand-invite join (Bearer token, Body { token } → { ok, brandId, role }). Membership
  * is provisioned via Admin SDK; the invite's `role`/email are authoritative, consumed single-use. */
 export const acceptInvite = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
       return;
     }
     const authHeader = req.headers.authorization || '';
     if (!authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Missing Authorization header' });
+      denyAndLog(res, 401, 'Missing Authorization header');
       return;
     }
     let uid = '';
@@ -3091,7 +3244,7 @@ export const acceptInvite = onRequest(
       uid = decoded.uid;
       callerEmail = (decoded.email || '').trim().toLowerCase();
     } catch {
-      res.status(401).json({ error: 'Invalid or expired token' });
+      denyAndLog(res, 401, 'Invalid or expired token');
       return;
     }
 
@@ -3137,7 +3290,7 @@ export const acceptInvite = onRequest(
       const inviteEmail = (inviteData.email || '').trim().toLowerCase();
       if (inviteEmail && inviteEmail !== callerEmail) {
         logger.warn('[acceptInvite] email mismatch', { uid, brandId });
-        res.status(403).json({ error: 'This invite was issued to a different email address' });
+        denyAndLog(res, 403, 'This invite was issued to a different email address');
         return;
       }
 
@@ -3196,7 +3349,7 @@ export const geminiProxy = onRequest(
    * causing DEADLINE_EXCEEDED. */
   { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB', secrets: [GEMINI_SECRET] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
       return;
@@ -3205,7 +3358,7 @@ export const geminiProxy = onRequest(
     // Verify Firebase ID token
     const authHeader = req.headers.authorization || '';
     if (!authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Missing Authorization header' });
+      denyAndLog(res, 401, 'Missing Authorization header');
       return;
     }
     const idToken = authHeader.slice(7);
@@ -3214,7 +3367,7 @@ export const geminiProxy = onRequest(
       const decoded = await admin.auth().verifyIdToken(idToken);
       decodedUid = decoded.uid;
     } catch {
-      res.status(401).json({ error: 'Invalid or expired token' });
+      denyAndLog(res, 401, 'Invalid or expired token');
       return;
     }
 
@@ -3239,16 +3392,17 @@ export const geminiProxy = onRequest(
           (await userHasAnyBrandMembership(decodedUid));
       }
       if (!hasBrandAccess) {
-        res.status(403).json({
-          error: requestedBrandId
-            ? 'Forbidden: not a member of the requested brand'
-            : 'Forbidden: account is not a member of any brand',
-        });
+        denyAndLog(
+          res,
+          403,
+          requestedBrandId ? 'Forbidden: not a member of the requested brand' : 'Forbidden: account is not a member of any brand',
+          { brandId: requestedBrandId || null }
+        );
         return;
       }
     } catch (err) {
       logger.error('[geminiProxy] brand-membership check failed', { alertKey: ALERT.unkeyed, err });
-      res.status(403).json({ error: 'Forbidden' });
+      denyAndLog(res, 403, 'Forbidden');
       return;
     }
 
@@ -3340,7 +3494,6 @@ export const geminiProxy = onRequest(
 
       res.status(200).json({ text });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       logger.error('[geminiProxy] Gemini error:', { alertKey: ALERT.unkeyed, err: error });
       res.status(500).json({ error: 'AI request failed — please try again' });
     }
@@ -3352,16 +3505,16 @@ export const geminiProxy = onRequest(
 export const webSearch = onRequest(
   { region: 'europe-west1', timeoutSeconds: 30, memory: '256MiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization || '';
-    if (!authHeader.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
     let uid = '';
     try {
       uid = (await admin.auth().verifyIdToken(authHeader.slice(7).trim())).uid;
     } catch {
-      res.status(401).json({ error: 'Invalid or expired token' });
+      denyAndLog(res, 401, 'Invalid or expired token');
       return;
     }
 
@@ -3393,12 +3546,12 @@ export const webSearch = onRequest(
 export const sendEmailNotification = onRequest(
   { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).send('POST only'); return; }
 
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Unauthorized' });
+      denyAndLog(res, 401, 'Unauthorized');
       return;
     }
     let callerUid: string;
@@ -3406,7 +3559,7 @@ export const sendEmailNotification = onRequest(
       const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
       callerUid = decoded.uid;
     } catch {
-      res.status(401).json({ error: 'Invalid token' });
+      denyAndLog(res, 401, 'Invalid token');
       return;
     }
 
@@ -3427,7 +3580,7 @@ export const sendEmailNotification = onRequest(
     // Caller must be a member of the brand on whose behalf they are sending.
     if (!(await verifyBrandMembership(callerUid, brandId))) {
       logger.warn('[sendEmailNotification] caller not a member of brand', { callerUid, brandId });
-      res.status(403).json({ error: 'Forbidden' });
+      denyAndLog(res, 403, 'Forbidden');
       return;
     }
 
@@ -3515,12 +3668,12 @@ function safeHttpUrl(u: unknown): string {
 export const sendInviteEmail = onRequest(
   { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).send('POST only'); return; }
 
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Unauthorized' });
+      denyAndLog(res, 401, 'Unauthorized');
       return;
     }
     let callerUid: string;
@@ -3528,7 +3681,7 @@ export const sendInviteEmail = onRequest(
       const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
       callerUid = decoded.uid;
     } catch {
-      res.status(401).json({ error: 'Invalid token' });
+      denyAndLog(res, 401, 'Invalid token');
       return;
     }
 
@@ -3545,7 +3698,7 @@ export const sendInviteEmail = onRequest(
     // Caller must have invite-management rights on the brand (owner / admin / brand creator / super admin).
     if (!(await verifyBrandConnectorManagement(callerUid, brandId))) {
       logger.warn('[sendInviteEmail] caller lacks brand management rights', { callerUid, brandId });
-      res.status(403).json({ error: 'Forbidden' });
+      denyAndLog(res, 403, 'Forbidden');
       return;
     }
 
@@ -3654,11 +3807,11 @@ export const refreshAggregates = onRequest(
   // 4GiB: the ~220k-SKU Product Intelligence aggregate OOM'd at 2GiB (SIGABRT/signal 6).
   { region: 'europe-west1', timeoutSeconds: 540, memory: '4GiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -3668,7 +3821,7 @@ export const refreshAggregates = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+        denyAndLog(res, 403, 'Not a member of this brand');
         return;
       }
 
@@ -3693,8 +3846,77 @@ export const refreshAggregates = onRequest(
       }
       res.status(200).json({ success: true, brandId });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshAggregates]', { alertKey: ALERT.aggregateStatsFailed, err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/** POST /megaventoryReceiptBackfill { brandId } — resumable inbound-docs re-walk for receipt dates + per-SKU suppliers; re-POST until complete:true. */
+export const megaventoryReceiptBackfill = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 540, memory: '1GiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
+  async (req, res) => {
+    if (await applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
+      const { brandId, maxPagesPerType } = req.body as { brandId?: string; maxPagesPerType?: number };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        denyAndLog(res, 403, 'Not a member of this brand');
+        return;
+      }
+      const result = await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, () =>
+        backfillMegaventoryReceiptDates(brandId, {
+          maxRuntimeMs: 8 * 60 * 1000,
+          ...(typeof maxPagesPerType === 'number' && maxPagesPerType > 0 ? { maxPagesPerType } : {}),
+        }),
+      );
+      res.status(200).json(result);
+    } catch (error) {
+      logger.error('[megaventoryReceiptBackfill]', { err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/** POST /magentoRefundBackfill { brandId } — ONE-TIME: backfill historical Magento partial credit
+ *  memos onto existing order docs, then re-aggregate so corrected turnover shows immediately. Member
+ *  auth. Resumable: re-POST until `complete:true`. Future refunds self-heal via incremental sync. */
+export const magentoRefundBackfill = onRequest(
+  // 4GiB: the synchronous post-backfill computeEcommerceSummary re-aggregate reads the full order
+  // history (108k+ on prod e-tennis) and OOM'd at 1GiB — same budget its other callers need.
+  { region: 'europe-west1', timeoutSeconds: 540, memory: '4GiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
+  async (req, res) => {
+    if (await applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
+      const { brandId, maxPages } = req.body as { brandId?: string; maxPages?: number };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        denyAndLog(res, 403, 'Not a member of this brand');
+        return;
+      }
+      // Optional `maxPages` lets the first prod run be bounded (validate on ~100 orders before the
+      // full walk). Resumable: re-POST continues from the checkpoint cursor.
+      const bounded = typeof maxPages === 'number' && maxPages > 0 ? { maxPages } : undefined;
+      const result = await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, () =>
+        backfillMagentoRefunds(brandId, bounded),
+      );
+      // Re-aggregate so the corrected (net-of-refunds) turnover is visible right away.
+      if (result.success && result.ordersPatched > 0) {
+        try { await computeEcommerceSummary(brandId); } catch (e) {
+          logger.warn('[magentoRefundBackfill] re-aggregate failed (non-fatal):', { err: e });
+        }
+      }
+      res.status(200).json(result);
+    } catch (error) {
+      logger.error('[magentoRefundBackfill]', { alertKey: ALERT.magentoSyncFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -3705,11 +3927,11 @@ export const refreshAggregates = onRequest(
 export const refreshDataAnalysisRfm = onRequest(
   { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -3719,7 +3941,7 @@ export const refreshDataAnalysisRfm = onRequest(
 
       if (action === 'diagnostic') {
         if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-          res.status(403).json({ error: 'Not a member of this brand' });
+          denyAndLog(res, 403, 'Not a member of this brand');
           return;
         }
         const result = await computeDataAnalysisRfmDiagnostic(brandId);
@@ -3728,13 +3950,12 @@ export const refreshDataAnalysisRfm = onRequest(
       }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να ανανεώσει το Data Analysis aggregate' });
+        denyAndLog(res, 403, 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να ανανεώσει το Data Analysis aggregate');
         return;
       }
       const result = await refreshDataAnalysisRfmAggregate(brandId);
       res.status(200).json({ success: true, brandId, action: 'run', result });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshDataAnalysisRfm]', { alertKey: ALERT.dataAnalysisRfmFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -3744,11 +3965,11 @@ export const refreshDataAnalysisRfm = onRequest(
 export const refreshProductIntelligence = onRequest(
   { region: 'europe-west1', timeoutSeconds: 1200, memory: '4GiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -3757,7 +3978,7 @@ export const refreshProductIntelligence = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        denyAndLog(res, 403, 'Δεν υπάρχει πρόσβαση στο brand');
         return;
       }
 
@@ -3765,7 +3986,6 @@ export const refreshProductIntelligence = onRequest(
       const result = await refreshProductIntelligenceAggregate(brandId);
       res.status(200).json({ success: true, brandId, result });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshProductIntelligence]', { alertKey: ALERT.productIntelligenceFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -3778,11 +3998,11 @@ export const refreshProductIntelligence = onRequest(
 export const refreshErpVelocity = onRequest(
   { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -3791,7 +4011,7 @@ export const refreshErpVelocity = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        denyAndLog(res, 403, 'Δεν υπάρχει πρόσβαση στο brand');
         return;
       }
 
@@ -3810,11 +4030,11 @@ export const queryProductIntelligence = onRequest(
   // DEADLINE_EXCEEDED on the read; the heavy PI writers already run at 4GiB.
   { region: 'europe-west1', timeoutSeconds: 120, memory: '2GiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -3823,14 +4043,13 @@ export const queryProductIntelligence = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        denyAndLog(res, 403, 'Δεν υπάρχει πρόσβαση στο brand');
         return;
       }
 
       const result = await queryProductIntelligenceRows(req.body);
       res.status(200).json({ success: true, brandId, result });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[queryProductIntelligence]', { alertKey: ALERT.productIntelligenceFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -3841,18 +4060,18 @@ export const queryProductIntelligence = onRequest(
 export const megaventoryListLocations = onRequest(
   { region: 'europe-west1', timeoutSeconds: 60, memory: '256MiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     let uid: string;
     try {
       uid = (await admin.auth().verifyIdToken(authHeader.slice(7).trim())).uid;
     } catch {
       // Invalid/expired token is a normal client occurrence — 401, never an alertable error.
-      res.status(401).json({ error: 'Invalid auth' });
+      denyAndLog(res, 401, 'Invalid auth');
       return;
     }
     try {
@@ -3860,7 +4079,7 @@ export const megaventoryListLocations = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(uid, brandId))) {
-        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        denyAndLog(res, 403, 'Δεν υπάρχει πρόσβαση στο brand');
         return;
       }
 
@@ -3875,14 +4094,49 @@ export const megaventoryListLocations = onRequest(
   }
 );
 
-export const refreshCompetitiveInventory = onRequest(
-  { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB' },
+/** POST /megaventorySampleCustomFields (Bearer, {brandId}) → CF1–20 fill% + sample values so the
+ *  connector card can guide brandCustomField selection. PER-176. */
+export const megaventorySampleCustomFields = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 60, memory: '256MiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
+
+    let uid: string;
+    try {
+      uid = (await admin.auth().verifyIdToken(authHeader.slice(7).trim())).uid;
+    } catch {
+      denyAndLog(res, 401, 'Invalid auth');
+      return;
+    }
+    try {
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+      if (!(await verifyBrandMembership(uid, brandId))) {
+        denyAndLog(res, 403, 'Δεν υπάρχει πρόσβαση στο brand');
+        return;
+      }
+      const result = await sampleMegaventoryCustomFields(brandId);
+      if (!result.ok) { res.status(400).json({ error: result.error || 'Αποτυχία φόρτωσης πεδίων' }); return; }
+      res.status(200).json({ success: true, fields: result.fields });
+    } catch (error) {
+      logger.warn('[megaventorySampleCustomFields] failed', { err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+export const refreshCompetitiveInventory = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB' },
+  async (req, res) => {
+    if (await applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -3891,14 +4145,13 @@ export const refreshCompetitiveInventory = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        denyAndLog(res, 403, 'Δεν υπάρχει πρόσβαση στο brand');
         return;
       }
 
       const result = await refreshCompetitiveInventoryLookup(brandId);
       res.status(200).json({ success: true, brandId, result });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshCompetitiveInventory]', { alertKey: ALERT.competitorMonitorFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -3912,11 +4165,11 @@ export const refreshCompetitiveInventory = onRequest(
 export const captureStock = onRequest(
   { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -3926,7 +4179,7 @@ export const captureStock = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+        denyAndLog(res, 403, 'Not a member of this brand');
         return;
       }
 
@@ -3934,7 +4187,6 @@ export const captureStock = onRequest(
       const movement = await computeStockMovement(brandId);
       res.status(200).json({ success: true, brandId, captured, movement });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[captureStock]', { alertKey: ALERT.stockMovementTrackFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -3948,11 +4200,11 @@ export const captureStock = onRequest(
 export const refreshSignals = onRequest(
   { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB' },
   async (req, res) => {
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
 
     try {
       const idToken = authHeader.slice(7).trim();
@@ -3962,15 +4214,50 @@ export const refreshSignals = onRequest(
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
       if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+        denyAndLog(res, 403, 'Not a member of this brand');
         return;
       }
 
       const result = await refreshProcurementSignals(brandId);
       res.status(200).json({ success: true, brandId, ...result });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshSignals]', { alertKey: ALERT.procurementSignalsFailed, err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/** POST /refreshMarketingPlanInsight — Body: { brandId }. Rebuilds marketing_plan_insight/{brandId}
+ * (all presets) server-side so the Marketing Plan page reads a compact doc instead of loading the
+ * ~222k-product catalog (PER-157). 4GiB: streams the projected catalog + runs the insight 6×. */
+export const refreshMarketingPlanInsight = onRequest(
+  // 4GiB to match the heavy aggregators: the build holds the ~222k-product array + a per-preset
+  // name-bridge index, and the global NODE_OPTIONS=--max-old-space-size=3072 needs a >3GiB container
+  // (1GiB OOM'd at 1078MiB on e-tennis). Same heap home as the nightly PI worker.
+  { region: 'europe-west1', timeoutSeconds: 540, memory: '4GiB', cpu: 2 },
+  async (req, res) => {
+    if (await applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        denyAndLog(res, 403, 'Not a member of this brand');
+        return;
+      }
+
+      const result = await refreshMarketingPlanInsightAggregate(brandId);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      logger.error('[refreshMarketingPlanInsight]', { err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -4076,13 +4363,71 @@ export const scheduledDigest = onSchedule(
   })
 );
 
+export const scheduledReorderEmail = onSchedule(
+  {
+    schedule: 'every monday 07:45',
+    timeZone: 'Europe/Athens',
+    region: 'europe-west1',
+    memory: '512MiB',
+    timeoutSeconds: 300,
+    secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET],
+  },
+  async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
+    const startedAt = Date.now();
+    await markNightlyJob('scheduledReorderEmail', 'running', { message: 'Reorder email started' });
+    try {
+      logger.info('[scheduledReorderEmail] Starting reorder email run');
+      const { brands, emails } = await sendReorderEmailsForAllBrands();
+      const durationMs = Date.now() - startedAt;
+      await markNightlyJob('scheduledReorderEmail', 'success', {
+        durationMs,
+        message: `Completed: brands=${brands}, emails=${emails}`,
+      });
+      logger.info(`[scheduledReorderEmail] Completed: ${brands} brands, ${emails} emails sent`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const durationMs = Date.now() - startedAt;
+      await markNightlyJob('scheduledReorderEmail', 'failed', { durationMs, message: msg });
+      logger.error('[scheduledReorderEmail] Fatal error:', { err: error });
+      throw error;
+    }
+  })
+);
+
+/** POST /reorderEmailSend { brandId } — member-auth manual trigger for the per-supplier reorder email. */
+export const reorderEmailSend = onRequest(
+  { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
+  async (req, res) => {
+    if (await applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        denyAndLog(res, 403, 'Not a member of this brand');
+        return;
+      }
+      const result = await runWithLogContext({ uid: decoded.uid, requestId: getRequestId(req) }, () =>
+        sendReorderEmailForBrand(brandId),
+      );
+      res.status(200).json(result);
+    } catch (error) {
+      logger.error('[reorderEmailSend]', { err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
 // ── Public: interest lead submission (landing, no auth) ─────────────────────
 
 export const submitInterestLead = onRequest(
   { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
     // Strict CORS (whitelisted origins only) — prevents scraping/abuse from arbitrary domains
-    if (applyStrictCors(req, res)) return;
+    if (await applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'POST only' });
       return;

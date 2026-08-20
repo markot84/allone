@@ -3,6 +3,7 @@ import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 import { ALERT } from './utils/alertKeys';
 import { computeProcurementSignals } from './procurementSignals';
+import { buildIsNonStocked, readNonMerchandise } from './nonMerchandise';
 
 let db: Firestore;
 
@@ -10,7 +11,7 @@ export function setDb(firestore: Firestore): void {
   db = firestore;
 }
 
-type ProductSourceKind = 'erp' | 'connector_catalog';
+type ProductSourceKind = 'erp' | 'connector_catalog' | 'manual';
 type StockBucket = 'healthy' | 'excess' | 'dead' | 'low' | 'no_stock';
 
 type CompactProduct = {
@@ -43,6 +44,12 @@ type CompactProduct = {
   seasonality_tag?: string;
   reorder_point?: number;
   reorder_qty?: number;
+  /** Declared parent (Magento itemGroupId) — real relations only, never heuristics. */
+  parent_sku?: string;
+  /** The Magento configurable's own name — the grouped row's title. */
+  parent_name?: string;
+  /** Sibling rows sharing parent_sku (incl. this one). */
+  variant_count?: number;
   source?: string;
   createdAt?: string;
 };
@@ -95,6 +102,7 @@ export type ProductIntelligenceQueryParams = {
   bucket?: PageBucket;
   search?: string;
   categories?: string[];
+  brands?: string[];
   tags?: string[];
   margin?: 'all' | 'high' | 'medium' | 'low';
   stockAge?: 'all' | 'dead' | 'near-dead' | 'high-margin-low-stock';
@@ -104,6 +112,8 @@ export type ProductIntelligenceQueryParams = {
   dateTo?: string;
   dateMode?: 'imported' | 'first_available';
   includeNoStock?: boolean;
+  /** Collapse variants sharing a declared parent_sku into one row per parent. */
+  groupByParent?: boolean;
 };
 
 type ProductIntelligenceQueryResult = {
@@ -118,6 +128,16 @@ type ProductIntelligenceQueryResult = {
   totalPages: number;
   bucket: PageBucket;
   products: CompactProduct[];
+  /** Summary over the full filtered set (not just the page) so cards can follow active filters (PER-178). */
+  summary?: InventorySummaryPayload;
+  /** PER-188: actionable dropdown options (own dimension omitted → Excel semantics). */
+  facets?: QueryFacets;
+};
+
+type QueryFacets = {
+  categories: Array<{ id: string; count: number }>;
+  brands: Array<{ id: string; count: number }>;
+  tags: Array<{ id: string; count: number }>;
 };
 
 const READ_PAGE_SIZE = 1000;
@@ -246,10 +266,37 @@ const DEFAULT_STOCK_THRESHOLDS: StockThresholds = {
   excessDaysOfCover: 120,
   newStockGraceDays: 60,
 };
+/** Platform floor for supplier lead time (days) when neither supplier nor brand default sets one. */
+const DEFAULT_LEAD_DAYS = 30;
 
 /** Per-brand thresholds for the current aggregation run; set at the top of refreshProductIntelligenceAggregate
  * (brands are processed sequentially, so a module-level value is safe) and read by stockBucket's default. */
 let activeStockThresholds: StockThresholds = DEFAULT_STOCK_THRESHOLDS;
+
+/** Per-brand supplier lead times (days) for the current run: supplier name (normalized) → lead_time,
+ * plus a brand-wide fallback. Feeds the PER-276 reorder-point low threshold. */
+let activeSupplierLeadByName = new Map<string, number>();
+let activeDefaultLeadDays = 0;
+const normSupplierName = (s?: string | null): string => (s ?? '').trim().toLowerCase();
+/** Effective lead time for a product's supplier: per-supplier lead_time, else brand default, else 0. */
+function leadDaysForSupplier(supplier?: string | null): number {
+  const perSupplier = activeSupplierLeadByName.get(normSupplierName(supplier));
+  return perSupplier != null && perSupplier > 0 ? perSupplier : activeDefaultLeadDays;
+}
+
+/** Load per-supplier lead times for a brand (suppliers collection is small — a few dozen docs). */
+async function loadSupplierLeadTimes(brandId: string): Promise<Map<string, number>> {
+  const firestore = assertDb();
+  const map = new Map<string, number>();
+  const snap = await firestore.collection('suppliers').where('brandId', '==', brandId).get().catch(() => null);
+  if (!snap) return map;
+  for (const doc of snap.docs) {
+    const name = normSupplierName(text(doc.data().name));
+    const lead = num(doc.data().lead_time);
+    if (name && lead > 0) map.set(name, lead);
+  }
+  return map;
+}
 
 /** Resolve a brand's inventoryThresholds onto a full StockThresholds, each field defaulting when unset/invalid. */
 function resolveStockThresholds(raw: unknown): StockThresholds {
@@ -268,12 +315,14 @@ function stockBucket(
   qtySoldPeriod: number | null,
   qtySoldLifetime: number | null = null,
   shelfAgeDays: number | null = null,
+  leadDays = 0,
   t: StockThresholds = activeStockThresholds
 ): StockBucket {
   if (stockLevel <= 0) return 'no_stock';
   if (qtySoldPeriod != null && qtySoldPeriod > 0) {
     const daysOfStock = stockLevel / (qtySoldPeriod / t.velocityWindowDays);
-    if (daysOfStock <= t.lowDaysOfCover) return 'low';
+    // PER-276: low = stock can't cover demand through the supplier replenishment lead time (reorder point).
+    if (daysOfStock <= t.lowDaysOfCover + leadDays) return 'low';
     if (daysOfStock > t.excessDaysOfCover) return 'excess';
     return 'healthy';
   }
@@ -322,7 +371,7 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     row.qty_sold_period != null || row.qtySoldPeriod != null || row.qty_sold_last_30d != null || row.qtySold != null;
   const qtySoldLifetime = firstPositive(row.qty_sold_lifetime, row.qtySoldLifetime);
   const margin = num(row.margin_percentage) || (price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0);
-  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null, qtySoldLifetime);
+  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null, qtySoldLifetime, null, leadDaysForSupplier(text(row.supplier)));
   const product: CompactProduct = {
     id: docId,
     ...(text(row.productId ?? row.ProductID ?? row.ProductId) ? { productId: text(row.productId ?? row.ProductID ?? row.ProductId) } : {}),
@@ -345,7 +394,7 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     ...(asIsoDate(row.last_sale_at ?? row.lastSaleAt) ? { last_sale_at: asIsoDate(row.last_sale_at ?? row.lastSaleAt) } : {}),
     ...(asIsoDate(row.first_available_date ?? row.firstAvailableDate ?? row.createdAt) ? { first_available_date: asIsoDate(row.first_available_date ?? row.firstAvailableDate ?? row.createdAt) } : {}),
     ...(text(row.supplier) ? { supplier: text(row.supplier) } : {}),
-    ...(text(row.brand) ? { brand: text(row.brand) } : {}),
+    ...(text(row.brand ?? row.manufacturer) ? { brand: text(row.brand ?? row.manufacturer) } : {}),
     ...(text(row.barcode ?? row.gtin) ? { barcode: text(row.barcode ?? row.gtin) } : {}),
     ...(text(row.procurement_status ?? row.status) ? { procurement_status: text(row.procurement_status ?? row.status) } : {}),
     ...(text(row.abc_class) ? { abc_class: text(row.abc_class) } : {}),
@@ -353,6 +402,8 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     ...(text(row.seasonality_tag) ? { seasonality_tag: text(row.seasonality_tag) } : {}),
     ...(optionalNumber(row.reorder_point) != null ? { reorder_point: optionalNumber(row.reorder_point) } : {}),
     ...(optionalNumber(row.reorder_qty) != null ? { reorder_qty: optionalNumber(row.reorder_qty) } : {}),
+    // itemGroupId = declared Magento parent (configurable_product_links).
+    ...(text(row.itemGroupId) && text(row.itemGroupId) !== sku ? { parent_sku: text(row.itemGroupId) } : {}),
     ...(asIsoDate(row.createdAt ?? row.updatedAt) ? { createdAt: asIsoDate(row.createdAt ?? row.updatedAt) } : {}),
     source: sourceKind,
   };
@@ -370,7 +421,7 @@ function overlayFromMegaventoryProduct(row: Record<string, unknown>): StockOverl
   const price = firstPositive(row.price, row.sell_price, row.list_price, row.sellingPrice);
   const cost = firstPositive(row.cost_price, row.costPrice, row.purchasePrice);
   const margin = num(row.margin_percentage) || (price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0);
-  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null);
+  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null, null, null, leadDaysForSupplier(text(row.supplier)));
   return {
     stock_level: Math.round(stock * 100) / 100,
     stock_capacity: Math.max(Math.round(stock * 2 * 100) / 100, Math.round(stock * 100) / 100, 1),
@@ -387,7 +438,7 @@ function overlayFromMegaventoryProduct(row: Record<string, unknown>): StockOverl
     ...(asIsoDate(row.first_available_date ?? row.firstAvailableDate ?? row.createdAt) ? { first_available_date: asIsoDate(row.first_available_date ?? row.firstAvailableDate ?? row.createdAt) } : {}),
     ...(text(row.category ?? row.category_name) ? { category: text(row.category ?? row.category_name) } : {}),
     ...(text(row.supplier) ? { supplier: text(row.supplier) } : {}),
-    ...(text(row.brand) ? { brand: text(row.brand) } : {}),
+    ...(text(row.brand ?? row.manufacturer) ? { brand: text(row.brand ?? row.manufacturer) } : {}),
     ...(text(row.barcode ?? row.gtin) ? { barcode: text(row.barcode ?? row.gtin) } : {}),
     ...(text(row.procurement_status ?? row.status) ? { procurement_status: text(row.procurement_status ?? row.status) } : {}),
     ...(text(row.abc_class) ? { abc_class: text(row.abc_class) } : {}),
@@ -399,14 +450,18 @@ function overlayFromMegaventoryProduct(row: Record<string, unknown>): StockOverl
   };
 }
 
-function applyStockOverlay(product: CompactProduct, overlay: StockOverlay): CompactProduct {
+function applyStockOverlay(product: CompactProduct, overlay: StockOverlay, keepStock = false): CompactProduct {
   // Mutate in place rather than spreading a fresh object — called once per ERP catalog row (~90k on
   // large brands); the product is owned solely by the catalog map at this stage.
   const finalQtySold = overlay.qty_sold_period ?? product.qty_sold_period ?? 0;
   const next = product;
-  next.stock_level = overlay.stock_level;
-  next.stock_capacity = overlay.stock_capacity;
-  next.priority_tag = stockBucket(overlay.stock_level, finalQtySold);
+  // PER-177: keepStock preserves the warehouse-filtered mirror total over the report's all-warehouse stock.
+  const effectiveStock = keepStock ? next.stock_level : overlay.stock_level;
+  if (!keepStock) {
+    next.stock_level = overlay.stock_level;
+    next.stock_capacity = overlay.stock_capacity;
+  }
+  next.priority_tag = stockBucket(effectiveStock, finalQtySold, null, null, leadDaysForSupplier(overlay.supplier ?? next.supplier));
   next.source = 'erp';
   if (overlay.price != null) next.price = overlay.price;
   if (overlay.cost_price != null) next.cost_price = overlay.cost_price;
@@ -415,8 +470,8 @@ function applyStockOverlay(product: CompactProduct, overlay: StockOverlay): Comp
   if (overlay.margin_tier) next.margin_tier = overlay.margin_tier;
   if (overlay.qty_sold_period != null) next.qty_sold_period = overlay.qty_sold_period;
   if (overlay.qty_sold_lifetime != null) next.qty_sold_lifetime = overlay.qty_sold_lifetime;
-  if (overlay.stock_on_hand != null) next.stock_on_hand = overlay.stock_on_hand;
-  if (overlay.available_stock != null) next.available_stock = overlay.available_stock;
+  if (!keepStock && overlay.stock_on_hand != null) next.stock_on_hand = overlay.stock_on_hand;
+  if (!keepStock && overlay.available_stock != null) next.available_stock = overlay.available_stock;
   if (overlay.last_sale_at) next.last_sale_at = overlay.last_sale_at;
   if (overlay.first_available_date) next.first_available_date = overlay.first_available_date;
   if (overlay.category && (!next.category || next.category === 'Uncategorized')) next.category = overlay.category;
@@ -714,10 +769,29 @@ async function loadEcommerceCatalogCollection(
   return read;
 }
 
+/** Stamp variant_count on every row with a declared parent_sku. */
+function stampVariantCounts(products: CompactProduct[]): number {
+  const sizes = new Map<string, number>();
+  for (const p of products) {
+    if (p.parent_sku) sizes.set(p.parent_sku, (sizes.get(p.parent_sku) || 0) + 1);
+  }
+  let stamped = 0;
+  for (const p of products) {
+    if (p.parent_sku) {
+      p.variant_count = sizes.get(p.parent_sku);
+      stamped++;
+    }
+  }
+  return stamped;
+}
+
 async function overlayMagentoCatalogDetails(brandId: string, bySku: Map<string, CompactProduct>): Promise<number> {
   const firestore = assertDb();
   let cursor: QueryDocumentSnapshot | null = null;
   let read = 0;
+  // Configurables match no ERP sku, so parent names live among the unmatched.
+  // ponytail: holds every unmatched name (parents unknown until the walk ends); prune to referenced parents if this ever pressures the heap.
+  const unmatchedNames = new Map<string, string>();
   for (;;) {
     let query = firestore
       .collection('magento_products')
@@ -732,18 +806,26 @@ async function overlayMagentoCatalogDetails(brandId: string, bySku: Map<string, 
       if (!detail) continue;
       const key = normalizeSku(detail.sku);
       const existing = bySku.get(key);
-      if (!existing) continue;
+      if (!existing) {
+        if (detail.name && detail.name !== detail.sku) unmatchedNames.set(key, detail.name);
+        continue;
+      }
       bySku.set(key, {
         ...existing,
         name: existing.name && existing.name !== existing.sku ? existing.name : detail.name,
         category: existing.category && existing.category !== 'Uncategorized' ? existing.category : detail.category,
         ...(existing.subcategory ? {} : detail.subcategory ? { subcategory: detail.subcategory } : {}),
         ...(existing.barcode ? {} : detail.barcode ? { barcode: detail.barcode } : {}),
+        ...(existing.parent_sku ? {} : detail.parent_sku ? { parent_sku: detail.parent_sku } : {}),
       });
     }
     if (snap.size < READ_PAGE_SIZE) break;
     cursor = snap.docs[snap.docs.length - 1] ?? null;
     if (!cursor) break;
+  }
+  for (const product of bySku.values()) {
+    const parentName = product.parent_sku ? unmatchedNames.get(normalizeSku(product.parent_sku)) : undefined;
+    if (parentName) product.parent_name = parentName;
   }
   return read;
 }
@@ -792,13 +874,14 @@ function applyMegaventoryStockOverlay(products: Map<string, CompactProduct>, sto
     if (!product.productId) continue;
     const stock = stockByProductId.get(product.productId);
     if (!stock) continue;
-    const stockLevel = stock.available > 0 ? stock.available : stock.physical;
+    // PER-300: shelf units — MV's "available" adds unreceived orders.
+    const stockLevel = stock.physical;
     const qtySold = product.qty_sold_period ?? 0;
     product.stock_level = Math.round(stockLevel * 100) / 100;
     product.stock_on_hand = Math.round(stock.physical * 100) / 100;
     product.available_stock = Math.round(stock.available * 100) / 100;
     product.stock_capacity = Math.max(Math.round(stockLevel * 2 * 100) / 100, Math.round(stockLevel * 100) / 100, 1);
-    product.priority_tag = stockBucket(stockLevel, qtySold);
+    product.priority_tag = stockBucket(stockLevel, qtySold, null, null, leadDaysForSupplier(product.supplier));
     applied += 1;
   }
   return applied;
@@ -874,7 +957,7 @@ function applySkuStatsOverlay(products: Map<string, CompactProduct>, statsBySku:
     if (qtySoldPeriod > 0) product.qty_sold_period = Math.round(qtySoldPeriod * 100) / 100;
     if (num(stats.sold) > 0) product.qty_sold_lifetime = Math.round(num(stats.sold) * 100) / 100;
     if (stats.lastSaleAt) product.last_sale_at = stats.lastSaleAt;
-    product.priority_tag = stockBucket(product.stock_level, qtySoldPeriod, num(stats.sold));
+    product.priority_tag = stockBucket(product.stock_level, qtySoldPeriod, num(stats.sold), null, leadDaysForSupplier(product.supplier));
     applied += 1;
   }
   return applied;
@@ -899,6 +982,41 @@ async function loadReceiptDates(brandId: string): Promise<Map<string, string>> {
   return bySku;
 }
 
+/** Read the chunked receipt suppliers (megaventory_receipts/{brandId}/supplier_chunks) → normalized sku → supplier name. */
+async function loadReceiptSuppliers(brandId: string): Promise<Map<string, string>> {
+  const firestore = assertDb();
+  const bySku = new Map<string, string>();
+  const parent = await firestore.doc(`megaventory_receipts/${brandId}`).get().catch(() => null);
+  if (!parent?.exists || num(parent.data()?.supplierChunkCount) <= 0) return bySku;
+  const snap = await firestore.collection(`megaventory_receipts/${brandId}/supplier_chunks`).orderBy(FieldPath.documentId()).get();
+  for (const doc of snap.docs) {
+    const raw = text(doc.data().receiptSuppliersJson);
+    if (!raw) continue;
+    try {
+      for (const [sku, v] of Object.entries(JSON.parse(raw) as Record<string, { s?: string }>)) {
+        if (v?.s) bySku.set(normalizeSku(sku), v.s);
+      }
+    } catch (error) {
+      logger.warn(`[ProductIntelligence] bad supplier chunk for ${brandId}/${doc.id}:`, { err: error });
+    }
+  }
+  return bySku;
+}
+
+/** Fill missing product.supplier from the latest inbound-receipt supplier (never overrides an ERP-declared one). */
+function applyReceiptSupplierOverlay(products: Map<string, CompactProduct>, supplierBySku: Map<string, string>): number {
+  if (supplierBySku.size === 0) return 0;
+  let applied = 0;
+  for (const [sku, product] of products.entries()) {
+    if (product.supplier) continue;
+    const supplier = supplierBySku.get(sku);
+    if (!supplier) continue;
+    product.supplier = supplier;
+    applied += 1;
+  }
+  return applied;
+}
+
 /** Overlay real supplier-receipt dates onto first_available_date so Stock Age reflects when stock arrived.
  * When all-channel ERP velocity is present (useShelfAgeDead), also reclassify no-recent-sales stock by
  * shelf age — genuinely old, unsold-in-any-channel stock becomes dead. Without all-channel velocity the
@@ -920,7 +1038,8 @@ function applyReceiptDateOverlay(
         product.stock_level,
         product.qty_sold_period ?? null,
         product.qty_sold_lifetime ?? null,
-        shelfAge >= 0 ? shelfAge : null
+        shelfAge >= 0 ? shelfAge : null,
+        leadDaysForSupplier(product.supplier)
       );
     }
     applied += 1;
@@ -930,7 +1049,8 @@ function applyReceiptDateOverlay(
 
 async function loadMegaventoryProductOverlay(
   brandId: string,
-  bySku: Map<string, CompactProduct>
+  bySku: Map<string, CompactProduct>,
+  warehouseFilteredStock: Map<string, { available: number; physical: number }>
 ): Promise<{ rowsRead: number; overlaysApplied: number; erpOnlyProducts: number }> {
   const firestore = assertDb();
   let cursor: QueryDocumentSnapshot | null = null;
@@ -954,7 +1074,8 @@ async function loadMegaventoryProductOverlay(
       if (!overlay) continue;
       const existing = bySku.get(sku);
       if (existing) {
-        bySku.set(sku, applyStockOverlay(existing, overlay));
+        const keepStock = !!existing.productId && warehouseFilteredStock.has(existing.productId);
+        bySku.set(sku, applyStockOverlay(existing, overlay, keepStock));
         overlaysApplied += 1;
         continue;
       }
@@ -970,7 +1091,7 @@ async function loadMegaventoryProductOverlay(
   return { rowsRead, overlaysApplied, erpOnlyProducts };
 }
 
-async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<{
+async function loadConnectorProducts(brandId: string, hasErp: boolean, manual = false): Promise<{
   products: CompactProduct[];
   sourceRowsRead: number;
   megaventoryApiRowsRead: number;
@@ -995,14 +1116,17 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
     // for non-SoftOne brands, so this is a no-op there.
     softoneRowsRead = await loadCatalogCollection(brandId, 'softone_items', 'erp', bySku);
   }
-  const ecommerceCatalogRowsRead = hasErp
-    ? 0
-    : (await Promise.all([
-        loadCatalogCollection(brandId, 'magento_products', 'connector_catalog', bySku),
-        loadCatalogCollection(brandId, 'shopify_products', 'connector_catalog', bySku),
-        loadCatalogCollection(brandId, 'woo_products', 'connector_catalog', bySku),
-        loadEcommerceCatalogCollection(brandId, 'opencart_products', bySku),
-      ])).reduce((sum, rowsRead) => sum + rowsRead, 0);
+  // Manual mode: the brand's own `products` docs are the catalog.
+  const ecommerceCatalogRowsRead = manual
+    ? await loadCatalogCollection(brandId, 'products', 'manual', bySku)
+    : hasErp
+      ? 0
+      : (await Promise.all([
+          loadCatalogCollection(brandId, 'magento_products', 'connector_catalog', bySku),
+          loadCatalogCollection(brandId, 'shopify_products', 'connector_catalog', bySku),
+          loadCatalogCollection(brandId, 'woo_products', 'connector_catalog', bySku),
+          loadEcommerceCatalogCollection(brandId, 'opencart_products', bySku),
+        ])).reduce((sum, rowsRead) => sum + rowsRead, 0);
   const magentoDetailRowsRead = hasErp ? await overlayMagentoCatalogDetails(brandId, bySku) : 0;
   // #8: stock totals come from the pre-summed (already warehouse-filtered) megaventory_products mirrors
   // — no per-location re-scan of megaventory_stock (the old DEADLINE-prone read on large brands).
@@ -1016,15 +1140,22 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
   const erpVelocity = hasErp ? await loadErpSkuVelocity(brandId) : { rowsRead: 0, bySku: new Map<string, SkuStatsRow>() };
   const hasErpVelocity = erpVelocity.bySku.size > 0;
   const velocityBySku = hasErp ? mergeVelocityPreferErp(skuStats.bySku, erpVelocity.bySku) : skuStats.bySku;
+  // Supplier fill must precede the velocity/receipt overlays — their priority_tag recomputes read leadDaysForSupplier.
+  if (hasErp) applyReceiptSupplierOverlay(bySku, await loadReceiptSuppliers(brandId));
   const skuStatsApplied = applySkuStatsOverlay(bySku, velocityBySku);
   // Real supplier-receipt dates → stock age (ERP catalog only); shelf-age dead only when all-channel
   // ERP velocity backs it, so in-store-only sellers aren't mislabelled dead.
   if (hasErp) applyReceiptDateOverlay(bySku, await loadReceiptDates(brandId), hasErpVelocity);
   const overlay = hasErp
-    ? await loadMegaventoryProductOverlay(brandId, bySku)
+    ? await loadMegaventoryProductOverlay(brandId, bySku, stockResult.byProductId)
     : { rowsRead: 0, overlaysApplied: 0, erpOnlyProducts: 0 };
+  // PER-293: brand additions (brands/{id}.nonMerchandise) join the platform demo/non-merch rule.
+  const brandSnap = await assertDb().doc(`brands/${brandId}`).get().catch(() => null);
+  const isNonStocked = buildIsNonStocked(readNonMerchandise(brandSnap?.data()));
+  const products = [...bySku.values()].filter((product) => !isNonStocked(product));
+  stampVariantCounts(products);
   return {
-    products: [...bySku.values()].filter((product) => !isDemoProduct(product) && !isNonMerchandiseProduct(product)),
+    products,
     sourceRowsRead:
       megaventoryApiRowsRead +
       megaventoryApiCatalogGapRead +
@@ -1093,8 +1224,58 @@ function categoryCounts(products: CompactProduct[]): Array<{ name: string; count
     .map(([name, count]) => ({ name, count }));
 }
 
+function brandCounts(products: CompactProduct[]): Array<{ name: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const product of products) {
+    if (product.brand) counts.set(product.brand, (counts.get(product.brand) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 250)
+    .map(([name, count]) => ({ name, count }));
+}
+
+/** PER-300: stock means units on the shelf, never the ERP's on-hand (which adds unreceived orders). */
+function effectiveStock(product: CompactProduct): number {
+  return product.stock_on_hand ?? product.stock_level ?? 0;
+}
+
+/** Mirrors the effectiveTag rule in matchesQuery. */
+function effectiveTagId(product: CompactProduct): string {
+  const stock = effectiveStock(product);
+  return stock <= 0 ? 'no_stock' : text(product.priority_tag).toLowerCase();
+}
+
+function facetCounts(
+  rows: CompactProduct[],
+  params: ProductIntelligenceQueryParams,
+  omit: 'categories' | 'brands' | 'tags',
+  idFn: (product: CompactProduct) => string,
+): Array<{ id: string; count: number }> {
+  const scoped = { ...params, [omit]: undefined };
+  const counts = new Map<string, number>();
+  for (const product of rows) {
+    if (!matchesQuery(product, scoped)) continue;
+    const id = idFn(product);
+    if (!id) continue;
+    counts.set(id, (counts.get(id) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 250)
+    .map(([id, count]) => ({ id, count }));
+}
+
+function buildQueryFacets(rows: CompactProduct[], params: ProductIntelligenceQueryParams): QueryFacets {
+  return {
+    categories: facetCounts(rows, params, 'categories', categoryId),
+    brands: facetCounts(rows, params, 'brands', (p) => text(p.brand)), // empty brand dropped
+    tags: facetCounts(rows, params, 'tags', effectiveTagId),
+  };
+}
+
 function daysOfStock(product: CompactProduct): number {
-  const stock = product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
+  const stock = effectiveStock(product);
   if (stock <= 0) return 0;
   const sold = product.qty_sold_period ?? 0;
   if (sold <= 0) return Number.POSITIVE_INFINITY;
@@ -1124,6 +1305,10 @@ function categoryId(product: CompactProduct): string {
   return text(product.category) || '__EMPTY_CAT__';
 }
 
+function brandFilterId(product: CompactProduct): string {
+  return text(product.brand) || '__EMPTY_BRAND__';
+}
+
 function searchText(product: CompactProduct): string {
   return [
     product.sku,
@@ -1143,13 +1328,18 @@ function matchesQuery(product: CompactProduct, params: ProductIntelligenceQueryP
   const search = text(params.search).toLowerCase();
   if (search && !searchText(product).includes(search)) return false;
 
-  const effectiveStock = product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
-  const effectiveTag = effectiveStock <= 0 ? 'no_stock' : text(product.priority_tag).toLowerCase();
-  if (params.includeNoStock !== true && effectiveStock <= 0) return false;
+  const stock = effectiveStock(product);
+  const effectiveTag = stock <= 0 ? 'no_stock' : text(product.priority_tag).toLowerCase();
+  if (params.includeNoStock !== true && stock <= 0) return false;
 
   if (params.categories?.length) {
     const allowed = new Set(params.categories);
     if (!allowed.has(categoryId(product))) return false;
+  }
+
+  if (params.brands?.length) {
+    const allowed = new Set(params.brands);
+    if (!allowed.has(brandFilterId(product))) return false;
   }
 
   if (params.tags?.length) {
@@ -1258,8 +1448,8 @@ function bucketRows(products: CompactProduct[], bucket: PageBucket): CompactProd
   const rows = bucket === 'all' ? products : products.filter((product) => product.priority_tag === bucket);
   return [...rows].sort((a, b) => {
     if (bucket === 'all') {
-      const stockA = a.available_stock ?? a.stock_on_hand ?? a.stock_level ?? 0;
-      const stockB = b.available_stock ?? b.stock_on_hand ?? b.stock_level ?? 0;
+      const stockA = effectiveStock(a);
+      const stockB = effectiveStock(b);
       if (stockA !== stockB) return stockB - stockA;
       const soldA = a.qty_sold_period ?? a.qty_sold_lifetime ?? 0;
       const soldB = b.qty_sold_period ?? b.qty_sold_lifetime ?? 0;
@@ -1271,13 +1461,8 @@ function bucketRows(products: CompactProduct[], bucket: PageBucket): CompactProd
 
 async function writePageDocs(brandId: string, products: CompactProduct[]): Promise<Record<PageBucket, number>> {
   const firestore = assertDb();
-  const old = await firestore.collection('product_intelligence_pages').where('brandId', '==', brandId).get();
-  for (let i = 0; i < old.docs.length; i += PAGE_WRITE_BATCH_SIZE) {
-    const batch = firestore.batch();
-    old.docs.slice(i, i + PAGE_WRITE_BATCH_SIZE).forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-  }
 
+  // Build the full new page set first.
   const pagesByBucket = {} as Record<PageBucket, number>;
   const writes: Array<{ id: string; data: Record<string, unknown> }> = [];
   for (const bucket of BUCKETS) {
@@ -1299,6 +1484,11 @@ async function writePageDocs(brandId: string, products: CompactProduct[]): Promi
     }
   }
 
+  // WRITE-THEN-CLEANUP (PER-166/167): overwrite the new pages IN PLACE first, so the previous build's
+  // pages stay readable throughout the rebuild. Readers serving the aggregate while status='running'
+  // therefore never see a missing-page window (which would yield partial data or, for the strategy /
+  // channel pages, a fall back to loading the full ~222k catalog). Only AFTER the new set is committed
+  // do we delete the now-stale leftovers from a previous, larger build.
   for (let i = 0; i < writes.length; i += PAGE_WRITE_BATCH_SIZE) {
     const batch = firestore.batch();
     writes.slice(i, i + PAGE_WRITE_BATCH_SIZE).forEach((item) => {
@@ -1306,7 +1496,24 @@ async function writePageDocs(brandId: string, products: CompactProduct[]): Promi
     });
     await batch.commit();
   }
+
+  const newIds = new Set(writes.map((w) => w.id));
+  const existing = await firestore.collection('product_intelligence_pages').where('brandId', '==', brandId).get();
+  const byId = new Map(existing.docs.map((doc) => [doc.id, doc.ref]));
+  const staleRefs = stalePageIds([...byId.keys()], newIds).map((id) => byId.get(id)!);
+  for (let i = 0; i < staleRefs.length; i += PAGE_WRITE_BATCH_SIZE) {
+    const batch = firestore.batch();
+    staleRefs.slice(i, i + PAGE_WRITE_BATCH_SIZE).forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
   return pagesByBucket;
+}
+
+/** Pages to delete after a write-then-cleanup rebuild: existing page docs NOT in the freshly-written
+ *  set. Pages present in both are overwritten in place and must NEVER be deleted — otherwise readers
+ *  serving the aggregate mid-rebuild would see a missing-page gap. */
+export function stalePageIds(existingIds: string[], keptIds: Set<string>): string[] {
+  return existingIds.filter((id) => !keptIds.has(id));
 }
 
 async function loadBucketProductsFromPages(brandId: string, bucket: PageBucket, pageCount: number): Promise<CompactProduct[]> {
@@ -1349,6 +1556,43 @@ export function classifyAggregateRecovery(
   return 'heal';
 }
 
+/** Collapse rows by parent_sku: top-stock variant carries price/margin/name; quantities sum; unparented pass through. */
+function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
+  const groups = new Map<string, CompactProduct[]>();
+  const out: CompactProduct[] = [];
+  for (const row of rows) {
+    if (!row.parent_sku) { out.push(row); continue; }
+    const g = groups.get(row.parent_sku);
+    if (g) g.push(row); else groups.set(row.parent_sku, [row]);
+  }
+  for (const [parent, members] of groups) {
+    const rep = members.reduce((a, b) => (b.stock_level > a.stock_level ? b : a));
+    const sum = (f: (p: CompactProduct) => number | undefined) =>
+      Math.round(members.reduce((t, p) => t + (f(p) || 0), 0) * 100) / 100;
+    const lastSale = members.map((p) => p.last_sale_at || '').sort().pop();
+    const stock = sum((p) => p.stock_level);
+    const soldPeriod = members.some((p) => p.qty_sold_period != null) ? sum((p) => p.qty_sold_period) : null;
+    const soldLifetime = members.some((p) => p.qty_sold_lifetime != null) ? sum((p) => p.qty_sold_lifetime) : null;
+    out.push({
+      ...rep,
+      id: `parent_${parent}`,
+      sku: parent,
+      name: rep.parent_name ?? rep.name,
+      stock_level: stock,
+      stock_capacity: sum((p) => p.stock_capacity),
+      ...(members.some((p) => p.stock_on_hand != null) ? { stock_on_hand: sum((p) => p.stock_on_hand) } : {}),
+      ...(members.some((p) => p.available_stock != null) ? { available_stock: sum((p) => p.available_stock) } : {}),
+      ...(soldPeriod != null ? { qty_sold_period: soldPeriod } : {}),
+      ...(soldLifetime != null ? { qty_sold_lifetime: soldLifetime } : {}),
+      ...(lastSale ? { last_sale_at: lastSale } : {}),
+      variant_count: members.length,
+      // The bucket describes the group, not its representative variant.
+      priority_tag: stockBucket(stock, soldPeriod, soldLifetime, null, leadDaysForSupplier(rep.supplier)),
+    });
+  }
+  return out;
+}
+
 export async function queryProductIntelligenceRows(params: ProductIntelligenceQueryParams): Promise<ProductIntelligenceQueryResult> {
   const firestore = assertDb();
   const aggregateSnap = await firestore.doc(`product_intelligence/${params.brandId}`).get();
@@ -1366,11 +1610,17 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
   const bucket = params.bucket ?? 'all';
   const pageSize = Math.max(1, Math.min(params.pageSize ?? TABLE_PAGE_SIZE, TABLE_PAGE_SIZE));
   const requestedPage = Math.max(1, Math.floor(params.page ?? 1));
-  const pageCount = Math.max(1, aggregate.pagesByBucket?.[bucket] ?? 1);
-  const rows = await loadBucketProductsFromPages(params.brandId, bucket, pageCount);
+  // PER-187: siblings scatter across buckets, so grouping reads the whole catalog and buckets the groups.
+  const readBucket: PageBucket = params.groupByParent ? 'all' : bucket;
+  const pageCount = Math.max(1, aggregate.pagesByBucket?.[readBucket] ?? 1);
+  const rows = await loadBucketProductsFromPages(params.brandId, readBucket, pageCount);
   const filtered = rows.filter((product) => matchesQuery(product, params));
+  // Collapse after filtering (variant-level filters stay precise), before sort/pagination.
+  const display = params.groupByParent
+    ? collapseByParentSku(filtered).filter((row) => bucket === 'all' || row.priority_tag === bucket)
+    : filtered;
   const sorted = sortProducts(
-    filtered,
+    display,
     params.sortField ?? 'margin_percentage',
     params.sortDirection ?? 'desc',
   );
@@ -1391,6 +1641,8 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
     totalPages,
     bucket,
     products: sorted.slice(start, start + pageSize),
+    summary: summaryForProducts(filtered),
+    facets: buildQueryFacets(rows, params),
   };
 }
 
@@ -1399,7 +1651,7 @@ function competitiveInventoryForProducts(products: CompactProduct[]): Record<str
   const add = (key: string, product: CompactProduct) => {
     const normalized = normalizeSku(key);
     if (!normalized) return;
-    const stock = Math.round((product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0) * 100) / 100;
+    const stock = Math.round(effectiveStock(product) * 100) / 100;
     const sold = Math.round((product.qty_sold_period ?? product.qty_sold_lifetime ?? 0) * 100) / 100;
     if (stock <= 0 && sold <= 0) return;
     const previous = rows[normalized];
@@ -1465,7 +1717,13 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
   // gating + connector ERP detection) is preserved unchanged.
   const stockOverride = await readStockSourceOverride(brandId);
   // Per-brand stock-health thresholds for this run (defaults preserve current behaviour when unset).
-  activeStockThresholds = resolveStockThresholds((await firestore.doc(`brands/${brandId}`).get()).data()?.inventoryThresholds);
+  const brandInventoryThresholds = (await firestore.doc(`brands/${brandId}`).get()).data()?.inventoryThresholds as
+    | Record<string, unknown>
+    | undefined;
+  activeStockThresholds = resolveStockThresholds(brandInventoryThresholds);
+  const rawLead = num(brandInventoryThresholds?.defaultLeadTimeDays);
+  activeDefaultLeadDays = rawLead > 0 ? rawLead : DEFAULT_LEAD_DAYS;
+  activeSupplierLeadByName = await loadSupplierLeadTimes(brandId);
 
   // Procurement-first: for Enterprise+Procurement brands stock is authoritative from the uploaded
   // procurement file and OVERRIDES any connector catalog.
@@ -1499,6 +1757,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
             pageSize: TABLE_PAGE_SIZE,
             pagesByBucket,
             categories: categoryCounts(procProducts),
+            brands: brandCounts(procProducts),
             charts,
             summary,
             computedAt: FieldValue.serverTimestamp(),
@@ -1525,27 +1784,21 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
   const connector = await hasConnectorCatalog(brandId);
   // Explicit setting picks ERP vs e-shop catalog; unset → connector detection (current behaviour).
   const useErp = stockOverride ? stockOverride === 'erp' : connector.hasErp;
-  if (!connector.connected) {
-    await ref.set({
-      brandId,
-      status: 'skipped',
-      reason: 'no_connector_catalog',
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    return { success: true, skipped: true, brandId };
-  }
+  // No catalog connector → build from the brand's imported `products` docs instead of skipping.
+  const useManual = !connector.connected;
+  const sourceLabel = useManual ? 'Manual upload' : connector.sourceLabel;
 
   await ref.set({
     brandId,
     status: 'running',
-    sourceLabel: connector.sourceLabel,
+    sourceLabel,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
   try {
     const [syncVersion, catalogResult] = await Promise.all([
       computeBrandSyncVersion(brandId),
-      loadConnectorProducts(brandId, useErp),
+      loadConnectorProducts(brandId, useManual ? false : useErp, useManual),
     ]);
     const {
       products,
@@ -1560,6 +1813,16 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       stockOverlaysApplied,
       erpOnlyProducts,
     } = catalogResult;
+    // Nothing imported either → skip as before.
+    if (useManual && products.length === 0) {
+      await ref.set({
+        brandId,
+        status: 'skipped',
+        reason: 'no_connector_catalog',
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return { success: true, skipped: true, brandId };
+    }
     const summary = summaryForProducts(products);
     const pagesByBucket = await writePageDocs(brandId, products);
     const competitiveInventory = await writeCompetitiveInventoryLookup(brandId, products);
@@ -1578,8 +1841,8 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
     const payload = {
       brandId,
       status: 'ready',
-      sourceLabel: connector.sourceLabel,
-      sourceKind: useErp ? 'erp' : 'connector_catalog',
+      sourceLabel,
+      sourceKind: useManual ? 'manual' : useErp ? 'erp' : 'connector_catalog',
       totalCount: products.length,
       syncVersion: syncVersion.version,
       latestSyncAt: syncVersion.latestSyncAt,
@@ -1601,6 +1864,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       pageSize: TABLE_PAGE_SIZE,
       pagesByBucket,
       categories: categoryCounts(products),
+      brands: brandCounts(products),
       charts,
       summary,
       computedAt: FieldValue.serverTimestamp(),
@@ -1612,7 +1876,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
     };
     await ref.set(payload, { merge: true });
     logger.info(
-      `[ProductIntelligence] ${brandId}: totalCount=${products.length} sourceRowsRead=${sourceRowsRead} sourceLabel=${connector.sourceLabel}`
+      `[ProductIntelligence] ${brandId}: totalCount=${products.length} sourceRowsRead=${sourceRowsRead} sourceLabel=${sourceLabel}`
     );
     return {
       success: true,
@@ -1669,11 +1933,17 @@ export async function refreshCompetitiveInventoryLookup(brandId: string): Promis
 
 /** Test-only export — unit tests exercise the real code, not copies. */
 export const __test = {
+  effectiveStock,
   productFromRow,
+  stampVariantCounts,
+  collapseByParentSku,
   stockBucket,
   summaryForProducts,
   canServeAggregateQuery,
+  stalePageIds,
   mergeVelocityPreferErp,
   applySkuStatsOverlay,
+  applyStockOverlay,
   classifyAggregateRecovery,
+  buildQueryFacets,
 };

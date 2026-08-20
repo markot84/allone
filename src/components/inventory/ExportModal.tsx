@@ -47,7 +47,8 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
       const title = p.name || id;
       const price = `${(p.price ?? 0).toFixed(2)} EUR`;
       const availability = (p.stock_level ?? 0) > 0 ? 'in stock' : 'out of stock';
-      const productType = p.category || '';
+      // ERP product type first; storefront category as fallback.
+      const productType = p.product_type || p.category || '';
       const link = ((p as unknown) as Record<string, unknown>).product_url as string | undefined || '';
       const imageLink = ((p as unknown) as Record<string, unknown>).image_url as string | undefined || '';
       return [

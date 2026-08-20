@@ -10,7 +10,7 @@ export function coerceToDate(value: unknown): Date | null {
   };
 
   const fromDdMmYyyy = (raw: string): Date | null => {
-    const m = raw.trim().match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:\s+.*)?$/);
+    const m = raw.trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})(?:\s+.*)?$/);
     if (!m) return null;
     const day = parseInt(m[1], 10);
     const month = parseInt(m[2], 10);

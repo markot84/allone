@@ -7,11 +7,11 @@ const PRESERVED_MEGAVENTORY_RFM_SOURCE = 'megaventory_rfm';
 /** SKUs from full ProductGet when the custom report covers only a subset (e.g. SQL filter). */
 export const PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE = 'megaventory_api_catalog';
 
+// suppliers excluded: user-created/edited supplier docs must survive the MV-master migration (PER-183)
 const BRAND_SCOPED_MANUAL_COLLECTIONS = [
   'products',
   'segments',
   'segment_customers',
-  'suppliers',
   'procurement_inventory',
   'procurement_costing',
   'procurement_item_evaluation',

@@ -703,7 +703,8 @@ export async function fetchOpenCartData(brandId: string): Promise<{
           productsAbort = true;
           productsCursorNext = prodPage;
           productsAbortReason = `page cap (${productImportedCount}+ products) — run sync again`;
-          logger.warnAlert(`[OpenCart] Products page budget reached, resume page ${prodPage} ${brandId}`, { alertKey: ALERT.opencartSyncFailed });
+          // Healthy resumable checkpoint (not a failure) — the next run continues from productsCursorNext. Info, not an alert.
+          logger.info(`[OpenCart] Products page budget reached, resume page ${prodPage} ${brandId}`);
         }
         break;
       }
@@ -787,7 +788,8 @@ export async function fetchOpenCartData(brandId: string): Promise<{
         ordersAbort = true;
         ordersCursorNext = orderPage;
         ordersAbortReason = `enrich budget (${ordersEnrichedThisRun} order details) — run sync again`;
-        logger.warnAlert(`[OpenCart] Orders enrich budget reached at page ${orderPage} for ${brandId} — will resume next run`, { alertKey: ALERT.opencartSyncFailed });
+        // Healthy resumable checkpoint (not a failure) — resumes next run. Info, not an alert.
+        logger.info(`[OpenCart] Orders enrich budget reached at page ${orderPage} for ${brandId} — will resume next run`);
         break;
       }
 
@@ -857,7 +859,8 @@ export async function fetchOpenCartData(brandId: string): Promise<{
           ordersAbort = true;
           ordersCursorNext = orderPage;
           ordersAbortReason = `page cap (${orderImportedCount}+ orders) — run sync again`;
-          logger.warnAlert(`[OpenCart] Orders page budget reached, resume page ${orderPage} ${brandId}`, { alertKey: ALERT.opencartSyncFailed });
+          // Healthy resumable checkpoint (not a failure) — resumes next run. Info, not an alert.
+          logger.info(`[OpenCart] Orders page budget reached, resume page ${orderPage} ${brandId}`);
         }
         break;
       }

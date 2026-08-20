@@ -3,6 +3,7 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, type QueryDocumentSnapshot, FieldValue } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
+import { readNonMerchandise, fold } from './nonMerchandise';
 import {
   aggregateOrderLinesForTopProducts,
   shouldSkipMagentoLineForTopProducts,
@@ -37,12 +38,21 @@ type SkuStatsRow = {
   sold30d: number;
   sold90d: number;
   lastSaleAt: string | null;
+  /** Gross/returns split (units); written only when the backend signs credit notes (MV), absent = UI shows «—». */
+  soldPos?: number;
+  soldNeg?: number;
+  soldPos7d?: number;
+  soldNeg7d?: number;
+  soldPos30d?: number;
+  soldNeg30d?: number;
+  soldPos90d?: number;
+  soldNeg90d?: number;
 };
 
-async function writeSkuStatsChunked(
+export async function writeSkuStatsChunked(
   db: Firestore,
   brandId: string,
-  skuStats: Record<string, SkuStatsRow>,
+  skuStats: Record<string, unknown>,
   skuCount: number,
   opts?: { collection?: string }
 ): Promise<void> {
@@ -55,7 +65,7 @@ async function writeSkuStatsChunked(
   } else {
     /** Split alphabetically to stay deterministic per run. Each chunk as close to the limit as possible. */
     const skus = Object.keys(skuStats).sort();
-    let bucket: Record<string, SkuStatsRow> = {};
+    let bucket: Record<string, unknown> = {};
     let bucketBytes = 2;
 
     for (const sku of skus) {
@@ -139,6 +149,8 @@ interface OrderRow {
     parentItemId?: string | number | null;
     rowTotal?: number;
   }>;
+  /** PER-301: revenue of nonMerchandise-matched lines, precomputed by readers that drop lineItems. */
+  nonMerchTotal?: number;
 }
 
 export const ECOMMERCE_PROVIDERS = ['shopify', 'woocommerce', 'opencart', 'magento'] as const;
@@ -151,6 +163,47 @@ const OMIT_FROM_RECENT_ORDER_LIST = new Set(['viva_klarna_undefined']);
 
 function isOmittedFromRecentOrderList(status: string | null | undefined): boolean {
   return OMIT_FROM_RECENT_ORDER_LIST.has(String(status || '').trim().toLowerCase());
+}
+
+type NonMerchLineMatch = (li: { sku?: string; title?: string; name?: string }) => boolean;
+
+/** PER-301 — line matcher for the brand's nonMerchandise rules (categories→SKU set, lines carry no category); brand rules only, null when none. */
+async function loadNonMerchLineMatcher(
+  db: Firestore,
+  brandId: string,
+  brandData: Record<string, unknown> | undefined
+): Promise<NonMerchLineMatch | null> {
+  const rules = readNonMerchandise(brandData);
+  const needles = rules.nameContains ?? [];
+  const cats = rules.categories ?? [];
+  const skus = new Set<string>();
+  if (cats.length) {
+    const query = db.collection('products').where('brandId', '==', brandId).select('sku', 'category');
+    for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
+      const d = doc.data();
+      if (!cats.includes(fold(d.category))) continue;
+      const sku = String(d.sku || '').trim().toLowerCase();
+      if (sku) skus.add(sku);
+    }
+  }
+  if (!needles.length && !skus.size) return null;
+  return (li) => {
+    const sku = String(li.sku || '').trim().toLowerCase();
+    if (sku && skus.has(sku)) return true;
+    if (!needles.length) return false;
+    const name = fold(`${li.title || ''} ${li.name || ''}`);
+    return needles.some((n) => name.includes(n));
+  };
+}
+
+/** Revenue of an order's line items matching the nonMerchandise rules. */
+export function nonMerchLineRevenue(lineItems: OrderRow['lineItems'], match: NonMerchLineMatch | null): number {
+  if (!match || !lineItems?.length) return 0;
+  let sum = 0;
+  for (const li of lineItems) {
+    if (match(li)) sum += li.rowTotal ?? (li.price || 0) * (li.quantity || 1);
+  }
+  return sum;
 }
 
 /** Demo products (name/SKU contains "demo") are excluded from every aggregate. */
@@ -266,12 +319,16 @@ function parseNumeric(value: unknown): number {
 
 /** Net products revenue ex-VAT. Magento: `baseSubtotal − |baseDiscountAmount|` (EUR fallback
  * `subtotal − |discountAmount|`; non-EUR without base_* → 0). Else `total − tax`. */
-function computeOrderExVatRevenue(platform: string, d: Record<string, unknown>): number {
+export function computeOrderExVatRevenue(platform: string, d: Record<string, unknown>): number {
   if (platform === 'magento') {
+    // Net out partial credit memos (refunds against still-complete orders): the ex-VAT merchandise
+    // refunded = subtotal_refunded − |discount_refunded|. Absent on un-backfilled orders → 0 → no-op.
+    const refundedBase = Math.max(0, parseNumeric(d.baseSubtotalRefunded) - Math.abs(parseNumeric(d.baseDiscountRefunded)));
+    const refundedLocal = Math.max(0, parseNumeric(d.subtotalRefunded) - Math.abs(parseNumeric(d.discountRefunded)));
     const baseSubtotal = parseNumeric(d.baseSubtotal);
     const baseDiscount = Math.abs(parseNumeric(d.baseDiscountAmount));
     if (baseSubtotal > 0) {
-      return Math.max(0, baseSubtotal - baseDiscount);
+      return Math.max(0, baseSubtotal - baseDiscount - refundedBase);
     }
     const currency = String(d.currency || '').toUpperCase();
     const baseCurrency = String(d.baseCurrencyCode || '').toUpperCase();
@@ -282,9 +339,9 @@ function computeOrderExVatRevenue(platform: string, d: Record<string, unknown>):
     const subtotal = parseNumeric(d.subtotal);
     const discount = Math.abs(parseNumeric(d.discountAmount));
     if (subtotal > 0) {
-      return Math.max(0, subtotal - discount);
+      return Math.max(0, subtotal - discount - refundedLocal);
     }
-    return Math.max(0, parseNumeric(d.grandTotal) - parseNumeric(d.taxAmount));
+    return Math.max(0, parseNumeric(d.grandTotal) - parseNumeric(d.taxAmount) - refundedBase);
   }
   const revenueField = REVENUE_FIELD[platform] || 'totalPrice';
   const taxField = TAX_FIELD[platform];
@@ -391,7 +448,11 @@ export function softOneSalesDocNetAmount(d: Record<string, unknown>): number {
   return Math.abs(parseNumeric(d['SALDOC.SUMAMNT'] ?? d['SALDOC.TOTALNET']));
 }
 
-async function readMegaventoryInvoiceOrderRows(db: Firestore, brandId: string): Promise<OrderRow[]> {
+async function readMegaventoryInvoiceOrderRows(
+  db: Firestore,
+  brandId: string,
+  nonMerchMatch: NonMerchLineMatch | null = null
+): Promise<OrderRow[]> {
   // Stream rather than .get(): on large brands megaventory_invoices is ~100k+ docs, and holding the
   // whole snapshot alongside the result array was a heap-OOM driver in the aggregate refresh.
   const query = db.collection('megaventory_invoices').where('brandId', '==', brandId);
@@ -417,6 +478,7 @@ async function readMegaventoryInvoiceOrderRows(db: Firestore, brandId: string): 
       shippingMethod: '',
       customerEmail: String(d.clientName ?? ''),
       lineItems: [],
+      nonMerchTotal: nonMerchLineRevenue(d.lineItems as OrderRow['lineItems'], nonMerchMatch),
     });
   }
   return rows;
@@ -488,18 +550,27 @@ async function readSoftOneSalesOrderRows(db: Firestore, brandId: string): Promis
 
 /** Total business revenue from ERP (Megaventory invoices / SoftOne SALDOC); separate from
  * `ecommerce_summary`, which stays strictly for e-shop connectors. */
-export async function computeBusinessRevenueSummary(brandId: string): Promise<void> {
+export async function computeBusinessRevenueSummary(
+  brandId: string,
+  // ponytail: caller-supplied matcher avoids re-streaming the products projection when computeEcommerceSummary already built one.
+  prebuiltMatch?: NonMerchLineMatch | null
+): Promise<void> {
   const db = getDb();
-  const connDoc = await db.doc(`connectors/${brandId}`).get();
+  const [connDoc, brandDoc] = await Promise.all([
+    db.doc(`connectors/${brandId}`).get(),
+    prebuiltMatch === undefined ? db.doc(`brands/${brandId}`).get() : Promise.resolve(null),
+  ]);
   const connPlain = (connDoc.data() || {}) as Record<string, unknown>;
   const erpBackend = resolveErpRevenueBackend(connPlain);
+  const nonMerchMatch =
+    prebuiltMatch !== undefined ? prebuiltMatch : await loadNonMerchLineMatcher(db, brandId, brandDoc?.data());
 
   let rawRows: OrderRow[] = [];
   let creditRows: MegaventoryCreditNoteRow[] = [];
   let source: 'none' | 'megaventory_invoices' | 'softone_sales_documents' = 'none';
 
   if (erpBackend === 'megaventory_invoices') {
-    rawRows = await readMegaventoryInvoiceOrderRows(db, brandId);
+    rawRows = await readMegaventoryInvoiceOrderRows(db, brandId, nonMerchMatch);
     creditRows = await readMegaventoryCreditNoteRows(db, brandId);
     source = 'megaventory_invoices';
   } else if (erpBackend === 'softone_sales_documents') {
@@ -511,8 +582,11 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
   const grossRevenueByDay: Record<string, number> = {};
   const grossRevenueByMonth: Record<string, number> = {};
   let grossTotalRevenue = 0;
+  // ponytail: gross of sales docs only — credit notes aren't netted per-line; informative indicator, not accounting.
+  let nonMerchandiseRevenue = 0;
   for (const o of rawRows) {
     grossTotalRevenue += o.totalPrice;
+    nonMerchandiseRevenue += o.nonMerchTotal ?? nonMerchLineRevenue(o.lineItems, nonMerchMatch);
     const day = o.createdAt?.slice(0, 10) || 'unknown';
     if (day !== 'unknown') {
       grossRevenueByDay[day] = (grossRevenueByDay[day] || 0) + o.totalPrice;
@@ -561,6 +635,9 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
     creditTotal,
     creditNotesApplied,
     unlinkedCreditTotal,
+    // PER-301: revenue produced by the brand's nonMerchandise-excluded products (kept in totals).
+    nonMerchandiseRevenue,
+    nonMerchandiseShare: totalRevenue > 0 ? nonMerchandiseRevenue / totalRevenue : 0,
     syncedAt: FieldValue.serverTimestamp(),
   });
   logger.info(
@@ -581,10 +658,18 @@ export type ErpVelocityAccum = {
   sold30: Map<string, number>;
   sold90: Map<string, number>;
   lastSale: Map<string, number>;
+  /** Sales-only accumulation (returns derive as pos − net); populated only by MV, which signs credit notes. */
+  pos: Map<string, number>;
+  pos7: Map<string, number>;
+  pos30: Map<string, number>;
+  pos90: Map<string, number>;
 };
 
 export function emptyErpVelocityAccum(): ErpVelocityAccum {
-  return { sold: new Map(), sold7: new Map(), sold30: new Map(), sold90: new Map(), lastSale: new Map() };
+  return {
+    sold: new Map(), sold7: new Map(), sold30: new Map(), sold90: new Map(), lastSale: new Map(),
+    pos: new Map(), pos7: new Map(), pos30: new Map(), pos90: new Map(),
+  };
 }
 
 /** Fold one megaventory_invoices document into the velocity accumulator (exported for unit tests). */
@@ -613,6 +698,10 @@ export function accumulateErpInvoiceVelocity(
     if (inW30) accum.sold30.set(sku, (accum.sold30.get(sku) || 0) + qty);
     if (inW90) accum.sold90.set(sku, (accum.sold90.get(sku) || 0) + qty);
     if (sign > 0) {
+      accum.pos.set(sku, (accum.pos.get(sku) || 0) + qty);
+      if (inW7) accum.pos7.set(sku, (accum.pos7.get(sku) || 0) + qty);
+      if (inW30) accum.pos30.set(sku, (accum.pos30.get(sku) || 0) + qty);
+      if (inW90) accum.pos90.set(sku, (accum.pos90.get(sku) || 0) + qty);
       const prev = accum.lastSale.get(sku) || 0;
       if (ts > prev) accum.lastSale.set(sku, ts);
     }
@@ -679,8 +768,19 @@ export async function computeErpSkuVelocity(brandId: string): Promise<void> {
   }
 
   const skuStats: Record<string, SkuStatsRow> = {};
+  // ± split only where the source signs credit notes (MV); elsewhere absent → UI «—», not a fake 0.
+  const hasPosNeg = backend === 'megaventory_invoices';
   for (const sku of accum.sold.keys()) {
     const lastTs = accum.lastSale.get(sku);
+    // returns = gross positive − net (both pre-clamp), stored as a positive magnitude.
+    const split = (posMap: Map<string, number>, netMap: Map<string, number>) => {
+      const pos = Math.max(0, Math.round(posMap.get(sku) || 0));
+      return { pos, neg: Math.max(0, pos - Math.round(netMap.get(sku) || 0)) };
+    };
+    const life = split(accum.pos, accum.sold);
+    const w7 = split(accum.pos7, accum.sold7);
+    const w30 = split(accum.pos30, accum.sold30);
+    const w90 = split(accum.pos90, accum.sold90);
     skuStats[sku] = {
       stock: 0, // stock comes from the catalog overlay; velocity store carries sales only
       sold: Math.max(0, Math.round(accum.sold.get(sku) || 0)),
@@ -688,6 +788,14 @@ export async function computeErpSkuVelocity(brandId: string): Promise<void> {
       sold30d: Math.max(0, Math.round(accum.sold30.get(sku) || 0)),
       sold90d: Math.max(0, Math.round(accum.sold90.get(sku) || 0)),
       lastSaleAt: lastTs ? new Date(lastTs).toISOString() : null,
+      ...(hasPosNeg
+        ? {
+            soldPos: life.pos, soldNeg: life.neg,
+            soldPos7d: w7.pos, soldNeg7d: w7.neg,
+            soldPos30d: w30.pos, soldNeg30d: w30.neg,
+            soldPos90d: w90.pos, soldNeg90d: w90.neg,
+          }
+        : {}),
     };
   }
   await writeSkuStatsChunked(db, brandId, skuStats, Object.keys(skuStats).length, {
@@ -697,6 +805,54 @@ export async function computeErpSkuVelocity(brandId: string): Promise<void> {
 }
 
 /** Compute and write the e-commerce summary for a brand; call after any connector sync. */
+/** channel -> dateKey -> value. */
+type ChannelDailyMap = Record<string, Record<string, number>>;
+
+/**
+ * Per-day(-or-month)-per-channel rollup for the Sales Channel card. Written to its own
+ * `ecommerce_channel_daily/{brandId}` doc so the client sums the picker window WITHOUT the unreliable
+ * raw-orders fetch (PER-170) and WITHOUT bloating the 1MB `ecommerce_summary` doc. Mirrors the
+ * all-time `*BySalesChannel` maps, just keyed by day. Granularity degrades day→month for a brand
+ * whose day×channel grid would risk the 1MB cap; the client reads `granularity` to slice the window.
+ */
+function buildChannelDailyRollup(visibleOrders: OrderRow[]): {
+  granularity: 'day' | 'month';
+  revenue: ChannelDailyMap;
+  includedRevenue: ChannelDailyMap;
+  orders: ChannelDailyMap;
+  includedOrders: ChannelDailyMap;
+} {
+  const channels = new Set<string>();
+  const days = new Set<string>();
+  for (const o of visibleOrders) {
+    channels.add(o.salesChannel || 'direct_eshop');
+    days.add(o.createdAt?.slice(0, 10) || 'unknown');
+  }
+  // ponytail: per-day stays exact for normal histories (~1.3k days × ~4 channels ≈ 0.5MB); a very
+  // long / many-channel brand degrades to per-month so the doc can't approach the 1MB cap.
+  const granularity: 'day' | 'month' = days.size * channels.size > 7000 ? 'month' : 'day';
+  const keyLen = granularity === 'day' ? 10 : 7;
+  const revenue: ChannelDailyMap = {};
+  const includedRevenue: ChannelDailyMap = {};
+  const orders: ChannelDailyMap = {};
+  const includedOrders: ChannelDailyMap = {};
+  const bump = (m: ChannelDailyMap, ch: string, k: string, v: number) => {
+    if (!m[ch]) m[ch] = {};
+    m[ch][k] = (m[ch][k] || 0) + v;
+  };
+  for (const o of visibleOrders) {
+    const ch = o.salesChannel || 'direct_eshop';
+    const k = o.createdAt?.slice(0, keyLen) || 'unknown';
+    bump(revenue, ch, k, o.totalPrice);
+    bump(orders, ch, k, 1);
+    if (o.revenueIncluded) {
+      bump(includedRevenue, ch, k, o.totalPrice);
+      bump(includedOrders, ch, k, 1);
+    }
+  }
+  return { granularity, revenue, includedRevenue, orders, includedOrders };
+}
+
 export async function computeEcommerceSummary(brandId: string): Promise<void> {
   const db = getDb();
 
@@ -754,6 +910,9 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
 
   // --- Aggregation ---
   const totalRevenue = revenueOrders.reduce((s, o) => s + o.totalPrice, 0);
+  // PER-301: revenue of nonMerchandise-matched lines within the counted orders (kept in totals).
+  const nonMerchMatch = await loadNonMerchLineMatcher(db, brandId, brandData);
+  const nonMerchandiseRevenue = revenueOrders.reduce((s, o) => s + nonMerchLineRevenue(o.lineItems, nonMerchMatch), 0);
   const orderCount = revenueOrders.length;
   const aov = orderCount > 0 ? totalRevenue / orderCount : 0;
 
@@ -940,6 +1099,8 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     totalRevenue,
     orderCount,
     aov,
+    nonMerchandiseRevenue,
+    nonMerchandiseShare: totalRevenue > 0 ? nonMerchandiseRevenue / totalRevenue : 0,
     revenueByDay,
     revenueByMonth,
     revenueByPlatform,
@@ -970,8 +1131,17 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
   } catch {
     // ignore
   }
+  // PER-170: per-day-per-channel rollup in its own doc (own 1MB budget) for the period-correct
+  // Sales Channel card. Non-fatal — a rollup hiccup must never fail the main summary write.
+  try {
+    const channelDaily = buildChannelDailyRollup(visibleOrders);
+    await db.doc(`ecommerce_channel_daily/${brandId}`).set({ ...channelDaily, updatedAt: FieldValue.serverTimestamp() });
+  } catch (e) {
+    logger.warn(`[EcommerceAgg] channel-daily rollup failed for ${brandId} (non-fatal):`, { err: e });
+  }
+
   logger.info(
     `[EcommerceAgg] Summary for ${brandId}: ${orderCount} orders, €${totalRevenue.toFixed(2)} revenue, sources=${revenueSummaryPlatforms.join(',')}`
   );
-  await computeBusinessRevenueSummary(brandId);
+  await computeBusinessRevenueSummary(brandId, nonMerchMatch);
 }

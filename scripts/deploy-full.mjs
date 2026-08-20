@@ -20,8 +20,9 @@ function hasStagedChanges() {
 console.log('→ firebase:deploy:full\n');
 run('npm run firebase:deploy:full');
 
-console.log('\n→ git add -A\n');
-run('git add -A');
+// git add -u (tracked files only) — never sweep untracked files (e.g. a stray .creds/.env dump) into the auto-commit+push
+console.log('\n→ git add -u\n');
+run('git add -u');
 
 if (hasStagedChanges()) {
   const msg = process.env.DEPLOY_COMMIT_MSG?.trim() || 'chore: full deploy';
