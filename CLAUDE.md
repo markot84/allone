@@ -79,5 +79,13 @@ another, guard it with `isSectionHidden()` so the reduced build stays free of de
 
 ## Repository
 
-Push only to `markot84/allone`. The sibling checkout `~/projects/makis/allone` is the client's
-production repo (`makis-nts/performance-plus`) and must not receive pushes.
+Push only to `markot84/allone`. The sibling checkout `~/projects/makis/performance-plus` is the
+client's repo (`makis-nts/performance-plus`) and must not receive pushes. It is wired here as the
+fetch-only remote `upstream` (push URL `no_push`), which is how upstream work is merged in — read
+from it freely, never write to it.
+
+Never deploy to the client's Firebase projects — `performance-plus-4a5b2` (production) or
+`performanceplus-staging`. The signed-in Firebase account can reach both, so the only thing keeping
+a deploy inside allone is `.firebaserc`, where `default`, `staging` and `production` all resolve to
+`allone-9e685`. Deploy through the `npm run firebase:deploy*` scripts, which pass an alias; never
+pass a raw project id.
