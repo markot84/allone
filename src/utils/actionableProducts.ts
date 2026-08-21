@@ -1,3 +1,4 @@
+import { getEffectiveStockLevel } from './productUtils';
 import type { MagentoProductEnrichment } from '../hooks/useMagentoProductEnrichment';
 import type { Product } from '../types';
 
@@ -32,7 +33,7 @@ const INACTIVE_STATUS_MARKERS = [
 ];
 
 export function getEffectiveStock(product: Product): number {
-  return Number(product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0) || 0;
+  return getEffectiveStockLevel(product); // PER-306: one canonical stock order (was available_stock-first = ERP on-hand incl. unreceived POs)
 }
 
 export function hasInactiveProductStatus(product: Product): boolean {

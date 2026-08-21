@@ -1,3 +1,4 @@
+import { getEffectiveStockLevel } from '../../utils/productUtils';
 import { useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, TrendingUp, Package, AlertTriangle, BarChart3 } from 'lucide-react';
@@ -112,7 +113,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
     let noStock = 0;
 
     products.forEach(p => {
-      const stock = p.available_stock ?? p.stock_on_hand ?? p.stock_level ?? 0;
+      const stock = getEffectiveStockLevel(p); // PER-306: one canonical stock order
       if (stock <= 0) {
         noStock++;
         return;

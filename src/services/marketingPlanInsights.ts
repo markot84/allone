@@ -1,3 +1,4 @@
+import { getEffectiveStockLevel } from '../utils/productUtils';
 import type { Product } from '../types';
 import {
   type EcommerceRawOrder,
@@ -337,7 +338,7 @@ function resolveNameToSku(index: NameBridgeIndex, rawName: unknown): { skuCanon:
 function productStock(product: Product | undefined): number {
   if (!product) return 0;
   return (
-    Number((product as any).available_stock ?? (product as any).stock_on_hand ?? (product as any).stock_level ?? 0) || 0
+    getEffectiveStockLevel(product) // PER-306: one canonical stock order
   );
 }
 

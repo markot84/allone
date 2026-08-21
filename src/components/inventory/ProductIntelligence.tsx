@@ -73,7 +73,7 @@ const STOCK_TAG_LABELS: Record<string, string> = {
   dead: 'Dead Stock', no_stock: 'No Stock', price_pending: 'Price Pending',
 };
 const productStockLevel = (product: Product): number =>
-  Number(product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0) || 0;
+  getEffectiveStockLevel(product); // PER-306: one canonical stock order
 const productDisplayTag = (product: Product): string =>
   productStockLevel(product) <= 0 ? 'no_stock' : hasPricePending(product) ? 'price_pending' : String(product.priority_tag || '');
 const EMPTY_INVENTORY_SUMMARY: InventorySummary = {
