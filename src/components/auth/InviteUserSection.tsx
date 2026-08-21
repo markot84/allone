@@ -3,14 +3,20 @@ import { BrandMembersNotificationTable } from './BrandMembersNotificationTable';
 import { InviteUserCard } from './InviteUserCard';
 import { MyDepartmentCard } from './MyDepartmentCard';
 import { NotificationSettings } from './NotificationSettings';
+import { PageHeader } from '../common';
+import { PageCanvas } from '../layout/ChromeControls';
+import { useFullBleedCanvas } from '../layout/AppChrome';
 
 export function InviteUserSection() {
+  // The page draws its own gutters, so the shell drops its padded wrapper.
+  useFullBleedCanvas();
+
   const { members, isLoading: membersLoading } = useBrandMembers();
 
   return (
-    <div className="p-6 max-w-5xl space-y-6">
+    <PageCanvas>
+      <PageHeader eyebrow="Admin" title="Καλέστε χρήστες" />
       <div>
-        <h2 className="text-xl font-semibold text-[var(--nts-charcoal)] mb-4">Καλέστε χρήστες</h2>
         <div className="space-y-6">
           <MyDepartmentCard />
           <InviteUserCard />
@@ -18,6 +24,6 @@ export function InviteUserSection() {
       </div>
       <BrandMembersNotificationTable members={members} loadingMembers={membersLoading} />
       <NotificationSettings />
-    </div>
+    </PageCanvas>
   );
 }

@@ -1,35 +1,32 @@
+import { SEGMENT_COLOR_TOKENS, token } from '../styles/chartTheme';
 import type { RFMSegment } from '../types';
 
-/** Distinct categorical hues — avoid clustering greens/teals for adjacent segments. */
-export const SEGMENT_COLORS: Record<string, string> = {
-  champions: '#F59E0B',
-  loyal: '#1D4ED8',
-  potential: '#6366F1',
-  loyal_customers: '#1D4ED8',
-  promising: '#6366F1',
-  at_risk: '#EF4444',
-  hibernating: '#64748B',
-  lost: '#991B1B',
-  recent_customers: '#06B6D4',
-  cant_lose_them: '#C026D3',
-  "can't_lose_them": '#C026D3',
-  customers_needing_attention: '#EC4899',
-  new_customers: '#84CC16',
-};
 
-export function getSegmentColor(segment: RFMSegment | null | undefined): string {
-  if (!segment) return '#6B7280';
+/** The `--token` name for a segment, for callers that want `var(...)` rather than a literal. */
+export function getSegmentColorToken(segment: RFMSegment | null | undefined): string {
+  if (!segment) return '--seg-lost';
   const idKey = segment.id.toLowerCase().replace(/\s+/g, '_');
   const idKeyNoApostrophe = idKey.replace(/'/g, '');
   const nameKey = (segment.name ?? '').toLowerCase().replace(/\s+/g, '_');
   const nameKeyNoApostrophe = nameKey.replace(/'/g, '');
   return (
-    SEGMENT_COLORS[segment.id] ??
-    SEGMENT_COLORS[idKey] ??
-    SEGMENT_COLORS[idKeyNoApostrophe] ??
-    SEGMENT_COLORS[nameKey] ??
-    SEGMENT_COLORS[nameKeyNoApostrophe] ??
-    segment.color ??
-    '#6B7280'
+    SEGMENT_COLOR_TOKENS[segment.id] ??
+    SEGMENT_COLOR_TOKENS[idKey] ??
+    SEGMENT_COLOR_TOKENS[idKeyNoApostrophe] ??
+    SEGMENT_COLOR_TOKENS[nameKey] ??
+    SEGMENT_COLOR_TOKENS[nameKeyNoApostrophe] ??
+    '--seg-lost'
   );
+}
+
+/**
+ * The literal colour for a segment.
+ *
+ * Literal rather than `var(--x)` because this value is handed to Nivo and Recharts, which paint it
+ * into SVG fills and their own colour maths — neither resolves a custom property. Any stored
+ * `segment.color` is deliberately ignored: it is a hex frozen into Firestore by whichever importer
+ * ran, and the palette is a display decision that should follow the tokens, not the data.
+ */
+export function getSegmentColor(segment: RFMSegment | null | undefined): string {
+  return token(getSegmentColorToken(segment));
 }

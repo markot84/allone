@@ -78,7 +78,7 @@ export function CommentsPanel({ entityType, entityId, entityTitle: _entityTitle 
         )}
         {comments.map(c => (
           <div key={c.id} className={`flex gap-2.5 ${c.authorId === user?.uid ? 'flex-row-reverse' : ''}`}>
-            <div className="w-8 h-8 rounded-full bg-[var(--nts-accent)] text-white flex items-center justify-center text-xs font-bold shrink-0">
+            <div className="w-8 h-8 rounded-full btn-gold text-white flex items-center justify-center text-xs font-bold shrink-0">
               {c.authorName.charAt(0).toUpperCase()}
             </div>
             <div className={`max-w-[80%] ${c.authorId === user?.uid ? 'text-right' : ''}`}>
@@ -93,7 +93,7 @@ export function CommentsPanel({ entityType, entityId, entityTitle: _entityTitle 
               </div>
               <div className={`px-3 py-2 rounded-xl text-sm ${
                 c.authorId === user?.uid
-                  ? 'bg-[var(--nts-accent)] text-white rounded-tr-sm'
+                  ? 'btn-gold text-white rounded-tr-sm'
                   : 'bg-[#F3F4F6] text-[#374151] rounded-tl-sm'
               }`}>
                 {c.text}
@@ -116,7 +116,7 @@ export function CommentsPanel({ entityType, entityId, entityTitle: _entityTitle 
         <button
           onClick={handleSend}
           disabled={!text.trim() || sending}
-          className="w-9 h-9 flex items-center justify-center rounded-lg bg-[var(--nts-accent)] text-white disabled:opacity-40 hover:opacity-90 transition-opacity"
+          className="w-9 h-9 flex items-center justify-center rounded-lg btn-gold text-white disabled:opacity-40 hover:opacity-90 transition-opacity"
         >
           <Send size={15} />
         </button>

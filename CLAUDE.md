@@ -13,9 +13,7 @@ withdraws the dark canvas in favour of a white background.
   Navigation means the label and the active-item wash, not a navy sidebar; the chrome surface stays
   white. All of it routes through the `--chrome-*` tokens, so it is one block to change, not a sweep.
 - **Orange `#FE630C`** — the single primary-action colour. On white it measures 3.00:1, so it is
-  never body text: use `--orange-700` (5.61:1) for orange text, or white on `--orange-700` for
-  buttons. `--nts-accent-text` exists for exactly this reason; do not "simplify" it back to
-  `--nts-accent`.
+  never body text: use `--orange-700` (5.61:1) for orange text. `--nts-accent-text` exists for exactly this reason; do not "simplify" it back   to `--nts-accent`.
 - **Gold `#FEC405`** — badge and highlight backgrounds only. Never text (1.60:1). Put navy on top.
 - **Sky `#005ECD`** — links, secondary CTA, info states.
 - The four brand colours are sampled from the logo and are fixed. A fifth "active" colour is not

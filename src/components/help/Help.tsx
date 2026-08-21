@@ -12,7 +12,9 @@ import {
   HelpCircle,
   X
 } from 'lucide-react';
-import { Card, CardHeader, Button, useToast, FormattedProse } from '../common';
+import { Card, CardHeader, Button, PageHeader, useToast, FormattedProse } from '../common';
+import { useFullBleedCanvas } from '../layout/AppChrome';
+import { PageCanvas } from '../layout/ChromeControls';
 import {
   knowledgeCategories,
   knowledgeArticles,
@@ -24,6 +26,9 @@ import {
 const SUPPORT_MAIL = 'noreply@performanceplus.gr';
 
 export function Help() {
+  // The page draws its own gutters, so the shell drops its padded wrapper.
+  useFullBleedCanvas();
+
   const toast = useToast();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
@@ -94,22 +99,22 @@ export function Help() {
   if (currentArticle) {
     const category = knowledgeCategories.find(c => c.id === currentArticle.category);
     return (
-      <div className="space-y-6">
+      <PageCanvas>
         {/* Header */}
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
           <button
             onClick={handleBack}
-            className="shrink-0 self-start rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
+            className="shrink-0 self-start rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]"
           >
-            <ArrowLeft size={20} className="text-[#4A4A4A]" />
+            <ArrowLeft size={20} className="text-[var(--text-secondary)]" />
           </button>
           <div className="min-w-0">
-            <div className="mb-1 flex flex-wrap items-center gap-2 text-sm text-[#9CA3AF]">
+            <div className="mb-1 flex flex-wrap items-center gap-2 text-sm text-[var(--text-muted)]">
               <span>{category?.icon}</span>
               <span>{category?.title}</span>
             </div>
-            <h1 className="break-words text-xl font-bold text-[#1A1A1A] sm:text-2xl">{currentArticle.title}</h1>
-            <p className="mt-1 text-sm text-[#4A4A4A]">{currentArticle.description}</p>
+            <h1 className="break-words text-xl font-bold text-[var(--text-primary)] sm:text-2xl">{currentArticle.title}</h1>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">{currentArticle.description}</p>
           </div>
         </div>
 
@@ -120,12 +125,12 @@ export function Help() {
 
             {/* Steps */}
             {currentArticle.steps && currentArticle.steps.length > 0 && (
-              <div className="mt-6 p-4 bg-[#F5F5F5] rounded-xl">
-                <h4 className="font-semibold text-[#1A1A1A] mb-3 flex items-center gap-2">
-                  <CheckCircle2 size={18} className="text-[#22C55E]" />
+              <div className="mt-6 p-4 bg-[var(--surface-2)] rounded-xl">
+                <h4 className="font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                  <CheckCircle2 size={18} className="text-[var(--success-700)]" />
                   Βήματα:
                 </h4>
-                <ol className="list-decimal list-inside space-y-2 text-[#4A4A4A]">
+                <ol className="list-decimal list-inside space-y-2 text-[var(--text-secondary)]">
                   {currentArticle.steps.map((step, i) => (
                     <li key={i}>{step}</li>
                   ))}
@@ -136,11 +141,11 @@ export function Help() {
             {/* Tips */}
             {currentArticle.tips && currentArticle.tips.length > 0 && (
               <div className="mt-6 p-4 bg-[var(--nts-light-gray)] rounded-xl border border-[var(--nts-accent)]/20">
-                <h4 className="font-semibold text-[#1A1A1A] mb-3 flex items-center gap-2">
+                <h4 className="font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
                   <Lightbulb size={18} className="text-[var(--nts-accent-text)]" />
                   Συμβουλές:
                 </h4>
-                <ul className="list-disc list-inside space-y-2 text-[#4A4A4A]">
+                <ul className="list-disc list-inside space-y-2 text-[var(--text-secondary)]">
                   {currentArticle.tips.map((tip, i) => (
                     <li key={i}>{tip}</li>
                   ))}
@@ -151,15 +156,15 @@ export function Help() {
             {/* FAQ */}
             {currentArticle.faq && currentArticle.faq.length > 0 && (
               <div className="mt-6">
-                <h4 className="font-semibold text-[#1A1A1A] mb-3 flex items-center gap-2">
-                  <HelpCircle size={18} className="text-[#4A4A4A]" />
+                <h4 className="font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                  <HelpCircle size={18} className="text-[var(--text-secondary)]" />
                   Συχνές Ερωτήσεις:
                 </h4>
                 <div className="space-y-3">
                   {currentArticle.faq.map((item, i) => (
-                    <div key={i} className="p-3 bg-white border border-[#E5E5E5] rounded-lg">
-                      <p className="font-medium text-[#1A1A1A] mb-1">{item.question}</p>
-                      <p className="text-sm text-[#4A4A4A]">{item.answer}</p>
+                    <div key={i} className="p-3 bg-white border border-[var(--border)] rounded-lg">
+                      <p className="font-medium text-[var(--text-primary)] mb-1">{item.question}</p>
+                      <p className="text-sm text-[var(--text-secondary)]">{item.answer}</p>
                     </div>
                   ))}
                 </div>
@@ -168,8 +173,8 @@ export function Help() {
 
             {/* Related Articles */}
             {currentArticle.related && currentArticle.related.length > 0 && (
-              <div className="mt-6 pt-6 border-t border-[#E5E5E5]">
-                <h4 className="font-semibold text-[#1A1A1A] mb-3">Σχετικά Άρθρα:</h4>
+              <div className="mt-6 pt-6 border-t border-[var(--border)]">
+                <h4 className="font-semibold text-[var(--text-primary)] mb-3">Σχετικά Άρθρα:</h4>
                 <div className="flex flex-wrap gap-2">
                   {currentArticle.related.map((relatedId) => {
                     const related = getArticleById(relatedId);
@@ -178,7 +183,7 @@ export function Help() {
                       <button
                         key={relatedId}
                         onClick={() => handleArticleClick(relatedId)}
-                        className="px-3 py-1.5 bg-[#F5F5F5] hover:bg-[var(--nts-light-gray)] rounded-lg text-sm text-[#1A1A1A] transition-colors"
+                        className="px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--nts-light-gray)] rounded-lg text-sm text-[var(--text-primary)] transition-colors"
                       >
                         {related.title}
                       </button>
@@ -189,7 +194,7 @@ export function Help() {
             )}
           </div>
         </Card>
-      </div>
+      </PageCanvas>
     );
   }
 
@@ -199,21 +204,21 @@ export function Help() {
     const articles = getArticlesByCategory(selectedCategory);
 
     return (
-      <div className="space-y-6">
+      <PageCanvas>
         {/* Header */}
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <button
             onClick={handleBack}
-            className="shrink-0 self-start rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
+            className="shrink-0 self-start rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]"
           >
-            <ArrowLeft size={20} className="text-[#4A4A4A]" />
+            <ArrowLeft size={20} className="text-[var(--text-secondary)]" />
           </button>
           <div className="min-w-0">
-            <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold text-[#1A1A1A] sm:text-2xl">
+            <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
               <span>{category?.icon}</span>
               {category?.title}
             </h1>
-            <p className="text-sm text-[#4A4A4A] mt-1">{category?.description}</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">{category?.description}</p>
           </div>
         </div>
 
@@ -229,14 +234,14 @@ export function Help() {
               <Card padding="md" hover onClick={() => handleArticleClick(article.id)}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-[#1A1A1A] mb-1">{article.title}</h3>
-                    <p className="text-sm text-[#4A4A4A]">{article.description}</p>
+                    <h3 className="font-semibold text-[var(--text-primary)] mb-1">{article.title}</h3>
+                    <p className="text-sm text-[var(--text-secondary)]">{article.description}</p>
                     {article.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {article.tags.slice(0, 3).map((tag) => (
                           <span
                             key={tag}
-                            className="text-xs px-2 py-0.5 bg-[#F5F5F5] rounded text-[#6B7280]"
+                            className="text-xs px-2 py-0.5 bg-[var(--surface-2)] rounded text-[var(--text-muted)]"
                           >
                             {tag}
                           </span>
@@ -244,42 +249,39 @@ export function Help() {
                       </div>
                     )}
                   </div>
-                  <ChevronRight size={18} className="text-[#9CA3AF] flex-shrink-0" />
+                  <ChevronRight size={18} className="text-[var(--text-muted)] flex-shrink-0" />
                 </div>
               </Card>
             </motion.div>
           ))}
         </div>
-      </div>
+      </PageCanvas>
     );
   }
 
   // Main Help Page
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="text-center py-8">
-        <h2 className="text-3xl font-bold text-[#1A1A1A]">Βιβλιοθήκη γνώσης</h2>
-        <p className="text-[#4A4A4A] mt-2 max-w-md mx-auto">
-          Βρείτε απαντήσεις και οδηγούς για τη χρήση του allone
-        </p>
+    <PageCanvas>
+      {/* Header — left-aligned like every other page; a centred hero was this page's own idea. */}
+      <PageHeader eyebrow="Help" title="Βιβλιοθήκη γνώσης" description="Βρείτε απαντήσεις και οδηγούς για τη χρήση του allone" />
 
+      <div>
         {/* Search */}
-        <div className="relative max-w-xl mx-auto mt-6">
-          <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+        <div className="relative max-w-xl">
+          <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
           <input
             type="text"
             placeholder="Αναζήτηση άρθρων..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border border-[#E5E5E5] rounded-xl text-sm focus:outline-none focus:border-[var(--nts-accent)] shadow-sm"
+            className="w-full pl-12 pr-4 py-3 bg-white border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:border-[var(--nts-accent)] shadow-sm"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-[#F5F5F5] rounded"
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-[var(--surface-2)] rounded"
             >
-              <X size={16} className="text-[#9CA3AF]" />
+              <X size={16} className="text-[var(--text-muted)]" />
             </button>
           )}
         </div>
@@ -288,7 +290,7 @@ export function Help() {
       {/* Search Results */}
       {searchQuery && filteredArticles.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-[#1A1A1A]">
+          <h3 className="text-lg font-semibold text-[var(--text-primary)]">
             Αποτελέσματα αναζήτησης ({filteredArticles.length})
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -301,10 +303,10 @@ export function Help() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-[#1A1A1A] mb-1">{article.title}</h3>
-                    <p className="text-sm text-[#4A4A4A]">{article.description}</p>
+                    <h3 className="font-semibold text-[var(--text-primary)] mb-1">{article.title}</h3>
+                    <p className="text-sm text-[var(--text-secondary)]">{article.description}</p>
                   </div>
-                  <ChevronRight size={18} className="text-[#9CA3AF]" />
+                  <ChevronRight size={18} className="text-[var(--text-muted)]" />
                 </div>
               </Card>
             ))}
@@ -315,8 +317,8 @@ export function Help() {
       {searchQuery && filteredArticles.length === 0 && (
         <Card padding="lg">
           <div className="text-center py-8">
-            <p className="text-[#4A4A4A]">Δεν βρέθηκαν άρθρα για "{searchQuery}"</p>
-            <p className="text-sm text-[#9CA3AF] mt-2">Δοκιμάστε διαφορετικούς όρους αναζήτησης</p>
+            <p className="text-[var(--text-secondary)]">Δεν βρέθηκαν άρθρα για "{searchQuery}"</p>
+            <p className="text-sm text-[var(--text-muted)] mt-2">Δοκιμάστε διαφορετικούς όρους αναζήτησης</p>
           </div>
         </Card>
       )}
@@ -346,13 +348,13 @@ export function Help() {
                         {category.icon}
                       </div>
                       <div className="flex-1">
-                        <h3 className="font-semibold text-[#1A1A1A]">{category.title}</h3>
-                        <p className="text-sm text-[#4A4A4A] mt-1">{category.description}</p>
+                        <h3 className="font-semibold text-[var(--text-primary)]">{category.title}</h3>
+                        <p className="text-sm text-[var(--text-secondary)] mt-1">{category.description}</p>
                         <p className="text-xs mt-2 text-[var(--nts-medium-gray)]">
                           {articlesCount} άρθρα
                         </p>
                       </div>
-                      <ChevronRight size={18} className="text-[#9CA3AF]" />
+                      <ChevronRight size={18} className="text-[var(--text-muted)]" />
                     </div>
                   </Card>
                 </motion.div>
@@ -374,12 +376,12 @@ export function Help() {
                   <motion.button
                     key={article.id}
                     onClick={() => handleArticleClick(article.id)}
-                    className="w-full flex items-center justify-between p-3 bg-[#F5F5F5] rounded-lg hover:bg-[var(--nts-light-gray)] transition-colors group text-left"
+                    className="w-full flex items-center justify-between p-3 bg-[var(--surface-2)] rounded-lg hover:bg-[var(--nts-light-gray)] transition-colors group text-left"
                   >
-                    <span className="text-sm text-[#1A1A1A] group-hover:text-[var(--nts-accent-text)]">
+                    <span className="text-sm text-[var(--text-primary)] group-hover:text-[var(--nts-accent-text)]">
                       {article.title}
                     </span>
-                    <ChevronRight size={16} className="text-[#9CA3AF] group-hover:text-[var(--nts-accent-text)]" />
+                    <ChevronRight size={16} className="text-[var(--text-muted)] group-hover:text-[var(--nts-accent-text)]" />
                   </motion.button>
                 ))}
             </div>
@@ -393,14 +395,14 @@ export function Help() {
               icon={<MessageCircle size={20} className="text-[var(--nts-accent-text)]" />}
             />
             <div className="space-y-4 mt-4">
-              <div className="p-4 bg-[#F5F5F5] rounded-xl">
+              <div className="p-4 bg-[var(--surface-2)] rounded-xl">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-[#22C55E]/20 rounded-lg flex items-center justify-center">
-                    <MessageCircle size={20} className="text-[#22C55E]" />
+                  <div className="w-10 h-10 bg-[var(--success-700)]/20 rounded-lg flex items-center justify-center">
+                    <MessageCircle size={20} className="text-[var(--success-700)]" />
                   </div>
                   <div>
-                    <h4 className="font-medium text-[#1A1A1A]">Live Chat</h4>
-                    <p className="text-xs text-[#22C55E]">Διαθέσιμο τώρα</p>
+                    <h4 className="font-medium text-[var(--text-primary)]">Live Chat</h4>
+                    <p className="text-xs text-[var(--success-700)]">Διαθέσιμο τώρα</p>
                   </div>
                 </div>
                 <Button
@@ -415,14 +417,14 @@ export function Help() {
                 </Button>
               </div>
 
-              <div className="p-4 border border-[#E5E5E5] rounded-xl">
+              <div className="p-4 border border-[var(--border)] rounded-xl">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-[#F5F5F5] rounded-lg flex items-center justify-center">
-                    <Mail size={20} className="text-[#4A4A4A]" />
+                  <div className="w-10 h-10 bg-[var(--surface-2)] rounded-lg flex items-center justify-center">
+                    <Mail size={20} className="text-[var(--text-secondary)]" />
                   </div>
                   <div>
-                    <h4 className="font-medium text-[#1A1A1A]">Email Support</h4>
-                    <p className="text-xs text-[#4A4A4A]">noreply@performanceplus.gr</p>
+                    <h4 className="font-medium text-[var(--text-primary)]">Email Support</h4>
+                    <p className="text-xs text-[var(--text-secondary)]">noreply@performanceplus.gr</p>
                   </div>
                 </div>
                 <Button
@@ -441,17 +443,17 @@ export function Help() {
       )}
 
       {/* Footer */}
-      <div className="text-center py-8 border-t border-[#E5E5E5]">
-        <p className="text-[#4A4A4A]">
+      <div className="text-center py-8 border-t border-[var(--border)]">
+        <p className="text-[var(--text-secondary)]">
           Δεν βρίσκετε αυτό που ψάχνετε;{' '}
           <a href={`mailto:${SUPPORT_MAIL}`} className="text-[var(--nts-accent-text)] hover:underline">
             Επικοινωνήστε με την ομάδα μας
           </a>
         </p>
-        <p className="text-xs text-[#9CA3AF] mt-2">
+        <p className="text-xs text-[var(--text-muted)] mt-2">
           allone by notthesame.ai | www.notthesame.ai
         </p>
       </div>
-    </div>
+    </PageCanvas>
   );
 }

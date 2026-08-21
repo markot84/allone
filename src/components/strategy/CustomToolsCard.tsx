@@ -71,7 +71,7 @@ export function CustomToolsCard({
               value={saveName}
               onChange={(e) => setSaveName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-              className="px-3 py-2 w-40 bg-white border border-[#E5E5E5] rounded-lg text-sm"
+              className="px-3 py-2 w-40 bg-white border border-[var(--border)] rounded-lg text-sm"
               autoFocus
             />
             <Button
@@ -105,7 +105,7 @@ export function CustomToolsCard({
             <select
               value={loadPresetId}
               onChange={(e) => setLoadPresetId(e.target.value)}
-              className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm"
+              className="px-3 py-2 bg-[var(--surface-2)] border border-transparent rounded-lg text-sm"
             >
               <option value="">— Φόρτωση preset —</option>
               {presets.map((p) => (
@@ -127,7 +127,7 @@ export function CustomToolsCard({
                 }
               }}
               disabled={!loadPresetId}
-              className="text-[#EF4444] hover:text-[#DC2626]"
+              className="text-[var(--danger-600)] hover:text-[var(--danger-600)]"
             >
               Διαγραφή
             </Button>
@@ -137,7 +137,7 @@ export function CustomToolsCard({
       </div>
 
       {toast && (
-        <div className="text-sm text-[#22C55E] font-medium animate-pulse">
+        <div className="text-sm text-[var(--success-700)] font-medium animate-pulse">
           {toast}
         </div>
       )}

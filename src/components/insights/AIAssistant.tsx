@@ -211,7 +211,7 @@ const MarkMessageItem = memo(function MarkMessageItem({
       <div
         className={`max-w-[80%] rounded-lg p-3 ${
           message.type === 'user'
-            ? 'bg-[var(--nts-accent)] text-white'
+            ? 'btn-gold text-white'
             : 'bg-[var(--nts-light-gray)] text-[var(--nts-charcoal)]'
         }`}
       >
@@ -292,7 +292,7 @@ const MarkMessageItem = memo(function MarkMessageItem({
                 markMessageId: message.id,
               })}
               disabled={savingInfo}
-              className="w-full rounded-lg bg-[var(--nts-accent)] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[var(--nts-accent)]/90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg btn-gold px-3 py-2 text-xs font-semibold text-white transition-colors hover:btn-gold/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {savingInfo ? 'Καταχώριση…' : 'Καταχώριση & άνοιγμα Marketing Plan'}
             </button>
@@ -1279,7 +1279,7 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
                 <button
                   onClick={() => handleSend()}
                   disabled={!input.trim() || isTyping || savingInfo}
-                  className="p-2 bg-[var(--nts-accent)] text-white rounded-lg hover:bg-[var(--nts-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-2 btn-gold text-white rounded-lg hover:bg-[var(--nts-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send size={18} />
                 </button>

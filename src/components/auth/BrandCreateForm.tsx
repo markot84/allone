@@ -134,7 +134,7 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
         assetType="logo"
       />
       
-      {error && <p className="text-sm text-[#EF4444]">{error}</p>}
+      {error && <p className="text-sm text-[var(--danger-600)]">{error}</p>}
       <Button type="submit" variant="primary" className="w-full" disabled={submitting}>
         Δημιουργία Brand
       </Button>

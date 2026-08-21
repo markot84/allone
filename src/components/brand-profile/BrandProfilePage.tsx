@@ -10,6 +10,8 @@ import {
 } from '../../services/brandProfile';
 import type { BrandArchetype, BrandICP, BrandIcpPriceSensitivity, BrandProfile } from '../../types';
 import { logger } from '../../utils/logger';
+import { useFullBleedCanvas } from '../layout/AppChrome';
+import { PageCanvas } from '../layout/ChromeControls';
 
 const PRICE_LABEL: Record<BrandIcpPriceSensitivity, string> = {
   low: 'Χαμηλή',
@@ -32,13 +34,13 @@ function TextareaField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[#6B7280]">{label}</span>
+      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</span>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={rows}
         placeholder={placeholder}
-        className="w-full resize-none rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[var(--nts-charcoal)] outline-none transition-colors focus:border-[var(--nts-accent)]"
+        className="w-full resize-none rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--nts-charcoal)] outline-none transition-colors focus:border-[var(--nts-accent)]"
       />
     </label>
   );
@@ -54,7 +56,7 @@ function IcpEditor({
   onRemove: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
+    <div className="rounded-xl border border-[var(--border)] bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <UserRound size={16} className="text-[var(--nts-accent-text)]" />
@@ -62,7 +64,7 @@ function IcpEditor({
             value={icp.name}
             onChange={(e) => onChange({ name: e.target.value })}
             placeholder="π.χ. Elite Tennis Competitor"
-            className="min-w-0 flex-1 rounded-lg border border-[#E5E7EB] px-3 py-1.5 text-sm font-semibold outline-none focus:border-[var(--nts-accent)]"
+            className="min-w-0 flex-1 rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm font-semibold outline-none focus:border-[var(--nts-accent)]"
           />
         </div>
         <button
@@ -101,7 +103,7 @@ function IcpEditor({
         />
       </div>
       <div className="mt-3">
-        <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Price sensitivity</span>
+        <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Price sensitivity</span>
         <div className="flex flex-wrap gap-2">
           {(Object.keys(PRICE_LABEL) as BrandIcpPriceSensitivity[]).map((level) => (
             <button
@@ -111,7 +113,7 @@ function IcpEditor({
               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 icp.priceSensitivity === level
                   ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]'
-                  : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
+                  : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]'
               }`}
             >
               {PRICE_LABEL[level]}
@@ -124,6 +126,9 @@ function IcpEditor({
 }
 
 export function BrandProfilePage() {
+  // The page draws its own gutters, so the shell drops its padded wrapper.
+  useFullBleedCanvas();
+
   const { currentBrand, setCurrentBrand, refreshBrands } = useBrand();
   const toast = useToast();
   const [profile, setProfile] = useState<BrandProfile>(() => normalizeBrandProfile(currentBrand?.brandProfile));
@@ -189,14 +194,11 @@ export function BrandProfilePage() {
   };
 
   return (
-    <div className="space-y-6">
+    <PageCanvas>
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Brand Profile</h2>}
-        description={
-          <p className="text-sm text-[#4A4A4A]">
-            Ταυτότητα, archetype, tone of voice και ICPs που καθοδηγούν Mark, Marketing Plan και μελλοντικά διαφημιστικά μηνύματα.
-          </p>
-        }
+        eyebrow="Marketing"
+        title="Brand Profile"
+        description="Ταυτότητα, archetype, tone of voice και ICPs που καθοδηγούν Mark, Marketing Plan και μελλοντικά διαφημιστικά μηνύματα."
         actions={
           <Button icon={saving ? <Spinner size="sm" /> : <Save size={16} />} onClick={save} disabled={!currentBrand?.id || saving}>
             {saving ? 'Αποθήκευση…' : 'Αποθήκευση'}
@@ -207,7 +209,7 @@ export function BrandProfilePage() {
       <Card padding="lg">
         <CardHeader title="Προφίλ brand" icon={<Palette size={18} className="text-[var(--nts-accent-text)]" />} />
         {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="mb-4 rounded-lg border border-[var(--danger-light)] bg-[var(--danger-light)] px-3 py-2 text-sm text-[var(--danger-600)]">
             {error}
           </div>
         )}
@@ -226,7 +228,7 @@ export function BrandProfilePage() {
         <CardHeader title="Brand archetype & tone of voice" />
         <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Archetype έως 2 επιλογές</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Archetype έως 2 επιλογές</p>
             <div className="grid gap-2 sm:grid-cols-2">
               {BRAND_ARCHETYPES.map((item) => (
                 <div
@@ -234,21 +236,21 @@ export function BrandProfilePage() {
                   className={`rounded-xl border p-3 text-left transition-colors ${
                     profile.archetype === item.id || profile.secondaryArchetype === item.id
                       ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10'
-                      : 'border-[#E5E7EB] bg-white hover:border-[var(--nts-accent)]/60'
+                      : 'border-[var(--border)] bg-white hover:border-[var(--nts-accent)]/60'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-[#1A1A1A]">{item.label}</span>
+                    <span className="text-sm font-semibold text-[var(--text-primary)]">{item.label}</span>
                   </div>
-                  <p className="mt-1 text-xs text-[#6B7280]">{item.description}</p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">{item.description}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => setArchetypeRole(item.id, 'primary')}
                       className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                         profile.archetype === item.id
-                          ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
-                          : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
+                          ? 'border-[var(--nts-accent)] btn-gold text-white'
+                          : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]'
                       }`}
                     >
                       Βασικό
@@ -260,7 +262,7 @@ export function BrandProfilePage() {
                       className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                         profile.secondaryArchetype === item.id
                           ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]'
-                          : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
+                          : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--nts-accent)]'
                       }`}
                     >
                       Συμπληρωματικό
@@ -274,7 +276,7 @@ export function BrandProfilePage() {
             {(primaryArchetype || secondaryArchetype) && (
               <div className="rounded-xl border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/5 p-3">
                 <p className="text-xs font-semibold uppercase text-[var(--nts-accent-text)]">Tone starter</p>
-                <p className="mt-1 text-sm text-[#4A4A4A]">
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
                   {[
                     primaryArchetype ? `Βασικό (${primaryArchetype.label}): ${primaryArchetype.toneHint}` : '',
                     secondaryArchetype ? `Συμπληρωματικό (${secondaryArchetype.label}): ${secondaryArchetype.toneHint}` : '',
@@ -307,7 +309,7 @@ export function BrandProfilePage() {
         </div>
         <div className="mt-4 space-y-3">
           {profile.icps.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-[#E5E7EB] bg-[#FAFAFA] p-4 text-sm text-[#6B7280]">
+            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm text-[var(--text-muted)]">
               Πρόσθεσε 1-3 βασικά ICPs για καλύτερη στόχευση σε Mark και Marketing Plan.
             </div>
           ) : (
@@ -322,7 +324,7 @@ export function BrandProfilePage() {
           )}
         </div>
       </Card>
-    </div>
+    </PageCanvas>
   );
 }
 

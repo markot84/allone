@@ -16,12 +16,12 @@ export function Spinner({ size = 'md', className = '', label }: SpinnerProps) {
   return (
     <div className={`flex flex-col items-center justify-center gap-2 ${className}`}>
       <div
-        className={`rounded-full border-[var(--nts-border-gray)] border-t-[var(--nts-accent)] animate-spin ${sizeClasses[size]}`}
+        className={`rounded-full border-[var(--border)] border-t-[var(--orange-500)] animate-spin ${sizeClasses[size]}`}
         role="status"
         aria-label={label ? undefined : 'Loading'}
       />
       {label && (
-        <span className="text-sm text-[var(--nts-medium-gray)]">{label}</span>
+        <span className="text-sm text-[var(--text-muted)]">{label}</span>
       )}
     </div>
   );

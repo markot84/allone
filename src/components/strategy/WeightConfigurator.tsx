@@ -41,6 +41,8 @@ import { useSegments } from '../../hooks/useSegments';
 import { useBrand } from '../../hooks/useBrand';
 import { CommercialInfoBanner } from '../commercial-info/CommercialInfoBanner';
 import { isSectionHidden } from '../../config/modules';
+import { useFullBleedCanvas } from '../layout/AppChrome';
+import { PageCanvas } from '../layout/ChromeControls';
 import { useActiveStrategy, type SeasonalProposal, type TriageOrigin } from '../../hooks/useActiveStrategy';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -159,14 +161,14 @@ const PreviewCell = memo(function PreviewCell({
     case 'product':
       return (
         <td className="py-2 pr-2 max-w-0">
-          <p className="text-xs font-medium text-[#1A1A1A] truncate">{product.name}</p>
-          <p className="text-[10px] text-[#9CA3AF] truncate">{product.sku}</p>
+          <p className="text-xs font-medium text-[var(--text-primary)] truncate">{product.name}</p>
+          <p className="text-[10px] text-[var(--text-muted)] truncate">{product.sku}</p>
         </td>
       );
     case 'category':
       return (
         <td className="py-2 pr-2 hidden lg:table-cell">
-          <span className="text-xs text-[#4A4A4A] truncate block max-w-[100px]">{product.category}</span>
+          <span className="text-xs text-[var(--text-secondary)] truncate block max-w-[100px]">{product.category}</span>
         </td>
       );
     case 'margin': {
@@ -198,16 +200,16 @@ const PreviewCell = memo(function PreviewCell({
       return (
         <td className="py-2 pr-2 w-20 hidden sm:table-cell">
           <div className="flex items-center gap-1.5">
-            <div className="w-10 h-1.5 bg-[#E5E5E5] rounded-full overflow-hidden shrink-0">
+            <div className="w-10 h-1.5 bg-[var(--border)] rounded-full overflow-hidden shrink-0">
               <div
                 className="h-full rounded-full"
                 style={{
                   width: `${Math.min(ratio * 100, 100)}%`,
-                  backgroundColor: ratio > 0.8 ? '#EF4444' : ratio > 0.5 ? '#F59E0B' : '#22C55E',
+                  backgroundColor: ratio > 0.8 ? 'var(--danger-600)' : ratio > 0.5 ? 'var(--orange-700)' : 'var(--success-700)',
                 }}
               />
             </div>
-            <span className="text-[10px] text-[#4A4A4A] font-mono">{effectiveStock}</span>
+            <span className="text-[10px] text-[var(--text-secondary)] font-mono">{effectiveStock}</span>
           </div>
         </td>
       );
@@ -215,7 +217,7 @@ const PreviewCell = memo(function PreviewCell({
       const d = getStockAgeDays(product);
       return (
         <td className="py-2 pr-2 w-16 hidden md:table-cell">
-          <span className="text-xs text-[#4A4A4A]">{d < 0 ? '—' : `${d}d`}</span>
+          <span className="text-xs text-[var(--text-secondary)]">{d < 0 ? '—' : `${d}d`}</span>
         </td>
       );
     }
@@ -224,7 +226,7 @@ const PreviewCell = memo(function PreviewCell({
       const pct = stockCapacity > 0 ? ((excess / stockCapacity) * 100).toFixed(0) : '0';
       return (
         <td className="py-2 pr-2 w-14 hidden md:table-cell">
-          <span className="text-xs font-medium text-[#4A4A4A]">{pct}%</span>
+          <span className="text-xs font-medium text-[var(--text-secondary)]">{pct}%</span>
         </td>
       );
     }
@@ -241,7 +243,7 @@ const PreviewCell = memo(function PreviewCell({
       const fmt = val >= 1000 ? `€${(val / 1000).toFixed(1)}K` : `€${val.toFixed(0)}`;
       return (
         <td className="py-2 pr-2 w-16 hidden sm:table-cell">
-          <span className="text-xs font-mono text-[#1A1A1A]">{fmt}</span>
+          <span className="text-xs font-mono text-[var(--text-primary)]">{fmt}</span>
         </td>
       );
     }
@@ -251,7 +253,7 @@ const PreviewCell = memo(function PreviewCell({
         label === 'Υψηλή' || label === 'Αυξημένη'
           ? 'text-amber-700 bg-amber-50'
           : label === 'Μέτρια'
-            ? 'text-[#4A4A4A] bg-[#F3F4F6]'
+            ? 'text-[var(--text-secondary)] bg-[var(--surface-2)]'
             : 'text-emerald-800 bg-emerald-50';
       return (
         <td className="py-2 pr-2 w-20 hidden sm:table-cell">
@@ -263,7 +265,7 @@ const PreviewCell = memo(function PreviewCell({
       if (!posNeg) {
         return (
           <td className="py-2 pr-2 w-20 hidden sm:table-cell">
-            <span className="text-[10px] text-[#9CA3AF]">—</span>
+            <span className="text-[10px] text-[var(--text-muted)]">—</span>
           </td>
         );
       }
@@ -272,7 +274,7 @@ const PreviewCell = memo(function PreviewCell({
           <span className="text-[10px] font-mono">
             <span className="text-emerald-700">+{posNeg.pos}</span>
             {' / '}
-            <span className={posNeg.neg > 0 ? 'text-rose-700' : 'text-[#9CA3AF]'}>−{posNeg.neg}</span>
+            <span className={posNeg.neg > 0 ? 'text-rose-700' : 'text-[var(--text-muted)]'}>−{posNeg.neg}</span>
           </span>
         </td>
       );
@@ -285,7 +287,7 @@ const PreviewCell = memo(function PreviewCell({
       if (!bm || bm.benchmarkPrice <= 0) {
         return (
           <td className="py-2 pr-2 w-20 hidden sm:table-cell">
-            <span className="text-[10px] text-[#9CA3AF]">—</span>
+            <span className="text-[10px] text-[var(--text-muted)]">—</span>
           </td>
         );
       }
@@ -294,7 +296,7 @@ const PreviewCell = memo(function PreviewCell({
           ? 'text-emerald-800 bg-emerald-50'
           : bm.priceDiff > 2
             ? 'text-rose-800 bg-rose-50'
-            : 'text-[#4A4A4A] bg-[#F3F4F6]';
+            : 'text-[var(--text-secondary)] bg-[var(--surface-2)]';
       return (
         <td className="py-2 pr-2 w-24 hidden sm:table-cell">
           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${tone}`}>
@@ -343,6 +345,9 @@ function getScenarioPendingActionText(scenarioId: string | null): string {
 export function WeightConfigurator({
   onSectionChange,
 }: { onSectionChange?: (section: string) => void } = {}) {
+  // The page draws its own gutters, so the shell drops its padded wrapper.
+  useFullBleedCanvas();
+
   const { currentBrand } = useBrand();
   // PER-167: score the bounded in-stock set (~14k) from the precomputed PI bucket pages instead of
   // loading + scoring the full ~222k catalog on the main thread (the freeze). useBoundedProductSource
@@ -1540,22 +1545,15 @@ export function WeightConfigurator({
 
 
   return (
-    <div className="space-y-6 max-w-full overflow-x-hidden">
+    <PageCanvas>
       {/* Page Header — 2 columns: left = text + package + tabs, right = preview image */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr,minmax(280px,400px)] gap-6 lg:gap-8 items-start max-w-full overflow-x-hidden">
         {/* Left column: title, subtitle, strategy package, tabs */}
         <div className="min-w-0 space-y-4 flex flex-col">
           <PageHeader
-            title={
-              <h2 className="text-xl font-bold tracking-tight text-[var(--nts-charcoal)] sm:text-2xl">
-                Commercial Strategy
-              </h2>
-            }
-            description={
-              <p className="text-[14px] text-[var(--nts-medium-gray)]">
-                Καθορισμός εμπορικών προτεραιοτήτων, κατανομή πόρων και συντονισμός εκτέλεσης
-              </p>
-            }
+            eyebrow="Commercial strategy"
+            title="Εμπορική πολιτική"
+            description="Καθορισμός εμπορικών προτεραιοτήτων, κατανομή πόρων και συντονισμός εκτέλεσης"
             meta={
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <DataSourcePill
@@ -1732,7 +1730,7 @@ export function WeightConfigurator({
 
           {/* Briefing Banner — shown after strategy save */}
           {briefingName && !showBriefingDrawer && (
-            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[#111827] rounded-xl">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[var(--text-primary)] rounded-xl">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-2 h-2 rounded-full bg-[var(--nts-accent)] shrink-0 animate-pulse" />
                 <span className="text-sm text-white truncate">
@@ -1748,7 +1746,7 @@ export function WeightConfigurator({
                 </button>
                 <button
                   onClick={() => setShowBriefingDrawer(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-[var(--nts-accent)] text-white rounded-lg hover:opacity-90 transition-opacity"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium btn-gold text-white rounded-lg hover:opacity-90 transition-opacity"
                 >
                   Αποστολή Briefing →
                 </button>
@@ -1778,15 +1776,15 @@ export function WeightConfigurator({
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`rounded-xl border p-4 ${expired ? 'border-[#EF4444]/30 bg-[#EF4444]/5' : 'border-[#F59E0B]/30 bg-[#F59E0B]/5'}`}
+            className={`rounded-xl border p-4 ${expired ? 'border-[var(--danger-600)]/30 bg-[var(--danger-600)]/5' : 'border-[var(--orange-700)]/30 bg-[var(--orange-700)]/5'}`}
           >
             <div className="flex items-start gap-3">
-              <AlertCircle size={18} className={expired ? 'text-[#EF4444] mt-0.5' : 'text-[#F59E0B] mt-0.5'} />
+              <AlertCircle size={18} className={expired ? 'text-[var(--danger-600)] mt-0.5' : 'text-[var(--orange-700)] mt-0.5'} />
               <div className="flex-1 min-w-0">
-                <h4 className={`text-sm font-semibold ${expired ? 'text-[#EF4444]' : 'text-[#F59E0B]'}`}>
+                <h4 className={`text-sm font-semibold ${expired ? 'text-[var(--danger-600)]' : 'text-[var(--orange-700)]'}`}>
                   {expired ? 'Η στρατηγική σας έχει λήξει' : `Η στρατηγική λήγει σε ${remaining} ${remaining === 1 ? 'ημέρα' : 'ημέρες'}`}
                 </h4>
-                <p className="text-xs text-[#4A4A4A] mt-1 leading-relaxed">
+                <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
                   {expired
                     ? 'Η διάρκεια της τρέχουσας στρατηγικής έχει ολοκληρωθεί. Επιλέξτε νέα στρατηγική ή ανανεώστε την υπάρχουσα.'
                     : 'Ετοιμαστείτε για αλλαγή — ελέγξτε τα αποτελέσματα και αποφασίστε αν θα ανανεώσετε, προσαρμόσετε ή αλλάξετε στρατηγική.'
@@ -1841,9 +1839,9 @@ export function WeightConfigurator({
           />
 
           {totalWeight !== 100 && (
-            <div className="mb-4 p-3 bg-[#FEF3C7] border border-[#F59E0B] rounded-lg flex items-center gap-2">
-              <AlertCircle size={16} className="text-[#F59E0B]" />
-              <span className="text-sm text-[#92400E]">
+            <div className="mb-4 p-3 bg-[var(--warning-light)] border border-[var(--orange-700)] rounded-lg flex items-center gap-2">
+              <AlertCircle size={16} className="text-[var(--orange-700)]" />
+              <span className="text-sm text-[var(--orange-700)]">
                 Weights must equal 100% (currently {totalWeight}%)
               </span>
             </div>
@@ -1931,7 +1929,7 @@ export function WeightConfigurator({
           <div className="-mx-2 overflow-x-auto">
             <table className="w-full table-fixed min-w-[760px]">
               <thead>
-                <tr className="text-left text-[11px] text-[#4A4A4A] border-b border-[#E5E5E5]">
+                <tr className="text-left text-[11px] text-[var(--text-secondary)] border-b border-[var(--border)]">
                   {previewConfig.columns.map((col) => {
                     const hiddenClass =
                       col.id === 'category' ? 'hidden lg:table-cell' :
@@ -1964,7 +1962,7 @@ export function WeightConfigurator({
                                 key={w}
                                 type="button"
                                 onClick={() => setPosNegWindow(w)}
-                                className={`text-[9px] px-1 rounded ${posNegWindow === w ? 'bg-[#1A1A1A] text-white' : 'bg-[#F3F4F6] text-[#4A4A4A]'}`}
+                                className={`text-[9px] px-1 rounded ${posNegWindow === w ? 'bg-[var(--text-primary)] text-white' : 'bg-[var(--surface-2)] text-[var(--text-secondary)]'}`}
                               >
                                 {label}
                               </button>
@@ -2015,8 +2013,8 @@ export function WeightConfigurator({
 
           {/* Pagination */}
           {prioritizedProducts.length > PREVIEW_PAGE_SIZE && (
-            <div className="mt-4 pt-4 border-t border-[#E5E5E5] flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-[#4A4A4A]">
+            <div className="mt-4 pt-4 border-t border-[var(--border)] flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-[var(--text-secondary)]">
                 Εμφανίζονται {(currentPreviewPage - 1) * PREVIEW_PAGE_SIZE + 1}–{Math.min(currentPreviewPage * PREVIEW_PAGE_SIZE, prioritizedProducts.length)} από {prioritizedProducts.length} προϊόντα
               </p>
               <div className="flex items-center gap-2">
@@ -2029,7 +2027,7 @@ export function WeightConfigurator({
                 >
                   Προηγούμενα
                 </Button>
-                <span className="text-sm text-[#4A4A4A] px-2">
+                <span className="text-sm text-[var(--text-secondary)] px-2">
                   Σελίδα {currentPreviewPage} από {previewTotalPages}
                 </span>
                 <Button
@@ -2047,16 +2045,16 @@ export function WeightConfigurator({
           )}
 
           {/* Impact Summary */}
-          <div className="mt-6 grid grid-cols-1 gap-4 rounded-lg bg-[#F5F5F5] p-4 sm:grid-cols-3">
+          <div className="mt-6 grid grid-cols-1 gap-4 rounded-lg bg-[var(--surface-2)] p-4 sm:grid-cols-3">
             <div>
-              <p className="text-xs text-[#4A4A4A]">Επηρεαζόμενες κατηγορίες</p>
-              <p className="text-lg font-bold text-[#1A1A1A]">
+              <p className="text-xs text-[var(--text-secondary)]">Επηρεαζόμενες κατηγορίες</p>
+              <p className="text-lg font-bold text-[var(--text-primary)]">
                 {new Set(prioritizedProducts.map((p) => p.category)).size}
               </p>
             </div>
             <div>
-              <p className="text-xs text-[#4A4A4A]">Μέση βαθμολογία</p>
-              <p className="text-lg font-bold text-[#1A1A1A] font-mono">
+              <p className="text-xs text-[var(--text-secondary)]">Μέση βαθμολογία</p>
+              <p className="text-lg font-bold text-[var(--text-primary)] font-mono">
                 {prioritizedProducts.length > 0
                   ? (
                       prioritizedProducts.reduce((sum, p) => sum + (p.composite_score || 0), 0) /
@@ -2066,14 +2064,14 @@ export function WeightConfigurator({
               </p>
             </div>
             <div>
-              <p className="text-xs text-[#4A4A4A]">
+              <p className="text-xs text-[var(--text-secondary)]">
                 {selectedScenario === 'stock_clearance'
                   ? 'Με πλεονάζον απόθεμα'
                   : selectedScenario === 'brand_launch'
                   ? 'Με στρατηγική επισήμανση'
                   : 'Με υψηλό περιθώριο'}
               </p>
-              <p className="text-lg font-bold text-[#22C55E]">
+              <p className="text-lg font-bold text-[var(--success-700)]">
                 {selectedScenario === 'stock_clearance'
                   ? prioritizedProducts.filter(
                       (p) => getEffectiveStockLevel(p) / Math.max(p.stock_capacity || 0, 1) > 1
@@ -2204,48 +2202,48 @@ export function WeightConfigurator({
                   <button
                     type="button"
                     onClick={() => setShowFeedFormatModal(false)}
-                    className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
+                    className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]"
                   >
-                    <X size={20} className="text-[#4A4A4A]" />
+                    <X size={20} className="text-[var(--text-secondary)]" />
                   </button>
                 }
               />
 
               {/* Content */}
               <div className="p-6 space-y-3">
-                <p className="text-sm text-[#4A4A4A] mb-4">
+                <p className="text-sm text-[var(--text-secondary)] mb-4">
                   Εξαγωγή feed με <strong>{rankedCandidates.length}</strong> προϊόντα, ταξινομημένα βάσει της τρέχουσας στρατηγικής.
                 </p>
 
                 <button
                   onClick={() => generateProductFeed('xlsx')}
-                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
+                  className="w-full p-4 border-2 border-[var(--border)] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
                 >
-                  <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors">
-                    <FileSpreadsheet size={24} className="text-[#22C55E]" />
+                  <div className="p-3 bg-[var(--success-700)]/10 rounded-lg group-hover:bg-[var(--success-700)]/20 transition-colors">
+                    <FileSpreadsheet size={24} className="text-[var(--success-700)]" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3>
-                    <p className="text-xs text-[#4A4A4A]">Λήψη ως αρχείο Excel</p>
+                    <h3 className="font-semibold text-[var(--text-primary)]">Excel (.xlsx)</h3>
+                    <p className="text-xs text-[var(--text-secondary)]">Λήψη ως αρχείο Excel</p>
                   </div>
                 </button>
 
                 <button
                   onClick={() => generateProductFeed('csv')}
-                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
+                  className="w-full p-4 border-2 border-[var(--border)] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
                 >
-                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors">
-                    <FileText size={24} className="text-[#4A4A4A]" />
+                  <div className="p-3 bg-[var(--surface-2)] rounded-lg group-hover:bg-[var(--border)] transition-colors">
+                    <FileText size={24} className="text-[var(--text-secondary)]" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3>
-                    <p className="text-xs text-[#4A4A4A]">Λήψη ως αρχείο CSV</p>
+                    <h3 className="font-semibold text-[var(--text-primary)]">CSV (.csv)</h3>
+                    <p className="text-xs text-[var(--text-secondary)]">Λήψη ως αρχείο CSV</p>
                   </div>
                 </button>
               </div>
 
               {/* Footer */}
-              <div className="p-6 border-t border-[#E5E5E5] flex justify-end">
+              <div className="p-6 border-t border-[var(--border)] flex justify-end">
                 <Button 
                   variant="ghost" 
                   onClick={() => setShowFeedFormatModal(false)}
@@ -2282,6 +2280,6 @@ export function WeightConfigurator({
           }}
         />
       )}
-    </div>
+    </PageCanvas>
   );
 }

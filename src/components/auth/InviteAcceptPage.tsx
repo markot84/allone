@@ -50,7 +50,7 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
 
   if (loading || authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f7]">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--surface-2)]">
         <Loader2 size={28} className="animate-spin text-[var(--nts-accent-text)]" />
       </div>
     );
@@ -58,21 +58,21 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
 
   if (!invite) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f7] p-4">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--surface-2)] p-4">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-[360px] bg-white rounded-2xl border border-[#E5E7EB] shadow-sm p-7 text-center"
+          className="w-full max-w-[360px] bg-white rounded-2xl border border-[var(--border)] shadow-sm p-7 text-center"
         >
-          <p className="text-sm text-[#1A1A1A] font-medium">
+          <p className="text-sm text-[var(--text-primary)] font-medium">
             Το invite δεν βρέθηκε, έχει ήδη χρησιμοποιηθεί ή έχει λήξει.
           </p>
-          <p className="text-xs text-[#6B7280] mt-2">
+          <p className="text-xs text-[var(--text-muted)] mt-2">
             Ζητήστε νέα πρόσκληση από τον διαχειριστή του brand.
           </p>
           <button
             onClick={() => (window.location.href = '/')}
-            className="mt-4 w-full py-2.5 rounded-xl bg-[var(--nts-accent)] text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+            className="mt-4 w-full py-2.5 rounded-xl btn-gold text-white text-sm font-semibold hover:opacity-90 transition-opacity"
           >
             Αρχική σελίδα
           </button>
@@ -84,7 +84,7 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
   const brandName = invite.brand?.name ?? invite.brandId;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#f5f5f7] px-4 py-10">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--surface-2)] px-4 py-10">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -96,20 +96,20 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
           <AllOneLogo height={48} className="mx-auto" />
         </div>
 
-        <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm p-7">
+        <div className="bg-white rounded-2xl border border-[var(--border)] shadow-sm p-7">
           <div className="text-center mb-6">
-            <div className="w-11 h-11 bg-[#DCFCE7] rounded-xl flex items-center justify-center mx-auto mb-3">
-              <CheckCircle size={22} className="text-[#22C55E]" />
+            <div className="w-11 h-11 bg-[var(--success-light)] rounded-xl flex items-center justify-center mx-auto mb-3">
+              <CheckCircle size={22} className="text-[var(--success-700)]" />
             </div>
-            <h2 className="text-base font-bold text-[#1A1A1A]">Πρόσκληση σε Brand</h2>
-            <p className="text-xs text-[#6B7280] mt-1">
-              Προσκαλείστε να συμμετάσχετε στο <strong className="text-[#1A1A1A]">{brandName}</strong>
+            <h2 className="text-base font-bold text-[var(--text-primary)]">Πρόσκληση σε Brand</h2>
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              Προσκαλείστε να συμμετάσχετε στο <strong className="text-[var(--text-primary)]">{brandName}</strong>
             </p>
           </div>
 
           {!user ? (
             <div className="space-y-3">
-              <p className="text-xs text-[#6B7280] text-center">
+              <p className="text-xs text-[var(--text-muted)] text-center">
                 Συνδεθείτε ή δημιουργήστε λογαριασμό για να αποδεχτείτε την πρόσκληση.
               </p>
               <button
@@ -117,7 +117,7 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
                   const returnUrl = `/invite/${token}`;
                   window.location.href = `/?auth=1&returnUrl=${encodeURIComponent(returnUrl)}`;
                 }}
-                className="w-full py-2.5 rounded-xl bg-[var(--nts-accent)] text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+                className="w-full py-2.5 rounded-xl btn-gold text-white text-sm font-semibold hover:opacity-90 transition-opacity"
               >
                 Σύνδεση / Εγγραφή
               </button>
@@ -125,14 +125,14 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
           ) : (
             <div className="space-y-3">
               {error && (
-                <p className="text-xs text-[#EF4444] bg-[#FEF2F2] border border-[#FECACA] rounded-lg px-3 py-2 text-center">
+                <p className="text-xs text-[var(--danger-600)] bg-[var(--danger-light)] border border-[var(--danger-light)] rounded-lg px-3 py-2 text-center">
                   {error}
                 </p>
               )}
               <button
                 onClick={handleAccept}
                 disabled={submitting}
-                className="w-full py-2.5 rounded-xl bg-[var(--nts-accent)] text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-2.5 rounded-xl btn-gold text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? 'Αποδοχή…' : 'Αποδοχή πρόσκλησης'}
               </button>

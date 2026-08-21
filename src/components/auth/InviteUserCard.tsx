@@ -198,7 +198,7 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
             </span>
           </label>
 
-          {error && <p className="text-sm text-[#EF4444]">{error}</p>}
+          {error && <p className="text-sm text-[var(--danger-600)]">{error}</p>}
 
           <div className="pt-1">
             <Button type="submit" variant="primary" size="sm" disabled={submitting} className="w-full">

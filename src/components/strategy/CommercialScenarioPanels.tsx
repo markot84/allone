@@ -79,14 +79,14 @@ export function CommercialScenarioPanels({
         action={
           <div className="flex items-center gap-2">
             {cachedAtLabel && !data.isRefreshing && (
-              <span className="text-xs text-[#9CA3AF]">Τελ. ανανέωση: {cachedAtLabel}</span>
+              <span className="text-xs text-[var(--text-muted)]">Τελ. ανανέωση: {cachedAtLabel}</span>
             )}
             <button
               type="button"
               onClick={() => data.refresh()}
               disabled={data.isLoading || data.isRefreshing}
               title="Ανανέωση δεδομένων"
-              className="flex items-center gap-1.5 rounded-lg border border-[#E5E7EB] px-2.5 py-1.5 text-xs font-medium text-[#374151] transition-colors hover:border-[var(--nts-accent)]/40 hover:bg-[var(--nts-accent)]/5 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--nts-accent)]/40 hover:bg-[var(--nts-accent)]/5 disabled:opacity-50"
             >
               <RefreshCw size={12} className={data.isRefreshing ? 'animate-spin' : ''} />
               {data.isRefreshing ? 'Φορτώνει…' : 'Ανανέωση'}
@@ -98,15 +98,15 @@ export function CommercialScenarioPanels({
       {data.isRefreshing && !data.isLoading && (
         <div className="absolute inset-0 z-10 flex items-start justify-center bg-white/75 px-4 pt-20 backdrop-blur-[1px]">
           <div className="w-full max-w-md rounded-xl border border-[var(--nts-accent)]/20 bg-white p-4 shadow-lg">
-            <p className="text-sm font-semibold text-[#1A1A1A]">Φορτώνουμε αποτελέσματα για τη νέα περίοδο…</p>
-            <p className="mb-3 text-xs text-[#6B7280]">Ελέγχουμε πώς οι αλλαγές τιμών και το budget των καμπανιών επηρέασαν τον τζίρο.</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">Φορτώνουμε αποτελέσματα για τη νέα περίοδο…</p>
+            <p className="mb-3 text-xs text-[var(--text-muted)]">Ελέγχουμε πώς οι αλλαγές τιμών και το budget των καμπανιών επηρέασαν τον τζίρο.</p>
             <ProgressBar progress={data.progress} />
           </div>
         </div>
       )}
 
       {visibleTabs.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-1 rounded-lg bg-[#F3F4F6] p-1" aria-busy={data.isLoading || data.isRefreshing}>
+        <div className="mb-4 flex flex-wrap gap-1 rounded-lg bg-[var(--surface-2)] p-1" aria-busy={data.isLoading || data.isRefreshing}>
           {visibleTabs.map((t) => (
             <button
               key={t.key}
@@ -117,7 +117,7 @@ export function CommercialScenarioPanels({
                 setShowDetails(false);
               }}
               className={`flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium sm:flex-initial sm:px-3 ${
-                activeTab === t.key ? 'bg-white text-[var(--nts-orange)] shadow-sm' : 'text-[#6B7280] hover:text-[#374151]'
+                activeTab === t.key ? 'bg-white text-[var(--nts-orange)] shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
               }`}
             >
               {t.icon}
@@ -144,21 +144,21 @@ export function CommercialScenarioPanels({
       {data.isLoading ? (
         <LoadingProgress progress={data.progress} />
       ) : visibleTabs.length === 0 ? (
-        <p className="text-sm text-[#6B7280]">
+        <p className="text-sm text-[var(--text-muted)]">
           Δεν υπάρχουν δεδομένα για αποφάσεις στην επιλεγμένη περίοδο.
         </p>
       ) : activeTab !== 'marketing' && !data.hasOrderLines ? (
         <EmptyHint hasCost={data.hasCostData} type="orders" />
       ) : activeTab === 'marketing' && (data.marketing?.rows.length ?? 0) === 0 ? (
-        <p className="text-sm text-[#6B7280]">Δεν βρέθηκαν καμπάνιες με σημαντικό spend στην περίοδο.</p>
+        <p className="text-sm text-[var(--text-muted)]">Δεν βρέθηκαν καμπάνιες με σημαντικό spend στην περίοδο.</p>
       ) : activeTab === 'price' && (data.price?.rows.length ?? 0) === 0 ? (
-        <p className="text-sm text-[#6B7280]">Δεν εντοπίστηκαν αλλαγές τιμών με μετρήσιμη επίδραση στην επιλεγμένη περίοδο. Δοκιμάστε ευρύτερο εύρος ημερομηνιών.</p>
+        <p className="text-sm text-[var(--text-muted)]">Δεν εντοπίστηκαν αλλαγές τιμών με μετρήσιμη επίδραση στην επιλεγμένη περίοδο. Δοκιμάστε ευρύτερο εύρος ημερομηνιών.</p>
       ) : filteredCount === 0 ? (
-        <p className="text-sm text-[#6B7280]">Δεν εντοπίστηκαν σενάρια με τα τρέχοντα κριτήρια.</p>
+        <p className="text-sm text-[var(--text-muted)]">Δεν εντοπίστηκαν σενάρια με τα τρέχοντα κριτήρια.</p>
       ) : (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-[#6B7280]">
+            <p className="text-xs text-[var(--text-muted)]">
               {showDetails
                 ? `Εμφανίζονται όλες οι ${formatNumber(filteredCount)} γραμμές.`
                 : `Προεπισκόπηση των 5 πρώτων από ${formatNumber(filteredCount)} διαθέσιμες γραμμές.`}
@@ -166,12 +166,12 @@ export function CommercialScenarioPanels({
             <button
               type="button"
               onClick={() => setShowDetails((v) => !v)}
-              className="rounded-lg border border-[#E5E7EB] px-3 py-1.5 text-xs font-semibold text-[#374151] transition-colors hover:border-[var(--nts-accent)]/40 hover:bg-[var(--nts-accent)]/5"
+              className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--nts-accent)]/40 hover:bg-[var(--nts-accent)]/5"
             >
               {showDetails ? 'Εμφάνιση μόνο 5 πρώτων' : 'Άνοιγμα πλήρους πίνακα'}
             </button>
           </div>
-          <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
+          <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
             {activeTab === 'price' && data.price && (
               <PriceTable rows={filteredPriceRows} limit={showDetails ? undefined : 5} getThumbnailUrl={getThumbnailUrl} stockBySku={data.stockBySku} />
             )}
@@ -201,18 +201,18 @@ function ProgressBar({ progress }: { progress?: { loaded: number; total: number 
   const pct = progressPct(progress);
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between text-xs text-[#6B7280]">
+      <div className="mb-1 flex items-center justify-between text-xs text-[var(--text-muted)]">
         <span>{pct == null ? 'Προετοιμασία…' : 'Φόρτωση παραγγελιών…'}</span>
         <span className="font-mono font-semibold text-[var(--nts-accent-text)]">{pct == null ? '' : `${pct}%`}</span>
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-[#F3F4F6]">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-2)]">
         <div
           className={`h-full rounded-full bg-[var(--nts-accent)] transition-all duration-300 ${pct == null ? 'animate-pulse' : ''}`}
           style={{ width: pct == null ? '35%' : `${Math.max(pct, 4)}%` }}
         />
       </div>
       {progress && progress.total > 0 && (
-        <p className="mt-1 text-[10px] text-[#9CA3AF]">
+        <p className="mt-1 text-[10px] text-[var(--text-muted)]">
           {formatNumber(progress.loaded)} / {formatNumber(progress.total)} παραγγελίες
         </p>
       )}
@@ -270,7 +270,7 @@ function FilterChips({ filter, onChange, tab }: { filter: ImpactFilter; onChange
           type="button"
           onClick={() => onChange(key)}
           className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
-            filter === key ? 'bg-[var(--nts-accent)]/15 text-[var(--nts-accent-text)]' : 'bg-[#F3F4F6] text-[#6B7280]'
+            filter === key ? 'bg-[var(--nts-accent)]/15 text-[var(--nts-accent-text)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'
           }`}
         >
           {label}
@@ -436,19 +436,19 @@ function MiniKpi({
   onClick?: () => void;
 }) {
   const toneClass =
-    tone === 'success' ? 'text-emerald-600' : tone === 'danger' ? 'text-rose-600' : tone === 'info' ? 'text-violet-600' : 'text-[#1A1A1A]';
+    tone === 'success' ? 'text-emerald-600' : tone === 'danger' ? 'text-rose-600' : tone === 'info' ? 'text-violet-600' : 'text-[var(--text-primary)]';
   const className = `rounded-xl border p-3 text-left transition-all ${
     selected
       ? 'border-[var(--nts-accent)]/40 bg-[var(--nts-accent)]/5 ring-2 ring-[var(--nts-accent)]/15'
-      : 'border-[#E5E7EB] bg-[#FAFAFA]'
+      : 'border-[var(--border)] bg-[var(--surface-2)]'
   } ${onClick ? 'cursor-pointer hover:border-[var(--nts-accent)]/40 hover:bg-white' : ''}`;
   const content = (
     <>
-      <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">
+      <p className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">
         {tooltip ? <Tooltip content={tooltip}>{label}</Tooltip> : label}
       </p>
       <p className={`mt-1 font-mono text-lg font-bold ${toneClass}`}>{typeof value === 'number' ? formatNumber(value) : value}</p>
-      {sub && <p className="mt-0.5 text-xs text-[#6B7280]">{sub}</p>}
+      {sub && <p className="mt-0.5 text-xs text-[var(--text-muted)]">{sub}</p>}
     </>
   );
   return onClick ? (
@@ -504,9 +504,9 @@ function RevenueMarginCells({
 function MetricUnavailable({ label, reason }: { label: string; reason: string }) {
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">{label}</p>
-      <p className="font-mono text-xs text-[#9CA3AF]">—</p>
-      <p className="text-[10px] text-[#9CA3AF]">{reason}</p>
+      <p className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">{label}</p>
+      <p className="font-mono text-xs text-[var(--text-muted)]">—</p>
+      <p className="text-[10px] text-[var(--text-muted)]">{reason}</p>
     </div>
   );
 }
@@ -524,7 +524,7 @@ function MetricPair({
 }) {
   return (
     <div className="whitespace-nowrap">
-      <p className="font-mono text-xs text-[#374151]">
+      <p className="font-mono text-xs text-[var(--text-secondary)]">
         {before} → {after}
       </p>
       {changePct != null && (
@@ -533,7 +533,7 @@ function MetricPair({
           {changePct}%
         </p>
       )}
-      {sub && <p className="text-[10px] text-[#9CA3AF]">{sub}</p>}
+      {sub && <p className="text-[10px] text-[var(--text-muted)]">{sub}</p>}
     </div>
   );
 }
@@ -579,7 +579,7 @@ function SkuCell({
       <ProductThumbnail src={thumb || undefined} alt={productName || sku} size="sm" />
       <div className="min-w-0">
         <p className="truncate font-semibold">{sku}</p>
-        <p className="line-clamp-1 text-xs text-[#6B7280]">{productName}</p>
+        <p className="line-clamp-1 text-xs text-[var(--text-muted)]">{productName}</p>
         {meta}
       </div>
     </div>
@@ -606,7 +606,7 @@ function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceC
         {showMargin && <col className="w-[12%]" />}
         <col className="w-[10%]" />
       </colgroup>
-      <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
+      <thead className="bg-[var(--surface-2)] text-xs uppercase text-[var(--text-muted)]">
         <tr>
           <th className="px-3 py-2 text-left">SKU</th>
           <th className="px-3 py-2 text-left">Τιμή</th>
@@ -620,11 +620,11 @@ function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceC
           <th className="px-3 py-2 text-center">Επίδραση</th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-[#E5E7EB]">
+      <tbody className="divide-y divide-[var(--border)]">
         {visibleRows.map((row, idx) => (
           // The same SKU can appear across multiple month-windows → unique key (otherwise duplicate
           // keys make React reuse stale rows when the filter changes).
-          <tr key={`${row.sku}__${row.changeDate}__${idx}`} className="hover:bg-[#FAFAFA]">
+          <tr key={`${row.sku}__${row.changeDate}__${idx}`} className="hover:bg-[var(--surface-2)]">
             <td className="px-3 py-2">
               <SkuCell sku={row.sku} productName={row.productName} getThumbnailUrl={getThumbnailUrl} />
             </td>
@@ -645,9 +645,9 @@ function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceC
                 const stock = stockBySku.get(row.sku.toUpperCase());
                 // null = no stock record → "—" (showing nothing would be ambiguous).
                 if (stock == null) {
-                  return <p className="text-[10px] text-[#D1D5DB]">απόθ. —</p>;
+                  return <p className="text-[10px] text-[var(--navy-100)]">απόθ. —</p>;
                 }
-                const color = stock === 0 ? 'text-rose-500' : stock < 5 ? 'text-amber-500' : 'text-[#9CA3AF]';
+                const color = stock === 0 ? 'text-rose-500' : stock < 5 ? 'text-amber-500' : 'text-[var(--text-muted)]';
                 return <p className={`text-[10px] ${color}`}>απόθ. {formatNumber(stock)}</p>;
               })()}
             </td>
@@ -656,7 +656,7 @@ function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceC
           </tr>
         ))}
       </tbody>
-      <tfoot className="border-t-2 border-[#E5E7EB] bg-[#F9FAFB] text-xs font-semibold text-[#374151]">
+      <tfoot className="border-t-2 border-[var(--border)] bg-[var(--surface-2)] text-xs font-semibold text-[var(--text-secondary)]">
         <tr>
           <td className="px-3 py-2" colSpan={2}>Σύνολο — {rows.length} SKU</td>
           <td className="px-3 py-2 font-mono text-right whitespace-nowrap">
@@ -689,7 +689,7 @@ function DecisionBadge({ row }: { row: MarketingSpendImpactRow }) {
       <ArrowDownRight size={11} className="inline" />
     ) : null;
   return (
-    <span className="inline-flex items-center gap-0.5 rounded-md bg-[#F3F4F6] px-1.5 py-0.5 text-[11px] font-semibold text-[#374151]">
+    <span className="inline-flex items-center gap-0.5 rounded-md bg-[var(--surface-2)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)]">
       {icon}
       {row.decisionLabel}
     </span>
@@ -701,7 +701,7 @@ function DecisionBadge({ row }: { row: MarketingSpendImpactRow }) {
 function verdictTextTone(v: ScenarioVerdict): string {
   if (v === 'positive') return 'text-emerald-600';
   if (v === 'negative') return 'text-rose-600';
-  return 'text-[#374151]';
+  return 'text-[var(--text-secondary)]';
 }
 
 function verdictAccent(v: ScenarioVerdict): string {
@@ -719,7 +719,7 @@ function MarketingTable({ rows, limit }: { rows: MarketingSpendImpactRow[]; limi
   const totRoas = totSpend > 0 ? Math.round((totRevenue / totSpend) * 100) / 100 : null;
   return (
     <table className="min-w-full text-left text-sm">
-      <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
+      <thead className="bg-[var(--surface-2)] text-xs uppercase text-[var(--text-muted)]">
         <tr>
           <th className="px-3 py-2">Καμπάνια</th>
           <th className="px-3 py-2">
@@ -737,35 +737,35 @@ function MarketingTable({ rows, limit }: { rows: MarketingSpendImpactRow[]; limi
           <th className="px-3 py-2">Ιδέα / Σύσταση</th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-[#E5E7EB]">
+      <tbody className="divide-y divide-[var(--border)]">
         {visibleRows.map((row, idx) => (
-          <tr key={`${row.id}__${idx}`} className="hover:bg-[#FAFAFA] align-top">
+          <tr key={`${row.id}__${idx}`} className="hover:bg-[var(--surface-2)] align-top">
             <td className={`px-3 py-2 ${verdictAccent(row.verdict)}`}>
               <p className="font-semibold">{row.title}</p>
-              <p className="text-xs text-[#6B7280]">{row.channel}</p>
+              <p className="text-xs text-[var(--text-muted)]">{row.channel}</p>
             </td>
             <td className="px-3 py-2 whitespace-nowrap">
               <DecisionBadge row={row} />
-              <p className="mt-1 font-mono text-[11px] text-[#6B7280]">
+              <p className="mt-1 font-mono text-[11px] text-[var(--text-muted)]">
                 {formatEuro(row.spendBefore)} → {formatEuro(row.spend)}
               </p>
             </td>
             <td className="px-3 py-2 text-right font-mono text-xs whitespace-nowrap">
-              <span className="text-[#9CA3AF]">{row.roasBefore != null ? `${row.roasBefore}x` : '—'}</span>
-              <span className="text-[#9CA3AF]"> → </span>
+              <span className="text-[var(--text-muted)]">{row.roasBefore != null ? `${row.roasBefore}x` : '—'}</span>
+              <span className="text-[var(--text-muted)]"> → </span>
               <span className={`font-semibold ${verdictTextTone(row.verdict)}`}>{row.roas != null ? `${row.roas}x` : '—'}</span>
             </td>
             <td className="px-3 py-2 text-right font-mono text-xs whitespace-nowrap">
-              <span className="text-[#9CA3AF]">{formatEuro(row.revenueBefore)}</span>
-              <span className="text-[#9CA3AF]"> → </span>
+              <span className="text-[var(--text-muted)]">{formatEuro(row.revenueBefore)}</span>
+              <span className="text-[var(--text-muted)]"> → </span>
               <span className={`font-semibold ${verdictTextTone(row.verdict)}`}>{formatEuro(row.revenue)}</span>
             </td>
             <VerdictCell verdict={row.verdict} tab="marketing" />
-            <td className="px-3 py-2 text-xs leading-relaxed text-[#374151] min-w-[220px] max-w-[340px]">{row.idea}</td>
+            <td className="px-3 py-2 text-xs leading-relaxed text-[var(--text-secondary)] min-w-[220px] max-w-[340px]">{row.idea}</td>
           </tr>
         ))}
       </tbody>
-      <tfoot className="border-t-2 border-[#E5E7EB] bg-[#F9FAFB] text-xs font-semibold text-[#374151]">
+      <tfoot className="border-t-2 border-[var(--border)] bg-[var(--surface-2)] text-xs font-semibold text-[var(--text-secondary)]">
         <tr>
           <td className="px-3 py-2">Σύνολο — {rows.length} αποφάσεις</td>
           <td className="px-3 py-2 font-mono">{formatEuro(totSpend)}</td>
@@ -787,7 +787,7 @@ function EmptyHint({ type, hasCost }: { type: 'orders' | 'cost' | 'stock'; hasCo
         ? 'Συγχρονίστε ERP/procurement pricing για υπολογισμό margin και κόστους ανά SKU.'
         : 'Συγχρονίστε ERP/procurement στοιχεία για days of cover και διαθέσιμο απόθεμα.';
   return (
-    <p className="text-sm text-[#6B7280]">
+    <p className="text-sm text-[var(--text-muted)]">
       {msg}
       {type === 'orders' && !hasCost && ' Το margin θα είναι περιορισμένο χωρίς κόστος ανά SKU.'}
     </p>

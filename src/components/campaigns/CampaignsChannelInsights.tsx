@@ -5,18 +5,8 @@ import { Card, CardHeader } from '../common';
 import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import { calculateChannelPerformance } from '../../utils/roiUtils';
 import type { Campaign } from '../../types';
+import { adChannelColor } from './channelPalette';
 
-const CHANNEL_DOT_COLORS: Record<string, string> = {
-  'Google Ads': '#4285F4',
-  Meta: '#1877F2',
-  Other: '#78716C',
-  'Google Shopping': '#34A853',
-  Facebook: '#1877F2',
-  Instagram: '#E4405F',
-  TikTok: '#000000',
-  Email: '#F59E0B',
-  SMS: '#8B5CF6',
-};
 
 export function CampaignsChannelInsights({ campaigns }: { campaigns: Campaign[] }) {
   const channelPerf = useMemo(() => calculateChannelPerformance(campaigns), [campaigns]);
@@ -43,7 +33,7 @@ export function CampaignsChannelInsights({ campaigns }: { campaigns: Campaign[] 
             <div className="flex items-center gap-2 mb-3">
               <div
                 className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: CHANNEL_DOT_COLORS[ch.channel] || '#78716C' }}
+                style={{ backgroundColor: adChannelColor(ch.channel) }}
               />
               <span className="font-medium text-[var(--nts-charcoal)] text-sm">{ch.channel}</span>
               <span className="text-xs text-[var(--nts-medium-gray)] ml-auto">
@@ -65,7 +55,7 @@ export function CampaignsChannelInsights({ campaigns }: { campaigns: Campaign[] 
               </div>
               <div>
                 <p className="text-[10px] text-[var(--nts-medium-gray)] uppercase tracking-wider">ROAS</p>
-                <p className={`text-sm font-bold font-mono ${ch.roas >= 1 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+                <p className="text-sm font-bold font-mono" style={{ color: ch.roas >= 1 ? 'var(--success-700)' : 'var(--danger-700)' }}>
                   {ch.roas > 0 ? `${formatNumber(ch.roas, 2)}x` : '—'}
                 </p>
               </div>

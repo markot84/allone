@@ -27,16 +27,17 @@ import { Card, CardHeader, Badge, Tooltip } from '../common';
 import { derivePredictiveMetrics } from '../../services/behavioralEngine';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import type { RFMSegment } from '../../types';
+import { axisProps, gridProps, tooltipProps } from '../../styles/chartTheme';
 
 interface PredictiveTabProps {
   segments: RFMSegment[];
 }
 
 const CHURN_COLORS: Record<string, string> = {
-  low: '#22C55E',
-  medium: '#F59E0B',
-  high: '#EF4444',
-  critical: '#DC2626',
+  low: 'var(--success-700)',
+  medium: 'var(--orange-700)',
+  high: 'var(--danger-600)',
+  critical: 'var(--danger-600)',
 };
 
 const CHURN_LABELS: Record<string, string> = {
@@ -47,9 +48,9 @@ const CHURN_LABELS: Record<string, string> = {
 };
 
 const TREND_ICONS: Record<string, React.ReactNode> = {
-  growing: <TrendingUp size={14} className="text-[#22C55E]" />,
-  stable: <BarChart3 size={14} className="text-[#3B82F6]" />,
-  declining: <TrendingDown size={14} className="text-[#EF4444]" />,
+  growing: <TrendingUp size={14} className="text-[var(--success-700)]" />,
+  stable: <BarChart3 size={14} className="text-[var(--sky-500)]" />,
+  declining: <TrendingDown size={14} className="text-[var(--danger-600)]" />,
 };
 
 const TREND_LABELS: Record<string, string> = {
@@ -105,8 +106,8 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
     <div className="space-y-6">
       {/* Data Source Indicator */}
       <div className="flex items-center gap-2 text-xs">
-        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${hasImportedData ? 'bg-[#DCFCE7] text-[#16A34A]' : 'bg-[#FEF3C7] text-[#D97706]'}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${hasImportedData ? 'bg-[#22C55E]' : 'bg-[#F59E0B]'}`} />
+        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${hasImportedData ? 'bg-[var(--success-light)] text-[var(--success-700)]' : 'bg-[var(--warning-light)] text-[var(--orange-700)]'}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${hasImportedData ? 'bg-[var(--success-700)]' : 'bg-[var(--orange-700)]'}`} />
           {hasImportedData ? 'Imported data' : 'Derived from RFM (εισάγετε data για ακρίβεια)'}
         </span>
       </div>
@@ -116,7 +117,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
         <button
           onClick={() => setView('overview')}
           className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-            view === 'overview' ? 'bg-[#1A1A2E] text-white' : 'bg-[var(--nts-light-gray)] text-[#4A4A4A] hover:bg-[#E5E5E5]'
+            view === 'overview' ? 'bg-[var(--navy-500)] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
           }`}
         >
           Overview
@@ -124,7 +125,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
         <button
           onClick={() => setView('detail')}
           className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-            view === 'detail' ? 'bg-[#1A1A2E] text-white' : 'bg-[var(--nts-light-gray)] text-[#4A4A4A] hover:bg-[#E5E5E5]'
+            view === 'detail' ? 'bg-[var(--navy-500)] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
           }`}
         >
           Segment Detail
@@ -137,35 +138,35 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
           icon={<DollarSign size={18} />}
           label="Total Customer LTV"
           value={formatCurrencyCompact(totals.totalLtv)}
-          color="#22C55E"
+          color="var(--success-700)"
           tooltip="Εκτιμώμενη συνολική αξία ζωής πελατών (Lifetime Value)"
         />
         <PredictiveKPI
           icon={<Target size={18} />}
           label="Πρόβλεψη 30 ημ."
           value={formatCurrencyCompact(totals.totalForecast30)}
-          color="#3B82F6"
+          color="var(--sky-500)"
           tooltip="Εκτιμώμενα έσοδα τις επόμενες 30 ημέρες βάσει purchase patterns"
         />
         <PredictiveKPI
           icon={<Calendar size={18} />}
           label="Πρόβλεψη 90 ημ."
           value={formatCurrencyCompact(totals.totalForecast90)}
-          color="#8B5CF6"
+          color="var(--seg-potential)"
           tooltip="Εκτιμώμενα έσοδα τις επόμενες 90 ημέρες"
         />
         <PredictiveKPI
           icon={<AlertTriangle size={18} />}
           label="At Risk Πελάτες"
           value={formatNumber(totals.atRiskCustomers)}
-          color="#EF4444"
+          color="var(--danger-600)"
           tooltip="Πελάτες με υψηλό ή κρίσιμο κίνδυνο churn"
         />
         <PredictiveKPI
           icon={<Shield size={18} />}
           label="Avg Retention"
           value={`${formatNumber(totals.avgRetention, 0)}%`}
-          color="#F59E0B"
+          color="var(--orange-700)"
           tooltip="Μέσος δείκτης διατήρησης πελατών"
         />
       </div>
@@ -184,11 +185,18 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
               <div style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={ltvChartData} margin={{ left: 10, right: 10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fill: '#4A4A4A', fontSize: 11 }} />
-                    <YAxis tickFormatter={(v) => `€${(v / 1000).toFixed(0)}K`} tick={{ fill: '#9CA3AF', fontSize: 11 }} />
+                    <CartesianGrid {...gridProps()} />
+                    {/* Segment names run to "Customers Needing Attention"; the axis truncates so ten
+                        of them stay separate labels rather than one grey smear. */}
+                    <XAxis
+                      dataKey="name"
+                      {...axisProps()}
+                      interval={0}
+                      tickFormatter={(v: string) => (v.length > 10 ? `${v.slice(0, 9)}…` : v)}
+                    />
+                    <YAxis tickFormatter={(v) => `€${(v / 1000).toFixed(0)}K`} {...axisProps()} width={52} />
                     <RechartsTooltip
-                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: 6, fontSize: 12 }}
+                      {...tooltipProps()}
                       formatter={(v: number | undefined) => [formatCurrencyCompact((v as number) || 0), 'LTV']}
                     />
                     <Bar dataKey="ltv" radius={[4, 4, 0, 0]} barSize={32}>
@@ -211,25 +219,26 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
               <div style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <ScatterChart margin={{ left: 10, right: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
+                    <CartesianGrid {...gridProps()} />
                     <XAxis
                       type="number"
                       dataKey="x"
                       name="Churn Risk"
                       domain={[0, 100]}
-                      tick={{ fill: '#9CA3AF', fontSize: 11 }}
-                      label={{ value: 'Churn Risk %', position: 'bottom', fontSize: 11, fill: '#9CA3AF' }}
+                      {...axisProps()}
+                      label={{ value: 'Churn Risk %', position: 'bottom', fontSize: 10, fontFamily: "'JetBrains Mono', monospace", fill: 'var(--text-muted)' }}
                     />
                     <YAxis
                       type="number"
                       dataKey="y"
                       name="LTV"
                       tickFormatter={(v) => `€${(v / 1000).toFixed(0)}K`}
-                      tick={{ fill: '#9CA3AF', fontSize: 11 }}
+                      {...axisProps()}
+                      width={52}
                     />
                     <ZAxis type="number" dataKey="z" name="Πελάτες" range={[100, 800]} />
                     <RechartsTooltip
-                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: 6, fontSize: 12 }}
+                      {...tooltipProps()}
                       content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
                         const row = payload[0].payload as {
@@ -240,18 +249,18 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
                           color: string;
                         };
                         return (
-                          <div className="rounded-md border border-[#E5E5E5] bg-white px-3 py-2 text-xs shadow-sm">
-                            <p className="mb-1.5 font-semibold text-[#1A1A1A]">{row.name}</p>
-                            <p className="text-[#4A4A4A]">
-                              <span className="text-[#9CA3AF]">Churn Risk: </span>
+                          <div className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-xs shadow-sm">
+                            <p className="mb-1.5 font-semibold text-[var(--text-primary)]">{row.name}</p>
+                            <p className="text-[var(--text-secondary)]">
+                              <span className="text-[var(--text-muted)]">Churn Risk: </span>
                               {formatNumber(row.x, 0)}%
                             </p>
-                            <p className="text-[#4A4A4A]">
-                              <span className="text-[#9CA3AF]">LTV: </span>
+                            <p className="text-[var(--text-secondary)]">
+                              <span className="text-[var(--text-muted)]">LTV: </span>
                               {formatCurrencyCompact(row.y)}
                             </p>
-                            <p className="text-[#4A4A4A]">
-                              <span className="text-[#9CA3AF]">Πελάτες: </span>
+                            <p className="text-[var(--text-secondary)]">
+                              <span className="text-[var(--text-muted)]">Πελάτες: </span>
                               {formatNumber(row.z)}
                             </p>
                           </div>
@@ -288,8 +297,8 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
                     <DollarSign size={18} style={{ color: segment.color }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-semibold text-[#1A1A1A] truncate">{segment.name}</h4>
-                    <p className="text-xs text-[#9CA3AF]">{formatNumber(segment.count)} πελάτες</p>
+                    <h4 className="text-sm font-semibold text-[var(--text-primary)] truncate">{segment.name}</h4>
+                    <p className="text-xs text-[var(--text-muted)]">{formatNumber(segment.count)} πελάτες</p>
                   </div>
                   <Badge
                     variant={metrics.churn_risk_label === 'low' ? 'success' : metrics.churn_risk_label === 'medium' ? 'warning' : 'danger'}
@@ -300,29 +309,29 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
                 </div>
 
                 <div className="grid grid-cols-3 gap-3 text-center">
-                  <div className="p-2 bg-[#F5F5F5] rounded-lg">
-                    <p className="text-[10px] text-[#9CA3AF] uppercase">LTV</p>
-                    <p className="text-sm font-bold font-mono text-[#1A1A1A]">{formatCurrencyCompact(metrics.estimated_ltv)}</p>
-                    <p className="text-[9px] text-[#9CA3AF]">conf. {formatNumber(metrics.ltv_confidence, 0)}%</p>
+                  <div className="p-2 bg-[var(--surface-2)] rounded-lg">
+                    <p className="text-[10px] text-[var(--text-muted)] uppercase">LTV</p>
+                    <p className="text-sm font-bold font-mono text-[var(--text-primary)]">{formatCurrencyCompact(metrics.estimated_ltv)}</p>
+                    <p className="text-[9px] text-[var(--text-muted)]">conf. {formatNumber(metrics.ltv_confidence, 0)}%</p>
                   </div>
-                  <div className="p-2 bg-[#F5F5F5] rounded-lg">
-                    <p className="text-[10px] text-[#9CA3AF] uppercase">Next Order</p>
-                    <p className="text-sm font-bold font-mono text-[#1A1A1A]">{metrics.days_to_next_purchase}d</p>
-                    <p className="text-[9px] text-[#9CA3AF]">prob. {metrics.next_purchase_probability}%</p>
+                  <div className="p-2 bg-[var(--surface-2)] rounded-lg">
+                    <p className="text-[10px] text-[var(--text-muted)] uppercase">Next Order</p>
+                    <p className="text-sm font-bold font-mono text-[var(--text-primary)]">{metrics.days_to_next_purchase}d</p>
+                    <p className="text-[9px] text-[var(--text-muted)]">prob. {metrics.next_purchase_probability}%</p>
                   </div>
-                  <div className="p-2 bg-[#F5F5F5] rounded-lg">
-                    <p className="text-[10px] text-[#9CA3AF] uppercase">30d Forecast</p>
-                    <p className="text-sm font-bold font-mono text-[#1A1A1A]">{formatCurrencyCompact(metrics.revenue_forecast_30d)}</p>
-                    <p className="text-[9px] text-[#9CA3AF]">90d: {formatCurrencyCompact(metrics.revenue_forecast_90d)}</p>
+                  <div className="p-2 bg-[var(--surface-2)] rounded-lg">
+                    <p className="text-[10px] text-[var(--text-muted)] uppercase">30d Forecast</p>
+                    <p className="text-sm font-bold font-mono text-[var(--text-primary)]">{formatCurrencyCompact(metrics.revenue_forecast_30d)}</p>
+                    <p className="text-[9px] text-[var(--text-muted)]">90d: {formatCurrencyCompact(metrics.revenue_forecast_90d)}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#E5E5E5]">
-                  <div className="flex items-center gap-2 text-xs text-[#4A4A4A]">
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border)]">
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                     <Shield size={12} />
                     <span>Retention: <span className="font-bold font-mono">{metrics.retention_score}%</span></span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-[#4A4A4A]">
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
                     {TREND_ICONS[metrics.demand_trend]}
                     <span>{TREND_LABELS[metrics.demand_trend]}</span>
                   </div>
@@ -330,7 +339,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
                     <span className="font-mono font-bold" style={{ color: CHURN_COLORS[metrics.churn_risk_label] }}>
                       {metrics.churn_risk}%
                     </span>
-                    <span className="text-[#9CA3AF]">churn</span>
+                    <span className="text-[var(--text-muted)]">churn</span>
                   </div>
                 </div>
               </Card>
@@ -352,14 +361,14 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
             .map(({ segment, metrics }) => (
               <div
                 key={segment.id}
-                className="flex items-center gap-3 p-3 rounded-lg border border-[#FEE2E2] bg-[#FEF2F2]"
+                className="flex items-center gap-3 p-3 rounded-lg border border-[var(--danger-light)] bg-[var(--danger-light)]"
               >
-                <AlertTriangle size={16} className="text-[#EF4444] flex-shrink-0" />
+                <AlertTriangle size={16} className="text-[var(--danger-600)] flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[#1A1A1A]">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">
                     {segment.name}: Υψηλός κίνδυνος churn ({metrics.churn_risk}%)
                   </p>
-                  <p className="text-xs text-[#4A4A4A]">
+                  <p className="text-xs text-[var(--text-secondary)]">
                     {formatNumber(segment.count)} πελάτες με LTV {formatCurrencyCompact(metrics.estimated_ltv)} σε κίνδυνο. Πιθανή απώλεια εσόδων {formatCurrencyCompact(metrics.revenue_forecast_30d)}/μήνα.
                   </p>
                 </div>
@@ -371,14 +380,14 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
             .map(({ segment, metrics }) => (
               <div
                 key={`opp-${segment.id}`}
-                className="flex items-center gap-3 p-3 rounded-lg border border-[#DCFCE7] bg-[#F0FDF4]"
+                className="flex items-center gap-3 p-3 rounded-lg border border-[var(--success-light)] bg-[var(--success-light)]"
               >
-                <TrendingUp size={16} className="text-[#22C55E] flex-shrink-0" />
+                <TrendingUp size={16} className="text-[var(--success-700)] flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[#1A1A1A]">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">
                     {segment.name}: Αυξητική ζήτηση
                   </p>
-                  <p className="text-xs text-[#4A4A4A]">
+                  <p className="text-xs text-[var(--text-secondary)]">
                     LTV {formatCurrencyCompact(metrics.estimated_ltv)} με forecast {formatCurrencyCompact(metrics.revenue_forecast_90d)} (90d). Ευκαιρία για upsell/cross-sell campaigns.
                   </p>
                 </div>
@@ -409,10 +418,10 @@ function PredictiveKPI({ icon, label, value, color, tooltip }: {
             <span style={{ color }}>{icon}</span>
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] text-[#9CA3AF]">
+            <p className="text-[11px] text-[var(--text-muted)]">
               <Tooltip content={tooltip} size={11}>{label}</Tooltip>
             </p>
-            <p className="text-lg font-bold font-mono text-[#1A1A1A]">{value}</p>
+            <p className="text-lg font-bold font-mono text-[var(--text-primary)]">{value}</p>
           </div>
         </div>
       </Card>

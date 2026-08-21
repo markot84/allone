@@ -31,6 +31,9 @@ import buildInfoJson from '../../generated/buildInfo.json';
 import type { BuildInfo } from '../../types/buildInfo';
 import { logger } from '../../utils/logger';
 import { sanitizeClipboardText } from '../../utils/spreadsheetSafe';
+import { PageHeader } from '../common';
+import { useFullBleedCanvas } from '../layout/AppChrome';
+import { ChromeTabRow, PageCanvas } from '../layout/ChromeControls';
 
 // Cast so empty commits/changes arrays don't infer as never[] under `tsc -b`.
 const buildInfo = buildInfoJson as BuildInfo;
@@ -45,6 +48,9 @@ interface ServiceStatus {
 }
 
 export function SuperAdminDashboard() {
+  // The page draws its own gutters, so the shell drops its padded wrapper.
+  useFullBleedCanvas();
+
   const [activeTab, setActiveTab] = useState<AdminTab>('brands');
   const { user } = useAuth();
 
@@ -58,52 +64,15 @@ export function SuperAdminDashboard() {
   ];
 
   return (
-    <div>
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-          <ShieldIcon size={24} />
-          <Text as="h1" style={{ fontSize: 24, fontWeight: 700, color: 'var(--fgColor-default)' }}>
-            Super Admin
-          </Text>
-        </div>
-        <Text as="p" style={{ color: 'var(--fgColor-muted)', fontSize: 14 }}>
-          Διαχείριση εφαρμογής, brands, APIs και εκδόσεων
-        </Text>
-      </div>
+    <PageCanvas>
+      {/* Six admin views; the bar carries them like every other page's tab row. */}
+      <ChromeTabRow
+        tabs={tabs.map((tab) => ({ id: tab.id, label: tab.label }))}
+        current={activeTab}
+        onSelect={(id) => setActiveTab(id as AdminTab)}
+      />
 
-      {/* Tabs */}
-      <div style={{
-        display: 'flex',
-        gap: 0,
-        borderBottom: '1px solid var(--borderColor-default, #d0d7de)',
-        marginBottom: 24,
-        overflowX: 'auto'
-      }}>
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '10px 16px',
-              border: 'none',
-              borderBottom: activeTab === tab.id ? '2px solid var(--nts-accent, #d4854a)' : '2px solid transparent',
-              background: 'transparent',
-              cursor: 'pointer',
-              fontSize: 14,
-              fontWeight: activeTab === tab.id ? 600 : 400,
-              color: activeTab === tab.id ? 'var(--fgColor-default)' : 'var(--fgColor-muted)',
-              whiteSpace: 'nowrap',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <tab.icon size={16} />
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <PageHeader eyebrow="Admin" title="Super Admin" description="Διαχείριση εφαρμογής, brands, APIs και εκδόσεων" />
 
       {/* Tab Content */}
       {activeTab === 'brands' && <BrandsTab />}
@@ -112,7 +81,7 @@ export function SuperAdminDashboard() {
       {activeTab === 'api' && <ApiStatusTab />}
       {activeTab === 'changelog' && <ChangelogTab userEmail={user?.email ?? ''} />}
       {activeTab === 'system' && <SystemInfoTab />}
-    </div>
+    </PageCanvas>
   );
 }
 
@@ -254,8 +223,8 @@ function BrandsTab() {
               style={{
                 padding: 16,
                 borderRadius: 10,
-                border: `1px solid ${isEnterprise ? 'rgba(139,92,246,0.3)' : 'var(--borderColor-default, #d0d7de)'}`,
-                background: 'var(--bgColor-default, #fff)',
+                border: `1px solid ${isEnterprise ? 'rgba(139,92,246,0.3)' : 'var(--borderColor-default, var(--border))'}`,
+                background: 'var(--bgColor-default, var(--surface-0))',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -269,7 +238,7 @@ function BrandsTab() {
                 ) : (
                   <div style={{
                     width: 36, height: 36, borderRadius: 8,
-                    background: 'var(--bgColor-accent-muted, #ddf4ff)',
+                    background: 'var(--bgColor-accent-muted, var(--sky-badge-bg))',
                     display: 'grid', placeItems: 'center',
                     fontWeight: 700, fontSize: 14, color: 'var(--nts-accent-text)'
                   }}>
@@ -285,7 +254,7 @@ function BrandsTab() {
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 {/* Plan Selector */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--borderColor-default, #d0d7de)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--borderColor-default, var(--border))' }}>
                   <button
                     type="button"
                     onClick={() => plan !== 'growth' && handlePlanChange(brand.id, 'growth')}
@@ -296,8 +265,8 @@ function BrandsTab() {
                       fontWeight: plan === 'growth' ? 700 : 400,
                       border: 'none',
                       cursor: updatingPlan === brand.id ? 'wait' : 'pointer',
-                      background: plan === 'growth' ? '#22C55E' : 'var(--bgColor-default, #fff)',
-                      color: plan === 'growth' ? '#fff' : 'var(--fgColor-muted)',
+                      background: plan === 'growth' ? 'var(--success-700)' : 'var(--bgColor-default, var(--surface-0))',
+                      color: plan === 'growth' ? 'var(--surface-0)' : 'var(--fgColor-muted)',
                       transition: 'all 0.15s ease',
                     }}
                   >
@@ -312,10 +281,10 @@ function BrandsTab() {
                       fontSize: 12,
                       fontWeight: plan === 'enterprise' ? 700 : 400,
                       border: 'none',
-                      borderLeft: '1px solid var(--borderColor-default, #d0d7de)',
+                      borderLeft: '1px solid var(--borderColor-default, var(--border))',
                       cursor: updatingPlan === brand.id ? 'wait' : 'pointer',
-                      background: plan === 'enterprise' ? '#8B5CF6' : 'var(--bgColor-default, #fff)',
-                      color: plan === 'enterprise' ? '#fff' : 'var(--fgColor-muted)',
+                      background: plan === 'enterprise' ? 'var(--seg-potential)' : 'var(--bgColor-default, var(--surface-0))',
+                      color: plan === 'enterprise' ? 'var(--surface-0)' : 'var(--fgColor-muted)',
                       transition: 'all 0.15s ease',
                     }}
                   >
@@ -323,7 +292,7 @@ function BrandsTab() {
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--borderColor-default, #d0d7de)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--borderColor-default, var(--border))' }}>
                   <button
                     type="button"
                     onClick={() => brandKind !== 'B2C' && handleBrandTypeChange(brand.id, 'B2C')}
@@ -334,8 +303,8 @@ function BrandsTab() {
                       fontWeight: brandKind === 'B2C' ? 700 : 400,
                       border: 'none',
                       cursor: updatingBrandType === brand.id ? 'wait' : 'pointer',
-                      background: brandKind === 'B2C' ? '#d4854a' : 'var(--bgColor-default, #fff)',
-                      color: brandKind === 'B2C' ? '#fff' : 'var(--fgColor-muted)',
+                      background: brandKind === 'B2C' ? 'var(--orange-700)' : 'var(--bgColor-default, var(--surface-0))',
+                      color: brandKind === 'B2C' ? 'var(--surface-0)' : 'var(--fgColor-muted)',
                       transition: 'all 0.15s ease',
                     }}
                   >
@@ -350,10 +319,10 @@ function BrandsTab() {
                       fontSize: 12,
                       fontWeight: brandKind === 'B2B' ? 700 : 400,
                       border: 'none',
-                      borderLeft: '1px solid var(--borderColor-default, #d0d7de)',
+                      borderLeft: '1px solid var(--borderColor-default, var(--border))',
                       cursor: updatingBrandType === brand.id ? 'wait' : 'pointer',
-                      background: brandKind === 'B2B' ? '#3b82f6' : 'var(--bgColor-default, #fff)',
-                      color: brandKind === 'B2B' ? '#fff' : 'var(--fgColor-muted)',
+                      background: brandKind === 'B2B' ? 'var(--sky-500)' : 'var(--bgColor-default, var(--surface-0))',
+                      color: brandKind === 'B2B' ? 'var(--surface-0)' : 'var(--fgColor-muted)',
                       transition: 'all 0.15s ease',
                     }}
                   >
@@ -366,7 +335,7 @@ function BrandsTab() {
                   <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>χρήστες</Text>
                 </div>
               </div>
-              <div style={{ width: '100%', borderTop: '1px solid var(--borderColor-muted, #e5e7eb)', paddingTop: 12 }}>
+              <div style={{ width: '100%', borderTop: '1px solid var(--borderColor-muted, var(--border))', paddingTop: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
                   <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>
                     Edition matrix (Growth/Enterprise · B2C/B2B από πάνω): defaults ανά <strong>{brandKind}</strong>, με granular overrides.
@@ -390,8 +359,8 @@ function BrandsTab() {
                       padding: '4px 8px',
                       fontSize: 12,
                       borderRadius: 6,
-                      border: '1px solid var(--borderColor-default, #d0d7de)',
-                      background: 'var(--bgColor-default, #fff)',
+                      border: '1px solid var(--borderColor-default, var(--border))',
+                      background: 'var(--bgColor-default, var(--surface-0))',
                       color: 'var(--fgColor-default)',
                       cursor: updatingHistory === brand.id ? 'wait' : 'text',
                     }}
@@ -406,8 +375,8 @@ function BrandsTab() {
                         padding: '3px 8px',
                         fontSize: 11,
                         borderRadius: 6,
-                        border: '1px solid var(--borderColor-default, #d0d7de)',
-                        background: 'var(--bgColor-default, #fff)',
+                        border: '1px solid var(--borderColor-default, var(--border))',
+                        background: 'var(--bgColor-default, var(--surface-0))',
                         color: 'var(--fgColor-muted)',
                         cursor: updatingHistory === brand.id ? 'wait' : 'pointer',
                       }}
@@ -439,7 +408,7 @@ function BrandsTab() {
                           borderRadius: 999,
                           border: enabled ? '1px solid rgba(34,197,94,0.35)' : '1px solid rgba(148,163,184,0.35)',
                           background: hiddenEdition ? 'rgba(148,163,184,0.04)' : enabled ? 'rgba(34,197,94,0.10)' : 'rgba(148,163,184,0.08)',
-                          color: hiddenEdition ? '#94a3b8' : enabled ? '#15803d' : '#475569',
+                          color: hiddenEdition ? 'var(--text-muted)' : enabled ? 'var(--success-700)' : 'var(--text-secondary)',
                           fontSize: 12,
                           fontWeight: 600,
                           cursor: disabled ? (pending ? 'wait' : 'not-allowed') : 'pointer',
@@ -678,8 +647,8 @@ function UsersTab() {
               padding: '6px 12px',
               fontSize: 13,
               borderRadius: 6,
-              border: '1px solid var(--borderColor-default, #d0d7de)',
-              background: 'var(--bgColor-default, #fff)',
+              border: '1px solid var(--borderColor-default, var(--border))',
+              background: 'var(--bgColor-default, var(--surface-0))',
               color: 'var(--fgColor-default)',
               minWidth: 220,
             }}
@@ -706,7 +675,7 @@ function UsersTab() {
           padding: 12, borderRadius: 8,
           background: 'rgba(239,68,68,0.08)',
           border: '1px solid rgba(239,68,68,0.2)',
-          color: '#b91c1c', marginBottom: 16, fontSize: 13,
+          color: 'var(--danger-600)', marginBottom: 16, fontSize: 13,
         }}>
           Δεν ήταν δυνατή η φόρτωση των χρηστών: {error}
         </div>
@@ -725,8 +694,8 @@ function UsersTab() {
               key={u.id}
               style={{
                 padding: 16, borderRadius: 10,
-                border: `1px solid ${admin ? 'rgba(212,133,74,0.4)' : 'var(--borderColor-default, #d0d7de)'}`,
-                background: 'var(--bgColor-default, #fff)',
+                border: `1px solid ${admin ? 'rgba(212,133,74,0.4)' : 'var(--borderColor-default, var(--border))'}`,
+                background: 'var(--bgColor-default, var(--surface-0))',
                 display: 'grid', gap: 12,
               }}
             >
@@ -734,10 +703,10 @@ function UsersTab() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
                   <div style={{
                     width: 36, height: 36, borderRadius: '50%',
-                    background: admin ? 'rgba(212,133,74,0.15)' : 'var(--bgColor-accent-muted, #ddf4ff)',
+                    background: admin ? 'rgba(212,133,74,0.15)' : 'var(--bgColor-accent-muted, var(--sky-badge-bg))',
                     display: 'grid', placeItems: 'center',
                     fontWeight: 700, fontSize: 14,
-                    color: admin ? 'var(--nts-accent)' : '#0969da',
+                    color: admin ? 'var(--nts-accent)' : 'var(--sky-500)',
                     flexShrink: 0,
                   }}>
                     {initial}
@@ -757,7 +726,7 @@ function UsersTab() {
                       {isSelf && (
                         <span style={{
                           padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
-                          background: 'var(--bgColor-muted, #f6f8fa)', color: 'var(--fgColor-muted)',
+                          background: 'var(--bgColor-muted, var(--surface-2))', color: 'var(--fgColor-muted)',
                         }}>
                           εσύ
                         </span>
@@ -771,7 +740,7 @@ function UsersTab() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{
                     padding: '2px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600,
-                    background: 'var(--bgColor-muted, #f6f8fa)', color: 'var(--fgColor-muted)',
+                    background: 'var(--bgColor-muted, var(--surface-2))', color: 'var(--fgColor-muted)',
                   }}>
                     {userBrands.length} brand{userBrands.length !== 1 ? 's' : ''}
                   </span>
@@ -782,9 +751,9 @@ function UsersTab() {
                     title={isSelf ? 'Δεν μπορείς να αλλάξεις τα δικά σου δικαιώματα' : admin ? 'Αφαίρεση super admin' : 'Παραχώρηση super admin'}
                     style={{
                       padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                      border: '1px solid var(--borderColor-default, #d0d7de)',
-                      background: admin ? 'rgba(207,34,46,0.06)' : 'var(--bgColor-default, #fff)',
-                      color: isSelf ? 'var(--fgColor-muted)' : admin ? '#cf222e' : 'var(--fgColor-default)',
+                      border: '1px solid var(--borderColor-default, var(--border))',
+                      background: admin ? 'rgba(207,34,46,0.06)' : 'var(--bgColor-default, var(--surface-0))',
+                      color: isSelf ? 'var(--fgColor-muted)' : admin ? 'var(--danger-600)' : 'var(--fgColor-default)',
                       cursor: busy === `sa:${u.id}` ? 'wait' : isSelf ? 'not-allowed' : 'pointer',
                       opacity: isSelf ? 0.5 : 1,
                     }}
@@ -796,8 +765,8 @@ function UsersTab() {
                     onClick={() => setExpanded(isOpen ? null : u.id)}
                     style={{
                       padding: '5px 10px', borderRadius: 6, fontSize: 12,
-                      border: '1px solid var(--borderColor-default, #d0d7de)',
-                      background: 'var(--bgColor-default, #fff)',
+                      border: '1px solid var(--borderColor-default, var(--border))',
+                      background: 'var(--bgColor-default, var(--surface-0))',
                       color: 'var(--fgColor-muted)', cursor: 'pointer',
                     }}
                   >
@@ -807,7 +776,7 @@ function UsersTab() {
               </div>
 
               {isOpen && (
-                <div style={{ borderTop: '1px solid var(--borderColor-muted, #e5e7eb)', paddingTop: 12, display: 'grid', gap: 8 }}>
+                <div style={{ borderTop: '1px solid var(--borderColor-muted, var(--border))', paddingTop: 12, display: 'grid', gap: 8 }}>
                   {userBrands.length === 0 && (
                     <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>
                       Ο χρήστης δεν ανήκει σε κανένα brand.
@@ -823,7 +792,7 @@ function UsersTab() {
                           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                           gap: 12, flexWrap: 'wrap',
                           padding: '8px 12px', borderRadius: 8,
-                          background: 'var(--bgColor-muted, #f6f8fa)',
+                          background: 'var(--bgColor-muted, var(--surface-2))',
                         }}
                       >
                         <div style={{ minWidth: 0 }}>
@@ -835,7 +804,7 @@ function UsersTab() {
                           )}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--borderColor-default, #d0d7de)' }}>
+                          <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--borderColor-default, var(--border))' }}>
                             {MEMBERSHIP_ROLES.map((r) => (
                               <button
                                 key={r}
@@ -846,9 +815,9 @@ function UsersTab() {
                                   padding: '4px 10px', fontSize: 12,
                                   fontWeight: m.role === r ? 700 : 400,
                                   border: 'none',
-                                  borderLeft: r !== 'owner' ? '1px solid var(--borderColor-default, #d0d7de)' : 'none',
-                                  background: m.role === r ? 'var(--nts-accent, #d4854a)' : 'var(--bgColor-default, #fff)',
-                                  color: m.role === r ? '#fff' : 'var(--fgColor-muted)',
+                                  borderLeft: r !== 'owner' ? '1px solid var(--borderColor-default, var(--border))' : 'none',
+                                  background: m.role === r ? 'var(--nts-accent, var(--orange-700))' : 'var(--bgColor-default, var(--surface-0))',
+                                  color: m.role === r ? 'var(--surface-0)' : 'var(--fgColor-muted)',
                                   cursor: roleBusy ? 'wait' : 'pointer',
                                 }}
                               >
@@ -864,9 +833,9 @@ function UsersTab() {
                             style={{
                               display: 'flex', alignItems: 'center', gap: 4,
                               padding: '4px 10px', borderRadius: 6, fontSize: 12,
-                              border: '1px solid var(--borderColor-default, #d0d7de)',
-                              background: 'var(--bgColor-default, #fff)',
-                              color: 'var(--danger-fg, #cf222e)',
+                              border: '1px solid var(--borderColor-default, var(--border))',
+                              background: 'var(--bgColor-default, var(--surface-0))',
+                              color: 'var(--danger-fg, var(--danger-600))',
                               cursor: removeBusy ? 'wait' : 'pointer',
                             }}
                           >
@@ -901,8 +870,8 @@ function UsersTab() {
             disabled={safePage === 0}
             style={{
               padding: '6px 12px', borderRadius: 6, fontSize: 13,
-              border: '1px solid var(--borderColor-default, #d0d7de)',
-              background: 'var(--bgColor-default, #fff)',
+              border: '1px solid var(--borderColor-default, var(--border))',
+              background: 'var(--bgColor-default, var(--surface-0))',
               color: 'var(--fgColor-default)',
               cursor: safePage === 0 ? 'not-allowed' : 'pointer',
               opacity: safePage === 0 ? 0.5 : 1,
@@ -919,8 +888,8 @@ function UsersTab() {
             disabled={safePage >= pageCount - 1}
             style={{
               padding: '6px 12px', borderRadius: 6, fontSize: 13,
-              border: '1px solid var(--borderColor-default, #d0d7de)',
-              background: 'var(--bgColor-default, #fff)',
+              border: '1px solid var(--borderColor-default, var(--border))',
+              background: 'var(--bgColor-default, var(--surface-0))',
               color: 'var(--fgColor-default)',
               cursor: safePage >= pageCount - 1 ? 'not-allowed' : 'pointer',
               opacity: safePage >= pageCount - 1 ? 0.5 : 1,
@@ -1035,7 +1004,7 @@ function LeadsTab() {
           borderRadius: 8,
           background: 'rgba(239,68,68,0.08)',
           border: '1px solid rgba(239,68,68,0.2)',
-          color: '#b91c1c',
+          color: 'var(--danger-600)',
           marginBottom: 16,
           fontSize: 13,
         }}>
@@ -1052,8 +1021,8 @@ function LeadsTab() {
               style={{
                 padding: 16,
                 borderRadius: 10,
-                border: '1px solid var(--borderColor-default, #d0d7de)',
-                background: 'var(--bgColor-default, #fff)',
+                border: '1px solid var(--borderColor-default, var(--border))',
+                background: 'var(--bgColor-default, var(--surface-0))',
                 display: 'grid',
                 gap: 10,
               }}
@@ -1085,7 +1054,7 @@ function LeadsTab() {
                     borderRadius: 999,
                     fontSize: 12,
                     fontWeight: 600,
-                    color: teamSent ? '#15803d' : '#b45309',
+                    color: teamSent ? 'var(--success-700)' : 'var(--orange-700)',
                     background: teamSent ? 'rgba(34,197,94,0.10)' : 'rgba(245,158,11,0.12)',
                     border: teamSent ? '1px solid rgba(34,197,94,0.22)' : '1px solid rgba(245,158,11,0.24)',
                   }}>
@@ -1098,7 +1067,7 @@ function LeadsTab() {
                   margin: 0,
                   padding: 12,
                   borderRadius: 8,
-                  background: 'var(--bgColor-muted, #f6f8fa)',
+                  background: 'var(--bgColor-muted, var(--surface-2))',
                   whiteSpace: 'pre-wrap',
                   fontSize: 13,
                   color: 'var(--fgColor-default)',
@@ -1202,14 +1171,14 @@ function ApiStatusTab() {
             key={svc.name}
             style={{
               padding: 16, borderRadius: 10,
-              border: '1px solid var(--borderColor-default, #d0d7de)',
-              background: 'var(--bgColor-default, #fff)',
+              border: '1px solid var(--borderColor-default, var(--border))',
+              background: 'var(--bgColor-default, var(--surface-0))',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {svc.status === 'ok' && <CheckCircleIcon size={20} fill="#2da44e" />}
-              {svc.status === 'error' && <XCircleIcon size={20} fill="#cf222e" />}
+              {svc.status === 'ok' && <CheckCircleIcon size={20} fill="var(--success-700)" />}
+              {svc.status === 'error' && <XCircleIcon size={20} fill="var(--danger-600)" />}
               {svc.status === 'checking' && <SyncIcon size={20} className="anim-rotate" />}
               <div>
                 <Text as="div" weight="semibold" style={{ fontSize: 14 }}>{svc.name}</Text>
@@ -1224,7 +1193,7 @@ function ApiStatusTab() {
               <span style={{
                 padding: '2px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600,
                 background: svc.status === 'ok' ? 'rgba(45,164,78,0.12)' : svc.status === 'error' ? 'rgba(207,34,46,0.12)' : 'rgba(0,0,0,0.06)',
-                color: svc.status === 'ok' ? '#2da44e' : svc.status === 'error' ? '#cf222e' : 'var(--fgColor-muted)'
+                color: svc.status === 'ok' ? 'var(--success-700)' : svc.status === 'error' ? 'var(--danger-600)' : 'var(--fgColor-muted)'
               }}>
                 {svc.status === 'ok' ? 'Online' : svc.status === 'error' ? 'Offline' : 'Checking...'}
               </span>
@@ -1240,7 +1209,7 @@ function ApiStatusTab() {
 
       <div style={{
         marginTop: 20, padding: 16, borderRadius: 10,
-        background: 'var(--bgColor-muted, #f6f8fa)',
+        background: 'var(--bgColor-muted, var(--surface-2))',
         border: '1px solid var(--borderColor-default)'
       }}>
         <Text as="div" weight="semibold" size="small" style={{ marginBottom: 8, color: 'var(--fgColor-muted)' }}>
@@ -1286,7 +1255,7 @@ function BuildInfoPanel() {
     <div style={{
       borderRadius: 10, marginBottom: 16,
       border: '1px solid var(--borderColor-default)',
-      background: 'var(--bgColor-default, #fff)',
+      background: 'var(--bgColor-default, var(--surface-0))',
       overflow: 'hidden'
     }}>
       {/* Header - always visible */}
@@ -1295,7 +1264,7 @@ function BuildInfoPanel() {
         style={{
           width: '100%', padding: '12px 16px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          border: 'none', background: 'var(--bgColor-muted, #f6f8fa)',
+          border: 'none', background: 'var(--bgColor-muted, var(--surface-2))',
           cursor: 'pointer', gap: 8
         }}
       >
@@ -1311,7 +1280,7 @@ function BuildInfoPanel() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{
             padding: '1px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
-            background: 'rgba(45,164,78,0.1)', color: '#2da44e'
+            background: 'rgba(45,164,78,0.1)', color: 'var(--success-700)'
           }}>
             {buildInfo.changes.length} αλλαγές
           </span>
@@ -1334,7 +1303,7 @@ function BuildInfoPanel() {
                 border: '1px solid var(--borderColor-default)',
                 background: copiedAll ? 'rgba(45,164,78,0.08)' : 'var(--bgColor-default)',
                 cursor: 'pointer', fontSize: 12, fontWeight: 500,
-                color: copiedAll ? '#2da44e' : 'var(--fgColor-default)'
+                color: copiedAll ? 'var(--success-700)' : 'var(--fgColor-default)'
               }}
             >
               {copiedAll ? <><CheckCircleIcon size={12} /> Αντιγράφηκε!</> : <><CopyIcon size={12} /> Αντιγραφή για χρήστες</>}
@@ -1345,7 +1314,7 @@ function BuildInfoPanel() {
               const tagMatch = change.match(/^\[(.+?)\]\s*/);
               const tag = tagMatch ? tagMatch[1] : null;
               const text = tagMatch ? change.slice(tagMatch[0].length) : change;
-              const dot = tag?.includes('Διόρθωση') ? '#cf222e' : tag?.includes('Αναδιαμόρφωση') ? '#8250df' : tag?.includes('Βελτίωση') ? '#78716C' : '#2da44e';
+              const dot = tag?.includes('Διόρθωση') ? 'var(--danger-600)' : tag?.includes('Αναδιαμόρφωση') ? 'var(--seg-potential)' : tag?.includes('Βελτίωση') ? 'var(--text-muted)' : 'var(--success-700)';
               return (
                 <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13, lineHeight: 1.6, padding: '2px 0' }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0, marginTop: 6 }} />
@@ -1506,8 +1475,8 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '6px 14px', borderRadius: 6,
-              border: 'none', background: 'var(--nts-accent, #d4854a)',
-              color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600
+              border: 'none', background: 'var(--nts-accent, var(--orange-700))',
+              color: 'var(--surface-0)', cursor: 'pointer', fontSize: 13, fontWeight: 600
             }}
           >
             <PlusIcon size={14} />
@@ -1521,7 +1490,7 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
         <div style={{
           padding: 20, borderRadius: 10, marginBottom: 20,
           border: '1px solid var(--borderColor-default)',
-          background: 'var(--bgColor-muted, #f6f8fa)'
+          background: 'var(--bgColor-muted, var(--surface-2))'
         }}>
           <Text as="div" weight="semibold" style={{ marginBottom: 12, fontSize: 15 }}>
             {editingId ? 'Επεξεργασία Έκδοσης' : 'Νέα Έκδοση'}
@@ -1587,8 +1556,8 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
                 disabled={!form.version.trim() || !form.title.trim()}
                 style={{
                   padding: '8px 16px', borderRadius: 6,
-                  border: 'none', background: 'var(--nts-accent, #d4854a)',
-                  color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                  border: 'none', background: 'var(--nts-accent, var(--orange-700))',
+                  color: 'var(--surface-0)', cursor: 'pointer', fontSize: 13, fontWeight: 600,
                   opacity: (!form.version.trim() || !form.title.trim()) ? 0.5 : 1
                 }}
               >
@@ -1606,8 +1575,8 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
             key={entry.id}
             style={{
               padding: 16, borderRadius: 10,
-              border: '1px solid var(--borderColor-default, #d0d7de)',
-              background: 'var(--bgColor-default, #fff)'
+              border: '1px solid var(--borderColor-default, var(--border))',
+              background: 'var(--bgColor-default, var(--surface-0))'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
@@ -1634,7 +1603,7 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
                     padding: 6, border: '1px solid var(--borderColor-default)',
                     borderRadius: 6, background: copiedId === entry.id ? 'rgba(45,164,78,0.12)' : 'var(--bgColor-default)',
                     cursor: 'pointer', display: 'flex', alignItems: 'center',
-                    color: copiedId === entry.id ? '#2da44e' : 'var(--fgColor-muted)'
+                    color: copiedId === entry.id ? 'var(--success-700)' : 'var(--fgColor-muted)'
                   }}
                 >
                   {copiedId === entry.id ? <CheckCircleIcon size={14} /> : <CopyIcon size={14} />}
@@ -1658,7 +1627,7 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
                     padding: 6, border: '1px solid var(--borderColor-default)',
                     borderRadius: 6, background: 'var(--bgColor-default)',
                     cursor: 'pointer', display: 'flex', alignItems: 'center',
-                    color: 'var(--danger-fg, #cf222e)'
+                    color: 'var(--danger-fg, var(--danger-600))'
                   }}
                 >
                   <TrashIcon size={14} />
@@ -1671,7 +1640,7 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
                   const tagMatch = change.match(/^\[(.+?)\]\s*/);
                   const tag = tagMatch ? tagMatch[1] : null;
                   const text = tagMatch ? change.slice(tagMatch[0].length) : change;
-                  const dot = tag?.includes('Διόρθωση') ? '#cf222e' : tag?.includes('Αναδιαμόρφωση') ? '#8250df' : tag?.includes('Βελτίωση') ? '#78716C' : '#2da44e';
+                  const dot = tag?.includes('Διόρθωση') ? 'var(--danger-600)' : tag?.includes('Αναδιαμόρφωση') ? 'var(--seg-potential)' : tag?.includes('Βελτίωση') ? 'var(--text-muted)' : 'var(--success-700)';
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13, lineHeight: 1.6, padding: '2px 0' }}>
                       <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0, marginTop: 6 }} />
@@ -1765,8 +1734,8 @@ function SystemInfoTab() {
           key={section.title}
           style={{
             padding: 16, borderRadius: 10,
-            border: '1px solid var(--borderColor-default, #d0d7de)',
-            background: 'var(--bgColor-default, #fff)'
+            border: '1px solid var(--borderColor-default, var(--border))',
+            background: 'var(--bgColor-default, var(--surface-0))'
           }}
         >
           <Text as="div" weight="semibold" style={{ fontSize: 14, marginBottom: 10, color: 'var(--fgColor-muted)' }}>
@@ -1785,7 +1754,7 @@ function SystemInfoTab() {
 
       <div style={{
         padding: 16, borderRadius: 10,
-        background: 'var(--bgColor-muted, #f6f8fa)',
+        background: 'var(--bgColor-muted, var(--surface-2))',
         border: '1px solid var(--borderColor-default)'
       }}>
         <Text as="div" weight="semibold" size="small" style={{ marginBottom: 8, color: 'var(--fgColor-muted)' }}>

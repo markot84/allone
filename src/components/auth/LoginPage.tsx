@@ -94,13 +94,13 @@ export function LoginPage({
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#f5f5f7] px-4 py-10">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--surface-2)] px-4 py-10">
       {/* Back link */}
       {onBackToLanding && (
         <button
           type="button"
           onClick={onBackToLanding}
-          className="mb-6 flex items-center gap-1.5 text-sm text-[#6B7280] hover:text-[#1A1A1A] transition-colors"
+          className="mb-6 flex items-center gap-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
         >
           <ArrowLeft size={14} />
           Επιστροφή
@@ -119,18 +119,18 @@ export function LoginPage({
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm p-7">
+        <div className="bg-white rounded-2xl border border-[var(--border)] shadow-sm p-7">
 
           {mode === 'forgot' ? (
             resetSent ? (
               /* ── Reset sent ── */
               <div className="text-center space-y-4">
-                <div className="w-11 h-11 bg-[#ECFDF5] rounded-xl flex items-center justify-center mx-auto">
-                  <Send size={20} className="text-[#10B981]" />
+                <div className="w-11 h-11 bg-[var(--success-light)] rounded-xl flex items-center justify-center mx-auto">
+                  <Send size={20} className="text-[var(--success-700)]" />
                 </div>
                 <div>
-                  <p className="font-semibold text-[#1A1A1A] text-sm">Email εστάλη!</p>
-                  <p className="text-xs text-[#6B7280] mt-1">
+                  <p className="font-semibold text-[var(--text-primary)] text-sm">Email εστάλη!</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">
                     Ελέγξτε το <strong>{email}</strong> για τον σύνδεσμο.
                   </p>
                 </div>
@@ -145,7 +145,7 @@ export function LoginPage({
             ) : (
               /* ── Forgot password ── */
               <>
-                <p className="text-xs text-[#6B7280] text-center mb-5">
+                <p className="text-xs text-[var(--text-muted)] text-center mb-5">
                   Εισάγετε το email σας για να λάβετε σύνδεσμο επαναφοράς.
                 </p>
                 <form onSubmit={handleResetPassword} className="space-y-3">
@@ -165,7 +165,7 @@ export function LoginPage({
                 <button
                   type="button"
                   onClick={() => { setMode('login'); setError(''); }}
-                  className="w-full mt-4 text-xs text-[#9CA3AF] hover:text-[#6B7280] transition-colors"
+                  className="w-full mt-4 text-xs text-[var(--text-muted)] hover:text-[var(--text-muted)] transition-colors"
                 >
                   ← Επιστροφή
                 </button>
@@ -175,7 +175,7 @@ export function LoginPage({
             /* ── Login / Register ── */
             <>
               {allowEmailRegister ? (
-                <div className="flex gap-1 mb-6 bg-[#F3F4F6] rounded-lg p-1">
+                <div className="flex gap-1 mb-6 bg-[var(--surface-2)] rounded-lg p-1">
                   {(['login', 'register'] as const).map((m) => (
                     <button
                       key={m}
@@ -183,8 +183,8 @@ export function LoginPage({
                       onClick={() => { setMode(m); setError(''); }}
                       className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${
                         mode === m
-                          ? 'bg-white text-[#1A1A1A] shadow-sm'
-                          : 'text-[#6B7280] hover:text-[#1A1A1A]'
+                          ? 'bg-white text-[var(--text-primary)] shadow-sm'
+                          : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                       }`}
                     >
                       {m === 'login' ? 'Σύνδεση' : 'Εγγραφή'}
@@ -192,9 +192,9 @@ export function LoginPage({
                   ))}
                 </div>
               ) : (
-                <p className="text-[11px] text-[#6B7280] text-center mb-5 leading-relaxed">
-                  Πρόσβαση έχουν μόνο <strong className="text-[#374151]">ενεργοί λογαριασμοί</strong> (εγκεκριμένοι χρήστες).
-                  Νέα μέλη ενεργοποιούνται μόνο αφού λάβουν <strong className="text-[#374151]">πρόσκληση</strong>, αποδεχτούν τον σύνδεσμο και ολοκληρώσουν την εγγραφή.
+                <p className="text-[11px] text-[var(--text-muted)] text-center mb-5 leading-relaxed">
+                  Πρόσβαση έχουν μόνο <strong className="text-[var(--text-secondary)]">ενεργοί λογαριασμοί</strong> (εγκεκριμένοι χρήστες).
+                  Νέα μέλη ενεργοποιούνται μόνο αφού λάβουν <strong className="text-[var(--text-secondary)]">πρόσκληση</strong>, αποδεχτούν τον σύνδεσμο και ολοκληρώσουν την εγγραφή.
                   Σύνδεση με email ή Google για λογαριασμό που έχει ήδη δημιουργηθεί.
                 </p>
               )}
@@ -246,16 +246,16 @@ export function LoginPage({
               </form>
 
               <div className="my-5 flex items-center gap-3">
-                <div className="flex-1 h-px bg-[#E5E7EB]" />
-                <span className="text-[10px] text-[#9CA3AF]">ή</span>
-                <div className="flex-1 h-px bg-[#E5E7EB]" />
+                <div className="flex-1 h-px bg-[var(--border)]" />
+                <span className="text-[10px] text-[var(--text-muted)]">ή</span>
+                <div className="flex-1 h-px bg-[var(--border)]" />
               </div>
 
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isLoading}
-                className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-[#E5E7EB] bg-white text-[#1A1A1A] hover:bg-[#F9FAFB] transition-colors disabled:opacity-50 text-sm font-medium"
+                className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-[var(--border)] bg-white text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors disabled:opacity-50 text-sm font-medium"
               >
                 <GoogleIcon />
                 Σύνδεση με Google
@@ -282,14 +282,14 @@ function InputField({
 }) {
   return (
     <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]">{icon}</span>
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">{icon}</span>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         autoComplete={autoComplete}
-        className="w-full pl-9 pr-4 py-2.5 text-sm bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30 focus:border-[var(--nts-accent)] focus:bg-white transition-all placeholder:text-[#9CA3AF]"
+        className="w-full pl-9 pr-4 py-2.5 text-sm bg-[var(--surface-2)] border border-[var(--border)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30 focus:border-[var(--nts-accent)] focus:bg-white transition-all placeholder:text-[var(--text-muted)]"
       />
     </div>
   );
@@ -300,7 +300,7 @@ function SubmitButton({ children, disabled }: { children: React.ReactNode; disab
     <button
       type="submit"
       disabled={disabled}
-      className="w-full clear-both py-2.5 rounded-xl bg-[var(--nts-accent)] text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+      className="w-full clear-both py-2.5 rounded-xl btn-gold text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {children}
     </button>
@@ -309,7 +309,7 @@ function SubmitButton({ children, disabled }: { children: React.ReactNode; disab
 
 function ErrorMsg({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-xs text-[#EF4444] bg-[#FEF2F2] border border-[#FECACA] rounded-lg px-3 py-2">
+    <p className="text-xs text-[var(--danger-600)] bg-[var(--danger-light)] border border-[var(--danger-light)] rounded-lg px-3 py-2">
       {children}
     </p>
   );
@@ -318,6 +318,7 @@ function ErrorMsg({ children }: { children: React.ReactNode }) {
 function GoogleIcon() {
   return (
     <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
+      {/* Google's own mark — its four colours are the logo, not a palette choice. */}
       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
       <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
       <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />

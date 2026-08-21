@@ -361,7 +361,7 @@ export function SuppliersPage() {
                     value={newName}
                     onChange={e => setNewName(e.target.value)}
                     placeholder="π.χ. ACME Corp"
-                    className="w-full text-sm border border-[#E5E5E5] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30"
+                    className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30"
                   />
                 </div>
                 <div>
@@ -374,7 +374,7 @@ export function SuppliersPage() {
                     value={newTod}
                     onChange={e => setNewTod(parseInt(e.target.value) || DEFAULT_TOD)}
                     min={1}
-                    className="w-full text-sm border border-[#E5E5E5] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30"
+                    className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30"
                   />
                 </div>
                 <div>
@@ -387,7 +387,7 @@ export function SuppliersPage() {
                     value={newLeadTime}
                     onChange={e => setNewLeadTime(parseInt(e.target.value) || 0)}
                     min={0}
-                    className="w-full text-sm border border-[#E5E5E5] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30"
+                    className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30"
                   />
                 </div>
                 <div>
@@ -397,7 +397,7 @@ export function SuppliersPage() {
                     value={newContact}
                     onChange={e => setNewContact(e.target.value)}
                     placeholder="Email / Τηλ."
-                    className="w-full text-sm border border-[#E5E5E5] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30"
+                    className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30"
                   />
                 </div>
               </div>
@@ -442,7 +442,7 @@ export function SuppliersPage() {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Όνομα ή επικοινωνία…"
-              className="w-full pl-8 pr-2 py-1.5 text-sm border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
+              className="w-full pl-8 pr-2 py-1.5 text-sm border border-[var(--border)] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
             />
           </div>
           <div className="min-w-0 lg:min-w-[140px]">
@@ -452,7 +452,7 @@ export function SuppliersPage() {
               value={filterName}
               onChange={e => setFilterName(e.target.value)}
               placeholder="περιέχει…"
-              className="w-full px-2 py-1.5 text-sm border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
+              className="w-full px-2 py-1.5 text-sm border border-[var(--border)] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
             />
           </div>
           <div className="min-w-0 lg:w-[110px]">
@@ -462,7 +462,7 @@ export function SuppliersPage() {
               value={filterTod}
               onChange={e => setFilterTod(e.target.value)}
               placeholder=">30"
-              className="w-full px-2 py-1.5 text-sm text-center border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
+              className="w-full px-2 py-1.5 text-sm text-center border border-[var(--border)] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
             />
           </div>
           <div className="min-w-0 lg:w-[110px]">
@@ -472,7 +472,7 @@ export function SuppliersPage() {
               value={filterLead}
               onChange={e => setFilterLead(e.target.value)}
               placeholder="5-10"
-              className="w-full px-2 py-1.5 text-sm text-center border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
+              className="w-full px-2 py-1.5 text-sm text-center border border-[var(--border)] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
             />
           </div>
           <div className="min-w-0 lg:min-w-[140px]">
@@ -482,7 +482,7 @@ export function SuppliersPage() {
               value={filterContact}
               onChange={e => setFilterContact(e.target.value)}
               placeholder="περιέχει…"
-              className="w-full px-2 py-1.5 text-sm border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
+              className="w-full px-2 py-1.5 text-sm border border-[var(--border)] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
             />
           </div>
           {hasColumnFilters && (
@@ -509,7 +509,7 @@ export function SuppliersPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm table-fixed">
               <thead>
-                <tr className="bg-[#F9F9F9] border-b border-[#E5E5E5]">
+                <tr className="bg-[var(--surface-1)] border-b border-[var(--border)]">
                   <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('name')}>
                     Προμηθευτής <SortIcon col="name" />
                   </th>
@@ -550,7 +550,7 @@ export function SuppliersPage() {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ delay: i * 0.02 }}
-                      className="border-b border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
+                      className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors"
                     >
                       <td className="px-3 py-2 font-medium text-xs text-[var(--nts-charcoal)] truncate">{s.name}</td>
                       <td className="px-3 py-2 text-center">
@@ -576,7 +576,7 @@ export function SuppliersPage() {
                             value={editLeadTime}
                             onChange={e => setEditLeadTime(parseInt(e.target.value) || 0)}
                             min={0}
-                            className="w-16 text-center text-xs border border-[#E5E5E5] rounded px-1 py-1 focus:outline-none"
+                            className="w-16 text-center text-xs border border-[var(--border)] rounded px-1 py-1 focus:outline-none"
                           />
                         ) : (
                           <span className="text-xs text-[var(--nts-medium-gray)]">

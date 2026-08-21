@@ -1,11 +1,8 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  Header as PrimerHeader,
-  NavList,
-  Text
-} from '@primer/react';
-import { Button, AllOneLogo } from '../common';
+import { Text } from '@primer/react';
+import { AllOneLogo } from '../common';
+import { AppChromeProvider, useAppChrome } from './AppChrome';
 import { useAuth, useBrand, useBrandMembers } from '../../hooks';
 import { useModules } from '../../hooks/useModules';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
@@ -23,7 +20,6 @@ import {
   OrganizationIcon,
   PackageIcon,
   PencilIcon,
-  PinIcon,
   ReportIcon,
   SearchIcon,
   ShieldIcon,
@@ -33,7 +29,10 @@ import {
 import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2, HeartHandshake, MapPin, ClipboardList, Palette, Lightbulb } from 'lucide-react';
 import { NotificationBell } from '../coordination/NotificationBell';
 
-const SIDEBAR_PIN_KEY = 'perf-plus-sidebar-pinned';
+const RAIL_OPEN_KEY = 'perf-plus-rail-open';
+
+/** The artboard's second face: every number, key cap, tab and eyebrow label is set in it. */
+const MONO = "'JetBrains Mono', monospace";
 
 export interface AppShellProps {
   activeSection: string;
@@ -43,7 +42,7 @@ export interface AppShellProps {
 
 type NavGroup = 'business' | 'commerce' | 'commercial' | 'marketing' | 'procurement' | 'finance' | 'operations' | 'admin';
 type NavIcon = React.ComponentType<{ size?: number }>;
-type NavItem = { id: AppSectionId; label: string; icon: NavIcon; badge?: string; badgeColor?: string; group: NavGroup };
+type NavItem = { id: AppSectionId; label: string; icon: NavIcon; badge?: string; group: NavGroup };
 type TimestampLike = { toMillis?: () => number; seconds?: number };
 
 const NAV_GROUP_LABELS: Record<NavGroup, string> = {
@@ -102,75 +101,160 @@ function useCascadeHighlight(): Set<string> {
   return lit;
 }
 
-function SidebarNav({
+/**
+ * The rail's navigation list.
+ *
+ * Primer's `NavList` was doing the markup here, which meant every rule of the artboard — the mono
+ * group label with its hairline, the 9px radius, the gold marker down the leading edge of the
+ * active item — had to be forced through `!important` overrides in `index.css`. The list is a
+ * dozen lines of flexbox; owning it is cheaper than fighting a component that wants to look like
+ * something else.
+ */
+function RailNav({
   navItems,
   activeSection,
+  collapsed,
   onSelect,
 }: {
   navItems: NavItem[];
   activeSection: string;
+  collapsed: boolean;
   onSelect: (id: AppSectionId) => void;
 }) {
   const cascadeLit = useCascadeHighlight();
+
+  const isCurrent = (item: NavItem) =>
+    activeSection === item.id || (item.id === 'data' && activeSection.startsWith('data-'));
+
+  /** Groups in nav order, so a group heading is emitted once per run of items that share it. */
+  const groups = navItems.reduce<{ group: NavGroup; items: NavItem[] }[]>((acc, item) => {
+    const last = acc[acc.length - 1];
+    if (last && last.group === item.group) last.items.push(item);
+    else acc.push({ group: item.group, items: [item] });
+    return acc;
+  }, []);
+
+  const handleClick = (e: React.MouseEvent, id: AppSectionId) => {
+    // Let the browser handle ctrl/cmd/shift-click and middle-click so "open in new tab" works;
+    // only plain clicks stay in-SPA.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onSelect(id);
+  };
+
   return (
-    <NavList aria-label="Primary">
-      {navItems.map((item, index) => {
-        const previousGroup = navItems[index - 1]?.group;
-        const isFirstGroup = index === 0;
-        const showGroupLabel = item.group !== previousGroup;
-        return (
-          <React.Fragment key={item.id}>
-            {showGroupLabel && (
-              <li
-                style={{
-                  listStyle: 'none',
-                  margin: isFirstGroup ? '2px 12px 4px' : '10px 12px 4px',
-                  paddingTop: isFirstGroup ? 0 : 8,
-                  borderTop: isFirstGroup ? 'none' : '1px solid var(--chrome-border)'
-                }}
-              >
-                <span
-                  className="text-[10px] font-semibold uppercase tracking-[0.16em]"
-                  style={{ color: 'var(--chrome-fg-subtle)' }}
-                >
-                  {NAV_GROUP_LABELS[item.group]}
-                </span>
-              </li>
-            )}
-            <NavList.Item
-              as="a"
-              href={`#${item.id}`}
-              onClick={(e) => {
-                // Let the browser handle ctrl/cmd/shift-click and middle-click so
-                // "open in new tab" works; only plain clicks stay in-SPA.
-                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                e.preventDefault();
-                e.stopPropagation();
-                onSelect(item.id);
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: collapsed ? 2 : 6,
+        alignItems: collapsed ? 'center' : 'stretch',
+      }}
+    >
+      {groups.map(({ group, items }) => (
+        <div
+          key={group}
+          style={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: collapsed ? 'center' : 'stretch' }}
+        >
+          {!collapsed && (
+            <span
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 10px 4px',
+                fontFamily: MONO,
+                fontSize: 9.5,
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase',
+                color: 'var(--chrome-fg-subtle)',
+                lineHeight: 1.3,
               }}
-              aria-current={(activeSection === item.id || (item.id === 'data' && activeSection.startsWith('data-'))) ? 'page' : undefined}
-              className={cascadeLit.has(item.id) ? 'nav-cascade-pulse' : undefined}
-              style={{ width: '100%', textAlign: 'left' }}
             >
-              <NavList.LeadingVisual>
-                {<item.icon size={16} />}
-              </NavList.LeadingVisual>
-              <span className="flex items-center gap-2">
-                {item.label}
-                {item.badge && (
+              {NAV_GROUP_LABELS[group]}
+              <span style={{ flex: 1, height: 1, background: 'var(--chrome-border)', display: 'block' }} />
+            </span>
+          )}
+          {items.map((item) => {
+            const current = isCurrent(item);
+            const Icon = item.icon;
+            return (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                title={collapsed ? item.label : undefined}
+                aria-current={current ? 'page' : undefined}
+                onClick={(e) => handleClick(e, item.id)}
+                className={`rail-nav-item${current ? ' rail-nav-item--current' : ''}${
+                  cascadeLit.has(item.id) ? ' nav-cascade-pulse' : ''
+                }`}
+                style={
+                  collapsed
+                    ? {
+                        width: 38,
+                        height: 26,
+                        flex: 'none',
+                        borderRadius: 8,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        textDecoration: 'none',
+                      }
+                    : {
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '7px 10px',
+                        borderRadius: 9,
+                        fontSize: 13,
+                        fontWeight: current ? 700 : 500,
+                        textDecoration: 'none',
+                      }
+                }
+              >
+                <Icon size={16} />
+                {!collapsed && (
                   <span
-                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none"
-                    style={{ backgroundColor: `${item.badgeColor}20`, color: item.badgeColor }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
                   >
-                    {item.badge}
+                    {item.label}
+                    {item.badge && (
+                      <span
+                        style={{
+                          fontFamily: MONO,
+                          fontSize: 9,
+                          fontWeight: 700,
+                          lineHeight: 1,
+                          padding: '3px 5px',
+                          borderRadius: 999,
+                          background: 'var(--gold-500)',
+                          color: 'var(--navy-900)',
+                        }}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
                   </span>
                 )}
-              </span>
-            </NavList.Item>
-          </React.Fragment>
-        );
-      })}
-    </NavList>
+              </a>
+            );
+          })}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -217,39 +301,39 @@ function BrandMenu({
 
   return (
     <>
+      {/* The artboard's "SportFlow ▾": the brand sits beside the section title as a mono eyebrow,
+          not as a boxed control. It only reads as a control when there is more than one brand. */}
       <button
         ref={btnRef}
         type="button"
         title={currentBrand.name}
         onClick={onToggle}
+        className="brand-eyebrow"
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
-          padding: '6px 10px',
-          border: '1px solid var(--chrome-control-border)',
-          borderRadius: 8,
-          background: 'var(--chrome-control-bg)',
+          gap: 4,
+          padding: 0,
+          border: 'none',
+          background: 'transparent',
           cursor: brands.length > 1 ? 'pointer' : 'default',
-          fontSize: 14,
-          fontWeight: 600,
-          color: 'var(--chrome-fg)',
+          fontFamily: MONO,
+          fontSize: 10,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          color: 'var(--chrome-fg-muted)',
           minWidth: 0,
           maxWidth: 'min(100%, 12rem)',
         }}
       >
         <Text
           as="span"
-          size="small"
-          weight="semibold"
-          className="hidden min-w-0 max-w-[4.5rem] truncate min-[420px]:inline sm:max-w-[8rem] md:max-w-[10rem] lg:max-w-[12rem]"
-          style={{ color: 'var(--chrome-fg)' }}
+          className="min-w-0 max-w-[6rem] truncate sm:max-w-[10rem]"
+          style={{ font: 'inherit', color: 'inherit' }}
         >
           {currentBrand.name}
         </Text>
-        {brands.length > 1 && (
-          <span style={{ opacity: 0.7, fontSize: 12 }}>▼</span>
-        )}
+        {brands.length > 1 && <span aria-hidden>▾</span>}
       </button>
       {brands.length > 1 && isOpen && createPortal(
         <>
@@ -257,8 +341,8 @@ function BrandMenu({
           <div
             style={{
               ...menuStyle,
-              background: 'var(--bgColor-default, #ffffff)',
-              border: '1px solid var(--borderColor-default, #d0d7de)',
+              background: 'var(--bgColor-default, var(--surface-0))',
+              border: '1px solid var(--borderColor-default, var(--border))',
               borderRadius: 8,
               boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
             }}
@@ -272,10 +356,10 @@ function BrandMenu({
                   padding: '10px 12px',
                   textAlign: 'left',
                   border: 'none',
-                  background: currentBrand?.id === b.id ? 'var(--bgColor-muted, #f6f8fa)' : 'transparent',
+                  background: currentBrand?.id === b.id ? 'var(--bgColor-muted, var(--surface-2))' : 'transparent',
                   cursor: 'pointer',
                   fontSize: 14,
-                  color: currentBrand?.id === b.id ? 'var(--nts-accent)' : 'var(--fgColor-default, #24292f)'
+                  color: currentBrand?.id === b.id ? 'var(--nts-accent)' : 'var(--fgColor-default, var(--text-primary))'
                 }}
               >
                 {b.name}
@@ -298,7 +382,11 @@ function AccountMenu({
   hasPasswordProvider,
   hasGoogleProvider,
   onLinkPassword,
-  onLinkGoogle
+  onLinkGoogle,
+  initial,
+  label,
+  caption,
+  collapsed
 }: {
   user: { email?: string | null; displayName?: string | null } | null;
   onSignOut: () => void;
@@ -309,6 +397,11 @@ function AccountMenu({
   hasGoogleProvider: boolean;
   onLinkPassword: (password: string) => Promise<void>;
   onLinkGoogle: () => Promise<void>;
+  /** Rail footer presentation — the avatar letter, the name under it and the caption below that. */
+  initial: string;
+  label: string;
+  caption: string;
+  collapsed: boolean;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
@@ -323,14 +416,18 @@ function AccountMenu({
       const gutter = 8;
       const viewportWidth = window.innerWidth;
       const width = Math.min(260, viewportWidth - gutter * 2);
-      const left = Math.min(Math.max(gutter, rect.right - width), viewportWidth - width - gutter);
+      const left = Math.min(Math.max(gutter, rect.left), viewportWidth - width - gutter);
+      // The trigger now lives at the BOTTOM of the rail, so the menu rises from it. Anchored by
+      // `bottom` rather than `top` so it grows upward and never runs off the foot of the viewport.
       setMenuStyle({
         position: 'fixed',
-        top: rect.bottom + 4,
+        bottom: Math.max(gutter, window.innerHeight - rect.top + 6),
         left,
         width,
         minWidth: 0,
         maxWidth: `calc(100vw - ${gutter * 2}px)`,
+        maxHeight: `calc(100vh - ${gutter * 2}px)`,
+        overflowY: 'auto',
         zIndex: 1000
       });
     }
@@ -340,41 +437,76 @@ function AccountMenu({
 
   return (
     <>
+      {/* The rail footer: an orange initial tile, the account name, and the active strategy as a
+          mono caption. The whole strip is the menu trigger. */}
       <button
         ref={btnRef}
         onClick={onToggle}
+        title={user.email || user.displayName || 'Account'}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        className="rail-account"
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
-          padding: '6px 12px',
-          border: '1px solid var(--chrome-control-border)',
-          borderRadius: 6,
-          background: 'var(--chrome-control-bg)',
+          gap: 9,
+          width: collapsed ? 'auto' : '100%',
+          minWidth: 0,
+          padding: collapsed ? 0 : '4px 2px',
+          border: 'none',
+          borderRadius: 8,
+          background: 'transparent',
           cursor: 'pointer',
-          fontSize: 14
+          textAlign: 'left',
         }}
       >
-        <div
+        <span
           style={{
-            width: 24,
-            height: 24,
-            borderRadius: '50%',
-            background: '#F97316',
-            color: 'white',
+            width: collapsed ? 26 : 28,
+            height: collapsed ? 26 : 28,
+            flex: 'none',
+            borderRadius: 8,
+            background: 'var(--orange-500)',
+            color: 'var(--navy-900)',
+            fontSize: 11.5,
+            fontWeight: 700,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontWeight: 600,
-            fontSize: 12,
-            flexShrink: 0
           }}
         >
-          {(user.email?.[0] || user.displayName?.[0] || '?').toUpperCase()}
-        </div>
-        <Text as="span" size="small" className="hidden xl:inline" style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--chrome-fg)' }}>
-          {user.email || user.displayName || 'Account'}
-        </Text>
+          {initial}
+        </span>
+        {!collapsed && (
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--chrome-fg)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {label}
+            </span>
+            <span
+              style={{
+                fontFamily: MONO,
+                fontSize: 9,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                color: 'var(--chrome-fg-muted)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {caption}
+            </span>
+          </span>
+        )}
       </button>
       {isOpen && createPortal(
         <>
@@ -382,22 +514,23 @@ function AccountMenu({
           <div
             style={{
               ...menuStyle,
-              background: 'var(--bgColor-default, #ffffff)',
-              border: '1px solid var(--borderColor-default, #d0d7de)',
+              background: 'var(--bgColor-default, var(--surface-0))',
+              border: '1px solid var(--borderColor-default, var(--border))',
               borderRadius: 8,
               boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
             }}
           >
-            <div style={{ padding: 12, borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
-              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 2 }}>Account</Text>
+            <div style={{ padding: 12, borderBottom: '1px solid var(--borderColor-default, var(--border))' }}>
+              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, var(--text-muted))', marginBottom: 2 }}>Account</Text>
               <Text as="div" size="small" weight="semibold" style={{ wordBreak: 'break-all' }}>{user.email}</Text>
               {user.displayName && (
-                <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)' }}>{user.displayName}</Text>
+                <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, var(--text-muted))' }}>{user.displayName}</Text>
               )}
               <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
                 {hasPasswordProvider && (
-                  <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 10, background: 'rgba(45,164,78,0.1)', color: '#2da44e' }}>Email/Password</span>
+                  <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 10, background: 'rgba(45,164,78,0.1)', color: 'var(--success-700)' }}>Email/Password</span>
                 )}
+                {/* Google's own blue: this badge says which provider the account signs in with. */}
                 {hasGoogleProvider && (
                   <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 10, background: 'rgba(66,133,244,0.1)', color: '#4285F4' }}>Google</span>
                 )}
@@ -406,8 +539,8 @@ function AccountMenu({
 
             {/* Accent color (per-user, localStorage) — off while the brand palette is fixed. */}
             {ACCENT_PICKER_ENABLED && (
-            <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
-              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 8 }}>
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--borderColor-default, var(--border))' }}>
+              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, var(--text-muted))', marginBottom: 8 }}>
                 Χρώμα έμφασης
               </Text>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -428,7 +561,7 @@ function AccountMenu({
                         background: preset.swatch2
                           ? `linear-gradient(135deg, ${preset.swatch} 0 50%, ${preset.swatch2} 50% 100%)`
                           : preset.swatch,
-                        border: selected ? '2px solid var(--fgColor-default, #24292f)' : '2px solid transparent',
+                        border: selected ? '2px solid var(--fgColor-default, var(--text-primary))' : '2px solid transparent',
                         boxShadow: selected ? `0 0 0 2px ${preset.swatch}` : 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                         cursor: 'pointer',
                         display: 'flex',
@@ -438,7 +571,7 @@ function AccountMenu({
                       }}
                     >
                       {selected && (
-                        <span style={{ color: '#fff', fontSize: 13, fontWeight: 700, lineHeight: 1 }}>✓</span>
+                        <span style={{ color: 'var(--surface-0)', fontSize: 13, fontWeight: 700, lineHeight: 1 }}>✓</span>
                       )}
                     </button>
                   );
@@ -449,14 +582,14 @@ function AccountMenu({
 
             {/* Link providers */}
             {!hasPasswordProvider && (
-              <div style={{ borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
+              <div style={{ borderBottom: '1px solid var(--borderColor-default, var(--border))' }}>
                 {!showSetPassword ? (
                   <button
                     onClick={() => setShowSetPassword(true)}
                     style={{
                       width: '100%', padding: '10px 12px', textAlign: 'left',
                       border: 'none', background: 'transparent', cursor: 'pointer',
-                      fontSize: 13, color: 'var(--fgColor-default, #24292f)'
+                      fontSize: 13, color: 'var(--fgColor-default, var(--text-primary))'
                     }}
                   >
                     Ορισμός κωδικού
@@ -490,7 +623,7 @@ function AccountMenu({
                         }}
                         style={{
                           flex: 1, padding: '5px 8px', fontSize: 12, fontWeight: 600, borderRadius: 6,
-                          border: 'none', background: 'var(--nts-accent)', color: '#fff', cursor: 'pointer'
+                          border: 'none', background: 'var(--nts-accent)', color: 'var(--surface-0)', cursor: 'pointer'
                         }}
                       >
                         Αποθήκευση
@@ -511,7 +644,7 @@ function AccountMenu({
             )}
 
             {!hasGoogleProvider && (
-              <div style={{ borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
+              <div style={{ borderBottom: '1px solid var(--borderColor-default, var(--border))' }}>
                 <button
                   onClick={async () => {
                     try {
@@ -525,7 +658,7 @@ function AccountMenu({
                   style={{
                     width: '100%', padding: '10px 12px', textAlign: 'left',
                     border: 'none', background: 'transparent', cursor: 'pointer',
-                    fontSize: 13, color: 'var(--fgColor-default, #24292f)'
+                    fontSize: 13, color: 'var(--fgColor-default, var(--text-primary))'
                   }}
                 >
                   Σύνδεση Google λογαριασμού
@@ -536,7 +669,7 @@ function AccountMenu({
             {linkMsg && (
               <div style={{
                 padding: '6px 12px', fontSize: 12,
-                color: linkMsg.type === 'ok' ? '#2da44e' : '#cf222e',
+                color: linkMsg.type === 'ok' ? 'var(--success-700)' : 'var(--danger-600)',
                 background: linkMsg.type === 'ok' ? 'rgba(45,164,78,0.08)' : 'rgba(207,34,46,0.08)'
               }}>
                 {linkMsg.text}
@@ -553,7 +686,7 @@ function AccountMenu({
                 background: 'transparent',
                 cursor: 'pointer',
                 fontSize: 14,
-                color: 'var(--danger-fg, #cf222e)'
+                color: 'var(--danger-fg, var(--danger-600))'
               }}
             >
               Αποσύνδεση
@@ -612,14 +745,14 @@ function AccentMenu() {
           <div
             style={{
               ...menuStyle,
-              background: 'var(--bgColor-default, #ffffff)',
-              border: '1px solid var(--borderColor-default, #d0d7de)',
+              background: 'var(--bgColor-default, var(--surface-0))',
+              border: '1px solid var(--borderColor-default, var(--border))',
               borderRadius: 8,
               boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
               padding: 12,
             }}
           >
-            <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 8 }}>
+            <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, var(--text-muted))', marginBottom: 8 }}>
               Χρώμα έμφασης
             </Text>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -640,7 +773,7 @@ function AccentMenu() {
                       background: preset.swatch2
                         ? `linear-gradient(135deg, ${preset.swatch} 0 50%, ${preset.swatch2} 50% 100%)`
                         : preset.swatch,
-                      border: selected ? '2px solid var(--fgColor-default, #24292f)' : '2px solid transparent',
+                      border: selected ? '2px solid var(--fgColor-default, var(--text-primary))' : '2px solid transparent',
                       boxShadow: selected ? `0 0 0 2px ${preset.swatch}` : 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                       cursor: 'pointer',
                       display: 'flex',
@@ -649,7 +782,7 @@ function AccentMenu() {
                       padding: 0,
                     }}
                   >
-                    {selected && <span style={{ color: '#fff', fontSize: 14, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                    {selected && <span style={{ color: 'var(--surface-0)', fontSize: 14, fontWeight: 700, lineHeight: 1 }}>✓</span>}
                   </button>
                 );
               })}
@@ -663,6 +796,86 @@ function AccentMenu() {
 }
 
 const LAYOUT_WIDE_MQ = '(min-width: 1024px)';
+
+const RAIL_WIDTH_OPEN = 238;
+const RAIL_WIDTH_CLOSED = 62;
+
+/** The search affordance at the top of the rail. Dispatches the same ⌘K the palette listens for. */
+function RailSearch({ collapsed }: { collapsed: boolean }) {
+  const open = () => {
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true, cancelable: true })
+    );
+  };
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={open}
+        title="Αναζήτηση (⌘K)"
+        aria-label="Αναζήτηση"
+        className="rail-control"
+        style={{
+          width: 38,
+          height: 26,
+          flex: 'none',
+          border: 'none',
+          borderRadius: 8,
+          background: 'var(--chrome-control-bg)',
+          color: 'var(--chrome-fg-muted)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <SearchIcon size={14} />
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={open}
+      aria-label="Αναζήτηση"
+      className="rail-control"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        width: '100%',
+        background: 'var(--chrome-control-bg)',
+        border: '1px solid var(--chrome-control-border)',
+        borderRadius: 10,
+        padding: '8px 10px',
+        cursor: 'pointer',
+        textAlign: 'left',
+      }}
+    >
+      <span style={{ display: 'flex', color: 'var(--chrome-fg-muted)', flex: 'none' }}>
+        <SearchIcon size={14} />
+      </span>
+      <span style={{ fontSize: 12.5, color: 'var(--chrome-fg-muted)' }}>Αναζήτηση</span>
+      <span
+        style={{
+          marginLeft: 'auto',
+          fontFamily: MONO,
+          fontSize: 9.5,
+          fontWeight: 700,
+          color: 'var(--chrome-fg-muted)',
+          background: 'var(--chrome-control-hover)',
+          border: '1px solid var(--chrome-control-hover)',
+          borderRadius: 5,
+          padding: '2px 5px',
+        }}
+      >
+        ⌘K
+      </span>
+    </button>
+  );
+}
 
 export function AppShell({ activeSection, onSectionChange, children }: AppShellProps) {
   const [isWideLayout, setIsWideLayout] = useState(() =>
@@ -678,21 +891,23 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarPinned, setSidebarPinned] = useState(() => {
-    if (typeof localStorage !== 'undefined') return localStorage.getItem(SIDEBAR_PIN_KEY) === '1';
-    return false;
+  /** Expanded vs the 62px icon rail. Persisted, so the choice survives a reload. */
+  const [railOpen, setRailOpen] = useState(() => {
+    if (typeof localStorage !== 'undefined') return localStorage.getItem(RAIL_OPEN_KEY) !== '0';
+    return true;
   });
+  /** Below 1024px there is no room for a column at all — the rail becomes an overlay drawer. */
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const { user, signOut, isSuperAdmin, hasPasswordProvider, hasGoogleProvider, linkPassword, linkGoogle } = useAuth();
   const { currentBrand, brands, setCurrentBrand } = useBrand();
   const { isB2B, enabledModules, moduleConfig } = useModules();
-  const { activeStrategy } = useActiveStrategy();
+  const { activeStrategy, getStrategyName } = useActiveStrategy();
   useBrandMembers();
 
-  /** On screens <1024px the pinned menu does NOT stay as a column (it breaks the layout) — only the overlay drawer is used. */
-  const showPinnedColumn = sidebarPinned && isWideLayout;
+  const [tabsNode, setTabsNode] = useState<HTMLElement | null>(null);
+  const [actionsNode, setActionsNode] = useState<HTMLElement | null>(null);
 
   /** Main scroll lives here (not the window) so a new page from the menu starts at the top. */
   const mainContentScrollRef = useRef<HTMLDivElement>(null);
@@ -713,22 +928,20 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       : typeof timestamp?.seconds === 'number' ? timestamp.seconds * 1000
       : NaN;
     if (isNaN(startMs)) {
-      return { text: `${dur}ημ`, color: '#F97316' };
+      return { text: `${dur}ημ` };
     }
     const elapsedDays = Math.floor((nowMs - startMs) / 86400000);
-    if (elapsedDays < 1) return { text: `${dur}ημ`, color: '#F97316' };
+    if (elapsedDays < 1) return { text: `${dur}ημ` };
     const remaining = dur - elapsedDays;
-    if (remaining <= 0) return { text: 'Έληξε', color: '#EF4444' };
-    if (remaining <= 3) return { text: `${remaining}ημ`, color: '#F59E0B' };
-    return { text: `${remaining}ημ`, color: '#F97316' };
+    if (remaining <= 0) return { text: 'Έληξε' };
+    return { text: `${remaining}ημ` };
   }, [activeStrategy, nowMs]);
 
-  const togglePin = () => {
-    const next = !sidebarPinned;
-    setSidebarPinned(next);
-    setSidebarOpen(next);
+  const toggleRail = () => {
+    const next = !railOpen;
+    setRailOpen(next);
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(SIDEBAR_PIN_KEY, next ? '1' : '0');
+      localStorage.setItem(RAIL_OPEN_KEY, next ? '1' : '0');
     }
   };
 
@@ -744,7 +957,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'rfm', label: moduleConfig.rfm.label, icon: OrganizationIcon, group: 'commerce' },
         { id: 'accounts', label: moduleConfig.accounts.label, icon: Users, group: 'commerce' },
         { id: 'competitive', label: moduleConfig.competitive.label, icon: SearchIcon, group: 'commerce' },
-        { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'commercial', ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
+        { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'commercial', ...(strategyBadge ? { badge: strategyBadge.text } : {}) },
         { id: 'policy-impact', label: 'Policy Impact', icon: BarChart3, group: 'commercial' },
         { id: 'markets', label: moduleConfig.markets.label, icon: Globe2, group: 'commercial' },
         { id: 'sales', label: moduleConfig.sales.label, icon: Handshake, group: 'commercial' },
@@ -798,142 +1011,332 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
     [enabledModules, isB2B, isSuperAdmin, moduleConfig, strategyBadge]
   );
 
-  return (
-    <>
-      <PrimerHeader style={{ borderBottom: '1px solid var(--chrome-border)', backgroundColor: 'var(--app-chrome-bg, #111111)' }} className="min-w-0">
-        <PrimerHeader.Item className="min-w-0 shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<ThreeBarsIcon />}
-            onClick={() => {
-              if (showPinnedColumn) togglePin();
-              else setSidebarOpen((o) => !o);
-            }}
-            style={{
-              color: 'var(--chrome-fg)',
-              border: '1px solid var(--chrome-control-border)',
-              background: 'var(--chrome-control-bg)',
-              borderRadius: 8
-            }}
-            aria-label="Menu"
-          />
-        </PrimerHeader.Item>
+  /** The top bar's title. `activeSection` can be a sub-route (`data-...`), hence the prefix match. */
+  const sectionTitle =
+    navItems.find((item) => item.id === activeSection)?.label ??
+    navItems.find((item) => activeSection.startsWith(`${item.id}-`))?.label ??
+    (isB2B ? 'Owner Dashboard' : 'Dashboard');
 
-        <PrimerHeader.Item style={{ flex: '0 1 auto', minWidth: 0 }} className="min-w-0">
-          <PrimerHeader.Link
-            as="button"
-            type="button"
-            onClick={(e) => { e.preventDefault(); onSectionChange('dashboard'); }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              textDecoration: 'none',
-              border: 'none',
-              background: 'transparent',
-              padding: 0,
-              font: 'inherit',
-              cursor: 'pointer',
-            }}
-          >
-            <AllOneLogo height={30} className="max-w-[6.5rem] min-[420px]:max-w-[9rem] sm:max-w-none" variant="onLight" />
-          </PrimerHeader.Link>
-        </PrimerHeader.Item>
+  const userInitial = (user?.email?.[0] || user?.displayName?.[0] || '?').toUpperCase();
+  const userLabel = (user?.email || user?.displayName || 'Account').split('@')[0];
+  const strategyLabel = activeStrategy ? getStrategyName(activeStrategy.scenarioId) : 'Χωρίς ενεργή στρατηγική';
 
-        <PrimerHeader.Item style={{ marginLeft: 'auto', minWidth: 0 }} className="min-w-0 shrink">
-          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2 lg:gap-3">
-            {currentBrand && (
-              <BrandMenu
-                currentBrand={currentBrand}
-                brands={brands}
-                isOpen={brandMenuOpen}
-                onToggle={() => setBrandMenuOpen((o) => !o)}
-                onClose={() => setBrandMenuOpen(false)}
-                onSelect={setCurrentBrand}
-              />
-            )}
-            {ACCENT_PICKER_ENABLED && <AccentMenu />}
-            <div style={{ position: 'relative', overflow: 'visible' }}>
-              <NotificationBell onNavigate={(s) => onSectionChange(s)} />
-            </div>
-            <div style={{ position: 'relative', overflow: 'visible' }}>
-              <AccountMenu
-                user={user}
-                onSignOut={signOut}
-                isOpen={userMenuOpen}
-                onToggle={() => setUserMenuOpen((o) => !o)}
-                onClose={() => setUserMenuOpen(false)}
-                hasPasswordProvider={hasPasswordProvider}
-                hasGoogleProvider={hasGoogleProvider}
-                onLinkPassword={linkPassword}
-                onLinkGoogle={linkGoogle}
-              />
-            </div>
-          </div>
-        </PrimerHeader.Item>
-      </PrimerHeader>
-
-      <div style={{ 
-        flex: 1, 
-        minHeight: 0, 
-        display: 'flex', 
-        flexDirection: 'row',
+  /** The rail, at either width. Also the drawer's contents below 1024px, always expanded there. */
+  const renderRail = (collapsed: boolean, inDrawer: boolean) => (
+    <nav
+      aria-label="Primary"
+      style={{
+        boxSizing: 'border-box',
+        height: '100%',
         overflow: 'hidden',
-        width: '100%',
-        maxWidth: '100%'
-      }}>
-        {/* Pinned Sidebar */}
-        {showPinnedColumn && (
-          <div 
-            className="app-sidebar"
+        flex: 'none',
+        display: 'flex',
+        flexDirection: 'column',
+        width: inDrawer ? '100%' : collapsed ? RAIL_WIDTH_CLOSED : RAIL_WIDTH_OPEN,
+        background: 'var(--chrome-bg)',
+        borderRight: inDrawer ? 'none' : '1px solid var(--chrome-border)',
+        padding: collapsed ? '9px 8px' : '14px 12px',
+        gap: collapsed ? 6 : 10,
+        alignItems: collapsed ? 'center' : 'stretch',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: collapsed ? 'center' : 'space-between',
+          gap: 8,
+          padding: collapsed ? 0 : '0 2px',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => onSectionChange('dashboard')}
+          title="Dashboard"
+          style={{
+            height: collapsed ? 28 : 34,
+            padding: collapsed ? '0 6px' : '0 8px',
+            borderRadius: 8,
+            border: 'none',
+            background: 'var(--surface-0)',
+            display: 'flex',
+            alignItems: 'center',
+            overflow: 'hidden',
+            cursor: 'pointer',
+          }}
+        >
+          <AllOneLogo height={collapsed ? 20 : 24} variant="onLight" />
+        </button>
+        {!collapsed && !inDrawer && (
+          <button
+            type="button"
+            onClick={toggleRail}
+            title="Σύμπτυξη μενού"
+            aria-label="Σύμπτυξη μενού"
+            className="rail-control"
             style={{
-              width: 260,
-              minWidth: 260,
-              maxWidth: 260,
-              borderRight: '1px solid var(--chrome-border)',
-              overflowY: 'auto',
-              overflowX: 'hidden',
-              backgroundColor: 'var(--app-chrome-bg, #111111)',
-              display: 'flex',
-              flexDirection: 'column'
+              border: 'none',
+              cursor: 'pointer',
+              width: 26,
+              height: 26,
+              flex: 'none',
+              borderRadius: 8,
+              background: 'var(--chrome-control-bg)',
+              color: 'var(--chrome-fg-muted)',
+              fontFamily: MONO,
+              fontSize: 12,
+              fontWeight: 700,
             }}
           >
-            <div style={{ 
-              padding: '8px 16px', 
-              borderBottom: '1px solid var(--chrome-border)',
+            «
+          </button>
+        )}
+        {inDrawer && (
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(false)}
+            aria-label="Κλείσιμο μενού"
+            className="rail-control"
+            style={{
+              border: 'none',
+              cursor: 'pointer',
+              width: 26,
+              height: 26,
+              flex: 'none',
+              borderRadius: 8,
+              background: 'var(--chrome-control-bg)',
+              color: 'var(--chrome-fg-muted)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'flex-end',
-              flexShrink: 0
-            }}>
+              justifyContent: 'center',
+            }}
+          >
+            <XIcon size={14} />
+          </button>
+        )}
+      </div>
+
+      {collapsed && !inDrawer && (
+        <button
+          type="button"
+          onClick={toggleRail}
+          title="Ανάπτυξη μενού"
+          aria-label="Ανάπτυξη μενού"
+          className="rail-control"
+          style={{
+            border: 'none',
+            cursor: 'pointer',
+            width: 24,
+            height: 22,
+            flex: 'none',
+            borderRadius: 8,
+            background: 'var(--chrome-control-bg)',
+            color: 'var(--chrome-fg-muted)',
+            fontFamily: MONO,
+            fontSize: 12,
+            fontWeight: 700,
+          }}
+        >
+          »
+        </button>
+      )}
+
+      <RailSearch collapsed={collapsed} />
+
+      <RailNav
+        navItems={navItems}
+        activeSection={activeSection}
+        collapsed={collapsed}
+        onSelect={(id) => {
+          setDrawerOpen(false);
+          onSectionChange(id);
+        }}
+      />
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 9,
+          borderTop: collapsed ? 'none' : '1px solid var(--chrome-border)',
+          padding: collapsed ? 0 : '11px 2px 0',
+        }}
+      >
+        <AccountMenu
+          user={user}
+          onSignOut={signOut}
+          isOpen={userMenuOpen}
+          onToggle={() => setUserMenuOpen((o) => !o)}
+          onClose={() => setUserMenuOpen(false)}
+          hasPasswordProvider={hasPasswordProvider}
+          hasGoogleProvider={hasGoogleProvider}
+          onLinkPassword={linkPassword}
+          onLinkGoogle={linkGoogle}
+          initial={userInitial}
+          label={userLabel}
+          caption={strategyLabel}
+          collapsed={collapsed}
+        />
+      </div>
+    </nav>
+  );
+
+  return (
+    <AppChromeProvider tabsNode={tabsNode} actionsNode={actionsNode}>
+      <ChromeCanvas
+        onSectionChange={onSectionChange}
+        isWideLayout={isWideLayout}
+        railOpen={railOpen}
+        drawerOpen={drawerOpen}
+        setDrawerOpen={setDrawerOpen}
+        renderRail={renderRail}
+        sectionTitle={sectionTitle}
+        currentBrand={currentBrand}
+        brands={brands}
+        brandMenuOpen={brandMenuOpen}
+        setBrandMenuOpen={setBrandMenuOpen}
+        setCurrentBrand={setCurrentBrand}
+        setTabsNode={setTabsNode}
+        setActionsNode={setActionsNode}
+        mainContentScrollRef={mainContentScrollRef}
+      >
+        {children}
+      </ChromeCanvas>
+    </AppChromeProvider>
+  );
+}
+
+/**
+ * The frame itself: rail, navy top bar, canvas.
+ *
+ * Split out from `AppShell` only because it has to read `useAppChrome()` — the shell is the
+ * component that *provides* that context, so it cannot consume it in the same render.
+ */
+function ChromeCanvas({
+  onSectionChange,
+  isWideLayout,
+  railOpen,
+  drawerOpen,
+  setDrawerOpen,
+  renderRail,
+  sectionTitle,
+  currentBrand,
+  brands,
+  brandMenuOpen,
+  setBrandMenuOpen,
+  setCurrentBrand,
+  setTabsNode,
+  setActionsNode,
+  mainContentScrollRef,
+  children,
+}: {
+  onSectionChange: (section: string, opts?: { hashQuery?: string }) => void;
+  isWideLayout: boolean;
+  railOpen: boolean;
+  drawerOpen: boolean;
+  setDrawerOpen: (open: boolean) => void;
+  renderRail: (collapsed: boolean, inDrawer: boolean) => React.ReactNode;
+  sectionTitle: string;
+  currentBrand: Brand | null;
+  brands: Brand[];
+  brandMenuOpen: boolean;
+  setBrandMenuOpen: (fn: (open: boolean) => boolean) => void;
+  setCurrentBrand: (brand: Brand) => void;
+  setTabsNode: (node: HTMLElement | null) => void;
+  setActionsNode: (node: HTMLElement | null) => void;
+  mainContentScrollRef: React.RefObject<HTMLDivElement | null>;
+  children: React.ReactNode;
+}) {
+  const chrome = useAppChrome();
+  const bleed = chrome?.bleed ?? false;
+  const pageOwnsActions = (chrome?.actionsClaimed ?? 0) > 0;
+
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'row', overflow: 'hidden', width: '100%', maxWidth: '100%' }}>
+      {isWideLayout && renderRail(!railOpen, false)}
+
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <header
+          style={{
+            background: 'var(--chrome-bg)',
+            display: 'flex',
+            alignItems: 'stretch',
+            justifyContent: 'space-between',
+            gap: 24,
+            padding: '0 28px',
+            flexWrap: 'wrap',
+            flex: 'none',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', minWidth: 0 }}>
+            {!isWideLayout && (
               <button
-                onClick={togglePin}
-                title="Ξεκαρφίτσωμα μενού"
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                aria-label="Μενού"
+                className="rail-control"
                 style={{
-                  padding: 4,
+                  alignSelf: 'center',
                   border: 'none',
-                  background: 'var(--chrome-control-hover)',
                   cursor: 'pointer',
-                  borderRadius: 4,
+                  width: 32,
+                  height: 32,
+                  flex: 'none',
+                  borderRadius: 8,
+                  background: 'var(--chrome-control-bg)',
+                  color: 'var(--chrome-fg-muted)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: 'var(--chrome-fg-subtle)'
                 }}
               >
-                <PinIcon size={14} />
+                <ThreeBarsIcon size={16} />
               </button>
-            </div>
-            <div style={{ padding: 12, flex: 1, overflowY: 'auto' }}>
-              <SidebarNav navItems={navItems} activeSection={activeSection} onSelect={(id) => onSectionChange(id)} />
-            </div>
+            )}
+            <span style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '14px 0', minWidth: 0 }}>
+              <span
+                style={{
+                  fontSize: 19,
+                  fontWeight: 800,
+                  letterSpacing: '-0.025em',
+                  color: 'var(--chrome-fg)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {sectionTitle}
+              </span>
+              {currentBrand && (
+                <BrandMenu
+                  currentBrand={currentBrand}
+                  brands={brands}
+                  isOpen={brandMenuOpen}
+                  onToggle={() => setBrandMenuOpen((o) => !o)}
+                  onClose={() => setBrandMenuOpen(() => false)}
+                  onSelect={setCurrentBrand}
+                />
+              )}
+            </span>
+            <nav
+              ref={setTabsNode}
+              aria-label="Ενότητες σελίδας"
+              style={{ display: 'flex', alignItems: 'stretch', gap: 26, flexWrap: 'wrap' }}
+            />
           </div>
-        )}
 
-        {/* Main Content */}
-        <div 
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '9px 0' }}>
+            <div ref={setActionsNode} style={{ display: 'contents' }} />
+            {/* The bar's own controls stand down while a page fills the slot — it is expected to
+                include whichever of them it still wants, in the order its design calls for. */}
+            {!pageOwnsActions && <NotificationBell onNavigate={(s) => onSectionChange(s)} />}
+            {ACCENT_PICKER_ENABLED && <AccentMenu />}
+          </div>
+        </header>
+
+        <div
           ref={mainContentScrollRef}
-          style={{ 
+          style={{
             flex: 1,
             minWidth: 0,
             minHeight: 0,
@@ -941,121 +1344,46 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             overflowX: 'hidden',
             width: '100%',
             maxWidth: '100%',
-            backgroundColor: 'var(--app-canvas-bg, var(--nts-bg-pure))'
+            backgroundColor: 'var(--app-canvas-bg, var(--surface-2))',
           }}
         >
-          <div className="mx-auto w-full max-w-[1400px] px-3 pb-28 pt-4 sm:px-4 sm:pb-28 sm:pt-5 md:px-6 md:py-6">
-            {children}
-          </div>
+          {bleed ? (
+            children
+          ) : (
+            <div className="mx-auto w-full max-w-[1400px] px-3 pb-28 pt-4 sm:px-4 sm:pb-28 sm:pt-5 md:px-6 md:py-6">
+              {children}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Drawer Overlay (unpinned) */}
-      {sidebarOpen && !showPinnedColumn && (
+      {!isWideLayout && drawerOpen && createPortal(
         <>
           <div
-            onClick={() => setSidebarOpen(false)}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.3)',
-              zIndex: 999,
-              animation: 'fadeIn 0.2s ease-out'
-            }}
+            onClick={() => setDrawerOpen(false)}
+            style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,34,94,0.45)', zIndex: 999, animation: 'fadeIn 0.2s ease-out' }}
+            aria-hidden
           />
           <div
-            className="app-sidebar"
             style={{
               position: 'fixed',
               top: 0,
               left: 0,
               bottom: 0,
-              width: 280,
+              width: RAIL_WIDTH_OPEN,
               maxWidth: '80vw',
-              backgroundColor: 'var(--app-chrome-bg, #111111)',
-              borderRight: '1px solid var(--chrome-border)',
               zIndex: 1000,
               display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+              boxShadow: '0 8px 24px rgba(0, 34, 94, 0.4)',
               animation: 'slideInLeft 0.2s ease-out',
-              overflowY: 'auto',
-              overflowX: 'hidden'
             }}
           >
-            {/* Drawer Header */}
-            <div style={{ 
-              padding: 16, 
-              borderBottom: '1px solid var(--chrome-border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexShrink: 0
-            }}>
-              <button
-                type="button"
-                onClick={() => onSectionChange('dashboard')}
-                style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                title="Dashboard"
-              >
-                <AllOneLogo height={40} variant="onLight" />
-              </button>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <button
-                  onClick={togglePin}
-                  title="Καρφίτσωμα μενού"
-                  style={{
-                    padding: 6,
-                    border: 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    borderRadius: 6,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--chrome-fg-subtle)'
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--chrome-control-hover)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                >
-                  <PinIcon size={16} />
-                </button>
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  aria-label="Close navigation"
-                  style={{
-                    padding: 6,
-                    border: 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    borderRadius: 6,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--chrome-fg-subtle)'
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--chrome-control-hover)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                >
-                  <XIcon size={16} />
-                </button>
-              </div>
-            </div>
-            {/* Navigation */}
-            <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
-              <SidebarNav
-                navItems={navItems}
-                activeSection={activeSection}
-                onSelect={(id) => {
-                  setSidebarOpen(false);
-                  onSectionChange(id);
-                }}
-              />
-            </div>
+            {renderRail(false, true)}
           </div>
-        </>
+        </>,
+        document.body
       )}
-    </>
+    </div>
   );
 }
 

@@ -161,7 +161,7 @@ export function FeedSourcesSection() {
           className="mb-4"
           toolbarAriaLabel="Feed sources"
           title={
-            <h3 className="flex items-center gap-2 text-base font-semibold text-[#1A1A1A] sm:text-lg">
+            <h3 className="flex items-center gap-2 text-base font-semibold text-[var(--text-primary)] sm:text-lg">
               <LinkIcon size={20} className="shrink-0" />
               Αποθηκευμένα Feed Sources
             </h3>
@@ -182,25 +182,25 @@ export function FeedSourcesSection() {
         />
 
         {showForm && (
-          <form onSubmit={handleSubmit} className="mb-4 p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E5E5]">
-            <h4 className="font-medium text-[#1A1A1A] mb-3">{editingId ? 'Επεξεργασία' : 'Νέο Feed Source'}</h4>
+          <form onSubmit={handleSubmit} className="mb-4 p-4 bg-[var(--surface-2)] rounded-lg border border-[var(--border)]">
+            <h4 className="font-medium text-[var(--text-primary)] mb-3">{editingId ? 'Επεξεργασία' : 'Νέο Feed Source'}</h4>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-[#4A4A4A] block mb-1">Όνομα</label>
+                <label className="text-xs text-[var(--text-secondary)] block mb-1">Όνομα</label>
                 <input
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="π.χ. ERP Daily Export"
-                  className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm"
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm"
                   required
                 />
               </div>
               <div>
-                <label className="text-xs text-[#4A4A4A] block mb-1">Τύπος</label>
+                <label className="text-xs text-[var(--text-secondary)] block mb-1">Τύπος</label>
                 <select
                   value={formType}
                   onChange={(e) => setFormType(e.target.value as FeedSource['type'])}
-                  className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm"
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm"
                 >
                   {FEED_SOURCE_OPTIONS.map((f) => (
                     <option key={f.id} value={f.id}>{f.name}</option>
@@ -208,13 +208,13 @@ export function FeedSourcesSection() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-[#4A4A4A] block mb-1">URL</label>
+                <label className="text-xs text-[var(--text-secondary)] block mb-1">URL</label>
                 <input
                   type="url"
                   value={formUrl}
                   onChange={(e) => setFormUrl(e.target.value)}
                   placeholder="https://..."
-                  className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm"
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm"
                   required
                 />
               </div>
@@ -235,7 +235,7 @@ export function FeedSourcesSection() {
             <Spinner size="md" />
           </div>
         ) : feedSources.length === 0 ? (
-          <p className="text-sm text-[#6B7280] py-4">
+          <p className="text-sm text-[var(--text-muted)] py-4">
             Δεν υπάρχουν αποθηκευμένα feed sources. Προσθέστε ένα για γρήγορη εισαγωγή με «Sync τώρα».
           </p>
         ) : (
@@ -243,14 +243,14 @@ export function FeedSourcesSection() {
             {feedSources.map((s) => (
               <div
                 key={s.id}
-                className="flex items-center gap-3 p-3 border border-[#E5E5E5] rounded-lg hover:border-[var(--nts-accent)]/50 transition-colors"
+                className="flex items-center gap-3 p-3 border border-[var(--border)] rounded-lg hover:border-[var(--nts-accent)]/50 transition-colors"
               >
                 <span className="text-[var(--nts-medium-gray)]">{typeInfo(s.type)?.icon ?? <FileText size={20} />}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-[#1A1A1A] truncate">{s.name}</p>
-                  <p className="text-xs text-[#6B7280] truncate" title={s.url}>{s.url}</p>
+                  <p className="font-medium text-[var(--text-primary)] truncate">{s.name}</p>
+                  <p className="text-xs text-[var(--text-muted)] truncate" title={s.url}>{s.url}</p>
                   {s.lastRun && (
-                    <p className="text-xs text-[#9CA3AF] mt-0.5">
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
                       Τελευταία: {new Date(s.lastRun).toLocaleString('el-GR')}
                       {s.lastStatus === 'success' && s.lastImported != null && (
                         <span className="text-green-600 ml-1">· {s.lastImported} εισήχθησαν</span>
@@ -274,14 +274,14 @@ export function FeedSourcesSection() {
                   <button
                     onClick={() => handleEdit(s)}
                     disabled={!canManageCatalog}
-                    className="p-2 rounded-lg hover:bg-[#F5F5F5] text-[#6B7280] disabled:opacity-40"
+                    className="p-2 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-muted)] disabled:opacity-40"
                     title={canManageCatalog ? 'Επεξεργασία' : 'Μόνο ιδιοκτήτης ή διαχειριστής'}
                   >
                     <Pencil size={16} />
                   </button>
                   <button
                     onClick={() => handleDelete(s.id)}
-                    className="p-2 rounded-lg hover:bg-red-50 text-[#6B7280] hover:text-red-600 disabled:opacity-40"
+                    className="p-2 rounded-lg hover:bg-red-50 text-[var(--text-muted)] hover:text-red-600 disabled:opacity-40"
                     title={canManageCatalog ? 'Διαγραφή' : 'Μόνο ιδιοκτήτης ή διαχειριστής'}
                     disabled={isDeleting || !canManageCatalog}
                   >

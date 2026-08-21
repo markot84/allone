@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
 import { Button as PrimerButton } from '@primer/react';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -18,11 +18,34 @@ function mapSize(size: ButtonProps['size']): 'small' | 'medium' | 'large' {
   }
 }
 
-const variantStyles: Record<string, string> = {
-  primary: 'bg-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/90 text-white border-[var(--nts-accent)]',
-  secondary: 'bg-white hover:bg-gray-50 text-[var(--nts-charcoal)] border-[#E5E5E5]',
-  ghost: '',
-  danger: 'bg-red-600 hover:bg-red-700 text-white border-red-600',
+/**
+ * Colour is the whole of this file's design.
+ *
+ * Primary is white on `--orange-700`, not on `--orange-500`. Orange at full strength measures
+ * 3.00:1 against white, which is a button whose label cannot be read; `--orange-700` is 5.61:1 and
+ * is the only reason `--nts-accent-text` exists. Hover darkens with a filter rather than stepping
+ * to `--orange-600`, because that step goes *lighter* and would drop the label back under 4.5:1
+ * exactly while the pointer is on it.
+ *
+ * Secondary is the board's resting control: white, `--border`, secondary text. Danger is white on
+ * `--danger-700` for the same contrast reason primary is.
+ */
+const variantStyle: Record<'primary' | 'secondary' | 'danger', CSSProperties> = {
+  primary: {
+    background: 'var(--gold-500)',
+    color: 'var(--navy-900)',
+    borderColor: 'var(--gold-500)',
+  },
+  secondary: {
+    background: 'var(--surface-0)',
+    color: 'var(--text-secondary)',
+    borderColor: 'var(--border)',
+  },
+  danger: {
+    background: 'var(--danger-700)',
+    color: 'var(--surface-0)',
+    borderColor: 'var(--danger-700)',
+  },
 };
 
 export function Button({
@@ -48,8 +71,9 @@ export function Button({
         disabled={disabled || loading}
         onClick={onClick}
         aria-label={rest['aria-label'] || 'button'}
-        className={`inline-flex items-center justify-center p-2 rounded-md hover:bg-white/10 transition-colors disabled:opacity-50 ${className}`}
-        style={style}
+        className={`signal-btn inline-flex items-center justify-center p-2 rounded-lg disabled:opacity-50 ${className}`}
+        style={{ color: 'var(--text-secondary)', ...style }}
+        {...rest}
       >
         {icon}
       </button>
@@ -64,7 +88,7 @@ export function Button({
         disabled={disabled || loading}
         onClick={onClick}
         type={type}
-        className={className}
+        className={`signal-btn ${className}`.trim()}
         style={style}
         leadingVisual={icon && iconPosition === 'left' ? () => <>{icon}</> : undefined}
         trailingVisual={icon && iconPosition === 'right' ? () => <>{icon}</> : undefined}
@@ -75,13 +99,15 @@ export function Button({
     );
   }
 
+  const resolved = variantStyle[variant] ?? variantStyle.secondary;
+
   return (
     <button
       type={type || 'button'}
       disabled={disabled || loading}
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-1.5 font-medium rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${sizeClass} ${variantStyles[variant] || variantStyles.secondary} ${className}`}
-      style={style}
+      className={`signal-btn signal-btn--${variant} inline-flex items-center justify-center gap-1.5 font-semibold rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed ${sizeClass} ${className}`}
+      style={{ ...resolved, ...style }}
       {...rest}
     >
       {loading ? 'Φόρτωση…' : (

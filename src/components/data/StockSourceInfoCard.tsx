@@ -70,7 +70,7 @@ export function StockSourceInfoCard() {
         return (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {labels.length > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[12px] font-semibold text-[#0F766E] bg-[#0F766E]/10">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[12px] font-semibold text-[var(--success-700)] bg-[var(--success-light)]">
                 Απόθεμα: {labels.join(', ')}
                 <Tooltip
                   content="Τα νούμερα αποθέματος (Stock Status, αξία, ημέρες επάρκειας) αφορούν μόνο τις επιλεγμένες αποθήκες. Ρυθμίζεται στις ρυθμίσεις του Megaventory connector."

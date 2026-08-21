@@ -1,6 +1,8 @@
 import { useMemo, useEffect, useRef, useState } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend } from 'recharts';
+import { axisProps, gridProps, legendProps, tooltipProps } from '../../styles/chartTheme';
+import { adChannelColor } from './channelPalette';
 import { Card, CardHeader } from '../common';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import type { Campaign } from '../../types';
@@ -12,15 +14,7 @@ import {
   getCampaignDailyAttributedValueInPeriod,
 } from '../../utils/roiUtils';
 
-const CHANNEL_COLORS: Record<string, string> = {
-  'Google Ads': '#22C55E',
-  Meta: '#2563EB',
-  Other: '#F59E0B',
-  TikTok: '#000000',
-  LinkedIn: '#0A66C2',
-  Pinterest: '#E60023',
-  Skroutz: '#F68B24',
-};
+const channelLineColor = adChannelColor;
 
 const MAX_DAILY_POINTS = 90;
 
@@ -167,32 +161,27 @@ export function ChannelPerformanceHistoryCard({
       <div ref={historyChartRef} className="relative w-full min-w-0 max-w-full" style={{ height: 288, minHeight: 288 }}>
         {realPerformanceHistory && realPerformanceHistory.rows.length > 0 ? (
           <LineChart width={historyChartSize.width} height={historyChartSize.height} data={realPerformanceHistory.rows} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
-            <XAxis dataKey="label" tick={{ fill: '#4A4A4A', fontSize: 12 }} axisLine={{ stroke: '#E5E5E5' }} />
-            <YAxis
-              tick={{ fill: '#4A4A4A', fontSize: 12 }}
-              axisLine={{ stroke: '#E5E5E5' }}
-              tickFormatter={(v) => `${v.toFixed(1)}x`}
-              domain={[0, 'auto']}
-            />
+            <CartesianGrid {...gridProps()} />
+            <XAxis dataKey="label" {...axisProps()} />
+            <YAxis {...axisProps()} width={48} tickFormatter={(v) => `${v.toFixed(1)}x`} domain={[0, 'auto']} />
             <Tooltip
-              contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: '8px', padding: '10px 14px' }}
+              {...tooltipProps()}
               formatter={(v, name) => [`${((v as number) || 0).toFixed(2)}x`, name as string]}
               labelFormatter={(label) => label}
             />
-            <Legend />
+            <Legend {...legendProps()} />
             {realPerformanceHistory.channels.map((ch) => {
               const hasData = realPerformanceHistory.rows.some((d) => (d[ch] as number) > 0);
               if (!hasData) return null;
-              const color = CHANNEL_COLORS[ch] || '#6B7280';
+              const color = channelLineColor(ch);
               return (
-                <Line key={ch} type="monotone" dataKey={ch} stroke={color} strokeWidth={2.5} name={ch} dot={{ r: 4, fill: color }} connectNulls />
+                <Line key={ch} type="monotone" dataKey={ch} stroke={color} strokeWidth={2.5} name={ch} dot={{ r: 3, fill: color, strokeWidth: 0 }} connectNulls />
               );
             })}
           </LineChart>
         ) : (
           <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν δεδομένα performance history για αυτό το εύρος</p>
+            <p className="text-sm text-[var(--text-secondary)]">Δεν υπάρχουν δεδομένα performance history για αυτό το εύρος</p>
           </div>
         )}
       </div>

@@ -15,9 +15,10 @@ import {
   ChevronUp,
   FileText,
   Send,
-  PenLine,
 } from 'lucide-react';
-import { Card, Badge, Spinner, FormattedProse, toPlainProseText, PageHeader } from '../common';
+import { Button, Card, Badge, Spinner, FormattedProse, toPlainProseText, PageHeader } from '../common';
+import { useFullBleedCanvas } from '../layout/AppChrome';
+import { PageCanvas } from '../layout/ChromeControls';
 import { logger } from '../../utils/logger';
 import { sanitizeClipboardText } from '../../utils/spreadsheetSafe';
 // Data is now read from activeStrategy.contentSuggestions (persisted on strategy save)
@@ -33,7 +34,7 @@ const channelIcons: Record<string, React.ReactNode> = {
   Blog: <Globe size={16} className="text-emerald-600" />,
   'Blog/SEO': <Globe size={16} className="text-emerald-600" />,
   'Social Media': <Share2 size={16} className="text-pink-600" />,
-  Newsletter: <Newspaper size={16} className="text-violet-600" />,
+  Newsletter: <Newspaper size={16} className="text-[var(--seg-potential)]" />,
   LinkedIn: <Briefcase size={16} className="text-sky-700" />,
 };
 
@@ -41,10 +42,13 @@ function getChannelIcon(channel: string) {
   for (const [key, icon] of Object.entries(channelIcons)) {
     if (channel.toLowerCase().includes(key.toLowerCase())) return icon;
   }
-  return <Globe size={16} className="text-stone-500" />;
+  return <Globe size={16} className="text-[var(--text-muted)]" />;
 }
 
 export function ContentStrategy() {
+  // The page draws its own gutters, so the shell drops its padded wrapper.
+  useFullBleedCanvas();
+
   const { currentBrand } = useBrand();
   const { activeStrategy, getStrategyName, isLoading: strategyLoading, saveContentSuggestions } = useActiveStrategy();
   const { products } = useProductSource();
@@ -194,68 +198,47 @@ export function ContentStrategy() {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Warm hero — the app's content hub */}
-      <div className="relative overflow-hidden rounded-2xl border border-orange-200/55 bg-gradient-to-br from-amber-50 via-orange-50/70 to-[#FFF7ED] shadow-[0_8px_32px_-8px_rgba(234,88,12,0.18)]">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-[var(--nts-accent)]/15 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 -left-10 h-44 w-44 rounded-full bg-rose-300/20 blur-3xl" />
-        <div className="relative px-5 py-7 sm:px-8 sm:py-9">
-          <PageHeader
-            toolbarAriaLabel="Εξαγωγή περιεχομένου"
-            className="!gap-5"
-            title={
-              <div className="space-y-3">
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/90 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-900/85 shadow-sm ring-1 ring-orange-200/80">
-                  <PenLine size={14} className="text-[var(--nts-accent-text)]" aria-hidden />
-                  Content &amp; storytelling
-                </span>
-                <h2 className="text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
-                  Στρατηγική Περιεχομένου
-                </h2>
-              </div>
-            }
-            description={
-              <p className="max-w-2xl text-[15px] leading-relaxed text-stone-600 sm:text-base">
-                {strategyLoading
-                  ? 'Φόρτωση στρατηγικής...'
-                  : activeStrategy
-                  ? (
-                    <>
-                      Ιδέες, τόνος και κατευθύνσεις βασισμένες στη στρατηγική σας — ώστε το marketing να «μιλάει» με τη φωνή του brand.{' '}
-                      <span className="font-medium text-stone-700">({strategyName})</span>
-                    </>
-                  )
-                  : 'Ξεκίνα από την Εμπορική Στρατηγική για να ενεργοποιηθούν οι προτάσεις περιεχομένου.'}
-              </p>
-            }
-            actions={
-              hasStrategy && !suggestionsLoading && buildFullExportText ? (
-                <button
-                  type="button"
-                  onClick={handleCopyAll}
-                  className="flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl bg-[var(--nts-accent)] px-4 py-2 text-sm font-semibold text-white shadow-md shadow-orange-500/25 transition-all hover:brightness-105 active:scale-[0.98] sm:w-auto"
-                  title="Αντιγραφή όλου του περιεχομένου για αποστολή"
-                >
-                  {allCopied ? <Check size={16} className="text-white" /> : <Copy size={16} />}
-                  {allCopied ? 'Αντιγράφηκε!' : 'Αντιγραφή όλων'}
-                </button>
-              ) : null
-            }
-          />
-        </div>
-      </div>
+    <PageCanvas>
+      {/* The "warm hero" this replaces was a gradient mesh with two blurred colour blobs — the exact
+          decoration the brief rules out. The page still opens on its own name; it just says it in
+          the board's voice. */}
+      <PageHeader
+        toolbarAriaLabel="Εξαγωγή περιεχομένου"
+        eyebrow="Content & storytelling"
+        title="Στρατηγική Περιεχομένου"
+        description={
+          strategyLoading
+            ? 'Φόρτωση στρατηγικής...'
+            : activeStrategy
+              ? `Ιδέες, τόνος και κατευθύνσεις βασισμένες στη στρατηγική σας — ώστε το marketing να «μιλάει» με τη φωνή του brand. (${strategyName})`
+              : 'Ξεκίνα από την Εμπορική Στρατηγική για να ενεργοποιηθούν οι προτάσεις περιεχομένου.'
+        }
+        actions={
+          hasStrategy && !suggestionsLoading && buildFullExportText ? (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={allCopied ? <Check size={16} /> : <Copy size={16} />}
+              onClick={handleCopyAll}
+              title="Αντιγραφή όλου του περιεχομένου για αποστολή"
+            >
+              {allCopied ? 'Αντιγράφηκε!' : 'Αντιγραφή όλων'}
+            </Button>
+          ) : null
+        }
+      />
 
       {/* Content Brief for Marketing Team — shown first when present */}
       {hasStrategy && !suggestionsLoading && brief && (
-        <Card padding="lg" className="border border-orange-100/90 bg-white shadow-md shadow-orange-500/[0.06]">
+        <Card padding="lg" className="border border-[var(--orange-100)] bg-white shadow-sm">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-100 to-amber-50 ring-2 ring-orange-200/50">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--surface-1)] ring-1 ring-[var(--border)]">
                 <Send size={22} className="text-[var(--nts-accent-text)]" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-stone-900">Brief για ομάδα marketing</h3>
-                <p className="text-sm text-stone-600">
+                <h3 className="text-lg font-bold text-[var(--text-primary)]">Brief για ομάδα marketing</h3>
+                <p className="text-sm text-[var(--text-secondary)]">
                   Έτοιμο κείμενο για agency ή in-house team — αντίγραψέ το με ένα κλικ
                 </p>
               </div>
@@ -263,14 +246,14 @@ export function ContentStrategy() {
             <button
               type="button"
               onClick={handleCopyBrief}
-              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-orange-200/80 bg-white px-4 py-2 text-sm font-semibold text-stone-800 shadow-sm transition-all hover:bg-amber-50/90 hover:border-orange-300"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[var(--orange-100)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text-primary)] shadow-sm transition-all hover:bg-[var(--gold-50)] hover:border-[var(--orange-100)]"
             >
-              {briefCopied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} className="text-stone-600" />}
+              {briefCopied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} className="text-[var(--text-secondary)]" />}
               {briefCopied ? 'Αντιγράφηκε!' : 'Αντιγραφή'}
             </button>
           </div>
 
-          <div className="rounded-2xl border border-orange-100/70 bg-gradient-to-b from-[#FFFBF7] to-white p-5 sm:p-6 shadow-inner">
+          <div className="rounded-2xl border border-[var(--orange-100)] bg-[var(--surface-1)] p-5 sm:p-6 ">
             <FormattedProse content={brief} variant="default" />
           </div>
         </Card>
@@ -278,21 +261,21 @@ export function ContentStrategy() {
 
       {/* Loading state */}
       {hasStrategy && suggestionsLoading && (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-orange-100/80 bg-gradient-to-b from-amber-50/30 to-white py-20">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-[var(--orange-100)] bg-[var(--surface-1)] py-20">
           <Spinner size="lg" label="Φόρτωση ιδεών περιεχομένου..." />
         </div>
       )}
 
       {/* Empty state when strategy exists but no content suggestions saved */}
       {hasStrategy && !suggestionsLoading && !hasSavedContent && (
-        <Card padding="lg" className="border border-dashed border-orange-200 bg-gradient-to-br from-amber-50/50 to-orange-50/30">
+        <Card padding="lg" className="border border-dashed border-[var(--orange-100)] bg-[var(--surface-1)]">
           <div className="flex flex-col items-center justify-center py-14 text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-md shadow-orange-500/10 ring-2 ring-orange-100">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-[var(--border)]">
               <Sparkles size={30} className="text-[var(--nts-accent-text)]" />
             </div>
-            <p className="text-base font-semibold text-stone-800">Δεν υπάρχουν ακόμα προτάσεις περιεχομένου</p>
-            <p className="mt-2 max-w-md text-sm leading-relaxed text-stone-600">
-              Αποθήκευσε ξανά τη στρατηγική στο <span className="font-medium text-stone-700">Commercial Strategy</span> — το σύστημα θα γεμίσει αυτόματα τις ιδέες για κανάλια και καμπάνιες.
+            <p className="text-base font-semibold text-[var(--text-primary)]">Δεν υπάρχουν ακόμα προτάσεις περιεχομένου</p>
+            <p className="mt-2 max-w-md text-sm leading-relaxed text-[var(--text-secondary)]">
+              Αποθήκευσε ξανά τη στρατηγική στο <span className="font-medium text-[var(--text-secondary)]">Commercial Strategy</span> — το σύστημα θα γεμίσει αυτόματα τις ιδέες για κανάλια και καμπάνιες.
             </p>
           </div>
         </Card>
@@ -300,14 +283,14 @@ export function ContentStrategy() {
 
       {/* Thematic Directions per Channel */}
       {hasStrategy && !suggestionsLoading && directions.length > 0 && (
-        <Card padding="lg" className="border border-orange-100/80 bg-white shadow-md shadow-orange-500/[0.05]">
+        <Card padding="lg" className="border border-[var(--orange-100)] bg-white shadow-sm">
           <div className="mb-6 flex items-start gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-100 to-fuchsia-50 ring-2 ring-violet-100">
-              <Sparkles size={22} className="text-violet-600" />
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--surface-1)] ring-1 ring-[var(--border)]">
+              <Sparkles size={22} className="text-[var(--seg-potential)]" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-stone-900">Θεματικές κατευθύνσεις ανά κανάλι</h3>
-              <p className="mt-0.5 text-sm text-stone-600">
+              <h3 className="text-lg font-bold text-[var(--text-primary)]">Θεματικές κατευθύνσεις ανά κανάλι</h3>
+              <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
                 Συνδέονται με «{strategyName}» — segments &amp; κατηγορίες προϊόντων
               </p>
             </div>
@@ -320,30 +303,30 @@ export function ContentStrategy() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.06 }}
-                className="group overflow-hidden rounded-2xl border border-orange-100/80 bg-white shadow-sm transition-all hover:border-orange-200 hover:shadow-md"
+                className="group overflow-hidden rounded-2xl border border-[var(--orange-100)] bg-white shadow-sm transition-all hover:border-[var(--orange-100)] hover:shadow-md"
               >
-                <div className="flex items-center gap-3 border-b border-orange-100/60 bg-gradient-to-r from-amber-50/90 to-orange-50/40 px-4 py-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-orange-100">
+                <div className="flex items-center gap-3 border-b border-[var(--orange-100)] bg-[var(--surface-1)] px-4 py-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-[var(--border)]">
                     {getChannelIcon(dir.channel)}
                   </div>
-                  <h4 className="text-sm font-semibold text-stone-900">{dir.channel}</h4>
+                  <h4 className="text-sm font-semibold text-[var(--text-primary)]">{dir.channel}</h4>
                 </div>
                 <div className="px-4 py-4">
-                  <p className="mb-1.5 text-sm font-semibold text-stone-900">{dir.theme}</p>
-                  <p className="text-xs leading-relaxed text-stone-600">{dir.reasoning}</p>
+                  <p className="mb-1.5 text-sm font-semibold text-[var(--text-primary)]">{dir.theme}</p>
+                  <p className="text-xs leading-relaxed text-[var(--text-secondary)]">{dir.reasoning}</p>
 
                   {((dir.targetSegments && dir.targetSegments.length > 0) || (dir.suggestedCategories && dir.suggestedCategories.length > 0)) && (
-                    <div className="mt-3 flex flex-wrap gap-2 border-t border-orange-50 pt-3">
+                    <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--orange-100)] pt-3">
                       {dir.targetSegments && dir.targetSegments.length > 0 && (
-                        <div className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-2.5 py-1 ring-1 ring-violet-100">
-                          <Users size={11} className="text-violet-600" />
-                          <span className="text-[11px] font-medium text-violet-950/80">
+                        <div className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--navy-50)] px-2.5 py-1 ring-1 ring-[var(--border)]">
+                          <Users size={11} className="text-[var(--seg-potential)]" />
+                          <span className="text-[11px] font-medium text-[var(--seg-potential)]/80">
                             {dir.targetSegments.join(', ')}
                           </span>
                         </div>
                       )}
                       {dir.suggestedCategories && dir.suggestedCategories.length > 0 && (
-                        <div className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 ring-1 ring-amber-100">
+                        <div className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--gold-50)] px-2.5 py-1 ring-1 ring-[var(--border)]">
                           <Tag size={11} className="text-amber-700" />
                           <span className="text-[11px] font-medium text-amber-950/80">
                             {dir.suggestedCategories.join(', ')}
@@ -361,24 +344,24 @@ export function ContentStrategy() {
 
       {/* Example Content Actions (collapsible) */}
       {hasStrategy && !suggestionsLoading && suggestions.length > 0 && (
-        <Card padding="lg" className="border border-violet-100/90 bg-gradient-to-b from-white to-violet-50/20 shadow-md shadow-violet-500/[0.04]">
+        <Card padding="lg" className="border border-[var(--navy-100)] bg-[var(--surface-0)] shadow-sm">
           <button
             type="button"
             onClick={() => setShowExamples(!showExamples)}
-            className="flex w-full items-center justify-between gap-3 rounded-xl text-left transition-colors hover:bg-violet-50/50 -m-1 p-1"
+            className="flex w-full items-center justify-between gap-3 rounded-xl text-left transition-colors hover:bg-[var(--navy-50)] -m-1 p-1"
           >
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-100 to-indigo-50 ring-2 ring-violet-100">
-                <FileText size={22} className="text-violet-700" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--surface-1)] ring-1 ring-[var(--border)]">
+                <FileText size={22} className="text-[var(--seg-potential)]" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-stone-900">Παραδείγματα ενεργειών</h3>
-                <p className="text-sm text-stone-600">
+                <h3 className="text-lg font-bold text-[var(--text-primary)]">Παραδείγματα ενεργειών</h3>
+                <p className="text-sm text-[var(--text-secondary)]">
                   {suggestions.length} ιδέες — από headline μέχρι καμπάνια
                 </p>
               </div>
             </div>
-            {showExamples ? <ChevronUp size={22} className="shrink-0 text-violet-400" /> : <ChevronDown size={22} className="shrink-0 text-violet-400" />}
+            {showExamples ? <ChevronUp size={22} className="shrink-0 text-[var(--seg-potential)]" /> : <ChevronDown size={22} className="shrink-0 text-[var(--seg-potential)]" />}
           </button>
 
           <AnimatePresence>
@@ -407,11 +390,11 @@ export function ContentStrategy() {
                         </Badge>
                         <span className="text-xs capitalize text-stone-400">{action.priority}</span>
                       </div>
-                      <h4 className="mb-1 text-sm font-semibold text-stone-900">{action.title}</h4>
-                      <p className="mb-2 text-xs leading-relaxed text-stone-600">{action.description}</p>
+                      <h4 className="mb-1 text-sm font-semibold text-[var(--text-primary)]">{action.title}</h4>
+                      <p className="mb-2 text-xs leading-relaxed text-[var(--text-secondary)]">{action.description}</p>
                       <p className="mb-2 text-xs font-medium text-[var(--nts-accent-text)]">Κανάλι: {action.channel}</p>
                       {action.headline_suggestion && (
-                        <div className="rounded-lg border border-orange-100 bg-amber-50/80 px-3 py-2 text-xs italic leading-snug text-stone-700">
+                        <div className="rounded-lg border border-[var(--orange-100)] bg-[var(--gold-50)] px-3 py-2 text-xs italic leading-snug text-[var(--text-secondary)]">
                           &ldquo;{action.headline_suggestion}&rdquo;
                         </div>
                       )}
@@ -426,18 +409,18 @@ export function ContentStrategy() {
 
       {/* No strategy fallback */}
       {!hasStrategy && !strategyLoading && (
-        <Card padding="lg" className="border border-orange-100 bg-gradient-to-br from-amber-50/40 to-white">
+        <Card padding="lg" className="border border-[var(--orange-100)] bg-[var(--surface-1)]">
           <div className="py-12 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg shadow-orange-500/10 ring-2 ring-orange-100">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-[var(--border)]">
               <Sparkles size={30} className="text-[var(--nts-accent-text)]" />
             </div>
-            <p className="text-lg font-semibold text-stone-800">Χρειάζεσαι πρώτα εμπορική στρατηγική</p>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-stone-600">
-              Η Content Strategy τροφοδοτείται από το ενεργό σενάριο στο <span className="font-medium text-stone-800">Commercial Strategy</span>. Όρισέ την εκεί για να εμφανιστούν κατευθύνσεις και ιδέες.
+            <p className="text-lg font-semibold text-[var(--text-primary)]">Χρειάζεσαι πρώτα εμπορική στρατηγική</p>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--text-secondary)]">
+              Η Content Strategy τροφοδοτείται από το ενεργό σενάριο στο <span className="font-medium text-[var(--text-primary)]">Commercial Strategy</span>. Όρισέ την εκεί για να εμφανιστούν κατευθύνσεις και ιδέες.
             </p>
           </div>
         </Card>
       )}
-    </div>
+    </PageCanvas>
   );
 }

@@ -66,12 +66,12 @@ export function FeedPreviewModal({
         <ModalHeader
           toolbarAriaLabel="Κλείσιμο preview"
           title={
-            <h3 className="break-words text-lg font-bold text-[#1A1A1A]">
+            <h3 className="break-words text-lg font-bold text-[var(--text-primary)]">
               Preview — {file?.name ?? 'αρχείο'}
             </h3>
           }
           actions={
-            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
+            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[var(--surface-2)]">
               <X size={20} />
             </button>
           }
@@ -92,32 +92,32 @@ export function FeedPreviewModal({
             <div className="space-y-6">
               {/* Validation summary */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3 bg-[#F0FDF4] border border-[#86EFAC] rounded-lg">
-                  <p className="text-xs text-[#166534]">Έγκυρα</p>
-                  <p className="text-xl font-bold text-[#15803D]">{preview.validCount}</p>
+                <div className="p-3 bg-[var(--success-light)] border border-[var(--success-light)] rounded-lg">
+                  <p className="text-xs text-[var(--success-700)]">Έγκυρα</p>
+                  <p className="text-xl font-bold text-[var(--success-700)]">{preview.validCount}</p>
                 </div>
-                <div className="p-3 bg-[#FEF2F2] border border-[#FECACA] rounded-lg">
-                  <p className="text-xs text-[#991B1B]">Σφάλματα</p>
-                  <p className="text-xl font-bold text-[#DC2626]">{preview.errorCount}</p>
+                <div className="p-3 bg-[var(--danger-light)] border border-[var(--danger-light)] rounded-lg">
+                  <p className="text-xs text-[var(--danger-600)]">Σφάλματα</p>
+                  <p className="text-xl font-bold text-[var(--danger-600)]">{preview.errorCount}</p>
                 </div>
-                <div className="p-3 bg-[#F5F5F5] rounded-lg">
-                  <p className="text-xs text-[#4A4A4A]">Σύνολο γραμμών</p>
-                  <p className="text-xl font-bold text-[#1A1A1A]">{preview.totalRows}</p>
+                <div className="p-3 bg-[var(--surface-2)] rounded-lg">
+                  <p className="text-xs text-[var(--text-secondary)]">Σύνολο γραμμών</p>
+                  <p className="text-xl font-bold text-[var(--text-primary)]">{preview.totalRows}</p>
                 </div>
-                <div className="p-3 bg-[#F5F5F5] rounded-lg">
-                  <p className="text-xs text-[#4A4A4A]">Στήλες</p>
-                  <p className="text-xl font-bold text-[#1A1A1A]">{preview.headers.length}</p>
+                <div className="p-3 bg-[var(--surface-2)] rounded-lg">
+                  <p className="text-xs text-[var(--text-secondary)]">Στήλες</p>
+                  <p className="text-xl font-bold text-[var(--text-primary)]">{preview.headers.length}</p>
                 </div>
               </div>
 
               {/* Column mapping - only when feed source selected */}
               {config && (
               <div>
-                <h4 className="font-semibold text-[#1A1A1A] mb-2">Αντιστοίχιση στηλών ({config.name})</h4>
-                <div className="border border-[#E5E5E5] rounded-lg overflow-hidden">
+                <h4 className="font-semibold text-[var(--text-primary)] mb-2">Αντιστοίχιση στηλών ({config.name})</h4>
+                <div className="border border-[var(--border)] rounded-lg overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-[#F5F5F5] text-left text-xs text-[#4A4A4A]">
+                      <tr className="bg-[var(--surface-2)] text-left text-xs text-[var(--text-secondary)]">
                         <th className="px-3 py-2">Feed column</th>
                         <th className="px-3 py-2"><ArrowRight size={14} className="inline" /></th>
                         <th className="px-3 py-2">App field</th>
@@ -129,12 +129,12 @@ export function FeedPreviewModal({
                         const feedNorm = a.feedColumn.toLowerCase().replace(/\s+/g, '_');
                         const found = preview.headers.some((h) => h.toLowerCase().replace(/\s+/g, '_') === feedNorm);
                         return (
-                          <tr key={a.feedColumn} className={`border-t border-[#E5E5E5] ${!found ? 'opacity-50' : ''}`}>
+                          <tr key={a.feedColumn} className={`border-t border-[var(--border)] ${!found ? 'opacity-50' : ''}`}>
                             <td className="px-3 py-2 font-mono text-xs">
                               {a.feedColumn}
                               {a.required && !found && <span className="text-red-500 ml-1">*</span>}
                             </td>
-                            <td className="px-3 py-2 text-[#9CA3AF]">→</td>
+                            <td className="px-3 py-2 text-[var(--text-muted)]">→</td>
                             <td className="px-3 py-2">{APP_FIELD_LABELS[a.appField] ?? a.appField}</td>
                             <td className="px-3 py-2">{found ? <CheckCircle2 size={14} className="text-green-600" /> : '—'}</td>
                           </tr>
@@ -143,7 +143,7 @@ export function FeedPreviewModal({
                     </tbody>
                   </table>
                   {preview.headers.length > 0 && (
-                    <p className="text-xs text-[#6B7280] px-3 py-2 border-t border-[#E5E5E5]">
+                    <p className="text-xs text-[var(--text-muted)] px-3 py-2 border-t border-[var(--border)]">
                       Ανιχνευμένες στήλες: {preview.headers.join(', ')}
                     </p>
                   )}
@@ -151,20 +151,20 @@ export function FeedPreviewModal({
               </div>
               )}
               {!config && preview.headers.length > 0 && (
-                <div className="p-3 bg-[#F5F5F5] rounded-lg">
-                  <p className="text-sm font-medium text-[#4A4A4A]">Ανιχνευμένες στήλες:</p>
-                  <p className="text-xs text-[#6B7280] mt-1">{preview.headers.join(', ')}</p>
+                <div className="p-3 bg-[var(--surface-2)] rounded-lg">
+                  <p className="text-sm font-medium text-[var(--text-secondary)]">Ανιχνευμένες στήλες:</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{preview.headers.join(', ')}</p>
                 </div>
               )}
 
               {/* Sample rows (mapped) */}
               {preview.mappedSample.length > 0 && (
                 <div>
-                  <h4 className="font-semibold text-[#1A1A1A] mb-2">Δείγμα (πρώτες {preview.mappedSample.length} γραμμές)</h4>
-                  <div className="border border-[#E5E5E5] rounded-lg overflow-x-auto max-h-48 overflow-y-auto">
+                  <h4 className="font-semibold text-[var(--text-primary)] mb-2">Δείγμα (πρώτες {preview.mappedSample.length} γραμμές)</h4>
+                  <div className="border border-[var(--border)] rounded-lg overflow-x-auto max-h-48 overflow-y-auto">
                     <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-[#F5F5F5]">
-                        <tr className="text-left text-xs text-[#4A4A4A]">
+                      <thead className="sticky top-0 bg-[var(--surface-2)]">
+                        <tr className="text-left text-xs text-[var(--text-secondary)]">
                           {['sku', 'name', 'price', 'stock_level', 'category'].map((k) => (
                             <th key={k} className="px-3 py-2">{APP_FIELD_LABELS[k] ?? k}</th>
                           ))}
@@ -172,7 +172,7 @@ export function FeedPreviewModal({
                       </thead>
                       <tbody>
                         {preview.mappedSample.map((row, i) => (
-                          <tr key={i} className="border-t border-[#E5E5E5]">
+                          <tr key={i} className="border-t border-[var(--border)]">
                             {['sku', 'name', 'price', 'stock_level', 'category'].map((k) => (
                               <td key={k} className="px-3 py-2 truncate max-w-[120px]" title={row[k]}>
                                 {row[k] || '—'}
@@ -189,13 +189,13 @@ export function FeedPreviewModal({
               {/* Errors */}
               {preview.errors.length > 0 && (
                 <div>
-                  <h4 className="font-semibold text-[#DC2626] mb-2">Σφάλματα validation</h4>
-                  <ul className="text-sm text-[#991B1B] space-y-1 max-h-32 overflow-y-auto bg-red-50 p-3 rounded-lg">
+                  <h4 className="font-semibold text-[var(--danger-600)] mb-2">Σφάλματα validation</h4>
+                  <ul className="text-sm text-[var(--danger-600)] space-y-1 max-h-32 overflow-y-auto bg-red-50 p-3 rounded-lg">
                     {preview.errors.slice(0, 10).map((e, i) => (
                       <li key={i}>{e}</li>
                     ))}
                     {preview.errors.length > 10 && (
-                      <li className="text-[#6B7280]">…και {preview.errors.length - 10} ακόμα</li>
+                      <li className="text-[var(--text-muted)]">…και {preview.errors.length - 10} ακόμα</li>
                     )}
                   </ul>
                 </div>
@@ -203,7 +203,7 @@ export function FeedPreviewModal({
             </div>
           )}
         </div>
-        <div className="p-4 border-t border-[#E5E5E5] flex items-center justify-between gap-3">
+        <div className="p-4 border-t border-[var(--border)] flex items-center justify-between gap-3">
           <Button variant="secondary" onClick={onClose}>
             Ακύρωση
           </Button>

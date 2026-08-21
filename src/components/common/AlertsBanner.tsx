@@ -142,14 +142,14 @@ export function AlertsBanner({ filterGroup, maxAlerts = 3, compact = false, onNa
                     >
                       <div className="min-w-0 flex-1">
                         <p
-                          className={`font-semibold text-[#111827] leading-snug ${
+                          className={`font-semibold text-[var(--text-primary)] leading-snug ${
                             compact ? 'text-xs line-clamp-2' : 'text-sm line-clamp-2'
                           }`}
                         >
                           {alert.title}
                         </p>
                         <p
-                          className={`text-[#57534E] mt-1 leading-relaxed ${
+                          className={`text-[var(--text-secondary)] mt-1 leading-relaxed ${
                             compact ? 'text-[10px] line-clamp-2' : 'text-[12px] line-clamp-4'
                           }`}
                         >
@@ -167,7 +167,7 @@ export function AlertsBanner({ filterGroup, maxAlerts = 3, compact = false, onNa
                       }`}
                     >
                       <p
-                        className={`font-medium uppercase tracking-wider text-[#9CA3AF] mb-1.5 ${
+                        className={`font-medium uppercase tracking-wider text-[var(--text-muted)] mb-1.5 ${
                           compact ? 'text-[8px]' : 'text-[9px]'
                         }`}
                       >
@@ -199,7 +199,7 @@ export function AlertsBanner({ filterGroup, maxAlerts = 3, compact = false, onNa
                               } ${
                                 isActive
                                   ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/15 text-[var(--nts-accent-text)] shadow-inner ring-1 ring-[var(--nts-accent)]/30'
-                                  : 'border-[#E5E7EB] bg-white text-[#4B5563] hover:border-[var(--nts-accent)]/45 hover:bg-orange-50/50 hover:text-[#C2410C]'
+                                  : 'border-[var(--border)] bg-white text-[var(--text-secondary)] hover:border-[var(--nts-accent)]/45 hover:bg-orange-50/50 hover:text-[var(--orange-700)]'
                               } disabled:opacity-60`}
                             >
                               {saving && isActive ? (

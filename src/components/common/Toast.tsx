@@ -55,9 +55,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 function ToastItem({ toast, onClose }: { toast: ToastItem; onClose: () => void }) {
   const styles = {
-    success: 'bg-[#dafbe1] border-[#1a7f37]/30 text-[#1a7f37]',
-    error: 'bg-[#ffebe9] border-[#cf222e]/30 text-[#cf222e]',
-    info: 'bg-[#F3F4F6] border-[#6B7280]/30 text-[#6B7280]',
+    success: 'bg-[var(--success-light)] border-[var(--success-700)]/30 text-[var(--success-700)]',
+    error: 'bg-[var(--danger-light)] border-[var(--danger-600)]/30 text-[var(--danger-600)]',
+    info: 'bg-[var(--surface-2)] border-[var(--text-muted)]/30 text-[var(--text-muted)]',
   };
   const icons = {
     success: <CheckCircle2 size={20} className="flex-shrink-0" />,

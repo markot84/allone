@@ -64,3 +64,78 @@ export function useConnectorSyncErrors(): ConnectorSyncError[] {
 
   return data ?? [];
 }
+
+export interface ConnectorStatus {
+  id: string;
+  name: string;
+  /** `ok` synced recently, `stale` connected but nothing for over a day, `error` last sync failed. */
+  state: 'ok' | 'stale' | 'error';
+  /** Millisecond timestamp of the last successful sync, when the connector records one. */
+  lastSyncAt: number | null;
+  error: string | null;
+}
+
+/** Connected connectors older than this without a successful sync read as stale, not healthy. */
+const STALE_AFTER_HOURS = 26;
+
+type ConnectorDoc = {
+  connected?: boolean;
+  lastSyncAt?: { toDate?: () => Date } | string;
+  lastSyncError?: string;
+  lastSyncErrorAt?: { toDate?: () => Date };
+};
+
+function toMillis(value: ConnectorDoc['lastSyncAt']): number | null {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const ms = new Date(value).getTime();
+    return Number.isNaN(ms) ? null : ms;
+  }
+  const date = value.toDate?.();
+  return date ? date.getTime() : null;
+}
+
+/** Every connected connector of the current brand with its freshness. Exported for tests. */
+export function collectConnectorStatuses(data: Record<string, unknown>, now = Date.now()): ConnectorStatus[] {
+  const d = data as Record<string, ConnectorDoc>;
+  const errored = new Set(collectConnectorSyncErrors(data, now).map((e) => e.id));
+  const out: ConnectorStatus[] = [];
+  for (const [id, name] of Object.entries(CONNECTOR_NAMES)) {
+    const c = d[id];
+    if (!c?.connected) continue;
+    const lastSyncAt = toMillis(c.lastSyncAt);
+    const stale = lastSyncAt === null || now - lastSyncAt > STALE_AFTER_HOURS * 3600_000;
+    out.push({
+      id,
+      name,
+      state: errored.has(id) ? 'error' : stale ? 'stale' : 'ok',
+      lastSyncAt,
+      error: errored.has(id) ? (c.lastSyncError ?? null) : null,
+    });
+  }
+  return out;
+}
+
+/**
+ * The brand's connected data sources and how fresh each one is.
+ *
+ * Shares the query key with `useConnectorSyncErrors` so the two hooks are one Firestore read
+ * between them, however many components ask.
+ */
+export function useConnectorStatuses(): ConnectorStatus[] {
+  const { currentBrand } = useBrand();
+  const brandId = currentBrand?.id ?? null;
+
+  const { data } = useQuery({
+    queryKey: ['connector_statuses', brandId],
+    enabled: !!brandId,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const snap = await getDoc(doc(db, 'connectors', brandId!));
+      return collectConnectorStatuses(snap.data() || {});
+    },
+  });
+
+  return data ?? [];
+}

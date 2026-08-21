@@ -68,7 +68,7 @@ export function BrandOnboarding({ children }: BrandOnboardingProps) {
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 50%, #16213e 100%)' }}
+      style={{ background: 'var(--navy-900)' }}
     >
       <AnimatePresence mode="wait">
         {step === 'welcome' && (
@@ -80,7 +80,7 @@ export function BrandOnboarding({ children }: BrandOnboardingProps) {
             className="w-full max-w-lg"
           >
             <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
-              <div className="bg-gradient-to-r from-[#111] to-[#1a1a2e] p-8 text-center">
+              <div className="bg-[var(--navy-500)] p-8 text-center">
                 <div className="flex justify-center mb-4">
                   <AllOneLogo height={44} className="mx-auto" variant="onDark" />
                 </div>
@@ -98,7 +98,7 @@ export function BrandOnboarding({ children }: BrandOnboardingProps) {
                   {FEATURES.map(({ icon: Icon, label, desc }) => (
                     <div key={label} className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
                       <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
-                        <Icon size={16} className="text-[#F97316]" />
+                        <Icon size={16} className="text-[var(--orange-500)]" />
                       </div>
                       <div>
                         <p className="text-[13px] font-semibold text-gray-800">{label}</p>
@@ -146,7 +146,7 @@ export function BrandOnboarding({ children }: BrandOnboardingProps) {
               <StepIndicator current={1} total={3} />
               <div className="text-center mb-6">
                 <div className="w-14 h-14 bg-gray-50 rounded-xl flex items-center justify-center mx-auto mb-4 border border-gray-200">
-                  <Building2 size={28} className="text-[#F97316]" />
+                  <Building2 size={28} className="text-[var(--orange-500)]" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-900">Δημιουργία Brand</h2>
                 <p className="text-gray-500 text-sm mt-1">Αυτό θα είναι το κεντρικό σας workspace.</p>
@@ -230,7 +230,7 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
         <div
           key={i}
           className={`h-1.5 rounded-full transition-all duration-300 ${
-            i + 1 <= current ? 'w-8 bg-[#F97316]' : 'w-4 bg-gray-200'
+            i + 1 <= current ? 'w-8 bg-[var(--orange-500)]' : 'w-4 bg-gray-200'
           }`}
         />
       ))}

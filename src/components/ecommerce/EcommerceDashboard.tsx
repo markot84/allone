@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { useBrand } from '../../hooks/useBrand';
 import {
-  ShoppingBag,
   ShoppingCart,
   Package,
   ExternalLink,
@@ -37,7 +36,7 @@ import {
   PieChart,
   Pie,
 } from 'recharts';
-import { Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
+import { Button, Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
 import { useEcommerceSummary, type EcommerceTopProduct } from '../../hooks/useEcommerceSummary';
 import { useEcommerceChannelDaily, sumChannelDailyWindow } from '../../hooks/useEcommerceChannelDaily';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
@@ -47,8 +46,11 @@ import { useMagentoParentLinks } from '../../hooks/useMagentoParentLinks';
 import { paymentChartLabelForEcommerceOrder } from '../../utils/magentoPaymentChart';
 import { getBrandHistoryStartISO } from '../../utils/brandHistoryStart';
 import type { KPICardData } from '../common/KPICard';
-import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
-import { DateRangePicker } from '../ui/DateRangePicker';
+import { useGlobalDate } from '../../contexts/GlobalDateContext';
+import { useFullBleedCanvas } from '../layout/AppChrome';
+import { ChromePeriodActions, PageCanvas } from '../layout/ChromeControls';
+import { MONO, SignalCard, SignalSkeleton } from '../signal';
+import { axisProps, gridProps, seriesColor, token, tooltipProps } from '../../styles/chartTheme';
 
 const PLATFORM_LABELS: Record<string, string> = {
   shopify: 'Shopify',
@@ -57,6 +59,9 @@ const PLATFORM_LABELS: Record<string, string> = {
   magento: 'Magento',
 };
 
+/** The four e-shop platforms, in their OWN brand colours — a Shopify green that is not Shopify's
+ *  green helps nobody recognise which shop a row came from. They are the one deliberate exception
+ *  to the no-hex rule on this page; everything else routes through the tokens. */
 const PLATFORM_COLORS: Record<string, string> = {
   shopify: '#96BF48',
   woocommerce: '#7F54B3',
@@ -64,13 +69,19 @@ const PLATFORM_COLORS: Record<string, string> = {
   magento: '#F46F25',
 };
 
-const SALES_CHANNEL_COLORS: Record<EcommerceSalesChannel, string> = {
-  direct_eshop: '#16A34A',
-  marketplace_skroutz: '#2563EB',
-  intercompany: '#7C3AED',
-  personal: '#DB2777',
-  needs_review: '#F59E0B',
+/** Sales channels, on the shared ramp. `needs_review` keeps the warning hue: it is a state, not a
+ *  category, and it should not read as just another channel. */
+const SALES_CHANNEL_TOKENS: Record<EcommerceSalesChannel, string> = {
+  direct_eshop: '--success-700',
+  marketplace_skroutz: '--sky-500',
+  intercompany: '--seg-potential',
+  personal: '--navy-500',
+  needs_review: '--warning',
 };
+
+function salesChannelColor(channel: EcommerceSalesChannel | string): string {
+  return token(SALES_CHANNEL_TOKENS[channel as EcommerceSalesChannel] ?? '--text-muted');
+}
 
 type OrderSortField = 'createdAt' | 'total' | 'platform';
 type RowsPerPage = 10 | 20 | 50 | 100 | 'all';
@@ -92,16 +103,8 @@ type SalesChannelBreakdownRow = {
   excludedOrders: number;
 };
 
-const TOOLTIP_STYLE: React.CSSProperties = {
-  backgroundColor: '#fff',
-  border: '1px solid #d0d7de',
-  borderRadius: 6,
-  fontSize: 12,
-  padding: '8px 12px',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-};
-
-const METHOD_CHART_COLORS = ['#F97316', '#FB923C', '#FDBA74', '#F59E0B', '#FACC15', '#A3A3A3', '#94A3B8', '#CBD5E1'];
+/** Payment methods are categorical; the shared ramp cycles for as many as the shop has. */
+const methodColor = (index: number) => seriesColor(index);
 
 /** Recharts Area needs >=2 points to render a visible line. */
 function padSparklineForChart(values: number[]): number[] {
@@ -162,7 +165,7 @@ function buildPaymentMethodPieData(
     .map(([name, value], index) => ({
       name,
       value,
-      color: METHOD_CHART_COLORS[index % METHOD_CHART_COLORS.length],
+      color: methodColor(index),
     }));
 }
 
@@ -181,7 +184,7 @@ function buildShippingMethodPieData(
     .map(([name, value], index) => ({
       name,
       value,
-      color: METHOD_CHART_COLORS[index % METHOD_CHART_COLORS.length],
+      color: methodColor(index),
     }));
 }
 
@@ -219,19 +222,20 @@ function buildSalesChannelBreakdownFromOrders(orders: EcommerceRawOrder[]): Sale
 
 function OrderStatusBadge({ status }: { status: string }) {
   const s = (status || '').toLowerCase();
-  let bg = '#F3F4F6';
-  let fg = '#6B7280';
+  let bg = 'var(--surface-2)';
+  let fg = 'var(--text-muted)';
 
+  // Each pair is a token background with a token text colour that clears 4.5:1 on it.
   if (['paid', 'completed', 'complete', 'fulfilled', 'processing'].includes(s)) {
-    bg = '#DCFCE7'; fg = '#16A34A';
+    bg = 'var(--success-light)'; fg = 'var(--success-700)';
   } else if (['pending', 'on-hold', 'on_hold', 'authorized'].includes(s)) {
-    bg = '#FEF3C7'; fg = '#D97706';
+    bg = 'var(--warning-light)'; fg = 'var(--orange-700)';
   } else if (['refunded', 'cancelled', 'canceled', 'voided', 'failed'].includes(s)) {
-    bg = '#FEE2E2'; fg = '#DC2626';
+    bg = 'var(--danger-light)'; fg = 'var(--danger-600)';
   } else if (['viva_klarna_undefined'].includes(s)) {
-    bg = '#F3E8FF'; fg = '#7C3AED';
+    bg = 'var(--navy-50)'; fg = 'var(--seg-potential)';
   } else if (['partially_refunded', 'partial'].includes(s)) {
-    bg = '#FFF7ED'; fg = '#EA580C';
+    bg = 'var(--orange-50)'; fg = 'var(--orange-700)';
   }
 
   return (
@@ -273,13 +277,10 @@ export function EcommerceDashboard() {
   }, [parentLinks.links]);
 
   // Same global date range as Dashboard/ROI — no session-local override (that caused the E-commerce and Dashboard periods to diverge).
-  const {
-    fromDate: globalFrom,
-    toDate: globalTo,
-    period: globalPeriod,
-    setPeriod: setGlobalPeriod,
-    setCustomRange,
-  } = useGlobalDate();
+  const { fromDate: globalFrom, toDate: globalTo } = useGlobalDate();
+
+  // The page draws its own gutters, so the shell drops its padded wrapper.
+  useFullBleedCanvas();
 
   const brandHistoryStartISO = getBrandHistoryStartISO(currentBrand);
   const rawFrom = globalFrom;
@@ -698,111 +699,59 @@ export function EcommerceDashboard() {
   // Loading state
   if (ecomm.isLoading) {
     return (
-      <div className="space-y-6">
-        <PageHeader
-          title={
-            <h2 className="flex items-center gap-2 text-xl font-bold text-[#1A1A1A]">
-              <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent-text)]" />
-              E-commerce
-            </h2>
-          }
-          description={
-            <p className="text-sm text-[#6B7280]">Δεδομένα παραγγελιών και προϊόντων από τα συνδεδεμένα e-shop</p>
-          }
-        />
-        <div className="py-16 text-center text-[#6B7280]">
-          <div className="animate-spin h-8 w-8 border-2 border-orange-400 border-t-transparent rounded-full mx-auto mb-3" />
-          Φόρτωση e-commerce δεδομένων…
-        </div>
-      </div>
+      <PageCanvas>
+        <PageHeader eyebrow="E-commerce" title="E-commerce" description="Δεδομένα παραγγελιών και προϊόντων από τα συνδεδεμένα e-shop" />
+        <SignalCard padding={20} style={{ gap: 12 }}>
+          <span style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text-primary)' }}>Φόρτωση e-commerce δεδομένων…</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+            <SignalSkeleton height={96} />
+            <SignalSkeleton height={96} />
+            <SignalSkeleton height={96} />
+            <SignalSkeleton height={96} />
+          </div>
+          <SignalSkeleton height={280} />
+        </SignalCard>
+      </PageCanvas>
     );
   }
 
   // Empty state
   if (!ecomm.hasData) {
     return (
-      <div className="space-y-6">
-        <PageHeader
-          title={
-            <h2 className="flex items-center gap-2 text-xl font-bold text-[#1A1A1A]">
-              <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent-text)]" />
-              E-commerce
-            </h2>
-          }
-          description={
-            <p className="text-sm text-[#6B7280]">Δεδομένα παραγγελιών και προϊόντων από τα συνδεδεμένα e-shop</p>
-          }
-        />
-
-        <Card>
-          <div className="p-10 text-center">
-            <ShoppingCart size={48} className="mx-auto text-[#D1D5DB] mb-4" />
-            <h3 className="text-base font-semibold text-[#1A1A1A] mb-2">Δεν υπάρχουν δεδομένα e-commerce</h3>
-            <p className="text-sm text-[#6B7280] mb-6 max-w-md mx-auto">
-              Συνδέστε τουλάχιστον ένα e-shop (Shopify, WooCommerce, OpenCart ή Magento) και κάντε sync για να δείτε τα δεδομένα σας εδώ.
-            </p>
-            <button
-              onClick={() => { window.location.hash = '#data'; }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[var(--nts-accent)] text-white text-sm font-semibold hover:opacity-90 transition-opacity"
-            >
-              <ExternalLink size={14} />
-              Μετάβαση στα Connectors
-            </button>
-          </div>
-        </Card>
-      </div>
+      <PageCanvas>
+        <PageHeader eyebrow="E-commerce" title="E-commerce" description="Δεδομένα παραγγελιών και προϊόντων από τα συνδεδεμένα e-shop" />
+        <SignalCard accent="var(--gold-700)" padding={24} style={{ gap: 12, alignItems: 'flex-start' }}>
+          <ShoppingCart size={28} style={{ color: 'var(--text-muted)' }} aria-hidden />
+          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Δεν υπάρχουν δεδομένα e-commerce</span>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55, maxWidth: '62ch' }}>
+            Συνδέστε τουλάχιστον ένα e-shop (Shopify, WooCommerce, OpenCart ή Magento) και κάντε sync για να δείτε τα
+            δεδομένα σας εδώ.
+          </span>
+          <Button variant="primary" size="sm" icon={<ExternalLink size={14} />} onClick={() => { window.location.hash = '#data'; }}>
+            Μετάβαση στα Connectors
+          </Button>
+        </SignalCard>
+      </PageCanvas>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <PageCanvas>
+      <ChromePeriodActions />
+
       <PageHeader
-        title={
-          <h2 className="flex items-center gap-2 text-xl font-bold text-[#1A1A1A]">
-            <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent-text)]" />
-            E-commerce
-          </h2>
-        }
-        description={
-          <p className="text-sm text-[#6B7280]">
-            Δεδομένα {ecomm.connectedPlatforms.map((p) => PLATFORM_LABELS[p] || p).join(', ')}
-          </p>
-        }
+        eyebrow="E-commerce"
+        title="E-commerce"
+        description={`Δεδομένα ${ecomm.connectedPlatforms.map((p) => PLATFORM_LABELS[p] || p).join(', ')}`}
         meta={
           ecomm.syncedAt ? (
-            <p className="text-[10px] text-[#9CA3AF]">
-              Τελευταίο sync:{' '}
+            <p style={{ margin: 0, fontFamily: MONO, fontSize: 10.5, letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
+              sync{' '}
               {ecomm.syncedAt?.toDate?.()
                 ? ecomm.syncedAt.toDate().toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                 : '—'}
             </p>
           ) : undefined
-        }
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-              {GLOBAL_PERIOD_OPTIONS.map(opt => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => setGlobalPeriod(opt.key)}
-                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
-                    globalPeriod === opt.key
-                      ? 'bg-white text-[var(--nts-orange)] shadow-sm font-semibold'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <DateRangePicker
-              from={effectiveFrom}
-              to={effectiveTo}
-              onChange={(f, t) => setCustomRange(f, t)}
-              onClear={() => setGlobalPeriod('current_month')}
-            />
-          </div>
         }
       />
 
@@ -824,34 +773,26 @@ export function EcommerceDashboard() {
                 <AreaChart data={filteredDailyRevenue}>
                   <defs>
                     <linearGradient id="ecommRevGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--nts-accent)" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="var(--nts-accent)" stopOpacity={0} />
+                      <stop offset="5%" stopColor={token('--orange-500')} stopOpacity={0.25} />
+                      <stop offset="95%" stopColor={token('--orange-500')} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fill: '#57606a', fontSize: 10 }}
-                    tickFormatter={(v: string) => v.slice(5)}
-                    axisLine={{ stroke: '#d0d7de' }}
-                    tickLine={{ stroke: '#d0d7de' }}
-                  />
+                  <CartesianGrid {...gridProps()} />
+                  <XAxis dataKey="date" {...axisProps()} tickFormatter={(v: string) => v.slice(5)} />
                   <YAxis
-                    tick={{ fill: '#57606a', fontSize: 10 }}
+                    {...axisProps()}
+                    width={52}
                     tickFormatter={(v: number) => `€${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
-                    axisLine={{ stroke: '#d0d7de' }}
-                    tickLine={{ stroke: '#d0d7de' }}
                   />
                   <RechartsTooltip
-                    contentStyle={TOOLTIP_STYLE}
-                    labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
+                    {...tooltipProps()}
                     formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Revenue']}
                   />
-                  <Area type="monotone" dataKey="revenue" stroke="var(--nts-accent)" fill="url(#ecommRevGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
+                  <Area type="monotone" dataKey="revenue" stroke={token('--orange-500')} fill="url(#ecommRevGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-8 text-center">Δεν υπάρχουν δεδομένα εσόδων</p>
+              <p className="text-sm text-[var(--text-muted)] py-8 text-center">Δεν υπάρχουν δεδομένα εσόδων</p>
             )}
           </div>
         </Card>
@@ -861,29 +802,28 @@ export function EcommerceDashboard() {
           <CardHeader title="Ανά πλατφόρμα" subtitle={`${effectiveFrom} — ${effectiveTo}`} />
           <div className="px-5 pb-5">
             {rawOrdersLoading && !rawOrdersLoaded && (
-              <p className="text-xs text-[#9CA3AF] mb-3">Φόρτωση πλήρους ιστορικού παραγγελιών για το εύρος…</p>
+              <p className="text-xs text-[var(--text-muted)] mb-3">Φόρτωση πλήρους ιστορικού παραγγελιών για το εύρος…</p>
             )}
             {displayPlatformBreakdown.length > 0 ? (
               <>
                 <ResponsiveContainer width="100%" height={160}>
                   <BarChart data={displayPlatformBreakdown} layout="vertical">
-                    <XAxis type="number" tick={{ fill: '#57606a', fontSize: 10 }} tickFormatter={(v: number) => `€${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`} />
+                    <XAxis type="number" {...axisProps()} tickFormatter={(v: number) => `€${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`} />
                     <YAxis
                       type="category"
                       dataKey="platform"
-                      tick={{ fill: '#374151', fontSize: 11 }}
+                      {...axisProps()}
                       tickFormatter={(v: string) => PLATFORM_LABELS[v] || v}
                       width={90}
                     />
                     <RechartsTooltip
-                      contentStyle={TOOLTIP_STYLE}
-                      labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
+                      {...tooltipProps()}
                       formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Revenue']}
                       labelFormatter={(l: string) => PLATFORM_LABELS[l] || l}
                     />
                     <Bar dataKey="revenue" radius={[0, 6, 6, 0]}>
                       {displayPlatformBreakdown.map((entry) => (
-                        <Cell key={entry.platform} fill={PLATFORM_COLORS[entry.platform] || '#94A3B8'} />
+                        <Cell key={entry.platform} fill={PLATFORM_COLORS[entry.platform] || token('--text-muted')} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -895,18 +835,18 @@ export function EcommerceDashboard() {
                       <div key={p.platform}>
                         <div className="flex items-center justify-between text-xs mb-1">
                           <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: PLATFORM_COLORS[p.platform] || '#94A3B8' }} />
-                            <span className="text-[#374151] font-medium">{PLATFORM_LABELS[p.platform] || p.platform}</span>
+                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: PLATFORM_COLORS[p.platform] || 'var(--text-muted)' }} />
+                            <span className="text-[var(--text-secondary)] font-medium">{PLATFORM_LABELS[p.platform] || p.platform}</span>
                           </div>
-                          <span className="text-[#6B7280]">{p.orders} orders · {pct.toFixed(0)}%</span>
+                          <span className="text-[var(--text-muted)]">{p.orders} orders · {pct.toFixed(0)}%</span>
                         </div>
-                        <div className="h-1 bg-[#F3F4F6] rounded-full overflow-hidden">
+                        <div className="h-1 bg-[var(--surface-2)] rounded-full overflow-hidden">
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${pct}%` }}
                             transition={{ duration: 0.6, ease: 'easeOut' }}
                             className="h-full rounded-full"
-                            style={{ backgroundColor: PLATFORM_COLORS[p.platform] || '#94A3B8' }}
+                            style={{ backgroundColor: PLATFORM_COLORS[p.platform] || 'var(--text-muted)' }}
                           />
                         </div>
                       </div>
@@ -915,7 +855,7 @@ export function EcommerceDashboard() {
                 </div>
               </>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-8 text-center">—</p>
+              <p className="text-sm text-[var(--text-muted)] py-8 text-center">—</p>
             )}
           </div>
         </Card>
@@ -928,55 +868,55 @@ export function EcommerceDashboard() {
             subtitle={`${effectiveFrom} — ${effectiveTo}`}
           />
           <div className="px-5 pb-5">
-            <p className="mb-3 max-w-3xl text-[11px] leading-relaxed text-[#6B7280]">
+            <p className="mb-3 max-w-3xl text-[11px] leading-relaxed text-[var(--text-muted)]">
               Core revenue = τζίρος που μετρά στα e-shop KPI/ROI. Τα εξαιρούμενα ποσά είναι πραγματικές
               παραγγελίες του καναλιού, αλλά δεν μπαίνουν στον καθαρό τζίρο e-shop.
             </p>
             {displaySalesChannelBreakdown.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-[#E5E7EB] bg-white p-5 text-sm text-[#6B7280]">
+              <div className="rounded-xl border border-dashed border-[var(--border)] bg-white p-5 text-sm text-[var(--text-muted)]">
                 Φόρτωση ανάλυσης καναλιών για το επιλεγμένο διάστημα…
               </div>
             ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {displaySalesChannelBreakdown.map((row) => {
-                const color = SALES_CHANNEL_COLORS[row.channel] || '#6B7280';
+                const color = salesChannelColor(row.channel);
                 const includedPct = row.revenue > 0 ? (row.includedRevenue / row.revenue) * 100 : 0;
                 // ECOM Phase 3.5: a fully-excluded channel made money but contributes €0 to the KPI —
                 // don't headline a bare €0 (reads as "no sales"); show its real revenue, marked excluded.
                 const fullyExcluded = row.includedRevenue <= 0 && row.revenue > 0;
                 return (
-                  <div key={row.channel} className="rounded-xl border border-[#E5E7EB] bg-white p-3">
+                  <div key={row.channel} className="rounded-xl border border-[var(--border)] bg-white p-3">
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                        <span className="text-xs font-semibold text-[#111827] truncate">{row.label}</span>
+                        <span className="text-xs font-semibold text-[var(--text-primary)] truncate">{row.label}</span>
                       </div>
-                      <span className="text-[10px] text-[#6B7280] whitespace-nowrap">{formatNumber(row.orders)} total orders</span>
+                      <span className="text-[10px] text-[var(--text-muted)] whitespace-nowrap">{formatNumber(row.orders)} total orders</span>
                     </div>
                     {fullyExcluded ? (
                       <>
-                        <p className="mb-0.5 text-[10px] text-[#9CA3AF]">Εξαιρείται από e-shop KPI</p>
-                        <div className="text-sm font-bold text-[#9CA3AF] tabular-nums">
+                        <p className="mb-0.5 text-[10px] text-[var(--text-muted)]">Εξαιρείται από e-shop KPI</p>
+                        <div className="text-sm font-bold text-[var(--text-muted)] tabular-nums">
                           {formatCurrencyCompact(row.revenue)}
                         </div>
-                        <p className="mt-0.5 text-[10px] text-[#9CA3AF]">
+                        <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">
                           {formatNumber(row.orders)} orders · €0 στα KPI
                         </p>
                       </>
                     ) : (
                       <>
-                        <p className="mb-0.5 text-[10px] text-[#6B7280]">Μετράει στα e-shop KPI</p>
-                        <div className="text-sm font-bold text-[#111827] tabular-nums">
+                        <p className="mb-0.5 text-[10px] text-[var(--text-muted)]">Μετράει στα e-shop KPI</p>
+                        <div className="text-sm font-bold text-[var(--text-primary)] tabular-nums">
                           {formatCurrencyCompact(row.includedRevenue)}
                         </div>
-                        <p className="mt-0.5 text-[10px] text-[#9CA3AF]">
+                        <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">
                           {formatNumber(row.includedOrders)} core orders
                         </p>
-                        <div className="mt-2 h-1.5 bg-[#F3F4F6] rounded-full overflow-hidden">
+                        <div className="mt-2 h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden">
                           <div className="h-full rounded-full" style={{ width: `${includedPct}%`, backgroundColor: color }} />
                         </div>
                         {row.excludedOrders > 0 && (
-                          <p className="mt-1.5 text-[10px] text-[#9CA3AF]">
+                          <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">
                             Εξαιρείται από KPI: {formatCurrencyCompact(row.excludedRevenue)} / {formatNumber(row.excludedOrders)} orders
                           </p>
                         )}
@@ -1014,8 +954,8 @@ export function EcommerceDashboard() {
                       ))}
                     </Pie>
                     <RechartsTooltip
+                      {...tooltipProps()}
                       formatter={(value, name) => [`${Number(value ?? 0).toLocaleString()} παραγγελίες`, String(name)]}
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -1023,13 +963,13 @@ export function EcommerceDashboard() {
                   {paymentMethodPieData.map((entry) => (
                     <div key={entry.name} className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                      <span className="text-[11px] text-[#374151]">{entry.name}</span>
+                      <span className="text-[11px] text-[var(--text-secondary)]">{entry.name}</span>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-10 text-center">Δεν υπάρχουν διαθέσιμα δεδομένα τρόπου πληρωμής</p>
+              <p className="text-sm text-[var(--text-muted)] py-10 text-center">Δεν υπάρχουν διαθέσιμα δεδομένα τρόπου πληρωμής</p>
             )}
           </div>
         </Card>
@@ -1056,8 +996,8 @@ export function EcommerceDashboard() {
                       ))}
                     </Pie>
                     <RechartsTooltip
+                      {...tooltipProps()}
                       formatter={(value, name) => [`${Number(value ?? 0).toLocaleString()} παραγγελίες`, String(name)]}
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -1065,13 +1005,13 @@ export function EcommerceDashboard() {
                   {shippingMethodPieData.map((entry) => (
                     <div key={entry.name} className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                      <span className="text-[11px] text-[#374151]">{entry.name}</span>
+                      <span className="text-[11px] text-[var(--text-secondary)]">{entry.name}</span>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-10 text-center">Δεν υπάρχουν διαθέσιμα δεδομένα τρόπου αποστολής</p>
+              <p className="text-sm text-[var(--text-muted)] py-10 text-center">Δεν υπάρχουν διαθέσιμα δεδομένα τρόπου αποστολής</p>
             )}
           </div>
         </Card>
@@ -1095,7 +1035,7 @@ export function EcommerceDashboard() {
                   setProdPage(1);
                 }}
                 placeholder="Αναζήτηση προϊόντος / SKU"
-                className="h-8 px-2.5 rounded-md border border-[#E5E7EB] text-xs min-w-[220px]"
+                className="h-8 px-2.5 rounded-md border border-[var(--border)] text-xs min-w-[220px]"
               />
               <select
                 value={prodScope}
@@ -1103,7 +1043,7 @@ export function EcommerceDashboard() {
                   setProdScope(e.target.value as ProductScope);
                   setProdPage(1);
                 }}
-                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs min-w-[180px]"
+                className="h-8 px-2 rounded-md border border-[var(--border)] text-xs min-w-[180px]"
               >
                 <option value="all">Όλα τα SKUs</option>
                 <option value="parents_only">Μόνο Parent SKUs</option>
@@ -1115,7 +1055,7 @@ export function EcommerceDashboard() {
                   setProdRows(v as RowsPerPage);
                   setProdPage(1);
                 }}
-                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs"
+                className="h-8 px-2 rounded-md border border-[var(--border)] text-xs"
               >
                 <option value="10">10 / σελίδα</option>
                 <option value="20">20 / σελίδα</option>
@@ -1124,32 +1064,32 @@ export function EcommerceDashboard() {
                 <option value="all">Προβολή όλων</option>
               </select>
               <Tooltip content="Όλα τα SKUs: κάθε προϊόν όπως πωλήθηκε. Μόνο Parent SKUs: ομαδοποίηση παραλλαγών με βάση τις δηλωμένες σχέσεις parent/variant του καταλόγου Magento (item_group_id) — προϊόντα χωρίς δηλωμένη σχέση εμφανίζονται ως έχουν.">
-                <span className="text-[11px] text-[#9CA3AF]">Filters</span>
+                <span className="text-[11px] text-[var(--text-muted)]">Filters</span>
               </Tooltip>
             </div>
             {topProductsPending ? (
-              <p className="text-xs text-[#6B7280] py-6 text-center">Υπολογισμός ακριβών στοιχείων περιόδου…</p>
+              <p className="text-xs text-[var(--text-muted)] py-6 text-center">Υπολογισμός ακριβών στοιχείων περιόδου…</p>
             ) : prodScope === 'parents_only' && parentLinks.isLoading ? (
-              <p className="text-xs text-[#6B7280] py-6 text-center">Φόρτωση καταλόγου για ομαδοποίηση Parent SKU…</p>
+              <p className="text-xs text-[var(--text-muted)] py-6 text-center">Φόρτωση καταλόγου για ομαδοποίηση Parent SKU…</p>
             ) : pagedProducts.length > 0 ? (
               <div className="overflow-x-auto -mx-5 px-5">
-                <table className="w-full text-left text-xs" style={{ minWidth: 340 }}>
+                <table className="data-table" style={{ minWidth: 340 }}>
                   <thead>
-                    <tr className="border-b border-[#E5E7EB]">
-                      <th className="pb-2.5 font-medium text-[#6B7280] pr-4">Προϊόν</th>
+                    <tr className="border-b border-[var(--border)]">
+                      <th className="pb-2.5 font-medium text-[var(--text-muted)] pr-4">Προϊόν</th>
                       <th
-                        className="pb-2.5 font-medium text-[#6B7280] text-right cursor-pointer select-none whitespace-nowrap"
+                        className="pb-2.5 font-medium text-[var(--text-muted)] text-right cursor-pointer select-none whitespace-nowrap"
                         onClick={() => toggleProdSort('revenue')}
                       >
-                        <span className="inline-flex items-center gap-0.5 hover:text-[#111827] transition-colors">
+                        <span className="inline-flex items-center gap-0.5 hover:text-[var(--text-primary)] transition-colors">
                           Revenue <SortIcon active={prodSort.field === 'revenue'} dir={prodSort.dir} />
                         </span>
                       </th>
                       <th
-                        className="pb-2.5 font-medium text-[#6B7280] text-right cursor-pointer select-none whitespace-nowrap"
+                        className="pb-2.5 font-medium text-[var(--text-muted)] text-right cursor-pointer select-none whitespace-nowrap"
                         onClick={() => toggleProdSort('quantity')}
                       >
-                        <span className="inline-flex items-center gap-0.5 hover:text-[#111827] transition-colors">
+                        <span className="inline-flex items-center gap-0.5 hover:text-[var(--text-primary)] transition-colors">
                           Qty <SortIcon active={prodSort.field === 'quantity'} dir={prodSort.dir} />
                         </span>
                       </th>
@@ -1162,21 +1102,21 @@ export function EcommerceDashboard() {
                       return (
                         <tr
                           key={p.sku + i}
-                          className="border-b border-[#F9FAFB] last:border-0 hover:bg-[#F9FAFB] transition-colors"
+                          className="border-b border-[var(--surface-2)] last:border-0 hover:bg-[var(--surface-2)] transition-colors"
                         >
                           <td className="py-2.5 pr-4">
-                            <p className="text-[#111827] font-medium truncate max-w-[220px]">{p.name || p.sku}</p>
-                            {p.sku !== p.name && <p className="text-[10px] text-[#9CA3AF] truncate max-w-[220px]">{p.sku}</p>}
+                            <p className="text-[var(--text-primary)] font-medium truncate max-w-[220px]">{p.name || p.sku}</p>
+                            {p.sku !== p.name && <p className="text-[10px] text-[var(--text-muted)] truncate max-w-[220px]">{p.sku}</p>}
                           </td>
                           <td className="py-2.5 text-right">
                             <div className="flex flex-col items-end">
-                              <span className="text-[#111827] font-semibold tabular-nums">€{formatNumber(p.revenue, 2)}</span>
-                              <div className="w-16 h-1 bg-[#F3F4F6] rounded-full overflow-hidden mt-1">
-                                <div className="h-full rounded-full bg-[#F97316]/60" style={{ width: `${barPct}%` }} />
+                              <span className="text-[var(--text-primary)] font-semibold tabular-nums">€{formatNumber(p.revenue, 2)}</span>
+                              <div className="w-16 h-1 bg-[var(--surface-2)] rounded-full overflow-hidden mt-1">
+                                <div className="h-full rounded-full bg-[var(--orange-500)]/60" style={{ width: `${barPct}%` }} />
                               </div>
                             </div>
                           </td>
-                          <td className="py-2.5 text-right text-[#6B7280] tabular-nums">{p.quantity}</td>
+                          <td className="py-2.5 text-right text-[var(--text-muted)] tabular-nums">{p.quantity}</td>
                         </tr>
                       );
                     })}
@@ -1184,18 +1124,18 @@ export function EcommerceDashboard() {
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-4 text-center">
+              <p className="text-sm text-[var(--text-muted)] py-4 text-center">
                 {rawOrdersLoading
                   ? 'Προετοιμασία προϊόντων…'
                   : 'Δεν βρέθηκαν προϊόντα με τα τρέχοντα φίλτρα'}
               </p>
             )}
-            <div className="mt-3 flex items-center justify-between text-[11px] text-[#6B7280]">
+            <div className="mt-3 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
               <span>Σύνολο: {filteredProducts.length} προϊόντα</span>
               {prodRows !== 'all' && (
                 <div className="inline-flex items-center gap-1">
                   <button
-                    className="px-2 py-1 rounded border border-[#E5E7EB] disabled:opacity-40"
+                    className="px-2 py-1 rounded border border-[var(--border)] disabled:opacity-40"
                     disabled={safeProdPage <= 1}
                     onClick={() => setProdPage((p) => Math.max(1, p - 1))}
                   >
@@ -1203,7 +1143,7 @@ export function EcommerceDashboard() {
                   </button>
                   <span>{safeProdPage}/{prodTotalPages}</span>
                   <button
-                    className="px-2 py-1 rounded border border-[#E5E7EB] disabled:opacity-40"
+                    className="px-2 py-1 rounded border border-[var(--border)] disabled:opacity-40"
                     disabled={safeProdPage >= prodTotalPages}
                     onClick={() => setProdPage((p) => Math.min(prodTotalPages, p + 1))}
                   >
@@ -1231,7 +1171,7 @@ export function EcommerceDashboard() {
                   setOrderPage(1);
                 }}
                 placeholder="Αναζήτηση order / όνομα / status"
-                className="h-8 px-2.5 rounded-md border border-[#E5E7EB] text-xs min-w-[220px]"
+                className="h-8 px-2.5 rounded-md border border-[var(--border)] text-xs min-w-[220px]"
               />
               <select
                 value={orderPlatform}
@@ -1239,7 +1179,7 @@ export function EcommerceDashboard() {
                   setOrderPlatform(e.target.value);
                   setOrderPage(1);
                 }}
-                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs"
+                className="h-8 px-2 rounded-md border border-[var(--border)] text-xs"
               >
                 <option value="all">Όλες οι πλατφόρμες</option>
                 {orderPlatforms.map((p) => (
@@ -1252,7 +1192,7 @@ export function EcommerceDashboard() {
                   setOrderStatus(e.target.value);
                   setOrderPage(1);
                 }}
-                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs"
+                className="h-8 px-2 rounded-md border border-[var(--border)] text-xs"
               >
                 <option value="all">Όλα τα statuses</option>
                 {orderStatuses.map((s) => (
@@ -1266,7 +1206,7 @@ export function EcommerceDashboard() {
                   setOrderRows(v as RowsPerPage);
                   setOrderPage(1);
                 }}
-                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs"
+                className="h-8 px-2 rounded-md border border-[var(--border)] text-xs"
               >
                 <option value="10">10 / σελίδα</option>
                 <option value="20">20 / σελίδα</option>
@@ -1275,38 +1215,38 @@ export function EcommerceDashboard() {
                 <option value="all">Προβολή όλων</option>
               </select>
               <Tooltip content="Συνδυάστε platform/status/search για drill-down. Τα φίλτρα εφαρμόζονται πριν το sort και την pagination.">
-                <span className="text-[11px] text-[#9CA3AF]">Filters</span>
+                <span className="text-[11px] text-[var(--text-muted)]">Filters</span>
               </Tooltip>
             </div>
             {pagedOrders.length > 0 ? (
               <div className="overflow-x-auto -mx-5 px-5">
-                <table className="w-full text-left text-xs" style={{ minWidth: 580 }}>
+                <table className="data-table" style={{ minWidth: 580 }}>
                   <thead>
-                    <tr className="border-b border-[#E5E7EB]">
+                    <tr className="border-b border-[var(--border)]">
                       <th
-                        className="pb-2.5 font-medium text-[#6B7280] cursor-pointer select-none whitespace-nowrap"
+                        className="pb-2.5 font-medium text-[var(--text-muted)] cursor-pointer select-none whitespace-nowrap"
                         onClick={() => toggleOrderSort('createdAt')}
                       >
-                        <span className="inline-flex items-center gap-0.5 hover:text-[#111827] transition-colors">
+                        <span className="inline-flex items-center gap-0.5 hover:text-[var(--text-primary)] transition-colors">
                           Ημ/νία <SortIcon active={orderSort.field === 'createdAt'} dir={orderSort.dir} />
                         </span>
                       </th>
-                      <th className="pb-2.5 font-medium text-[#6B7280]">Order</th>
+                      <th className="pb-2.5 font-medium text-[var(--text-muted)]">Order</th>
                       <th
-                        className="pb-2.5 font-medium text-[#6B7280] cursor-pointer select-none whitespace-nowrap"
+                        className="pb-2.5 font-medium text-[var(--text-muted)] cursor-pointer select-none whitespace-nowrap"
                         onClick={() => toggleOrderSort('platform')}
                       >
-                        <span className="inline-flex items-center gap-0.5 hover:text-[#111827] transition-colors">
+                        <span className="inline-flex items-center gap-0.5 hover:text-[var(--text-primary)] transition-colors">
                           Platform <SortIcon active={orderSort.field === 'platform'} dir={orderSort.dir} />
                         </span>
                       </th>
-                      <th className="pb-2.5 font-medium text-[#6B7280]">Κανάλι</th>
-                      <th className="pb-2.5 font-medium text-[#6B7280]">Κατάσταση</th>
+                      <th className="pb-2.5 font-medium text-[var(--text-muted)]">Κανάλι</th>
+                      <th className="pb-2.5 font-medium text-[var(--text-muted)]">Κατάσταση</th>
                       <th
-                        className="pb-2.5 font-medium text-[#6B7280] text-right cursor-pointer select-none whitespace-nowrap"
+                        className="pb-2.5 font-medium text-[var(--text-muted)] text-right cursor-pointer select-none whitespace-nowrap"
                         onClick={() => toggleOrderSort('total')}
                       >
-                        <span className="inline-flex items-center gap-0.5 hover:text-[#111827] transition-colors">
+                        <span className="inline-flex items-center gap-0.5 hover:text-[var(--text-primary)] transition-colors">
                           Total <SortIcon active={orderSort.field === 'total'} dir={orderSort.dir} />
                         </span>
                       </th>
@@ -1316,18 +1256,18 @@ export function EcommerceDashboard() {
                     {pagedOrders.map((o, i) => (
                       <tr
                         key={o.orderId + i}
-                        className="border-b border-[#F9FAFB] last:border-0 hover:bg-[#F9FAFB] transition-colors"
+                        className="border-b border-[var(--surface-2)] last:border-0 hover:bg-[var(--surface-2)] transition-colors"
                       >
-                        <td className="py-2.5 text-[#6B7280] whitespace-nowrap tabular-nums">
+                        <td className="py-2.5 text-[var(--text-muted)] whitespace-nowrap tabular-nums">
                           {o.createdAt
                             ? new Date(o.createdAt).toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: '2-digit' })
                             : '—'}
                         </td>
-                        <td className="py-2.5 text-[#111827] font-medium">{o.orderName || o.orderId}</td>
+                        <td className="py-2.5 text-[var(--text-primary)] font-medium">{o.orderName || o.orderId}</td>
                         <td className="py-2.5">
                           <span
                             className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap"
-                            style={{ backgroundColor: `${PLATFORM_COLORS[o.platform] || '#94A3B8'}18`, color: PLATFORM_COLORS[o.platform] || '#94A3B8' }}
+                            style={{ backgroundColor: `${PLATFORM_COLORS[o.platform] || token('--text-muted')}18`, color: PLATFORM_COLORS[o.platform] || token('--text-muted') }}
                           >
                             {PLATFORM_LABELS[o.platform] || o.platform}
                           </span>
@@ -1336,8 +1276,8 @@ export function EcommerceDashboard() {
                           <span
                             className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap"
                             style={{
-                              backgroundColor: `${SALES_CHANNEL_COLORS[(o.salesChannel || 'direct_eshop') as EcommerceSalesChannel] || '#6B7280'}18`,
-                              color: SALES_CHANNEL_COLORS[(o.salesChannel || 'direct_eshop') as EcommerceSalesChannel] || '#6B7280',
+                              backgroundColor: `${salesChannelColor(o.salesChannel || 'direct_eshop')}18`,
+                              color: salesChannelColor(o.salesChannel || 'direct_eshop'),
                             }}
                             title={o.revenueIncluded === false ? `Εκτός core revenue: ${o.exclusionReason || 'review'}` : 'Included στο core revenue'}
                           >
@@ -1347,25 +1287,25 @@ export function EcommerceDashboard() {
                         <td className="py-2.5">
                           <OrderStatusBadge status={o.status} />
                         </td>
-                        <td className="py-2.5 text-right text-[#111827] font-semibold tabular-nums">€{o.total.toFixed(2)}</td>
+                        <td className="py-2.5 text-right text-[var(--text-primary)] font-semibold tabular-nums">€{o.total.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-4 text-center">
+              <p className="text-sm text-[var(--text-muted)] py-4 text-center">
                 {rawOrdersLoading
                   ? 'Φόρτωση παραγγελιών για το επιλεγμένο διάστημα…'
                   : 'Δεν βρέθηκαν παραγγελίες με τα τρέχοντα φίλτρα'}
               </p>
             )}
-            <div className="mt-3 flex items-center justify-between text-[11px] text-[#6B7280]">
+            <div className="mt-3 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
               <span>Σύνολο: {filteredOrders.length} παραγγελίες</span>
               {orderRows !== 'all' && (
                 <div className="inline-flex items-center gap-1">
                   <button
-                    className="px-2 py-1 rounded border border-[#E5E7EB] disabled:opacity-40"
+                    className="px-2 py-1 rounded border border-[var(--border)] disabled:opacity-40"
                     disabled={safeOrderPage <= 1}
                     onClick={() => setOrderPage((p) => Math.max(1, p - 1))}
                   >
@@ -1373,7 +1313,7 @@ export function EcommerceDashboard() {
                   </button>
                   <span>{safeOrderPage}/{orderTotalPages}</span>
                   <button
-                    className="px-2 py-1 rounded border border-[#E5E7EB] disabled:opacity-40"
+                    className="px-2 py-1 rounded border border-[var(--border)] disabled:opacity-40"
                     disabled={safeOrderPage >= orderTotalPages}
                     onClick={() => setOrderPage((p) => Math.min(orderTotalPages, p + 1))}
                   >
@@ -1390,11 +1330,11 @@ export function EcommerceDashboard() {
       <div className="flex justify-center">
         <button
           onClick={() => { window.location.hash = '#data'; }}
-          className="inline-flex items-center gap-1.5 text-xs text-[#6B7280] hover:text-[var(--nts-accent-text)] transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--nts-accent-text)] transition-colors"
         >
           Διαχείριση Connectors <ArrowRight size={12} />
         </button>
       </div>
-    </div>
+    </PageCanvas>
   );
 }

@@ -128,7 +128,7 @@ function ResetPasswordAction({ oobCode, onDone }: { oobCode: string; onDone: () 
               </div>
             </div>
             {error && (
-              <p className="text-sm text-[#EF4444] bg-[#FEE2E2] rounded-lg px-3 py-2">{error}</p>
+              <p className="text-sm text-[var(--danger-600)] bg-[var(--danger-light)] rounded-lg px-3 py-2">{error}</p>
             )}
             <Button
               type="submit"
@@ -176,7 +176,7 @@ function ActionWrapper({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'linear-gradient(135deg, #f6f8fa 0%, #e9ecef 100%)' }}
+      style={{ background: 'var(--surface-2)' }}
     >
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -202,10 +202,10 @@ function ActionWrapper({ children }: { children: React.ReactNode }) {
 function StatusMessage({ type, title, message, onDone }: { type: 'success' | 'error'; title: string; message: string; onDone: () => void }) {
   return (
     <div className="text-center space-y-4">
-      <div className={`w-14 h-14 rounded-xl flex items-center justify-center mx-auto ${type === 'success' ? 'bg-[#ECFDF5]' : 'bg-[#FEE2E2]'}`}>
+      <div className={`w-14 h-14 rounded-xl flex items-center justify-center mx-auto ${type === 'success' ? 'bg-[var(--success-light)]' : 'bg-[var(--danger-light)]'}`}>
         {type === 'success'
-          ? <CheckCircle size={28} className="text-[#10B981]" />
-          : <AlertCircle size={28} className="text-[#EF4444]" />}
+          ? <CheckCircle size={28} className="text-[var(--success-700)]" />
+          : <AlertCircle size={28} className="text-[var(--danger-600)]" />}
       </div>
       <div>
         <p className="font-semibold text-[var(--nts-charcoal)]">{title}</p>

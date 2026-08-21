@@ -30,7 +30,7 @@ const PREV = 'prev:';
 const CURR = 'curr:';
 
 export function SegmentMigrationSankey({ flows, colorById, revealKey }: SegmentMigrationSankeyProps) {
-  const fallback = readTokenColor('--text-muted', '#667085');
+  const fallback = readTokenColor('--text-muted', 'var(--text-muted)');
   const { ref, mounted, animate } = useRevealOnce(revealKey);
 
   const data = useMemo(() => {
@@ -49,7 +49,7 @@ export function SegmentMigrationSankey({ flows, colorById, revealKey }: SegmentM
     return { nodes: [...nodes.values()], links };
   }, [colorById, fallback, flows]);
 
-  const labelColor = readTokenColor('--text-secondary', '#475467');
+  const labelColor = readTokenColor('--text-secondary', 'var(--text-secondary)');
 
   if (data.links.length === 0) return null;
 

@@ -1,17 +1,35 @@
-import { useId } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { Card } from './Card';
 import { Tooltip } from './Tooltip';
-import { useAccentColor } from '../../hooks/useAccentColor';
+import { MONO, MetricSpark, deltaColor, directionOf, type Delta } from '../signal';
+
+/**
+ * A labelled figure with a delta under it — the board's `MetricTile`, in card form.
+ *
+ * Three things changed when this moved onto the Signal Board's vocabulary, and each removed
+ * something rather than adding it:
+ *  - the arrow chip in the corner is gone; the delta line already says which way the number went,
+ *    and it now says it in colour instead of in a grey box that said it twice
+ *  - the Recharts sparkline is a hand-drawn SVG, which is what took the last literal accent hex out
+ *    of this file
+ *  - the entrance animation is gone, for the reason `Card` gives.
+ */
 
 export interface KPICardData {
   label: string;
   value: string;
   change?: number;
   changeLabel?: string;
+  /**
+   * Which way the number moved. Callers set it from the sign of `change`, so it says nothing about
+   * whether the move was welcome — which is why it does not decide the colour.
+   */
   trend?: 'up' | 'down';
+  /**
+   * Whether rising is good news. Bounce rate, ad spend, refunds and churn all fall the other way,
+   * and only the caller knows which metric this is — the same rule `MetricTile` follows on the
+   * dashboard, where the caller names the direction rather than the component guessing from a sign.
+   */
+  goodWhenRising?: boolean;
   sparklineData?: number[];
   tooltip?: string;
   /** Small caption rendered under the value (e.g. PER-301 non-merchandise revenue share). */
@@ -22,112 +40,110 @@ export interface KPICardData {
 
 interface KPICardProps {
   kpi: KPICardData;
-  index: number;
+  /** Position in the row. Kept for call-site compatibility; no longer staggers an animation. */
+  index?: number;
   onClick?: () => void;
   className?: string;
 }
 
-export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
-  const sparkGradientId = `kpi-spark-${useId().replace(/:/g, '')}`;
-  // Literal hex from the active profile; var(--nts-accent) does not resolve reliably
-  // inside SVG gradient stops / url(#id).
-  const { accent: accentColor } = useAccentColor();
+/** Labels that are counts or scores rather than percentage changes — printed as-is, in neutral. */
+const PLAIN_LABELS = new Set(['active', 'ενεργά', 'avg score', 'μέσος score', 'υγιή']);
 
-  const isPlainLabel =
-    kpi.changeLabel === 'active' ||
-    kpi.changeLabel === 'ενεργά' ||
-    kpi.changeLabel === 'avg score' ||
-    kpi.changeLabel === 'μέσος score' ||
-    kpi.changeLabel === 'υγιή';
+export function KPICard({ kpi, onClick, className }: KPICardProps) {
+  const isPlainLabel = kpi.changeLabel !== undefined && PLAIN_LABELS.has(kpi.changeLabel);
 
-  const formatChange = () => {
+  const formatChange = (): string | null => {
     if (kpi.change == null) return null;
     if (isPlainLabel) return `${kpi.change}`;
     if (kpi.changeLabel === 'campaigns_revenue_share') return `${kpi.change}%`;
     return `${kpi.change > 0 ? '+' : ''}${kpi.change}%`;
   };
 
+  /** A plain count carries no direction at all; everything else is judged against `goodWhenRising`. */
+  const direction: Delta = isPlainLabel ? 'flat' : directionOf(kpi.change, kpi.goodWhenRising ?? true);
+
+  const changeText = formatChange();
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
-      className="h-full min-w-0"
-    >
-      <Card
-        padding="lg"
-        hover={!!onClick}
-        className={`border-l-4 border-l-transparent hover:border-l-[var(--nts-accent)] h-full ${className || ''}`}
-        onClick={onClick}
-      >
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-1.5">
-            <p className="text-[13px] font-medium text-[var(--nts-medium-gray)]">{kpi.label}</p>
-            {kpi.tooltip && <Tooltip content={kpi.tooltip} size={13} />}
-            {kpi.refreshing && (
-              <span
-                className="inline-flex w-2 h-2 rounded-full bg-[var(--nts-accent)] animate-pulse"
-                title="Ανανέωση δεδομένων…"
-                aria-label="Ανανέωση δεδομένων"
-              />
-            )}
-          </div>
-          {kpi.trend === 'up' ? (
-            <div className="p-1.5 bg-[var(--nts-light-gray)] rounded-md border border-[var(--nts-border-gray)]">
-              <ArrowUpRight size={16} className="text-[var(--nts-medium-gray)]" />
-            </div>
-          ) : kpi.trend === 'down' ? (
-            <div className="p-1.5 bg-[var(--nts-light-gray)] rounded-md border border-[var(--nts-border-gray)]">
-              <ArrowDownRight size={16} className="text-[var(--nts-medium-gray)]" />
-            </div>
-          ) : null}
-        </div>
+    <Card padding="lg" hover={!!onClick} onClick={onClick} className={`h-full ${className || ''}`}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, height: '100%' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 10,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: 'var(--text-muted)',
+            }}
+          >
+            {kpi.label}
+          </span>
+          {kpi.tooltip && <Tooltip content={kpi.tooltip} size={13} />}
+          {kpi.refreshing && (
+            <span
+              className="animate-pulse"
+              title="Ανανέωση δεδομένων…"
+              aria-label="Ανανέωση δεδομένων"
+              style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--orange-500)', flex: 'none' }}
+            />
+          )}
+        </span>
 
-        <p className="text-3xl font-bold text-[var(--nts-charcoal)] mb-1 font-mono tracking-tight">
+        <span
+          style={{
+            fontFamily: MONO,
+            fontVariantNumeric: 'tabular-nums',
+            fontSize: 28,
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            lineHeight: 1.1,
+            color: 'var(--text-primary)',
+          }}
+        >
           {kpi.value}
-        </p>
+        </span>
 
-        {kpi.subtext && (
-          <p className="text-[11px] text-[var(--nts-medium-gray)] mb-1">{kpi.subtext}</p>
-        )}
+        {kpi.subtext && <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{kpi.subtext}</span>}
 
-        {kpi.sparklineData && kpi.sparklineData.length > 0 && (
-          <div className="my-1 h-[32px] w-full min-w-0 -mx-1">
-            <ResponsiveContainer width="100%" height={32}>
-              <AreaChart data={kpi.sparklineData.map((v, i) => ({ v, i }))} margin={{ top: 2, right: 4, left: 4, bottom: 2 }}>
-                <defs>
-                  <linearGradient id={sparkGradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={accentColor} stopOpacity={0.2} />
-                    <stop offset="95%" stopColor={accentColor} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <Area
-                  type="monotone"
-                  dataKey="v"
-                  stroke={accentColor}
-                  fill={`url(#${sparkGradientId})`}
-                  strokeWidth={1.5}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+        {kpi.sparklineData && kpi.sparklineData.length > 1 && (
+          <div style={{ marginTop: 2 }}>
+            <MetricSpark values={kpi.sparklineData} />
           </div>
         )}
 
-        {(kpi.change != null || kpi.changeLabel) && (
-          <div className="flex items-center gap-2 mt-2">
-            {kpi.change != null && (
-              <span className="text-[14px] font-semibold px-2 py-0.5 rounded-lg text-[var(--nts-medium-gray)] bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)]">
-                {formatChange()}
+        {(changeText || kpi.changeLabel) && (
+          <span
+            style={{
+              marginTop: 'auto',
+              paddingTop: 6,
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 6,
+              flexWrap: 'wrap',
+              minWidth: 0,
+            }}
+          >
+            {changeText && (
+              <span
+                style={{
+                  fontFamily: MONO,
+                  fontVariantNumeric: 'tabular-nums',
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: deltaColor(direction),
+                }}
+              >
+                {changeText}
               </span>
             )}
-            {kpi.changeLabel && (
-              <span className="text-[13px] text-[var(--nts-medium-gray)]">{kpi.changeLabel}</span>
+            {kpi.changeLabel && !isPlainLabel && kpi.changeLabel !== 'campaigns_revenue_share' && (
+              <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{kpi.changeLabel}</span>
             )}
-          </div>
+            {isPlainLabel && <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{kpi.changeLabel}</span>}
+          </span>
         )}
-      </Card>
-    </motion.div>
+      </div>
+    </Card>
   );
 }

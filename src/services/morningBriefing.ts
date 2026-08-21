@@ -453,7 +453,8 @@ export function computeBriefingDataHash(data: BriefingData): string {
 
 // ── Cache ────────────────────────────────────────────────────────────────────
 
-const MAX_DAILY_GENERATIONS = 4;
+/** Exported so the briefing card can print "2 από 4 ενημερώσεις" without hard-coding the cap. */
+export const MAX_DAILY_GENERATIONS = 4;
 const MIN_REGEN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour cooldown between auto-updates
 const BRIEFING_CACHE_VERSION = 4;
 

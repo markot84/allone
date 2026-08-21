@@ -377,7 +377,7 @@ export function SalesChannelRulesEditor() {
                   </button>
                 </div>
               </div>
-              <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg border border-orange-100 bg-orange-50/50 px-3 py-2 text-[12px] leading-relaxed text-[#374151]">
+              <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg border border-orange-100 bg-orange-50/50 px-3 py-2 text-[12px] leading-relaxed text-[var(--text-secondary)]">
                 <input
                   type="checkbox"
                   className="mt-0.5 h-4 w-4 shrink-0 rounded border-orange-200 text-[var(--nts-accent-text)] focus:ring-[var(--nts-accent)]"
@@ -385,8 +385,8 @@ export function SalesChannelRulesEditor() {
                   onChange={(e) => updateRule(idx, 'excludeFromDataAnalysis', e.target.checked)}
                 />
                 <span>
-                  <span className="font-semibold text-[#111827]">Exclude from Data Analysis</span>
-                  <span className="block text-[11px] text-[#6B7280]">
+                  <span className="font-semibold text-[var(--text-primary)]">Exclude from Data Analysis</span>
+                  <span className="block text-[11px] text-[var(--text-muted)]">
                     Ενεργοποίησέ το για υπαλλήλους, ενδοομιλικές κινήσεις ή άλλες αγορές που δεν πρέπει να επηρεάζουν RFM/segments.
                   </span>
                 </span>

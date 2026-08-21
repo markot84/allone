@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
 /* Design tokens — v2 brand palette. Single source of truth for colour; see colors.md.
@@ -27,10 +27,18 @@ html, body {
   overflow: hidden;
 }
 
-/* Prevent flex/grid children from overflowing their containers */
-* {
-  min-width: 0;
-  scroll-behavior: smooth;
+/* Prevent flex/grid children from overflowing their containers.
+
+   In `@layer base` on purpose. Unlayered rules beat every layered one regardless of specificity, so
+   while this sat outside a layer it also beat Tailwind's `min-w-*` utilities — `min-w-[200px]` on a
+   flex child computed to 0 app-wide, and any element that asked for a floor silently collapsed to
+   its content. Inside `base`, the utilities layer wins, and everything that does not ask for a
+   minimum still gets 0. */
+@layer base {
+  * {
+    min-width: 0;
+    scroll-behavior: smooth;
+  }
 }
 
 /* Recharts sizing – no !important so inline styles win for height */
@@ -44,7 +52,10 @@ html, body {
   position: relative;
 }
 
-.recharts-surface {
+/* The chart's own surface only — `>` matters. A legend icon is also a `.recharts-surface`, nested
+   inside `.recharts-legend-wrapper`, so the unscoped rule stretched every 10px swatch to fill its
+   row. It only became visible once the shared chart theme started drawing legends. */
+.recharts-wrapper > .recharts-surface {
   width: 100%;
   height: 100%;
 }
@@ -69,7 +80,10 @@ html, body {
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* Plus Jakarta Sans leads — the Signal Board artboard sets it on `body`, and the chrome, the
+     dashboard and the type scale below are drawn against its metrics. Inter stays in the stack as
+     the first fallback so nothing reflows badly if the webfont is slow or blocked. */
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background-color: var(--nts-bg-subtle);
   color: var(--fgColor-default, var(--nts-dark-gray));
   line-height: 1.5;
@@ -98,7 +112,7 @@ a:hover {
 
 /* Let Primer manage the heading scale for consistency */
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-weight: 600;
 }
 
@@ -106,37 +120,153 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'JetBrains Mono', monospace;
 }
 
-/* Primer NavList overrides for the app sidebar.
-   Driven by the chrome tokens, so the nav follows whatever the chrome is instead of hard-coding a
-   background it no longer sits on. `!important` is required: Primer sets these colours itself.
-   (Was `.sidebar-dark` with white text — invisible once the chrome went light.) */
-.app-sidebar nav button,
-.app-sidebar nav a,
-.app-sidebar li button,
-.app-sidebar li a {
-  color: var(--chrome-fg-muted) !important;
+/* ── The navy rail ────────────────────────────────────────────────────────────────────────────
+   Hover, focus and the active item's gold marker. These are states, so they cannot live in the
+   inline styles that carry the rest of the rail; everything resolves through the `--chrome-*`
+   tokens, so the rail follows the chrome wherever the chrome goes. */
+.rail-nav-item {
+  color: var(--chrome-fg-muted);
+  transition: background-color var(--dur-state) var(--ease-out), color var(--dur-state) var(--ease-out);
 }
-.app-sidebar nav button:hover,
-.app-sidebar nav a:hover,
-.app-sidebar li button:hover,
-.app-sidebar li a:hover {
-  color: var(--chrome-fg) !important;
-  background-color: var(--chrome-control-hover) !important;
+
+.rail-nav-item:hover {
+  background-color: var(--chrome-control-hover);
+  color: var(--chrome-fg);
+  text-decoration: none;
 }
-.app-sidebar [aria-current="page"],
-.app-sidebar [aria-current="page"]:hover {
-  background-color: var(--chrome-control-hover) !important;
-  color: var(--chrome-fg) !important;
+
+.rail-nav-item--current,
+.rail-nav-item--current:hover {
+  background-color: var(--chrome-active-bg);
+  color: var(--chrome-active-fg);
+  /* The marker down the leading edge. `inset` rather than a border so the 9px radius and the
+     item's box stay exactly as drawn. */
+  box-shadow: inset 3px 0 0 var(--chrome-active-marker);
 }
-.app-sidebar [aria-current="page"]::before {
-  background-color: var(--nts-accent) !important;
+
+.rail-control,
+.rail-account,
+.brand-eyebrow {
+  transition: background-color var(--dur-state) var(--ease-out), color var(--dur-state) var(--ease-out);
 }
-.app-sidebar nav svg,
-.app-sidebar li svg {
-  color: var(--chrome-fg-subtle) !important;
+
+.rail-control:hover {
+  background-color: var(--chrome-control-hover);
+  color: var(--chrome-fg);
 }
-.app-sidebar [aria-current="page"] svg {
-  color: var(--nts-accent) !important;
+
+.rail-account:hover {
+  background-color: var(--chrome-control-hover);
+}
+
+.brand-eyebrow:hover {
+  color: var(--chrome-fg);
+}
+
+/* Focus has to be visible against navy, and the browser default outline is not. */
+.rail-nav-item:focus-visible,
+.rail-control:focus-visible,
+.rail-account:focus-visible,
+.brand-eyebrow:focus-visible,
+.chrome-tab:focus-visible,
+.chrome-period:focus-visible,
+.chrome-chip:focus-visible {
+  outline: 2px solid var(--gold-500);
+  outline-offset: 2px;
+}
+
+/* ── The navy top bar ─────────────────────────────────────────────────────────────────────── */
+.chrome-tab {
+  transition: color var(--dur-state) var(--ease-out);
+}
+
+.chrome-tab:hover {
+  color: var(--chrome-fg);
+}
+
+.chrome-period:hover:not([aria-pressed='true']),
+.chrome-chip:hover {
+  color: var(--chrome-fg);
+}
+
+/* ── The board's controls, on white ───────────────────────────────────────────────────────────
+   `signal-pill`, `signal-link` and `chrome-primary` were being applied in the dashboard before
+   anything defined them, so the pills had no hover and no focus ring. States cannot live in the
+   inline styles that carry the rest of the vocabulary, so they live here — one block, all tokens.
+
+   The focus ring is sky rather than the rail's gold: gold on white is 1.60:1 and would be a ring
+   nobody can see, which is the one thing a focus ring may not be. */
+/* The gold primary button — the same spec as the top bar's "Αποστολή briefing": gold-500 behind
+   navy-900, mono uppercase at 10px/700 with 0.1em tracking. Declared here so no utility class or
+   inherited font can drift it a shade or a typeface away. */
+/* Every button shares one type treatment — mono uppercase at 10px/700, 0.1em tracking. Hierarchy
+   is carried by fill alone: gold for the page's single primary action, white for everything else.
+   Two typefaces inside one toolbar read as an accident, not as a hierarchy. */
+.signal-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.btn-gold,
+.signal-btn--primary {
+  background-color: var(--gold-500) !important;
+  color: var(--navy-900) !important;
+  border-color: var(--gold-500) !important;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.signal-pill,
+.signal-btn,
+.signal-link {
+  transition:
+    background-color var(--dur-state) var(--ease-out),
+    border-color var(--dur-state) var(--ease-out),
+    color var(--dur-state) var(--ease-out),
+    filter var(--dur-state) var(--ease-out);
+}
+
+.signal-pill:hover:not(:disabled) {
+  border-color: var(--navy-100);
+  background-color: var(--surface-2);
+}
+
+/* An active pill already carries its tone as a background; darken it instead of washing it out. */
+.signal-pill[aria-pressed='true']:hover:not(:disabled),
+.signal-btn--primary:hover:not(:disabled),
+.chrome-primary:hover:not(:disabled) {
+  filter: brightness(0.93);
+}
+
+.signal-link:hover {
+  color: var(--sky-700);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.signal-btn--secondary:hover:not(:disabled) {
+  background-color: var(--surface-2);
+  border-color: var(--navy-100);
+}
+
+.signal-btn--danger:hover:not(:disabled) {
+  filter: brightness(0.93);
+}
+
+.signal-pill:focus-visible,
+.signal-btn:focus-visible,
+.signal-link:focus-visible,
+.chrome-primary:focus-visible,
+.card-primer:focus-visible {
+  outline: 2px solid var(--sky-500);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 
@@ -285,3 +415,144 @@ h1, h2, h3, h4, h5, h6 {
 .stagger-4 { animation-delay: 0.2s; }
 .stagger-5 { animation-delay: 0.25s; }
 .stagger-6 { animation-delay: 0.3s; }
+
+/* ── Data tables ──────────────────────────────────────────────────────────────────────────────
+   Every page carries at least one table, and each had grown its own greys, paddings and header
+   weights. One class instead: mono uppercase headers, token hairlines, and — the part that matters
+   for reading a column — mono tabular figures in every right-aligned cell, because a right-aligned
+   cell in this app is always a measurement.
+
+   `.data-table--sticky` is for tables inside their own scroll container; a sticky header outside
+   one just pins to the page and overlaps the card above it. */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table thead th {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-0);
+  white-space: nowrap;
+}
+
+.data-table tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.data-table tbody tr:hover {
+  background: var(--surface-2);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table th.text-right,
+.data-table td.text-right,
+.data-table th[align='right'],
+.data-table td[align='right'] {
+  text-align: right;
+}
+
+.data-table td.text-right,
+.data-table td[align='right'],
+.data-table td .metric {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table--sticky thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* The full-bleed page canvas: the board's gutters, and its 16px rhythm between sections.
+   Inline styles cannot carry the narrow-screen step, which is the whole reason this is a class. */
+.page-canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 22px 32px 40px;
+}
+
+@media (max-width: 899px) {
+  .page-canvas {
+    padding: 18px 20px 32px;
+  }
+}
+
+@media (max-width: 599px) {
+  .page-canvas {
+    padding: 16px 14px 28px;
+    gap: 12px;
+  }
+}
+
+/* Dashboard hero row. Five columns at desktop: the revenue hero holds columns 1–2 across both
+   rows, Morning Briefing takes 3–4, the spend tile takes 5, and the three KPI cards fill the
+   second row under the briefing. */
+.dash-hero-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dash-hero-card {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+/* Briefing and the spend tile are grid items of one row, so stretch gives them a shared height. */
+.dash-briefing-row {
+  grid-column: span 3;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 16px;
+  min-width: 0;
+}
+
+.dash-briefing-row > * {
+  min-width: 0;
+}
+
+/* Below the desktop width the hero can no longer share its rows, so it takes a full row of its
+   own and the KPI cards pair up underneath. */
+@media (max-width: 1199px) {
+  .dash-hero-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dash-hero-card {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  .dash-briefing-row {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 719px) {
+  .dash-hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dash-briefing-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

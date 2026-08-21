@@ -28,8 +28,15 @@ const TYPE_META: Record<string, { icon: typeof Bell; color: string }> = {
 
 export function NotificationBell({
   onNavigate,
+  variant = 'icon',
 }: {
   onNavigate?: (section: string, opts?: { hashQuery?: string }) => void;
+  /**
+   * `icon` is the round bell in the top bar. `chip` is the Signal Board's labelled form —
+   * "● 5 νέα" — which the dashboard uses because on that page the count is the headline, not an
+   * afterthought. Same trigger, same dropdown, same data; only the button differs.
+   */
+  variant?: 'icon' | 'chip';
 }) {
   const { notifications, unreadCount } = useNotifications();
   const { newAlerts, invalidate: invalidateAlerts } = useAutomationAlerts();
@@ -108,46 +115,84 @@ export function NotificationBell({
 
   return (
     <div style={{ position: 'relative' }}>
-      <button
-        ref={btnRef}
-        onClick={() => setOpen(o => !o)}
-        style={{
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 36, height: 36,
-          borderRadius: 'var(--ui-radius-sm, 8px)',
-          border: 'none',
-          background: open ? 'var(--chrome-control-hover)' : 'transparent',
-          cursor: 'pointer',
-          /* The chrome is a WHITE header (--chrome-bg is surface-0). This used to be
-             rgba(255,255,255,0.7) left over from the dark chrome, which painted a white bell on a
-             white bar — the badge floated over nothing. Colour comes from the chrome tokens now, so
-             it follows the header wherever the header goes. */
-          color: 'var(--chrome-fg-muted)',
-          transition: 'background 0.15s, color 0.15s',
-        }}
-        aria-label={totalUnread > 0 ? `Ειδοποιήσεις (${totalUnread} νέες)` : 'Ειδοποιήσεις'}
-        aria-expanded={open}
-        onMouseEnter={e => (e.currentTarget.style.background = 'var(--chrome-control-hover)')}
-        onMouseLeave={e => (e.currentTarget.style.background = open ? 'var(--chrome-control-hover)' : 'transparent')}
-      >
-        <Bell size={18} />
-        {totalUnread > 0 && (
-          <span style={{
-            position: 'absolute', top: 2, right: 2,
-            minWidth: 16, height: 16, borderRadius: 'var(--ui-radius-pill, 999px)',
-            backgroundColor: 'var(--danger-600, #CC3A30)', color: '#fff',
-            border: '1.5px solid var(--chrome-bg)',
-            fontSize: 10, fontWeight: 700,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '0 4px',
-          }}>
-            {totalUnread > 9 ? '9+' : totalUnread}
-          </span>
-        )}
-      </button>
+      {variant === 'chip' ? (
+        <button
+          ref={btnRef}
+          onClick={() => setOpen(o => !o)}
+          className="chrome-chip"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 7,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: 'var(--chrome-fg)',
+            background: open ? 'var(--chrome-control-hover)' : 'var(--chrome-control-bg)',
+            border: '1px solid var(--chrome-control-border)',
+            padding: '7px 11px',
+            borderRadius: 8,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+          aria-label={totalUnread > 0 ? `Ειδοποιήσεις (${totalUnread} νέες)` : 'Ειδοποιήσεις'}
+          aria-expanded={open}
+        >
+          {/* Gold reads as "attention" without reading as "error" — the dot is a marker, and gold
+              is only ever a marker or a fill. */}
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: totalUnread > 0 ? 'var(--gold-500)' : 'var(--chrome-fg-muted)',
+              display: 'block',
+              flex: 'none',
+            }}
+          />
+          {totalUnread > 0 ? `${totalUnread} νέα` : 'Καμία νέα'}
+        </button>
+      ) : (
+        <button
+          ref={btnRef}
+          onClick={() => setOpen(o => !o)}
+          className="chrome-chip"
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 36, height: 36,
+            borderRadius: 'var(--ui-radius-sm, 8px)',
+            border: 'none',
+            background: open ? 'var(--chrome-control-hover)' : 'transparent',
+            cursor: 'pointer',
+            /* Colour comes from the chrome tokens, so the bell follows the bar wherever the bar
+               goes — it has now been a white bar and a navy one without touching this line. */
+            color: 'var(--chrome-fg-muted)',
+            transition: 'background 0.15s, color 0.15s',
+          }}
+          aria-label={totalUnread > 0 ? `Ειδοποιήσεις (${totalUnread} νέες)` : 'Ειδοποιήσεις'}
+          aria-expanded={open}
+        >
+          <Bell size={18} />
+          {totalUnread > 0 && (
+            <span style={{
+              position: 'absolute', top: 2, right: 2,
+              minWidth: 16, height: 16, borderRadius: 'var(--ui-radius-pill, 999px)',
+              backgroundColor: 'var(--danger-600)', color: '#fff',
+              border: '1.5px solid var(--chrome-bg)',
+              fontSize: 10, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '0 4px',
+            }}>
+              {totalUnread > 9 ? '9+' : totalUnread}
+            </span>
+          )}
+        </button>
+      )}
 
       {open && createPortal(
         <div ref={dropdownRef} style={menuStyle}>

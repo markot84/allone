@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Sparkles, ArrowRight, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sparkles, ArrowRight, AlertTriangle, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tooltip, toPlainProseText } from '../common';
 import { BriefingNarrative } from './BriefingNarrative';
 import type { BriefingResult } from '../../services/morningBriefing';
 import {
+  MAX_DAILY_GENERATIONS,
   collectBriefingData,
   generateMorningBriefing,
   getCachedBriefing,
@@ -14,6 +15,8 @@ import {
 } from '../../services/morningBriefing';
 import type { Product, Campaign, RFMSegment, AutomationAlert } from '../../types';
 import { isSectionHidden } from '../../config/modules';
+
+const MONO = "'JetBrains Mono', monospace";
 
 interface MorningBriefingProps {
   brandId: string;
@@ -144,11 +147,13 @@ function claimFirstReadOfDay(brandId: string): boolean {
   }
 }
 
+/** Collapsed is the default: expanded, the card runs the full height of the dashboard hero row
+ *  before anyone has asked to read it. Only an explicit expand (stored as '0') opens it. */
 function loadCollapsedPref(brandId: string): boolean {
   try {
-    return localStorage.getItem(`perf-plus-briefing-collapsed:${brandId}`) === '1';
+    return localStorage.getItem(`perf-plus-briefing-collapsed:${brandId}`) !== '0';
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -163,7 +168,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
   const [briefing, setBriefing] = useState<BriefingResult | null>(() =>
     brandId ? loadBriefingFromStorage(brandId, period) : null
   );
-  const [collapsed, setCollapsed] = useState(() => (brandId ? loadCollapsedPref(brandId) : false));
+  const [collapsed, setCollapsed] = useState(() => (brandId ? loadCollapsedPref(brandId) : true));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Ref: tracks whether auto-regen already ran for this metricsReady→true transition. */
@@ -399,217 +404,299 @@ export function MorningBriefing(props: MorningBriefingProps) {
     !metricsReady && ((props.ecommerce?.connectedPlatforms?.length ?? 0) > 0);
   const briefingPending = !briefing && !loading && !error;
 
-  const timeLabel = briefing?.generatedAt
-    ? new Date(briefing.generatedAt).toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' })
-    : null;
-
   const isUpdated = briefing?.urgency === 'updated';
 
-  const borderClass = isUpdated
-    ? 'border-amber-300/60'
-    : 'border-[var(--nts-accent)]/20';
+  /** How many of the day's regenerations have been spent. Lives on the cached doc, so it is read
+   *  rather than derived — the cap is shared with the auto-update check in the service. */
+  const [genCount, setGenCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!brandId) return;
+    let cancelled = false;
+    getCachedBriefing(brandId, period)
+      .then((cached) => {
+        if (!cancelled) setGenCount(cached?._genCount ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setGenCount(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, period, briefing?.generatedAt]);
 
-  const gradientLine = isUpdated
-    ? 'bg-gradient-to-r from-amber-400 via-orange-400 to-red-400'
-    : 'bg-gradient-to-r from-[var(--nts-accent)] via-[#8B5CF6] to-[#06B6D4]';
+  /** "17.08 · 2 από 4 ενημερώσεις" — the day it speaks for, then how much of the budget is used. */
+  const metaLabel = useMemo(() => {
+    const parts: string[] = [];
+    if (briefing?.generatedAt) {
+      const at = new Date(briefing.generatedAt);
+      parts.push(
+        `${String(at.getDate()).padStart(2, '0')}.${String(at.getMonth() + 1).padStart(2, '0')}`
+      );
+      parts.push(at.toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' }));
+    }
+    if (genCount !== null) parts.push(`${genCount} από ${MAX_DAILY_GENERATIONS} ενημερώσεις`);
+    else if (parts.length === 0) parts.push(periodLabel);
+    return parts.join(' · ');
+  }, [briefing?.generatedAt, genCount, periodLabel]);
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -8 }}
+      initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+      style={{
+        background: 'var(--surface-0)',
+        border: '1px solid var(--navy-100)',
+        borderRadius: 16,
+        // The orange edge is the card's signature: it is the only briefing on the board, and the
+        // one card that speaks rather than measures.
+        borderLeft: `4px solid ${isUpdated ? 'var(--gold-500)' : 'var(--orange-500)'}`,
+        padding: 22,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+        boxShadow: 'var(--elev-card, 0 4px 8px -2px rgba(16,24,40,0.08))',
+        minWidth: 0,
+      }}
     >
-      <div className={`relative overflow-hidden rounded-2xl border ${borderClass} bg-gradient-to-br from-white via-white to-[var(--nts-accent)]/5 shadow-sm`}>
-        <div className={`absolute top-0 left-0 right-0 h-[3px] ${gradientLine}`} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+        <span
+          style={{
+            width: 22,
+            height: 22,
+            flex: 'none',
+            borderRadius: 6,
+            background: 'var(--orange-500)',
+            color: 'var(--surface-0)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Sparkles size={13} />
+        </span>
+        <span style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text-heading)' }}>
+          Morning Briefing
+        </span>
+        <Tooltip
+          content="Το briefing της ημέρας αποθηκεύεται τοπικά και παραμένει διαθέσιμο όταν αλλάζετε σελίδα ή κάνετε ανανέωση. Ανανεώνεται μόνο όταν προκύπτει ουσιαστική μεταβολή στα δεδομένα, όπως έσοδα, διαφημιστική απόδοση ή κρίσιμες ειδοποιήσεις. Γίνονται έως 4 ενημερώσεις ημερησίως, με έλεγχο περίπου ανά 15 λεπτά όταν το tab είναι ανοιχτό."
+          size={12}
+        />
+        {isUpdated && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              fontFamily: MONO,
+              fontSize: 9.5,
+              fontWeight: 700,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              padding: '3px 7px',
+              borderRadius: 999,
+              background: 'var(--gold-100)',
+              color: 'var(--gold-700)',
+            }}
+          >
+            <Zap size={9} /> Ενημερώθηκε
+          </span>
+        )}
+        <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 10, color: 'var(--text-muted)' }}>
+          {metaLabel}
+        </span>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Ανάπτυξη' : 'Σύμπτυξη'}
+          className="briefing-collapse"
+          style={{
+            flex: 'none',
+            width: 22,
+            height: 22,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: 'none',
+            borderRadius: 6,
+            background: 'transparent',
+            color: 'var(--text-muted)',
+            cursor: 'pointer',
+          }}
+        >
+          {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+        </button>
+      </div>
 
-        <div className={collapsed ? 'px-4 py-3' : 'p-6'}>
-          {/* Header */}
-          <div className={`flex items-start justify-between gap-2 ${collapsed ? 'mb-0' : 'mb-4'}`}>
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--nts-accent)] to-[#8B5CF6] flex items-center justify-center shadow-sm shrink-0">
-                <Sparkles size={18} className="text-white" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-[15px] font-semibold text-[var(--nts-charcoal)] flex items-center gap-1">
-                    AI Briefing{' '}
-                    <Tooltip
-                      content="Το briefing της ημέρας αποθηκεύεται τοπικά και παραμένει διαθέσιμο όταν αλλάζετε σελίδα ή κάνετε ανανέωση. Ανανεώνεται μόνο όταν προκύπτει ουσιαστική μεταβολή στα δεδομένα, όπως έσοδα, διαφημιστική απόδοση ή κρίσιμες ειδοποιήσεις. Γίνονται έως 4 ενημερώσεις ημερησίως, με έλεγχο περίπου ανά 15 λεπτά όταν το tab είναι ανοιχτό."
-                      size={13}
-                    />
-                  </h3>
-                  {isUpdated && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-amber-100 text-amber-700 animate-pulse">
-                      <Zap size={9} /> Ενημερώθηκε
-                    </span>
-                  )}
-                  {loading && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--nts-accent)] animate-pulse" /> Σύνταξη briefing...
-                    </span>
-                  )}
-                  {awaitingEcommMetrics && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-slate-100 text-slate-600">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" /> Στοίχιση με KPI…
-                    </span>
-                  )}
-                </div>
-                {timeLabel && !awaitingEcommMetrics && (
-                  <p className="text-[11px] text-[var(--nts-medium-gray)] flex items-center gap-1 mt-0.5">
-                    <Clock size={10} /> {timeLabel}
-                    <span className="ml-1 px-1.5 py-0 rounded bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] text-[10px] font-medium">{periodLabel}</span>
-                    {briefing?.updateReason && !collapsed && (
-                      <span className="ml-1 text-amber-600">· {briefing.updateReason}</span>
-                    )}
-                  </p>
-                )}
-                {collapsed && awaitingEcommMetrics && (
-                  <p className="text-[12px] text-[var(--nts-medium-gray)] mt-1 line-clamp-2">
-                    Συγχρονίζουμε τον τζίρο και τις παραγγελίες από το ηλεκτρονικό κατάστημα με τον πίνακα ελέγχου…
-                  </p>
-                )}
-                {collapsed && briefingPending && !awaitingEcommMetrics && (
-                  <p className="text-[12px] text-[var(--nts-medium-gray)] mt-1 line-clamp-1">
-                    Το briefing θα εμφανιστεί αυτόματα μόλις είναι διαθέσιμα τα πρώτα αξιόπιστα δεδομένα.
-                  </p>
-                )}
-                {collapsed && !awaitingEcommMetrics && briefing && (
-                  <p className="text-[12px] text-[var(--nts-medium-gray)] mt-1 line-clamp-1">
-                    {toPlainProseText(briefing.narrative)}
-                  </p>
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={toggleCollapsed}
-              className="shrink-0 p-2 rounded-lg hover:bg-[#F3F4F6] text-[var(--nts-medium-gray)] transition-colors"
-              aria-expanded={!collapsed}
-              title={collapsed ? 'Ανάπτυξη' : 'Σύμπτυξη'}
-            >
-              {collapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-            </button>
-          </div>
-
-          {/* Content */}
-          {!collapsed && awaitingEcommMetrics && (
+      {collapsed ? (
+        <p
+          style={{
+            margin: 0,
+            fontSize: 13,
+            lineHeight: 1.55,
+            color: 'var(--text-secondary)',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}
+        >
+          {briefing
+            ? toPlainProseText(briefing.narrative)
+            : awaitingEcommMetrics
+              ? 'Συγχρονίζουμε τον τζίρο και τις παραγγελίες από το ηλεκτρονικό κατάστημα με τον πίνακα ελέγχου…'
+              : 'Το briefing θα εμφανιστεί αυτόματα μόλις είναι διαθέσιμα τα πρώτα αξιόπιστα δεδομένα.'}
+        </p>
+      ) : awaitingEcommMetrics ? (
+        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+          Αναμονή για ενημέρωση των δεδομένων…
+        </p>
+      ) : (
+        <AnimatePresence mode="wait">
+          {loading && !briefing && (
             <motion.div
-              key="await-ecomm"
+              key="skeleton"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-4 text-[13px] leading-relaxed text-[var(--nts-medium-gray)]"
+              exit={{ opacity: 0 }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
             >
-              <p className="text-[var(--nts-charcoal)]">Αναμονή για ενημέρωση των δεδομένων…</p>
+              {/* Fixed heights — the card must not resize under the grid when the text lands. */}
+              <div className="animate-pulse" style={{ height: 14, borderRadius: 6, background: 'var(--surface-2)' }} />
+              <div className="animate-pulse" style={{ height: 14, width: '92%', borderRadius: 6, background: 'var(--surface-2)' }} />
+              <div className="animate-pulse" style={{ height: 14, width: '76%', borderRadius: 6, background: 'var(--surface-2)' }} />
+              <div className="animate-pulse" style={{ height: 38, borderRadius: 8, background: 'var(--surface-2)', marginTop: 4 }} />
             </motion.div>
           )}
-          {!collapsed && !awaitingEcommMetrics && (
-          <AnimatePresence mode="wait">
-            {loading && !briefing && (
-              <motion.div
-                key="skeleton"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-3"
-              >
-                <div className="h-4 bg-[#F3F4F6] rounded-md w-full animate-pulse" />
-                <div className="h-4 bg-[#F3F4F6] rounded-md w-[90%] animate-pulse" />
-                <div className="h-4 bg-[#F3F4F6] rounded-md w-[75%] animate-pulse" />
-                <div className="flex gap-2 mt-4">
-                  <div className="h-8 bg-[#F3F4F6] rounded-lg w-1/3 animate-pulse" />
-                  <div className="h-8 bg-[#F3F4F6] rounded-lg w-1/3 animate-pulse" />
-                  <div className="h-8 bg-[#F3F4F6] rounded-lg w-1/3 animate-pulse" />
-                </div>
-              </motion.div>
-            )}
 
-            {error && (
-              <motion.div
-                key="error"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-start justify-between gap-3 p-3 bg-red-50 border border-red-100 rounded-xl"
+          {error && (
+            <motion.div
+              key="error"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: 12,
+                padding: '12px 14px',
+                borderRadius: 10,
+                background: 'var(--danger-light)',
+              }}
+            >
+              <span style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minWidth: 0 }}>
+                <AlertTriangle size={15} style={{ color: 'var(--danger-600)', flex: 'none', marginTop: 2 }} />
+                <span style={{ fontSize: 13, color: 'var(--danger-600)' }}>{error}</span>
+              </span>
+              <button
+                type="button"
+                onClick={handleRetry}
+                style={{
+                  flex: 'none',
+                  fontFamily: MONO,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: 'var(--danger-600)',
+                  background: 'var(--surface-0)',
+                  border: '1px solid var(--danger-600)',
+                  borderRadius: 999,
+                  padding: '6px 11px',
+                  cursor: 'pointer',
+                }}
               >
-                <div className="flex items-start gap-2">
-                  <AlertTriangle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleRetry}
-                  className="shrink-0 flex items-center gap-1 text-xs font-semibold text-red-700 hover:text-red-900 bg-red-100 hover:bg-red-200 rounded-lg px-2 py-1 transition-colors"
-                >
-                  Δοκίμασε ξανά
-                </button>
-              </motion.div>
-            )}
-
-            {briefingPending && (
-              <motion.div
-                key="pending"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-4 text-[13px] leading-relaxed text-[var(--nts-medium-gray)]"
-              >
-                <p className="font-medium text-[var(--nts-charcoal)]">Προετοιμασία briefing…</p>
-                <p className="mt-1">
-                  Το Dashboard εμφανίζεται άμεσα και το AI Briefing θα δημιουργηθεί αυτόματα μόλις φορτωθούν τα πρώτα αξιόπιστα στοιχεία του brand.
-                </p>
-              </motion.div>
-            )}
-
-            {briefing && (
-              <motion.div
-                key={briefing.generatedAt}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                <div className="mb-4">
-                  <BriefingNarrative
-                    narrative={toPlainProseText(briefing.narrative)}
-                    data={briefingData}
-                    segments={props.segments}
-                    campaigns={props.campaigns}
-                    platforms={props.ecommerce?.connectedPlatforms}
-                    onNavigate={onSectionChange}
-                    animate={firstReadOfDay}
-                  />
-                </div>
-
-                {briefing.actions.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {briefing.actions.map((action, i) => {
-                      const target = guessRoute(action);
-                      return (
-                        <button
-                          key={i}
-                          onClick={() =>
-                            onSectionChange?.(
-                              target.section,
-                              target.hashQuery ? { hashQuery: target.hashQuery } : undefined
-                            )
-                          }
-                          className="group flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-[var(--nts-charcoal)] bg-white border border-[var(--nts-border-gray)] rounded-lg hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent-text)] transition-all shadow-sm"
-                        >
-                          <span className="w-4 h-4 rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                            {i + 1}
-                          </span>
-                          <span className="line-clamp-1">{action}</span>
-                          <ArrowRight size={12} className="text-[var(--nts-medium-gray)] group-hover:text-[var(--nts-accent-text)] transition-colors flex-shrink-0" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+                Δοκίμασε ξανά
+              </button>
+            </motion.div>
           )}
-        </div>
-      </div>
+
+          {briefingPending && (
+            <motion.div key="pending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                <strong style={{ color: 'var(--text-primary)' }}>Προετοιμασία briefing…</strong>{' '}
+                Το Dashboard εμφανίζεται άμεσα και το AI Briefing θα δημιουργηθεί αυτόματα μόλις φορτωθούν τα πρώτα
+                αξιόπιστα στοιχεία του brand.
+              </p>
+            </motion.div>
+          )}
+
+          {briefing && (
+            <motion.div
+              key={briefing.generatedAt}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}
+            >
+              <BriefingNarrative
+                narrative={toPlainProseText(briefing.narrative)}
+                data={briefingData}
+                segments={props.segments}
+                campaigns={props.campaigns}
+                platforms={props.ecommerce?.connectedPlatforms}
+                onNavigate={onSectionChange}
+                animate={firstReadOfDay}
+              />
+
+              {briefing.actions.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {briefing.actions.map((action, i) => {
+                    const target = guessRoute(action);
+                    // The lead action is tinted; the rest are neutral. One emphasis per card.
+                    const lead = i === 0;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() =>
+                          onSectionChange?.(
+                            target.section,
+                            target.hashQuery ? { hashQuery: target.hashQuery } : undefined
+                          )
+                        }
+                        className="briefing-action"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          width: '100%',
+                          textAlign: 'left',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          background: lead ? 'var(--orange-50)' : 'var(--surface-2)',
+                          color: lead ? 'var(--orange-700)' : 'var(--text-heading)',
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: MONO,
+                            fontSize: 11,
+                            flex: 'none',
+                            color: lead ? 'var(--orange-700)' : 'var(--text-muted)',
+                          }}
+                        >
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {action}
+                        </span>
+                        <ArrowRight size={13} style={{ marginLeft: 'auto', flex: 'none' }} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
     </motion.div>
   );
 }

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, TrendingUp, Package, AlertTriangle, BarChart3 } from 'lucide-react';
 import { Card, Button, ModalHeader } from '../common';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { axisProps, gridProps, legendProps, seriesColor, tooltipProps } from '../../styles/chartTheme';
 import { getStockAgeDays, resolveStockHealth } from '../../utils/productUtils';
 import type { Product } from '../../types';
 import type { ProductIntelligenceCharts } from '../../services/productIntelligenceAggregate';
@@ -127,11 +128,11 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
     });
 
     const result = [
-      { name: 'Healthy Stock', value: healthy, color: '#22C55E' },
-      { name: 'Low Stock', value: low, color: '#8B5CF6' },
-      { name: 'Excess Stock', value: excess, color: '#F59E0B' },
-      { name: 'Dead Stock', value: dead, color: '#EF4444' },
-      { name: 'No Stock', value: noStock, color: '#94A3B8' }
+      { name: 'Healthy Stock', value: healthy, color: 'var(--success-700)' },
+      { name: 'Low Stock', value: low, color: 'var(--seg-potential)' },
+      { name: 'Excess Stock', value: excess, color: 'var(--orange-700)' },
+      { name: 'Dead Stock', value: dead, color: 'var(--danger-600)' },
+      { name: 'No Stock', value: noStock, color: 'var(--text-muted)' }
     ];
     logger.debug('[ProductCharts] Stock status:', { result });
     return aggregateCharts?.stockStatus ?? result;
@@ -193,14 +194,14 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
             <div className="flex min-w-0 items-start gap-3">
               <BarChart3 size={24} className="shrink-0 text-[var(--nts-accent-text)]" />
               <div className="min-w-0">
-                <h2 className="text-xl font-bold text-[#1A1A1A]">Οπτικοποίηση δεδομένων προϊόντων</h2>
-                <p className="text-sm text-[#4A4A4A]">{aggregateCharts ? `${totalProducts ?? products.length} προϊόντα σε full-inventory ανάλυση` : `${products.length} προϊόντα σε ανάλυση`}</p>
+                <h2 className="text-xl font-bold text-[var(--text-primary)]">Οπτικοποίηση δεδομένων προϊόντων</h2>
+                <p className="text-sm text-[var(--text-secondary)]">{aggregateCharts ? `${totalProducts ?? products.length} προϊόντα σε full-inventory ανάλυση` : `${products.length} προϊόντα σε ανάλυση`}</p>
               </div>
             </div>
           }
           actions={
-            <button type="button" onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
-              <X size={20} className="text-[#4A4A4A]" />
+            <button type="button" onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]">
+              <X size={20} className="text-[var(--text-secondary)]" />
             </button>
           }
         />
@@ -210,8 +211,8 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
           {/* Margin Distribution */}
           <Card padding="lg">
             <div className="flex items-center gap-2 mb-4">
-              <TrendingUp size={18} className="text-[#22C55E]" />
-              <h3 className="font-semibold text-[#1A1A1A]">Κατανομή margin</h3>
+              <TrendingUp size={18} className="text-[var(--success-700)]" />
+              <h3 className="font-semibold text-[var(--text-primary)]">Κατανομή margin</h3>
             </div>
             {(() => {
               const hasData = marginDistribution.some(r => r.count > 0);
@@ -220,17 +221,17 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
                 <div style={{ width: '100%', height: '300px', minHeight: '300px' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={marginDistribution} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
-                      <XAxis dataKey="name" stroke="#4A4A4A" />
-                      <YAxis stroke="#4A4A4A" />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="count" fill="#22C55E" />
+                      <CartesianGrid {...gridProps()} />
+                      <XAxis dataKey="name" {...axisProps()} />
+                      <YAxis {...axisProps()} width={52} />
+                      <Tooltip {...tooltipProps()} />
+                      <Legend {...legendProps()} />
+                      <Bar dataKey="count" fill="var(--success-700)" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-[300px] text-[#4A4A4A]">
+                <div className="flex flex-col items-center justify-center h-[300px] text-[var(--text-secondary)]">
                   <p>Δεν υπάρχουν δεδομένα για κατανομή margin</p>
                   <p className="text-xs mt-2">Προϊόντα: {products.length}</p>
                   {products.length > 0 && (
@@ -247,24 +248,24 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
           {/* Stock Age Distribution */}
           <Card padding="lg">
             <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle size={18} className="text-[#F59E0B]" />
-              <h3 className="font-semibold text-[#1A1A1A]">Κατανομή ηλικίας αποθέματος</h3>
+              <AlertTriangle size={18} className="text-[var(--orange-700)]" />
+              <h3 className="font-semibold text-[var(--text-primary)]">Κατανομή ηλικίας αποθέματος</h3>
             </div>
             {stockAgeDistribution.some(r => r.count > 0) ? (
               <div style={{ width: '100%', height: '300px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={stockAgeDistribution} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="count" fill="#F59E0B" />
+                    <CartesianGrid {...gridProps()} />
+                    <XAxis dataKey="name" {...axisProps()} />
+                    <YAxis {...axisProps()} width={52} />
+                    <Tooltip {...tooltipProps()} />
+                    <Legend {...legendProps()} />
+                    <Bar dataKey="count" fill="var(--orange-700)" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
+              <div className="flex items-center justify-center h-[300px] text-[var(--text-secondary)]">
                 <p>Δεν υπάρχουν δεδομένα για ηλικία αποθέματος</p>
               </div>
             )}
@@ -273,8 +274,8 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
           {/* Stock Status Pie */}
           <Card padding="lg">
             <div className="flex items-center gap-2 mb-4">
-              <Package size={18} className="text-[#78716C]" />
-              <h3 className="font-semibold text-[#1A1A1A]">Κατάσταση αποθέματος</h3>
+              <Package size={18} className="text-[var(--text-muted)]" />
+              <h3 className="font-semibold text-[var(--text-primary)]">Κατάσταση αποθέματος</h3>
             </div>
             {stockStatus.some((s: { value: number }) => s.value > 0) ? (
               <div style={{ width: '100%', height: '300px' }}>
@@ -287,19 +288,19 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
                       labelLine={false}
                       label={({ name, percent }) => `${name}: ${percent ? (percent * 100).toFixed(0) : 0}%`}
                       outerRadius={100}
-                      fill="#8884d8"
+                      fill={seriesColor(0)}
                       dataKey="value"
                     >
                       {stockStatus.map((entry: { color: string }, index: number) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip {...tooltipProps()} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
+              <div className="flex items-center justify-center h-[300px] text-[var(--text-secondary)]">
                 <p>Δεν υπάρχουν δεδομένα για κατάσταση αποθέματος</p>
               </div>
             )}
@@ -308,24 +309,24 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
           {/* Category Breakdown */}
           <Card padding="lg">
             <div className="flex items-center gap-2 mb-4">
-              <BarChart3 size={18} className="text-[#8B5CF6]" />
-              <h3 className="font-semibold text-[#1A1A1A]">Κύριες κατηγορίες</h3>
+              <BarChart3 size={18} className="text-[var(--seg-potential)]" />
+              <h3 className="font-semibold text-[var(--text-primary)]">Κύριες κατηγορίες</h3>
             </div>
             {categoryBreakdown.length > 0 ? (
               <div style={{ width: '100%', height: '300px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={categoryBreakdown} layout="vertical" margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="name" type="category" width={100} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="count" fill="#8B5CF6" />
+                    <CartesianGrid {...gridProps()} />
+                    <XAxis type="number" {...axisProps()} />
+                    <YAxis dataKey="name" type="category" width={100} {...axisProps()} />
+                    <Tooltip {...tooltipProps()} />
+                    <Legend {...legendProps()} />
+                    <Bar dataKey="count" fill="var(--seg-potential)" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
+              <div className="flex items-center justify-center h-[300px] text-[var(--text-secondary)]">
                 <p>Δεν υπάρχουν δεδομένα για κατηγορίες</p>
               </div>
             )}
@@ -334,25 +335,25 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
           {/* Top Products by Margin */}
           <Card padding="lg" className="lg:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <TrendingUp size={18} className="text-[#22C55E]" />
-              <h3 className="font-semibold text-[#1A1A1A]">Top 10 προϊόντα ανά margin</h3>
+              <TrendingUp size={18} className="text-[var(--success-700)]" />
+              <h3 className="font-semibold text-[var(--text-primary)]">Top 10 προϊόντα ανά margin</h3>
             </div>
             {topProductsByMargin.length > 0 ? (
               <div style={{ width: '100%', height: '300px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={topProductsByMargin} margin={{ top: 5, right: 5, left: 5, bottom: 80 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="margin" fill="#22C55E" name="Margin %" />
-                    <Bar dataKey="price" fill="#78716C" name="Τιμή (€)" />
+                    <CartesianGrid {...gridProps()} />
+                    <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} {...axisProps()} interval={0} />
+                    <YAxis {...axisProps()} width={52} />
+                    <Tooltip {...tooltipProps()} />
+                    <Legend {...legendProps()} />
+                    <Bar dataKey="margin" fill="var(--success-700)" name="Margin %" />
+                    <Bar dataKey="price" fill={seriesColor(0)} name="Τιμή (€)" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
+              <div className="flex items-center justify-center h-[300px] text-[var(--text-secondary)]">
                 <p>Δεν υπάρχουν δεδομένα για κορυφαία προϊόντα</p>
               </div>
             )}
@@ -362,25 +363,25 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
           <Card padding="lg" className="lg:col-span-2">
             <div className="flex items-center gap-2 mb-4">
               <BarChart3 size={18} className="text-[var(--nts-accent-text)]" />
-              <h3 className="font-semibold text-[#1A1A1A]">Ηλικία vs επίπεδο αποθέματος (δείγμα)</h3>
+              <h3 className="font-semibold text-[var(--text-primary)]">Ηλικία vs επίπεδο αποθέματος (δείγμα)</h3>
             </div>
             {stockAgeVsLevel.length > 0 ? (
               <div style={{ width: '100%', height: '300px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={stockAgeVsLevel} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid {...gridProps()} />
                     <XAxis dataKey="age" name="Ημέρες" />
                     <YAxis yAxisId="left" />
                     <YAxis yAxisId="right" orientation="right" />
-                    <Tooltip />
-                    <Legend />
-                    <Line yAxisId="left" type="monotone" dataKey="level" stroke="#78716C" name="Απόθεμα" />
-                    <Line yAxisId="right" type="monotone" dataKey="margin" stroke="#22C55E" name="Margin %" />
+                    <Tooltip {...tooltipProps()} />
+                    <Legend {...legendProps()} />
+                    <Line yAxisId="left" type="monotone" dataKey="level" stroke={seriesColor(0)} name="Απόθεμα" />
+                    <Line yAxisId="right" type="monotone" dataKey="margin" stroke="var(--success-700)" name="Margin %" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
+              <div className="flex items-center justify-center h-[300px] text-[var(--text-secondary)]">
                 <p>Δεν υπάρχουν δεδομένα για ηλικία vs επίπεδο αποθέματος</p>
               </div>
             )}
@@ -388,7 +389,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-[#E5E5E5] flex justify-end">
+        <div className="p-6 border-t border-[var(--border)] flex justify-end">
           <Button variant="primary" onClick={onClose}>
             Κλείσιμο
           </Button>

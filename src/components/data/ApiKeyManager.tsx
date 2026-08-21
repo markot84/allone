@@ -128,7 +128,7 @@ export function ApiKeyManager() {
           title={
             <div className="flex flex-wrap items-center gap-2">
               <Key size={20} className="shrink-0 text-[var(--nts-accent-text)]" />
-              <h3 className="text-base font-semibold text-[#1A1A1A] sm:text-lg">API Keys</h3>
+              <h3 className="text-base font-semibold text-[var(--text-primary)] sm:text-lg">API Keys</h3>
               <Badge variant="info" size="sm">
                 Automated Import
               </Badge>
@@ -172,7 +172,7 @@ export function ApiKeyManager() {
               exit={{ opacity: 0, height: 0 }}
               className="mb-4"
             >
-              <div className="bg-[#1A1A1A] rounded-xl p-5 text-sm font-mono space-y-4">
+              <div className="bg-[var(--text-primary)] rounded-xl p-5 text-sm font-mono space-y-4">
                 <div>
                   <p className="text-emerald-400 mb-1"># Upload αρχείου (CSV/XLSX)</p>
                   <p className="text-gray-300">
@@ -215,9 +215,9 @@ export function ApiKeyManager() {
 
         {/* Keys list */}
         {loading ? (
-          <div className="rounded-lg border border-dashed border-[#D1D5DB] bg-[#FAFAFA] px-4 py-5 text-center text-[var(--nts-medium-gray)]">
+          <div className="rounded-lg border border-dashed border-[var(--navy-100)] bg-[var(--surface-2)] px-4 py-5 text-center text-[var(--nts-medium-gray)]">
             <Spinner size="sm" className="mx-auto mb-2" />
-            <p className="text-sm font-medium text-[#4B5563]">Ανάκτηση αποθηκευμένων API keys…</p>
+            <p className="text-sm font-medium text-[var(--text-secondary)]">Ανάκτηση αποθηκευμένων API keys…</p>
             <p className="mt-1 text-xs">Οι ρυθμίσεις παραμένουν στη Firebase. Δεν γίνεται reset.</p>
           </div>
         ) : activeKeys.length === 0 ? (
@@ -231,13 +231,13 @@ export function ApiKeyManager() {
             {activeKeys.map((k) => (
               <div
                 key={k.id}
-                className="flex items-center gap-3 p-3 border border-[#E5E5E5] rounded-lg bg-white hover:border-[var(--nts-accent)]/30 transition-colors"
+                className="flex items-center gap-3 p-3 border border-[var(--border)] rounded-lg bg-white hover:border-[var(--nts-accent)]/30 transition-colors"
               >
                 <div className="w-8 h-8 rounded-md bg-emerald-50 flex items-center justify-center shrink-0">
                   <Key size={14} className="text-emerald-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-mono text-[#1A1A1A] truncate">
+                  <p className="text-xs font-mono text-[var(--text-primary)] truncate">
                     {revealedKeys.has(k.key) ? k.key : maskKey(k.key)}
                   </p>
                   <p className="text-[10px] text-[var(--nts-medium-gray)]">
@@ -272,12 +272,12 @@ export function ApiKeyManager() {
           </div>
         )}
         {!loading && isFetching && keys.length > 0 && (
-          <p className="mt-3 text-[11px] text-[#9CA3AF]">Ενημέρωση API keys στο παρασκήνιο…</p>
+          <p className="mt-3 text-[11px] text-[var(--text-muted)]">Ενημέρωση API keys στο παρασκήνιο…</p>
         )}
 
         {/* Revoked keys */}
         {revokedKeys.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-[#E5E5E5]">
+          <div className="mt-4 pt-4 border-t border-[var(--border)]">
             <p className="text-xs text-[var(--nts-medium-gray)] mb-2">Απενεργοποιημένα ({revokedKeys.length})</p>
             {revokedKeys.map((k) => (
               <div key={k.id} className="flex items-center gap-3 p-2 opacity-40">
@@ -289,7 +289,7 @@ export function ApiKeyManager() {
         )}
 
         {/* Endpoint info */}
-        <div className="mt-4 pt-4 border-t border-[#E5E5E5]">
+        <div className="mt-4 pt-4 border-t border-[var(--border)]">
           <div className="flex items-center gap-2 text-xs text-[var(--nts-medium-gray)]">
             <ExternalLink size={12} />
             <span>Endpoint:</span>

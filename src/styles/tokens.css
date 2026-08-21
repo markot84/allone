@@ -71,34 +71,48 @@
   --danger:  #F04438;
   --info:    var(--sky-500);
 
+  /* Text-weight steps of the same ramps. --success (#12B76A) is 2.3:1 on white and --danger
+     (#F04438) is 3.4:1 — both fine as a fill, neither usable as the "+8,4%" / "−3,8%" figures the
+     dashboard prints beside every metric. These are the AA-safe shades of those same hues. */
+  --success-700: #0D804A; /* positive delta text — 4.7:1 on white, 4.6:1 on --success-light */
+  --danger-700:  #CC3A30; /* negative delta text — 4.8:1 on white */
+  --danger-600:  #B42318; /* critical severity text/marker — 6.4:1 on white, on --danger-light */
+  --sky-badge-bg: #E1EDFC; /* info severity badge fill; --sky-50 is the banner tint, half a step lighter */
+
   /* ============ RFM SEGMENTS ============ */
   --seg-champions: #12B76A;       /* success green — unambiguously positive */
   --seg-loyal:     var(--sky-500);
   --seg-potential: #7A5AF8;       /* unique purple — separates it from the 4 brand colours */
   --seg-at-risk:   var(--gold-700);
+  /* Hibernating had no colour of its own and fell through to --seg-lost, which made the two
+     largest dormant segments indistinguishable in the share bar. A desaturated navy: same family
+     as the chrome, clearly cooler and lighter than every other segment. */
+  --seg-hibernating: #6B87B9;
   --seg-lost:      var(--text-muted);
 
-  /* ============ APP CHROME — header and sidebar ============ */
-  /* The chrome used to be a dark bar with white text at a dozen different opacities. Those are
-     roles, not values, so they live here: switching the chrome back to dark is changing this block,
-     not sweeping AppShell again.
-
-     Navy leads here, because colors.md §2 lists navigation among navy's roles alongside titles,
-     text and branding — and navigation was the last of the four still rendering neutral grey. The
-     BACKGROUND stays white: §6 rules navy out as a large surface in this version, so navy arrives
-     as the text and the wash behind the active item, not as a navy sidebar.
-     Every value below is an existing step of the navy scale; no new hue was introduced. */
-  --chrome-bg:             var(--surface-0);
-  --chrome-border:         var(--navy-100);  /* colors.md lists navy-100 as borders and dividers */
-  --chrome-fg:             var(--navy-900);  /* active item and primary chrome text — 13.6:1 */
-  --chrome-fg-muted:       var(--navy-500);  /* every other nav label — 11.85:1 */
-  /* Group labels stay NEUTRAL on purpose. They are headings over the navigation, not destinations,
-     and painting them navy too would flatten the one hierarchy the sidebar has. `/styleguide`
-     measures this at 4.97:1. */
-  --chrome-fg-subtle:      var(--text-muted);
-  --chrome-control-bg:     var(--surface-1);
-  --chrome-control-border: var(--navy-100);
-  --chrome-control-hover:  var(--navy-50);   /* colors.md: navy-50 is the subtle section background */
+  /* ============ APP CHROME — rail and top bar ============ */
+  /* The chrome is a role block, not a set of values: switching it back to a white bar is changing
+     the twelve lines below, not sweeping AppShell again. It has now been switched the other way —
+     the Signal Board artboard draws a navy #003087 rail and a navy top bar, which is a deliberate
+     departure from colors.md §6 ("navy is never a large-surface background"). That rule still holds
+     for the CANVAS: the page behind the cards stays --surface-2, and no content surface is navy.
+     Everything navy is chrome, and reverting is this block. */
+  --chrome-bg:             var(--navy-500);  /* rail + top bar surface */
+  --chrome-border:         var(--navy-700);  /* rail edge and the hairlines inside it */
+  --chrome-fg:             var(--surface-0); /* primary chrome text — 12.4:1 on navy */
+  --chrome-fg-muted:       var(--navy-100);  /* inactive nav labels and icons — 7.3:1 on navy */
+  /* Group labels share the muted step here. On white they were kept neutral so the navy labels had
+     something to sit under; on a navy rail a neutral grey would simply disappear, and the hierarchy
+     is carried by the mono/uppercase/letterspaced treatment instead of by hue. */
+  --chrome-fg-subtle:      var(--navy-100);
+  /* The active item inverts: white wash, navy text, gold marker down the leading edge. Gold is a
+     background/marker colour only (1.60:1), which is exactly the role it has here. */
+  --chrome-active-bg:      var(--surface-0);
+  --chrome-active-fg:      var(--navy-500);
+  --chrome-active-marker:  var(--gold-500);
+  --chrome-control-bg:     var(--navy-700);  /* search field, period switch, chips inside the chrome */
+  --chrome-control-border: var(--navy-700);
+  --chrome-control-hover:  var(--navy-900);
 
   /* ============ STRATEGY FACTORS — the five weights in the Configurator ============ */
   /* Categorical, so they need to stay distinguishable from each other; drawn from the palette
@@ -153,7 +167,10 @@
   --nts-orange-light: var(--sky-50);
 
   --app-chrome-bg: var(--chrome-bg);
-  --app-canvas-bg: var(--surface-0);
+  /* The page behind the cards. #F2F4F7 — the same value as --surface-2, referenced rather than
+     repeated so the neutral ramp stays one decision. It had been --surface-0, which put white cards
+     on a white canvas and left the card edges doing all the work of separating them. */
+  --app-canvas-bg: var(--surface-2);
 
   --success-light: #D3F8E6;
   --warning-light: #FEF0C7;

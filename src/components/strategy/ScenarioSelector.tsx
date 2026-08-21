@@ -58,7 +58,7 @@ export function ScenarioSelector({
                 w-full h-full min-w-0 min-h-[220px] p-4 rounded-xl border-2 text-left transition-all duration-200 flex flex-col
                 ${isSelected
                   ? 'border-[var(--nts-accent)] bg-[var(--nts-light-gray)]'
-                  : 'border-[#E5E5E5] bg-white hover:border-[var(--nts-accent)]/50'
+                  : 'border-[var(--border)] bg-white hover:border-[var(--nts-accent)]/50'
                 }
               `}
               style={{
@@ -85,14 +85,14 @@ export function ScenarioSelector({
                   </motion.div>
                 )}
               </div>
-              <h3 className="font-semibold text-[#1A1A1A] mt-3 text-sm">
+              <h3 className="font-semibold text-[var(--text-primary)] mt-3 text-sm">
                 {scenario.name}
               </h3>
-              <p className="text-xs text-[#4A4A4A] mt-1">
+              <p className="text-xs text-[var(--text-secondary)] mt-1">
                 {scenario.description}
               </p>
               {erpHints?.[scenario.id] && (
-                <p className="text-[10px] font-semibold text-[#92400E] mt-2 px-2 py-1.5 rounded-md bg-amber-50 border border-amber-100/80 leading-snug">
+                <p className="text-[10px] font-semibold text-[var(--orange-700)] mt-2 px-2 py-1.5 rounded-md bg-amber-50 border border-amber-100/80 leading-snug">
                   {erpHints[scenario.id]}
                 </p>
               )}
@@ -102,10 +102,10 @@ export function ScenarioSelector({
                 return (
                   <div className="flex items-center gap-1 mt-2">
                     {dur === 'ongoing'
-                      ? <InfinityIcon size={12} className="text-[#9CA3AF]" />
-                      : <Clock size={12} className="text-[#9CA3AF]" />
+                      ? <InfinityIcon size={12} className="text-[var(--text-muted)]" />
+                      : <Clock size={12} className="text-[var(--text-muted)]" />
                     }
-                    <span className="text-[10px] text-[#9CA3AF]">
+                    <span className="text-[10px] text-[var(--text-muted)]">
                       {dur === 'ongoing' ? 'Συνεχής' : `${dur} ημέρες`}
                     </span>
                   </div>
@@ -113,7 +113,7 @@ export function ScenarioSelector({
               })()}
               
               {scenario.weights && (
-                <div className="mt-auto pt-3 border-t border-[#E5E5E5]">
+                <div className="mt-auto pt-3 border-t border-[var(--border)]">
                   <div className="flex gap-1">
                     {Object.entries(scenario.weights)
                       .sort((a, b) => b[1] - a[1])
@@ -125,16 +125,16 @@ export function ScenarioSelector({
                           style={{
                             width: `${value}%`,
                             backgroundColor: 
-                              key === 'profit' ? '#22C55E' :
-                              key === 'stock' ? '#3B82F6' :
-                              key === 'strategic' ? '#8B5CF6' :
-                              key === 'revenue' ? '#F59E0B' :
+                              key === 'profit' ? 'var(--success-700)' :
+                              key === 'stock' ? 'var(--sky-500)' :
+                              key === 'strategic' ? 'var(--seg-potential)' :
+                              key === 'revenue' ? 'var(--orange-700)' :
                               'var(--nts-accent)'
                           }}
                         />
                       ))}
                   </div>
-                  <p className="text-[10px] text-[#9CA3AF] mt-1">
+                  <p className="text-[10px] text-[var(--text-muted)] mt-1">
                     {scenario.cardHint ??
                       `${Object.entries(scenario.weights)
                         .sort((a, b) => b[1] - a[1])

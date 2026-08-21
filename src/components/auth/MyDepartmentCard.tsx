@@ -86,7 +86,7 @@ export function MyDepartmentCard() {
             type="button"
             onClick={handleSave}
             disabled={saving || !me || me.department === department}
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-[var(--nts-accent)] rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 sm:shrink-0"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium text-white btn-gold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 sm:shrink-0"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             Αποθήκευση

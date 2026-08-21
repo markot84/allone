@@ -138,16 +138,16 @@ export function PriceBenchmarkSetupModal({
   if (!isOpen) return null;
 
   const renderGroupTable = (title: string, shown: GroupRow[], restCount: number, totalGroups: number) => (
-    <div className="rounded-xl border border-[#E5E5E5] overflow-hidden">
-      <div className="px-3 py-2 bg-[#F9FAFB] border-b border-[#E5E5E5] flex items-center gap-2">
-        <Layers size={14} className="text-[#6B7280]" />
-        <span className="text-xs font-semibold text-[#374151]">{title}</span>
-        <span className="text-[10px] text-[#9CA3AF] ml-auto">{totalGroups} ομάδες</span>
+    <div className="rounded-xl border border-[var(--border)] overflow-hidden">
+      <div className="px-3 py-2 bg-[var(--surface-2)] border-b border-[var(--border)] flex items-center gap-2">
+        <Layers size={14} className="text-[var(--text-muted)]" />
+        <span className="text-xs font-semibold text-[var(--text-secondary)]">{title}</span>
+        <span className="text-[10px] text-[var(--text-muted)] ml-auto">{totalGroups} ομάδες</span>
       </div>
       <div className="max-h-[220px] overflow-auto">
         <table className="w-full text-left text-[11px]">
-          <thead className="sticky top-0 bg-white border-b border-[#F3F4F6] z-[1]">
-            <tr className="text-[#9CA3AF]">
+          <thead className="sticky top-0 bg-white border-b border-[var(--surface-2)] z-[1]">
+            <tr className="text-[var(--text-muted)]">
               <th className="px-3 py-2 font-medium">Ομάδα</th>
               <th className="px-3 py-2 font-medium text-right">SKU</th>
               <th className="px-3 py-2 font-medium text-right">Μέσος Διαφορά %</th>
@@ -155,14 +155,14 @@ export function PriceBenchmarkSetupModal({
           </thead>
           <tbody>
             {shown.map((g) => (
-              <tr key={g.label} className="border-b border-[#F9FAFB]">
-                <td className="px-3 py-1.5 text-[#111827] truncate max-w-[180px]" title={g.label}>
+              <tr key={g.label} className="border-b border-[var(--surface-2)]">
+                <td className="px-3 py-1.5 text-[var(--text-primary)] truncate max-w-[180px]" title={g.label}>
                   {g.label}
                 </td>
-                <td className="px-3 py-1.5 text-right font-mono text-[#4B5563]">{g.count}</td>
+                <td className="px-3 py-1.5 text-right font-mono text-[var(--text-secondary)]">{g.count}</td>
                 <td
                   className={`px-3 py-1.5 text-right font-mono font-medium ${
-                    g.avgDiff < 0 ? 'text-emerald-700' : g.avgDiff > 0 ? 'text-rose-700' : 'text-[#6B7280]'
+                    g.avgDiff < 0 ? 'text-emerald-700' : g.avgDiff > 0 ? 'text-rose-700' : 'text-[var(--text-muted)]'
                   }`}
                 >
                   {g.avgDiff > 0 ? '+' : ''}
@@ -173,7 +173,7 @@ export function PriceBenchmarkSetupModal({
           </tbody>
         </table>
         {restCount > 0 && (
-          <p className="text-[10px] text-[#9CA3AF] px-3 py-2 border-t border-[#F3F4F6]">
+          <p className="text-[10px] text-[var(--text-muted)] px-3 py-2 border-t border-[var(--surface-2)]">
             +{restCount} ακόμα ομάδες με λιγότερα SKU (από κοινού στο σύνολο παραπάνω).
           </p>
         )}
@@ -205,15 +205,15 @@ export function PriceBenchmarkSetupModal({
           className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#E5E5E5]">
+          <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[var(--border)]">
             <div>
-              <h2 className="text-base font-bold text-[#1A1A1A]">Price Benchmarking — λειτουργία με φίλτρα</h2>
-              <p className="text-xs text-[#6B7280] mt-1 leading-relaxed">
+              <h2 className="text-base font-bold text-[var(--text-primary)]">Price Benchmarking — λειτουργία με φίλτρα</h2>
+              <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
                 Ορίστε preset και φίλτρα. Η λειτουργία εφαρμόζεται σε <strong>όλα</strong> τα SKU που πληρούν τα κριτήρια.
                 Παρακάτω εμφανίζεται συνοπτική εικόνα ανά μάρκα και κατηγορία, χωρίς αναλυτική λίστα SKU.
               </p>
             </div>
-            <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#F5F5F5] text-[#9CA3AF]">
+            <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-muted)]">
               <X size={18} />
             </button>
           </div>
@@ -233,7 +233,7 @@ export function PriceBenchmarkSetupModal({
                   className={`flex gap-2 rounded-xl border p-2.5 cursor-pointer text-left transition-colors ${
                     preset === opt.id
                       ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/5'
-                      : 'border-[#E5E5E5] hover:border-[var(--nts-accent)]/40'
+                      : 'border-[var(--border)] hover:border-[var(--nts-accent)]/40'
                   }`}
                 >
                   <input
@@ -244,8 +244,8 @@ export function PriceBenchmarkSetupModal({
                     onChange={() => setPreset(opt.id)}
                   />
                   <span className="min-w-0">
-                    <span className="text-xs font-semibold text-[#1A1A1A] block">{opt.label}</span>
-                    <span className="text-[10px] text-[#6B7280] leading-snug">{opt.hint}</span>
+                    <span className="text-xs font-semibold text-[var(--text-primary)] block">{opt.label}</span>
+                    <span className="text-[10px] text-[var(--text-muted)] leading-snug">{opt.hint}</span>
                   </span>
                 </label>
               ))}
@@ -253,13 +253,13 @@ export function PriceBenchmarkSetupModal({
 
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex-1 min-w-[140px]">
-                <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">Brand / προμηθευτής</label>
+                <label className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">Brand / προμηθευτής</label>
                 <input
                   list="pb-brands"
                   value={brandFilter}
                   onChange={(e) => setBrandFilter(e.target.value)}
                   placeholder="Φίλτρο…"
-                  className="mt-0.5 w-full text-xs border border-[#E5E5E5] rounded-lg px-2 py-1.5"
+                  className="mt-0.5 w-full text-xs border border-[var(--border)] rounded-lg px-2 py-1.5"
                 />
                 <datalist id="pb-brands">
                   {brandOptions.map((b) => (
@@ -268,13 +268,13 @@ export function PriceBenchmarkSetupModal({
                 </datalist>
               </div>
               <div className="flex-1 min-w-[140px]">
-                <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">Κατηγορία</label>
+                <label className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">Κατηγορία</label>
                 <input
                   list="pb-cats"
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
                   placeholder="Φίλτρο…"
-                  className="mt-0.5 w-full text-xs border border-[#E5E5E5] rounded-lg px-2 py-1.5"
+                  className="mt-0.5 w-full text-xs border border-[var(--border)] rounded-lg px-2 py-1.5"
                 />
                 <datalist id="pb-cats">
                   {categoryOptions.map((c) => (
@@ -283,25 +283,25 @@ export function PriceBenchmarkSetupModal({
                 </datalist>
               </div>
               <div className="flex-[2] min-w-[180px]">
-                <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">Αναζήτηση</label>
+                <label className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">Αναζήτηση</label>
                 <div className="relative mt-0.5">
-                  <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                  <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Όνομα ή SKU…"
-                    className="w-full text-xs border border-[#E5E5E5] rounded-lg pl-7 pr-2 py-1.5"
+                    className="w-full text-xs border border-[var(--border)] rounded-lg pl-7 pr-2 py-1.5"
                   />
                 </div>
               </div>
             </div>
 
             <div className="rounded-lg border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/5 px-3 py-2">
-              <p className="text-xs font-medium text-[#1A1A1A]">
+              <p className="text-xs font-medium text-[var(--text-primary)]">
                 Σύνολο <span className="text-[var(--nts-accent-text)]">{totalMatched.toLocaleString('el-GR')}</span> SKU
                 ταιριάζουν με τα κριτήρια.
               </p>
-              <p className="text-[10px] text-[#6B7280] mt-1">
+              <p className="text-[10px] text-[var(--text-muted)] mt-1">
                 Στην επόμενη οθόνη επιλέγετε διάρκεια· η λειτουργία θα ισχύει για όλα αυτά τα SKU (όχι επιλογή ανά
                 γραμμή).
               </p>
@@ -315,17 +315,17 @@ export function PriceBenchmarkSetupModal({
             )}
 
             {totalMatched === 0 && hasBenchmarkData && (
-              <p className="text-xs text-center text-[#9CA3AF] py-6">
+              <p className="text-xs text-center text-[var(--text-muted)] py-6">
                 Δεν βρέθηκε κανένα SKU που να ικανοποιεί τα επιλεγμένα φίλτρα ή preset.
               </p>
             )}
           </div>
 
-          <div className="flex justify-end gap-2 px-5 py-3 border-t border-[#E5E5E5] bg-[#FAFAFA]">
+          <div className="flex justify-end gap-2 px-5 py-3 border-t border-[var(--border)] bg-[var(--surface-2)]">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 text-xs font-medium text-[#6B7280] hover:text-[#111827]"
+              className="px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             >
               Ακύρωση
             </button>
@@ -333,7 +333,7 @@ export function PriceBenchmarkSetupModal({
               type="button"
               onClick={handleContinue}
               disabled={!hasBenchmarkData || totalMatched === 0}
-              className="px-4 py-1.5 text-xs font-medium rounded-lg bg-[var(--nts-accent)] text-white hover:opacity-90 disabled:opacity-40 disabled:pointer-events-none"
+              className="px-4 py-1.5 text-xs font-medium rounded-lg btn-gold text-white hover:opacity-90 disabled:opacity-40 disabled:pointer-events-none"
             >
               Συνέχεια — διάρκεια λειτουργίας
             </button>

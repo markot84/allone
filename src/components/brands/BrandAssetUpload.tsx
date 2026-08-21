@@ -153,7 +153,7 @@ export function BrandAssetUpload({
           {uploading ? 'Ανέβασμα...' : preview ? 'Αλλαγή' : 'Ανέβασμα'}
         </Button>
         {preview && !uploading && (
-          <span className="text-xs text-[#22C55E] flex items-center gap-1">
+          <span className="text-xs text-[var(--success-700)] flex items-center gap-1">
             <CheckCircle2 size={12} />
             Ανέβηκε
           </span>

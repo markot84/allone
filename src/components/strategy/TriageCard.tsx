@@ -88,48 +88,57 @@ const GROUP_BRIDGE: Record<
   }
 > = {
   critical: {
-    shell: 'rounded-lg border border-[#FECACA] bg-[#FEF2F2]',
-    iconClass: 'text-[#DC2626]',
-    titleClass: 'text-[#991B1B]',
-    subtitleClass: 'text-[#7F1D1D]/90',
-    metricsClass: 'text-[#7F1D1D]/85',
-    btnClass: 'bg-[#DC2626] hover:bg-[#B91C1C]',
+    shell: 'rounded-lg border border-[var(--danger-light)] bg-[var(--danger-light)]',
+    iconClass: 'text-[var(--danger-600)]',
+    titleClass: 'text-[var(--danger-600)]',
+    subtitleClass: 'text-[var(--text-secondary)]',
+    metricsClass: 'text-[var(--text-secondary)]',
+    btnClass: 'bg-[var(--danger-600)] hover:brightness-95',
   },
   opportunity: {
-    shell: 'rounded-lg border border-[#A7F3D0] bg-[#ECFDF5]',
-    iconClass: 'text-[#059669]',
-    titleClass: 'text-[#065F46]',
-    subtitleClass: 'text-[#064E3B]/90',
-    metricsClass: 'text-[#047857]/90',
-    btnClass: 'bg-[#059669] hover:bg-[#047857]',
+    shell: 'rounded-lg border border-[var(--success-light)] bg-[var(--success-light)]',
+    iconClass: 'text-[var(--success-700)]',
+    titleClass: 'text-[var(--success-700)]',
+    subtitleClass: 'text-[var(--text-secondary)]',
+    metricsClass: 'text-[var(--text-secondary)]',
+    btnClass: 'bg-[var(--success-700)] hover:brightness-95',
   },
   watch: {
-    shell: 'rounded-lg border border-[#FED7AA] bg-[#FFF7ED]',
-    iconClass: 'text-[#EA580C]',
-    titleClass: 'text-[#9A3412]',
-    subtitleClass: 'text-[#7C2D12]/90',
-    metricsClass: 'text-[#9A3412]/85',
-    btnClass: 'bg-[#F97316] hover:bg-[#EA580C]',
+    shell: 'rounded-lg border border-[var(--orange-100)] bg-[var(--orange-50)]',
+    iconClass: 'text-[var(--orange-700)]',
+    titleClass: 'text-[var(--orange-700)]',
+    subtitleClass: 'text-[var(--text-secondary)]',
+    metricsClass: 'text-[var(--text-secondary)]',
+    btnClass: 'bg-[var(--orange-700)] hover:brightness-95',
   },
   investigate: {
-    shell: 'rounded-lg border border-[#CBD5E1] bg-[#F8FAFC]',
-    iconClass: 'text-[#475569]',
-    titleClass: 'text-[#334155]',
-    subtitleClass: 'text-[#475569]/95',
-    metricsClass: 'text-[#64748B]',
-    btnClass: 'bg-[#475569] hover:bg-[#334155]',
+    shell: 'rounded-lg border border-[var(--border)] bg-[var(--surface-2)]',
+    iconClass: 'text-[var(--text-secondary)]',
+    titleClass: 'text-[var(--text-primary)]',
+    subtitleClass: 'text-[var(--text-secondary)]',
+    metricsClass: 'text-[var(--text-secondary)]',
+    btnClass: 'bg-[var(--navy-500)] hover:brightness-95',
   },
 };
 
+
+/**
+ * The eight triage buckets.
+ *
+ * Tailwind's rose/emerald/amber/sky/violet/indigo/slate ramps were doing categorical work here with
+ * colours that exist nowhere else in the product. These are the tokens instead, grouped by what the
+ * bucket asks you to do: red = capital stuck, orange = act on stock, green = working, gold = margin,
+ * sky/navy = watch, purple = discontinue, grey = unknown.
+ */
 const BUCKET_COLOR: Record<BucketId, { text: string; bg: string; ring: string }> = {
-  dead_capital:    { text: 'text-rose-700',    bg: 'bg-rose-100',    ring: 'ring-rose-300' },
-  stockout_risk:   { text: 'text-orange-700',  bg: 'bg-orange-100',  ring: 'ring-orange-300' },
-  hot_seller:      { text: 'text-emerald-700', bg: 'bg-emerald-100', ring: 'ring-emerald-300' },
-  margin_bleeder:  { text: 'text-amber-800',   bg: 'bg-amber-100',   ring: 'ring-amber-300' },
-  slow_mover:      { text: 'text-sky-700',     bg: 'bg-sky-100',     ring: 'ring-sky-300' },
-  discontinue:     { text: 'text-violet-700',  bg: 'bg-violet-100',  ring: 'ring-violet-300' },
-  replenish_now:   { text: 'text-indigo-700',  bg: 'bg-indigo-100',  ring: 'ring-indigo-300' },
-  new_or_unknown:  { text: 'text-slate-700',   bg: 'bg-slate-100',   ring: 'ring-slate-300' },
+  dead_capital:    { text: 'text-[var(--danger-600)]',     bg: 'bg-[var(--danger-light)]',  ring: 'ring-[var(--danger-light)]' },
+  stockout_risk:   { text: 'text-[var(--orange-700)]',     bg: 'bg-[var(--orange-100)]',    ring: 'ring-[var(--orange-100)]' },
+  hot_seller:      { text: 'text-[var(--success-700)]',    bg: 'bg-[var(--success-light)]', ring: 'ring-[var(--success-light)]' },
+  margin_bleeder:  { text: 'text-[var(--gold-700)]',       bg: 'bg-[var(--gold-100)]',      ring: 'ring-[var(--gold-100)]' },
+  slow_mover:      { text: 'text-[var(--sky-700)]',        bg: 'bg-[var(--sky-badge-bg)]',  ring: 'ring-[var(--sky-100)]' },
+  discontinue:     { text: 'text-[var(--seg-potential)]',  bg: 'bg-[var(--navy-50)]',       ring: 'ring-[var(--navy-100)]' },
+  replenish_now:   { text: 'text-[var(--navy-500)]',       bg: 'bg-[var(--navy-50)]',       ring: 'ring-[var(--navy-100)]' },
+  new_or_unknown:  { text: 'text-[var(--text-secondary)]', bg: 'bg-[var(--surface-2)]',     ring: 'ring-[var(--border)]' },
 };
 
 function fmtEur(n: number | undefined | null, opts: { dash?: boolean } = {}): string {
@@ -299,8 +308,8 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
   // ── LOADING STATE ─────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-[#E5E7EB] bg-gradient-to-br from-[#FAFAFA] to-white overflow-hidden shadow-sm animate-pulse">
-        <div className="px-4 py-3 border-b border-[#E8E8E8] bg-white">
+      <div className="rounded-xl border border-[var(--border)] bg-gradient-to-br from-[var(--surface-2)] to-white overflow-hidden shadow-sm animate-pulse">
+        <div className="px-4 py-3 border-b border-[var(--border)] bg-white">
           <div className="h-5 w-72 bg-gray-100 rounded" />
         </div>
         <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -368,14 +377,14 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
   };
 
   return (
-    <div className="rounded-xl border border-[#E5E7EB] bg-gradient-to-br from-[#FAFAFA] to-white overflow-hidden shadow-sm">
+    <div className="rounded-xl border border-[var(--border)] bg-gradient-to-br from-[var(--surface-2)] to-white overflow-hidden shadow-sm">
       {/* HEADER — same pattern as Product Intelligence bridge */}
-      <div className="border-b border-[#E8E8E8] bg-white">
+      <div className="border-b border-[var(--border)] bg-white">
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-2 sm:px-4 sm:py-2.5">
-          <div className="shrink-0 p-1 rounded-lg bg-[#7C3AED]/10">
-            <Target size={14} className="text-[#7C3AED]" aria-hidden />
+          <div className="shrink-0 p-1 rounded-lg bg-[var(--seg-potential)]/10">
+            <Target size={14} className="text-[var(--seg-potential)]" aria-hidden />
           </div>
-          <span className="shrink-0 text-sm font-bold tracking-tight text-[#111827] sm:text-base">
+          <span className="shrink-0 text-sm font-bold tracking-tight text-[var(--text-primary)] sm:text-base">
             Εμπορικές Προτεραιότητες
           </span>
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 sm:justify-center">
@@ -415,7 +424,7 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
       </div>
 
       {showDocumentation && (
-        <div className="px-5 py-3 bg-slate-50/95 border-b border-[#E8E8E8] space-y-3">
+        <div className="px-5 py-3 bg-[var(--surface-1)] border-b border-[var(--border)] space-y-3">
           <div className="text-[12px] text-gray-600 max-w-3xl leading-relaxed">
             Εδώ οι κωδικοί ομαδοποιούνται με βάση <strong>συνδυασμό καταλόγου και σημάτων</strong> (πωλήσεις,
             παράθυρα ζήτησης, κίνηση αποθέματος, κόστη από procurement). <strong>Δεν</strong> είναι το ίδιο με τις
@@ -1046,7 +1055,7 @@ function ExpandedPanel({
                   payload
                 );
               }}
-              className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[var(--nts-accent)] text-white text-[11px] font-semibold hover:opacity-90 transition-opacity"
+              className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-md btn-gold text-white text-[11px] font-semibold hover:opacity-90 transition-opacity"
             >
               {def.cta}
               <ChevronRight size={12} />

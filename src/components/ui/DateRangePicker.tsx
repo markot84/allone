@@ -111,25 +111,25 @@ function MonthCalendar({ year, month, pendingFrom, pendingTo, hoverDate, onDayCl
       <div className="flex items-center justify-between mb-3 h-8">
         <button
           onClick={onPrev}
-          className={`w-7 h-7 flex items-center justify-center rounded hover:bg-[#F3F4F6] transition-colors ${!showPrev ? 'invisible' : ''}`}
+          className={`w-7 h-7 flex items-center justify-center rounded hover:bg-[var(--surface-2)] transition-colors ${!showPrev ? 'invisible' : ''}`}
         >
-          <ChevronLeft size={15} className="text-[#6B7280]" />
+          <ChevronLeft size={15} className="text-[var(--text-muted)]" />
         </button>
-        <span className="text-sm font-semibold text-[#111827]">
+        <span className="text-sm font-semibold text-[var(--text-primary)]">
           {MONTH_NAMES[month]} {year}
         </span>
         <button
           onClick={onNext}
-          className={`w-7 h-7 flex items-center justify-center rounded hover:bg-[#F3F4F6] transition-colors ${!showNext ? 'invisible' : ''}`}
+          className={`w-7 h-7 flex items-center justify-center rounded hover:bg-[var(--surface-2)] transition-colors ${!showNext ? 'invisible' : ''}`}
         >
-          <ChevronRight size={15} className="text-[#6B7280]" />
+          <ChevronRight size={15} className="text-[var(--text-muted)]" />
         </button>
       </div>
 
       {/* Day headers */}
       <div className="grid grid-cols-7 mb-1">
         {DAY_NAMES.map(d => (
-          <div key={d} className="text-center text-[10px] font-medium text-[#9CA3AF] py-1">{d}</div>
+          <div key={d} className="text-center text-[10px] font-medium text-[var(--text-muted)] py-1">{d}</div>
         ))}
       </div>
 
@@ -163,12 +163,12 @@ function MonthCalendar({ year, month, pendingFrom, pendingTo, hoverDate, onDayCl
                 disabled={isFuture}
                 className={`
                   relative z-10 w-8 h-8 rounded-full text-[13px] transition-all flex items-center justify-center
-                  ${isFuture ? 'text-[#D1D5DB] cursor-not-allowed' : 'cursor-pointer'}
+                  ${isFuture ? 'text-[var(--navy-100)] cursor-not-allowed' : 'cursor-pointer'}
                   ${isStart || isEnd
-                    ? 'bg-[var(--nts-accent)] text-white font-semibold shadow-sm'
+                    ? 'btn-gold text-white font-semibold shadow-sm'
                     : isFuture
                     ? ''
-                    : 'text-[#374151] hover:bg-[var(--nts-accent)] hover:text-white hover:opacity-80'}
+                    : 'text-[var(--text-secondary)] hover:btn-gold hover:text-white hover:opacity-80'}
                   ${isToday && !isStart && !isEnd ? 'font-bold underline underline-offset-2' : ''}
                 `}
               >
@@ -313,17 +313,17 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
         <button
           onClick={() => setOpen(o => !o)}
           className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all bg-white
-            ${open ? 'border-[var(--nts-accent)] shadow-md' : 'border-[#E5E7EB] hover:border-[var(--nts-accent)]/60'}
+            ${open ? 'border-[var(--nts-accent)] shadow-md' : 'border-[var(--border)] hover:border-[var(--nts-accent)]/60'}
           `}
         >
           <Calendar size={15} className="text-[var(--nts-accent-text)] shrink-0" />
-          <span className="text-[#374151]">{triggerLabel}</span>
-          <ChevronDown size={13} className={`text-[#9CA3AF] transition-transform shrink-0 ${open ? 'rotate-180' : ''}`} />
+          <span className="text-[var(--text-secondary)]">{triggerLabel}</span>
+          <ChevronDown size={13} className={`text-[var(--text-muted)] transition-transform shrink-0 ${open ? 'rotate-180' : ''}`} />
         </button>
         {(from || to) && onClear && (
           <button
             onClick={onClear}
-            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[#F3F4F6] text-[#9CA3AF] hover:text-[#374151] transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[var(--surface-2)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
             title="Καθαρισμός"
           >
             <X size={13} />
@@ -337,7 +337,7 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
         createPortal(
           <div
             ref={panelRef}
-            className="fixed z-[10050] flex max-h-[min(520px,calc(100vh-24px))] w-[min(680px,calc(100vw-20px))] min-w-0 flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-2xl sm:w-auto sm:max-w-none sm:flex-row"
+            className="fixed z-[10050] flex max-h-[min(520px,calc(100vh-24px))] w-[min(680px,calc(100vw-20px))] min-w-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-2xl sm:w-auto sm:max-w-none sm:flex-row"
             style={
               panelPos
                 ? { left: panelPos.left, top: panelPos.top, minWidth: 'min(660px, calc(100vw - 20px))' }
@@ -345,8 +345,8 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
             }
           >
           {/* Presets sidebar */}
-          <div className="w-44 shrink-0 border-r border-[#F3F4F6] py-3 flex flex-col overflow-y-auto">
-            <div className="px-3 pb-2 text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">
+          <div className="w-44 shrink-0 border-r border-[var(--surface-2)] py-3 flex flex-col overflow-y-auto">
+            <div className="px-3 pb-2 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
               Γρήγορη επιλογή
             </div>
             {PRESETS.map(p => (
@@ -355,8 +355,8 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
                 onClick={() => applyPreset(p.from(), p.to())}
                 className={`text-left px-3 py-1.5 text-sm transition-colors
                   ${isPresetActive(p)
-                    ? 'bg-[var(--nts-accent)] text-white font-medium'
-                    : 'text-[#374151] hover:bg-[#F9FAFB]'}
+                    ? 'btn-gold text-white font-medium'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--surface-2)]'}
                 `}
               >
                 {p.label}
@@ -366,7 +366,7 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
 
           {/* Calendar area */}
           <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-            <div className="flex min-w-0 flex-1 flex-col divide-y divide-[#F3F4F6] sm:flex-row sm:divide-y-0 sm:divide-x">
+            <div className="flex min-w-0 flex-1 flex-col divide-y divide-[var(--surface-2)] sm:flex-row sm:divide-y-0 sm:divide-x">
               <MonthCalendar
                 year={leftYear}
                 month={leftMonth}
@@ -396,38 +396,38 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between px-4 py-3 border-t border-[#F3F4F6] bg-[#FAFAFA]">
+            <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--surface-2)] bg-[var(--surface-2)]">
               <div className="flex items-center gap-2 text-sm">
                 <span className={`px-3 py-1.5 rounded-md border text-sm ${
                   pendingFrom
-                    ? 'border-[var(--nts-accent)]/50 bg-white text-[#111827] font-medium'
-                    : 'border-dashed border-[#D1D5DB] text-[#9CA3AF]'
+                    ? 'border-[var(--nts-accent)]/50 bg-white text-[var(--text-primary)] font-medium'
+                    : 'border-dashed border-[var(--navy-100)] text-[var(--text-muted)]'
                 }`}>
                   {pendingFrom ? formatDisplay(pendingFrom) : 'Ημ. έναρξης'}
                 </span>
-                <span className="text-[#D1D5DB] font-light text-base">→</span>
+                <span className="text-[var(--navy-100)] font-light text-base">→</span>
                 <span className={`px-3 py-1.5 rounded-md border text-sm ${
                   pendingTo
-                    ? 'border-[var(--nts-accent)]/50 bg-white text-[#111827] font-medium'
-                    : 'border-dashed border-[#D1D5DB] text-[#9CA3AF]'
+                    ? 'border-[var(--nts-accent)]/50 bg-white text-[var(--text-primary)] font-medium'
+                    : 'border-dashed border-[var(--navy-100)] text-[var(--text-muted)]'
                 }`}>
                   {pendingTo ? formatDisplay(pendingTo) : 'Ημ. λήξης'}
                 </span>
                 {pickingSecond && (
-                  <span className="text-xs text-[#9CA3AF] italic ml-1">Επιλέξτε ημέρα λήξης</span>
+                  <span className="text-xs text-[var(--text-muted)] italic ml-1">Επιλέξτε ημέρα λήξης</span>
                 )}
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => setOpen(false)}
-                  className="px-4 py-1.5 text-sm rounded-lg border border-[#E5E7EB] text-[#374151] hover:bg-[#F9FAFB] transition-colors"
+                  className="px-4 py-1.5 text-sm rounded-lg border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-2)] transition-colors"
                 >
                   Ακύρωση
                 </button>
                 <button
                   onClick={apply}
                   disabled={!pendingFrom || !pendingTo}
-                  className="px-4 py-1.5 text-sm rounded-lg bg-[var(--nts-accent)] text-white font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
+                  className="px-4 py-1.5 text-sm rounded-lg btn-gold text-white font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
                 >
                   Εφαρμογή
                 </button>

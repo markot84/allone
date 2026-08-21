@@ -83,25 +83,25 @@ export function ProcurementStrategyBridge({
     n >= 1000 ? `${(n / 1000).toFixed(1).replace('.', ',')}k€` : `${Math.round(n)}€`;
 
   return (
-    <div className="rounded-xl border border-[#E5E7EB] bg-gradient-to-br from-[#FAFAFA] to-white overflow-hidden shadow-sm">
-      <div className="border-b border-[#E8E8E8] bg-white">
+    <div className="rounded-xl border border-[var(--border)] bg-gradient-to-br from-[var(--surface-2)] to-white overflow-hidden shadow-sm">
+      <div className="border-b border-[var(--border)] bg-white">
         <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2">
           <button
             type="button"
             aria-expanded={expanded}
             onClick={() => setExpanded((value) => !value)}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left hover:text-[#111827]"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left hover:text-[var(--text-primary)]"
           >
             {expanded ? (
               <ChevronDown size={16} className="shrink-0 text-gray-500" strokeWidth={2.25} />
             ) : (
               <ChevronRight size={16} className="shrink-0 text-gray-500" strokeWidth={2.25} />
             )}
-            <div className="shrink-0 p-1.5 rounded-lg bg-[#7C3AED]/10">
-              <Package size={16} className="text-[#7C3AED]" aria-hidden />
+            <div className="shrink-0 p-1.5 rounded-lg bg-[var(--seg-potential)]/10">
+              <Package size={16} className="text-[var(--seg-potential)]" aria-hidden />
             </div>
             <div className="min-w-0">
-              <h3 className="truncate text-sm font-bold text-[#111827] sm:text-base">
+              <h3 className="truncate text-sm font-bold text-[var(--text-primary)] sm:text-base">
                 Ειδοποιήσεις από Product Intelligence
               </h3>
               <p className="text-[10px] text-gray-500 sm:text-[11px]">
@@ -123,12 +123,12 @@ export function ProcurementStrategyBridge({
       </div>
       {expanded && <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
         {deadMeta.count > 0 && (
-          <div className="rounded-lg border border-[#FECACA] bg-[#FEF2F2] p-3 flex flex-col gap-2">
+          <div className="rounded-lg border border-[var(--danger-light)] bg-[var(--danger-light)] p-3 flex flex-col gap-2">
             <div className="flex items-start gap-2">
-              <AlertCircle size={18} className="text-[#DC2626] shrink-0 mt-0.5" aria-hidden />
+              <AlertCircle size={18} className="text-[var(--danger-600)] shrink-0 mt-0.5" aria-hidden />
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-[#991B1B]">Dead Stock (ERP)</p>
-                <p className="text-[11px] text-[#7F1D1D]/90 mt-0.5 leading-snug">
+                <p className="text-xs font-semibold text-[var(--danger-600)]">Dead Stock (ERP)</p>
+                <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-snug">
                   {deadMeta.count.toLocaleString('el-GR')} SKU(s) — ίδια λογική με την κάρτα Dead Stock στο Product
                   Intelligence (status / αξιολόγηση / απόθεμα).
                   {deadMeta.tied > 0 && (
@@ -147,7 +147,7 @@ export function ProcurementStrategyBridge({
                   tiedCapital: deadMeta.tied,
                 })
               }
-              className="mt-auto inline-flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-lg bg-[#DC2626] text-white text-xs font-semibold hover:bg-[#B91C1C] transition-colors"
+              className="mt-auto inline-flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-lg bg-[var(--danger-600)] text-white text-xs font-semibold hover:bg-[var(--danger-600)] transition-colors"
             >
               {stockClearanceTitle}
               <ArrowRight size={14} aria-hidden />
@@ -155,12 +155,12 @@ export function ProcurementStrategyBridge({
           </div>
         )}
         {excessMeta.count > 0 && (
-          <div className="rounded-lg border border-[#FCD34D] bg-[#FFFBEB] p-3 flex flex-col gap-2">
+          <div className="rounded-lg border border-[var(--gold-100)] bg-[var(--warning-light)] p-3 flex flex-col gap-2">
             <div className="flex items-start gap-2">
-              <AlertTriangle size={18} className="text-[#D97706] shrink-0 mt-0.5" aria-hidden />
+              <AlertTriangle size={18} className="text-[var(--orange-700)] shrink-0 mt-0.5" aria-hidden />
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-[#92400E]">Excess Stock (ERP)</p>
-                <p className="text-[11px] text-[#78350F]/90 mt-0.5 leading-snug">
+                <p className="text-xs font-semibold text-[var(--orange-700)]">Excess Stock (ERP)</p>
+                <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-snug">
                   {excessMeta.count.toLocaleString('el-GR')} SKU(s) — ίδια λογική με την κάρτα Excess Stock στο Product
                   Intelligence.
                   {excessMeta.tied > 0 && (
@@ -179,7 +179,7 @@ export function ProcurementStrategyBridge({
                   tiedCapital: excessMeta.tied,
                 })
               }
-              className="mt-auto inline-flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-lg bg-[#D97706] text-white text-xs font-semibold hover:bg-[#B45309] transition-colors"
+              className="mt-auto inline-flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-lg btn-gold text-white text-xs font-semibold hover:btn-gold transition-colors"
             >
               {stockClearanceTitle}
               <ArrowRight size={14} aria-hidden />

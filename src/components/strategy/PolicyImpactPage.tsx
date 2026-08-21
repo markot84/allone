@@ -197,17 +197,17 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
       <Card padding="md">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase text-[#9CA3AF]">
+            <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">
               <Tooltip content="Εμπορικές αποφάσεις που αφορούν την επιλεγμένη περίοδο. Αν μια απόφαση ξεκινά πριν ή τελειώνει μετά, μετράει μόνο το τμήμα που πέφτει εντός.">
                 Περίοδος ανάλυσης
               </Tooltip>
             </p>
             {periodLabel && (
-              <p className="mt-1 text-sm font-medium text-[#374151]">{periodLabel}</p>
+              <p className="mt-1 text-sm font-medium text-[var(--text-secondary)]">{periodLabel}</p>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-1 gap-0.5 rounded-lg bg-[#F3F4F6] p-0.5 sm:flex-initial">
+            <div className="flex flex-1 gap-0.5 rounded-lg bg-[var(--surface-2)] p-0.5 sm:flex-initial">
               {GLOBAL_PERIOD_OPTIONS.map((opt) => (
                 <button
                   key={opt.key}
@@ -216,7 +216,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
                   className={`min-h-[32px] flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-all sm:flex-initial sm:px-3 ${
                     dashPeriod === opt.key
                       ? 'bg-white font-semibold text-[var(--nts-orange)] shadow-sm'
-                      : 'text-[#6B7280] hover:text-[#374151]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                   }`}
                 >
                   {opt.label}
@@ -286,8 +286,8 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
           <div className="flex items-center gap-3">
             <Spinner />
             <div>
-              <p className="text-sm font-semibold text-[#1A1A1A]">Ανανεώνεται το Decision Memory για τη νέα περίοδο.</p>
-              <p className="text-xs text-[#6B7280]">Ελέγχουμε πραγματικές αποφάσεις, campaigns και εμπορικές ενέργειες χωρίς να διπλασιάζουμε τα ERP scenarios.</p>
+              <p className="text-sm font-semibold text-[var(--text-primary)]">Ανανεώνεται το Decision Memory για τη νέα περίοδο.</p>
+              <p className="text-xs text-[var(--text-muted)]">Ελέγχουμε πραγματικές αποφάσεις, campaigns και εμπορικές ενέργειες χωρίς να διπλασιάζουμε τα ERP scenarios.</p>
             </div>
           </div>
         </Card>
@@ -301,13 +301,13 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
           />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <input
-              className="rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm xl:col-span-2"
+              className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm xl:col-span-2"
               placeholder="Τίτλος απόφασης"
               value={form.title}
               onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
             />
             <select
-              className="rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
+              className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
               value={form.eventType}
               onChange={(e) => setForm((prev) => ({ ...prev, eventType: e.target.value as CommercialDecisionEventType }))}
             >
@@ -321,19 +321,19 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
             </select>
             <input
               type="date"
-              className="rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
+              className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
               value={form.startDate}
               onChange={(e) => setForm((prev) => ({ ...prev, startDate: e.target.value }))}
             />
             <input
               type="date"
-              className="rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
+              className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
               value={form.endDate}
               onChange={(e) => setForm((prev) => ({ ...prev, endDate: e.target.value }))}
             />
           </div>
           <textarea
-            className="mt-3 min-h-20 w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
+            className="mt-3 min-h-20 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
             placeholder="Εμπορική υπόθεση / γιατί πήραμε αυτή την απόφαση;"
             value={form.hypothesis}
             onChange={(e) => setForm((prev) => ({ ...prev, hypothesis: e.target.value }))}
@@ -367,9 +367,9 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
               />
               <div className="space-y-3">
                 <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                   <input
-                    className="w-full rounded-lg border border-[#E5E7EB] py-2 pl-9 pr-3 text-sm"
+                    className="w-full rounded-lg border border-[var(--border)] py-2 pl-9 pr-3 text-sm"
                     placeholder="Αναζήτηση απόφασης, campaign, κανάλι..."
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
@@ -395,7 +395,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
 
             <Card padding="none">
               {isRefreshing && !isLoading && (
-                <div className="border-b border-[#E5E7EB] px-4 py-3 text-xs text-[#6B7280]">
+                <div className="border-b border-[var(--border)] px-4 py-3 text-xs text-[var(--text-muted)]">
                   Ανανεώνονται οι αποφάσεις και τα outcomes για τη νέα περίοδο...
                 </div>
               )}
@@ -411,7 +411,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
                   hasActiveFilters={summaryTab !== 'all' || typeFilter !== 'all' || verdictFilter !== 'all' || query.trim().length > 0}
                 />
               ) : (
-                <ul className="max-h-[640px] divide-y divide-[#E5E7EB] overflow-y-auto">
+                <ul className="max-h-[640px] divide-y divide-[var(--border)] overflow-y-auto">
                   {filteredItems.map((item) => (
                     <DecisionListItem
                       key={item.event.id}
@@ -434,7 +434,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
               </>
             ) : (
               <Card padding="lg">
-                <p className="text-sm text-[#6B7280]">Επιλέξτε decision για ανάλυση.</p>
+                <p className="text-sm text-[var(--text-muted)]">Επιλέξτε decision για ανάλυση.</p>
               </Card>
             )}
           </div>
@@ -457,7 +457,7 @@ function SectionIntro({
   return (
     <div className="flex items-center gap-3">
       <span className="rounded-xl bg-[var(--nts-accent)]/10 p-2 text-[var(--nts-accent-text)]">{icon}</span>
-      <h3 className="text-lg font-bold text-[#1A1A1A]">
+      <h3 className="text-lg font-bold text-[var(--text-primary)]">
         {tooltip ? (
           <Tooltip content={tooltip}>{title}</Tooltip>
         ) : (
@@ -502,14 +502,14 @@ function SummaryCard({
       aria-selected={selected}
       onClick={onClick}
       className={`w-full rounded-xl border text-left transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)] ${
-        selected ? ringClass : 'border-transparent hover:border-[#D1D5DB] hover:ring-1 hover:ring-[#E5E7EB]'
+        selected ? ringClass : 'border-transparent hover:border-[var(--navy-100)] hover:ring-1 hover:ring-[var(--border)]'
       }`}
     >
       <Card padding="md" className={selected ? 'border-transparent bg-transparent shadow-sm' : undefined}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase text-[#9CA3AF]">{label}</p>
-            <p className="mt-1 font-mono text-2xl font-bold text-[#1A1A1A]">{formatNumber(value)}</p>
+            <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">{label}</p>
+            <p className="mt-1 font-mono text-2xl font-bold text-[var(--text-primary)]">{formatNumber(value)}</p>
           </div>
           <span className={`rounded-xl p-2 ${toneClass}`}>{icon}</span>
         </div>
@@ -529,7 +529,7 @@ function FilterSelect({
 }) {
   return (
     <select
-      className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
+      className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
       value={value}
       onChange={(e) => onChange(e.target.value)}
     >
@@ -562,15 +562,15 @@ function DecisionListItem({
         type="button"
         onClick={onSelect}
         className={`w-full px-4 py-4 text-left transition-colors ${
-          selected ? 'bg-[var(--nts-accent)]/10' : 'hover:bg-[#F9FAFB]'
+          selected ? 'bg-[var(--nts-accent)]/10' : 'hover:bg-[var(--surface-2)]'
         }`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-2">
             <ProductThumbnail src={thumb || undefined} alt={sku || event.title} size="sm" />
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-[#1A1A1A]">{event.title}</p>
-              <p className="mt-1 text-xs text-[#6B7280]">
+              <p className="truncate text-sm font-semibold text-[var(--text-primary)]">{event.title}</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
                 {TYPE_LABELS[event.eventType]} · {event.decisionDate} · {SOURCE_LABELS[event.source] ?? event.source}
               </p>
             </div>
@@ -579,7 +579,7 @@ function DecisionListItem({
             {VERDICT_LABELS[impact.verdict]}
           </Badge>
         </div>
-        <div className="mt-2 flex items-center gap-2 text-xs text-[#6B7280]">
+        <div className="mt-2 flex items-center gap-2 text-xs text-[var(--text-muted)]">
           <span className="font-mono">{impact.score}/100</span>
           <span>Βεβαιότητα: {impact.confidence}</span>
         </div>
@@ -630,9 +630,9 @@ function DecisionDetail({
       />
 
       {event.hypothesis && (
-        <div className="mb-4 rounded-xl border border-[#E5E7EB] bg-[#FAFAFA] p-3">
-          <p className="text-xs font-semibold uppercase text-[#9CA3AF]">Εμπορική υπόθεση</p>
-          <p className="mt-1 text-sm text-[#374151]">{event.hypothesis}</p>
+        <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+          <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Εμπορική υπόθεση</p>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">{event.hypothesis}</p>
         </div>
       )}
 
@@ -682,7 +682,7 @@ function DecisionDetail({
         <InsightList title="Ρίσκα / τι αποφεύγουμε" items={impact.risks} empty="Δεν εντοπίστηκαν σημαντικά risks." tone="danger" />
       </div>
 
-      <div className="mt-4 grid gap-3 rounded-xl border border-[#E5E7EB] p-3 text-sm sm:grid-cols-3">
+      <div className="mt-4 grid gap-3 rounded-xl border border-[var(--border)] p-3 text-sm sm:grid-cols-3">
         <ScopeLine label="Κανάλια" values={event.scope?.channels} />
         <ScopeLine label="Κατηγορίες" values={event.scope?.categories} />
         <ScopeLine label="SKUs" values={event.scope?.skus} />
@@ -690,12 +690,12 @@ function DecisionDetail({
 
       {event.changes && event.changes.length > 0 && (
         <div className="mt-4">
-          <p className="text-xs font-semibold uppercase text-[#9CA3AF]">Μεταβολές</p>
+          <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Μεταβολές</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {event.changes.slice(0, 6).map((change) => (
-              <div key={`${change.label}-${change.after}`} className="rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm">
-                <span className="font-semibold text-[#374151]">{change.label}</span>
-                <span className="ml-2 text-[#6B7280]">{change.after ?? '—'}</span>
+              <div key={`${change.label}-${change.after}`} className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm">
+                <span className="font-semibold text-[var(--text-secondary)]">{change.label}</span>
+                <span className="ml-2 text-[var(--text-muted)]">{change.after ?? '—'}</span>
               </div>
             ))}
           </div>
@@ -717,9 +717,9 @@ function MetricTile({
   positive?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-[#E5E7EB] bg-[#FAFAFA] p-3">
-      <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">{label}</p>
-      <p className="mt-1 font-mono text-lg font-bold text-[#1A1A1A]">{value}</p>
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+      <p className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">{label}</p>
+      <p className="mt-1 font-mono text-lg font-bold text-[var(--text-primary)]">{value}</p>
       {sub && (
         <p className={`mt-1 flex items-center gap-1 text-xs ${positive ? 'text-emerald-600' : 'text-rose-600'}`}>
           {positive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
@@ -742,10 +742,10 @@ function InsightList({
   tone: 'success' | 'danger';
 }) {
   return (
-    <div className="rounded-xl border border-[#E5E7EB] p-3">
-      <p className="text-xs font-semibold uppercase text-[#9CA3AF]">{title}</p>
+    <div className="rounded-xl border border-[var(--border)] p-3">
+      <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">{title}</p>
       {items.length === 0 ? (
-        <p className="mt-2 text-sm text-[#6B7280]">{empty}</p>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">{empty}</p>
       ) : (
         <ul className="mt-2 space-y-2">
           {items.slice(0, 5).map((item) => (
@@ -763,8 +763,8 @@ function ScopeLine({ label, values }: { label: string; values?: string[] }) {
   const display = values?.slice(0, 4).join(', ');
   return (
     <div>
-      <p className="text-xs font-semibold uppercase text-[#9CA3AF]">{label}</p>
-      <p className="mt-1 truncate text-[#374151]">{display || '—'}</p>
+      <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">{label}</p>
+      <p className="mt-1 truncate text-[var(--text-secondary)]">{display || '—'}</p>
     </div>
   );
 }
@@ -779,14 +779,14 @@ function PlaybookPanel({ items, onSelect }: { items: DecisionMemoryItem[]; onSel
             key={event.id}
             type="button"
             onClick={() => onSelect(event.id)}
-            className="rounded-xl border border-[#E5E7EB] p-3 text-left transition-colors hover:bg-[#FAFAFA]"
+            className="rounded-xl border border-[var(--border)] p-3 text-left transition-colors hover:bg-[var(--surface-2)]"
           >
             <div className="flex items-center justify-between gap-2">
               <Badge variant={VERDICT_BADGE[impact.verdict]}>{VERDICT_LABELS[impact.verdict]}</Badge>
-              <span className="font-mono text-xs text-[#6B7280]">{impact.score}/100</span>
+              <span className="font-mono text-xs text-[var(--text-muted)]">{impact.score}/100</span>
             </div>
-            <p className="mt-2 line-clamp-2 text-sm font-semibold text-[#1A1A1A]">{event.title}</p>
-            <p className="mt-1 text-xs text-[#6B7280]">
+            <p className="mt-2 line-clamp-2 text-sm font-semibold text-[var(--text-primary)]">{event.title}</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
               {impact.verdict === 'winning' ? 'Χρήση ως playbook' : 'Αποφυγή επανάληψης χωρίς αλλαγές'}
             </p>
           </button>
@@ -816,14 +816,14 @@ function EmptyState({
   const noDecisionsInPeriod = periodLabel && totalInPeriod === 0;
   return (
     <div className="p-5">
-      <p className="text-sm font-semibold text-[#1A1A1A]">
+      <p className="text-sm font-semibold text-[var(--text-primary)]">
         {hasActiveFilters && totalInPeriod > 0
           ? 'Κανένα αποτέλεσμα με τα τρέχοντα φίλτρα.'
           : noDecisionsInPeriod
             ? `Καμία απόφαση στην περίοδο ${periodLabel}.`
             : 'Δεν υπάρχουν ακόμη decision events.'}
       </p>
-      <p className="mt-1 text-sm text-[#6B7280]">
+      <p className="mt-1 text-sm text-[var(--text-muted)]">
         {hasActiveFilters && totalInPeriod > 0
           ? 'Αλλάξτε tab, τύπο ή αναζήτηση για να δείτε άλλες αποφάσεις της περιόδου.'
           : noDecisionsInPeriod

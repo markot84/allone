@@ -10,14 +10,19 @@ import { getAssetUrl } from '../../services/storage';
 import { FirestoreService } from '../../services/firestore';
 import { MembersService } from '../../services/coordination';
 import type { Brand } from '../../types';
+import { useFullBleedCanvas } from '../layout/AppChrome';
+import { PageCanvas } from '../layout/ChromeControls';
 
-const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B'];
+const COLORS = ['var(--nts-accent)', 'var(--text-muted)', 'var(--success-700)', 'var(--seg-potential)', 'var(--orange-700)'];
 
 interface BrandsPageProps {
   onNavigateToDashboard?: () => void;
 }
 
 export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
+  // The page draws its own gutters, so the shell drops its padded wrapper.
+  useFullBleedCanvas();
+
   const { brands, currentBrand, loading, setCurrentBrand, refreshBrands } = useBrand();
   const { user, isSuperAdmin } = useAuth();
   const [showAddForm, setShowAddForm] = useState(false);
@@ -106,15 +111,12 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <PageCanvas>
       <PageHeader
         toolbarAriaLabel="Brand"
-        title={<h2 className="text-xl font-bold text-[var(--text-heading)] sm:text-2xl">Τα Brands μου</h2>}
-        description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
-            Επιλέξτε brand για να δείτε τα δεδομένα και την ανάλυσή του
-          </p>
-        }
+        eyebrow="Business"
+        title="Τα Brands μου"
+        description="Επιλέξτε brand για να δείτε τα δεδομένα και την ανάλυσή του"
         actions={
           <Button
             variant="primary"
@@ -136,7 +138,7 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
           className="overflow-hidden"
         >
           <Card padding="lg" className="border-l-4 border-l-[var(--nts-accent)]">
-            <h3 className="font-semibold text-[#1A1A1A] mb-4">Δημιουργία νέου brand</h3>
+            <h3 className="font-semibold text-[var(--text-primary)] mb-4">Δημιουργία νέου brand</h3>
             <BrandCreateForm onCreated={handleCreated} />
           </Card>
         </motion.div>
@@ -199,9 +201,9 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
                     </div>
                   )}
                   <div className="min-w-0">
-                    <h3 className="font-semibold text-[#1A1A1A] truncate">{brand.name}</h3>
+                    <h3 className="font-semibold text-[var(--text-primary)] truncate">{brand.name}</h3>
                     {brand.type && (
-                      <p className="text-sm text-[#4A4A4A]">{brand.type}</p>
+                      <p className="text-sm text-[var(--text-secondary)]">{brand.type}</p>
                     )}
                   </div>
                 </div>
@@ -210,7 +212,7 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
                     <button
                       type="button"
                       aria-label={`Επεξεργασία ${brand.name}`}
-                      className="rounded-lg p-2 text-[#6B7280] transition-colors hover:bg-white hover:text-[var(--nts-accent-text)]"
+                      className="rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-white hover:text-[var(--nts-accent-text)]"
                       onClick={(e) => {
                         e.stopPropagation();
                         startEditing(brand);
@@ -222,7 +224,7 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
                   <ChevronRight
                     size={20}
                     className={`flex-shrink-0 ${
-                      currentBrand?.id === brand.id ? 'text-[var(--nts-accent-text)]' : 'text-[#9CA3AF]'
+                      currentBrand?.id === brand.id ? 'text-[var(--nts-accent-text)]' : 'text-[var(--text-muted)]'
                     }`}
                   />
                 </div>
@@ -267,7 +269,7 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
                     assetType="logo"
                     label="Logo Brand"
                   />
-                  {editError && <p className="text-sm text-[#EF4444]">{editError}</p>}
+                  {editError && <p className="text-sm text-[var(--danger-600)]">{editError}</p>}
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Button
                       type="submit"
@@ -305,9 +307,9 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
 
       {!loading && brands.length === 0 && !showAddForm && (
         <Card padding="lg" className="text-center py-12">
-          <Building2 size={48} className="mx-auto text-[#9CA3AF] mb-4" />
-          <p className="text-[#4A4A4A] font-medium">Δεν έχετε brands ακόμη</p>
-          <p className="text-sm text-[#4A4A4A] mt-1">
+          <Building2 size={48} className="mx-auto text-[var(--text-muted)] mb-4" />
+          <p className="text-[var(--text-secondary)] font-medium">Δεν έχετε brands ακόμη</p>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
             Δημιουργήστε το πρώτο σας brand ή περίμενε πρόσκληση από άλλον χρήστη
           </p>
           <Button
@@ -320,6 +322,6 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
           </Button>
         </Card>
       )}
-    </div>
+    </PageCanvas>
   );
 }

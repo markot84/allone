@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { MONO } from '../signal';
 
 interface ProgressBarProps {
   value: number;
@@ -9,37 +9,60 @@ interface ProgressBarProps {
   className?: string;
 }
 
-const sizes = {
-  sm: 'h-1',
-  md: 'h-2',
-  lg: 'h-3'
-};
+const HEIGHT: Record<NonNullable<ProgressBarProps['size']>, number> = { sm: 4, md: 8, lg: 12 };
 
+/**
+ * A share of a total, as one bar.
+ *
+ * The fill grows through a CSS transition on the board's reorder duration rather than through a
+ * framer-motion `animate`, so a progress bar inside a list of forty rows costs forty transitions
+ * instead of forty animation loops — and it obeys `prefers-reduced-motion`, which `tokens.css`
+ * already handles globally.
+ */
 export function ProgressBar({
   value,
   max = 100,
-  color = 'var(--nts-accent)',
+  color = 'var(--orange-500)',
   showLabel = false,
   size = 'md',
-  className = ''
+  className = '',
 }: ProgressBarProps) {
-  const percentage = Math.min((value / max) * 100, 100);
+  const percentage = max > 0 ? Math.min(Math.max((value / max) * 100, 0), 100) : 0;
+  const height = HEIGHT[size];
 
   return (
     <div className={className}>
       {showLabel && (
-        <div className="flex justify-between text-xs text-[#4A4A4A] mb-1">
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontFamily: MONO,
+            fontVariantNumeric: 'tabular-nums',
+            fontSize: 11,
+            color: 'var(--text-muted)',
+            marginBottom: 4,
+          }}
+        >
           <span>{value}</span>
           <span>{max}</span>
         </div>
       )}
-      <div className={`bg-[#E5E5E5] rounded-full overflow-hidden ${sizes[size]}`}>
-        <motion.div
-          className="h-full rounded-full"
-          style={{ backgroundColor: color }}
-          initial={{ width: 0 }}
-          animate={{ width: `${percentage}%` }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
+      <div
+        style={{ height, borderRadius: 999, overflow: 'hidden', background: 'var(--surface-2)' }}
+        role="progressbar"
+        aria-valuenow={Math.round(percentage)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div
+          style={{
+            height: '100%',
+            width: `${percentage}%`,
+            borderRadius: 999,
+            background: color,
+            transition: 'width var(--dur-reorder) var(--ease-out)',
+          }}
         />
       </div>
     </div>

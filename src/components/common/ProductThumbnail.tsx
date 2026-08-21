@@ -21,7 +21,7 @@ export function ProductThumbnail({ src, alt = '', size = 'sm', className = '' }:
 
   return (
     <div
-      className={`relative shrink-0 overflow-hidden rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] ${SIZE_CLASS[size]} ${className}`}
+      className={`relative shrink-0 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface-2)] ${SIZE_CLASS[size]} ${className}`}
     >
       {showImage ? (
         <img
@@ -33,7 +33,7 @@ export function ProductThumbnail({ src, alt = '', size = 'sm', className = '' }:
           onError={() => setFailed(true)}
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-[#D1D5DB]" aria-hidden>
+        <div className="flex h-full w-full items-center justify-center text-[var(--navy-100)]" aria-hidden>
           <Package size={size === 'sm' ? 16 : 20} strokeWidth={1.5} />
         </div>
       )}

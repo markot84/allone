@@ -5,6 +5,23 @@ import { SegmentTreemap } from '../rfm/SegmentTreemap';
 import { SegmentMigrationSankey } from '../rfm/SegmentMigrationSankey';
 import { BriefingNarrative } from '../dashboard/BriefingNarrative';
 import { EnterpriseBadge } from '../common/EnterpriseBadge';
+import { Badge } from '../common/Badge';
+import { Button } from '../common/Button';
+import { KPICard } from '../common/KPICard';
+import { ProgressBar } from '../common/ProgressBar';
+import {
+  AxisTicks,
+  LegendKey,
+  MONO,
+  MetricSpark,
+  MetricTile,
+  PillButton,
+  SignalCard,
+  SignalCardHeader,
+  SignalChip,
+  SignalSkeleton,
+} from '../signal';
+import { channelColor, seriesPalette } from '../../styles/chartTheme';
 import type { BriefingData } from '../../services/morningBriefing';
 import { contrastOnWhite } from '../../utils/color';
 import { readTokenColor } from '../../utils/cssToken';
@@ -48,10 +65,14 @@ const NEUTRALS: Swatch[] = [
 ];
 
 const SEMANTIC: Swatch[] = [
-  { token: '--success' },
+  { token: '--success', note: 'fill only — 2.3:1 on white' },
   { token: '--warning' },
-  { token: '--danger' },
+  { token: '--danger', note: 'fill only — 3.4:1 on white' },
   { token: '--info', note: 'resolves to sky' },
+  { token: '--success-700', note: 'the "+8,4%" figure — AA on white' },
+  { token: '--danger-700', note: 'the "−3,8%" figure — AA on white' },
+  { token: '--danger-600', note: 'critical severity text' },
+  { token: '--sky-badge-bg', note: 'info badge fill' },
 ];
 
 const SEGMENTS: Swatch[] = [
@@ -59,6 +80,7 @@ const SEGMENTS: Swatch[] = [
   { token: '--seg-loyal' },
   { token: '--seg-potential' },
   { token: '--seg-at-risk' },
+  { token: '--seg-hibernating', note: 'was falling through to --seg-lost' },
   { token: '--seg-lost' },
 ];
 
@@ -74,6 +96,13 @@ const TEXT_ON_WHITE = [
   '--text-primary',
   '--text-secondary',
   '--text-muted',
+  // The delta figures beside every metric. The base --success / --danger are here to show why the
+  // 700 steps had to exist at all.
+  '--success',
+  '--success-700',
+  '--danger',
+  '--danger-700',
+  '--danger-600',
 ];
 
 /** What a measured ratio permits, per colors.md §3. */
@@ -332,14 +361,12 @@ function ChromePreview() {
           {items.map((label, index) => (
             <span
               key={index === 1 ? `${label}-${pulseRun}` : label}
-              className={index === 1 ? 'nav-cascade-pulse' : undefined}
-              style={{
-                font: '500 13px Inter, sans-serif',
-                color: index === 0 ? 'var(--chrome-fg)' : 'var(--chrome-fg-muted)',
-                background: index === 0 ? 'var(--chrome-control-hover)' : 'transparent',
-                borderRadius: 6,
-                padding: '7px 10px',
-              }}
+              /* The real rail classes, so hover, focus and the gold marker are the app's, not a
+                 restatement of them. */
+              className={`rail-nav-item${index === 0 ? ' rail-nav-item--current' : ''}${
+                index === 1 ? ' nav-cascade-pulse' : ''
+              }`}
+              style={{ font: '500 13px "Plus Jakarta Sans", sans-serif', borderRadius: 9, padding: '7px 10px' }}
             >
               {label}
             </span>
@@ -615,6 +642,165 @@ function RadarDemo() {
   );
 }
 
+/**
+ * The Signal Board vocabulary, drawn with the real components.
+ *
+ * Every page of the app is built from these eight parts, so this is the block to check a new page
+ * against: if a page invents a ninth, either the vocabulary is missing something or the page is.
+ */
+function VocabularyPreview() {
+  return (
+    <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+      <SignalCard style={{ gap: 16 }}>
+        <SignalCardHeader eyebrow="Card header" title="Eyebrow, then title" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 12 }}>
+          <MetricTile label="Τζίρος" value="€243,2K" note="+8,4%" noteDirection="up" />
+          <MetricTile label="Δαπάνη" value="€81,7K" note="+12,1%" noteDirection="down" />
+          <MetricTile label="ROAS" value="3,20×" note="σταθερό" noteDirection="flat" />
+        </div>
+        <MetricSpark values={[12, 18, 15, 24, 21, 30, 27, 36]} />
+        <AxisTicks ticks={['1 Αυγ', '8 Αυγ', '15 Αυγ', '20 Αυγ']} />
+      </SignalCard>
+
+      <SignalCard accent="var(--danger-600)" style={{ gap: 14 }}>
+        <SignalCardHeader eyebrow="Accent edge" title="A card that carries a decision" />
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <SignalChip tone="var(--danger-600)" background="var(--danger-light)">Κρίσιμο</SignalChip>
+          <SignalChip tone="var(--orange-700)" background="var(--warning-light)">Προσοχή</SignalChip>
+          <SignalChip tone="var(--sky-700)" background="var(--sky-badge-bg)">Πληροφορία</SignalChip>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <PillButton active tone="var(--orange-700)">Εφαρμογή</PillButton>
+          <PillButton>Αναβολή</PillButton>
+          <PillButton disabled>Απορρίφθηκε</PillButton>
+        </div>
+        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontFamily: MONO, fontSize: 10.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+          <LegendKey color="var(--orange-500)">Τζίρος</LegendKey>
+          <LegendKey color="var(--sky-500)" shape="block">Δαπάνη</LegendKey>
+        </div>
+      </SignalCard>
+
+      <SignalCard style={{ gap: 14 }}>
+        <SignalCardHeader eyebrow="Loading" title="Skeletons carry the real dimensions" />
+        <SignalSkeleton height={44} />
+        <SignalSkeleton height={16} width="60%" />
+        <SignalSkeleton height={16} width="40%" />
+      </SignalCard>
+    </div>
+  );
+}
+
+/** The shared primitives, which are the same vocabulary wearing their old API. */
+function PrimitivesPreview() {
+  return (
+    <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+      <KPICard
+        kpi={{
+          label: 'Συνολικά έσοδα',
+          value: '€243,2K',
+          change: 8.4,
+          changeLabel: 'vs προηγ. μήνα',
+          sparklineData: [18, 22, 19, 27, 24, 33, 30, 41],
+        }}
+      />
+      <KPICard
+        kpi={{
+          label: 'Marketing expenses',
+          value: '€81,7K',
+          change: 12.1,
+          trend: 'down',
+          changeLabel: 'vs προηγ. μήνα',
+          subtext: 'σε 4 πλατφόρμες',
+        }}
+      />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Button variant="primary" size="sm">Primary</Button>
+          <Button variant="secondary" size="sm">Secondary</Button>
+          <Button variant="danger" size="sm">Danger</Button>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <Badge variant="success">Ενεργό</Badge>
+          <Badge variant="warning">Εκκρεμεί</Badge>
+          <Badge variant="danger">Σφάλμα</Badge>
+          <Badge variant="info">Info</Badge>
+          <Badge variant="orange">Mark</Badge>
+          <Badge variant="gold">Highlight</Badge>
+        </div>
+        <ProgressBar value={68} showLabel />
+      </div>
+    </div>
+  );
+}
+
+/** The categorical ramp Recharts and Nivo both read, resolved live from `chartTheme`. */
+function ChartPalettePreview() {
+  const series = seriesPalette();
+  const channels = ['Organic Search', 'Paid Search', 'Organic Social', 'Paid Social', 'Direct', 'Email', 'Referral', '(Other)'];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {series.map((color, i) => (
+          <div key={color} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 26, height: 26, borderRadius: 6, background: color, display: 'block' }} />
+            <code style={{ font: `400 11px ${MONO}`, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              {i}. {color}
+            </code>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontFamily: MONO, fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+        {channels.map((channel) => (
+          <LegendKey key={channel} color={channelColor(channel)} shape="block">
+            {channel}
+          </LegendKey>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The table treatment every page's data grid inherits from one class. */
+function DataTablePreview() {
+  const rows = [
+    { channel: 'Organic Search', sessions: 6421, revenue: '€84.210', share: '38,4%' },
+    { channel: 'Paid Search', sessions: 3187, revenue: '€61.940', share: '19,1%' },
+    { channel: 'Direct', sessions: 2760, revenue: '€44.330', share: '16,5%' },
+    { channel: 'Paid Social', sessions: 1902, revenue: '€28.070', share: '11,4%' },
+  ];
+  return (
+    <div style={{ border: '1px solid var(--navy-100)', borderRadius: 16, overflow: 'hidden', background: 'var(--surface-0)' }}>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Κανάλι</th>
+              <th className="text-right">Sessions</th>
+              <th className="text-right">Έσοδα</th>
+              <th className="text-right">Μερίδιο</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.channel}>
+                <td>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 3, background: channelColor(row.channel) }} />
+                    {row.channel}
+                  </span>
+                </td>
+                <td className="text-right">{row.sessions.toLocaleString('el-GR')}</td>
+                <td className="text-right">{row.revenue}</td>
+                <td className="text-right">{row.share}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function StyleGuide() {
   return (
     <div style={{ background: 'var(--surface-0)', minHeight: '100vh' }}>
@@ -725,6 +911,34 @@ export function StyleGuide() {
         </Section>
 
         <Section
+          title="Signal Board vocabulary"
+          description="Every card in the app is one of these: a white panel, an eyebrow over a title, a labelled figure, a chip, a pill, a legend key, an axis row or a skeleton. Two typefaces do the work — Plus Jakarta Sans for prose, JetBrains Mono for anything that is a measurement or a label about one. If it is set in mono, it is data."
+        >
+          <VocabularyPreview />
+        </Section>
+
+        <Section
+          title="Shared primitives"
+          description="Card, CardHeader, KPICard, PageHeader, Button, Badge and ProgressBar are the vocabulary wearing their original API, so a page that has not been touched yet still inherits the board. The entrance animation each card used to carry is gone: motion is concentrated, not sprinkled."
+        >
+          <PrimitivesPreview />
+        </Section>
+
+        <Section
+          title="Data tables"
+          description="One class, `.data-table`, carries every grid in the app: mono uppercase headers, token hairlines, and mono tabular figures in every right-aligned cell — because a right-aligned cell here is always a measurement. Wide tables scroll inside their own container rather than pushing the page sideways."
+        >
+          <DataTablePreview />
+        </Section>
+
+        <Section
+          title="Chart palette"
+          description="One ramp for every chart in the app, read from the tokens by src/styles/chartTheme.ts. Six steps, in the order a reader meets them — the primary measure orange, what it is compared against sky — then it cycles, because a chart carrying a seventh series has a bigger problem than colour. GA4's channel groups pair paid and organic of the same medium a step apart on the ramp."
+        >
+          <ChartPalettePreview />
+        </Section>
+
+        <Section
           title="Command palette"
           description="⌘K / Ctrl+K, from anywhere. Navigation only: it jumps to a section, a SKU or a segment. Changing a strategy scenario is left out on purpose — it saves the active strategy and triggers AI generation, which needs the confirmation the Configurator gives it, not a keystroke."
         >
@@ -733,7 +947,7 @@ export function StyleGuide() {
 
         <Section
           title="App chrome"
-          description="Header and sidebar: white surface, navy text. §2 lists navigation among navy's roles and it was the last of the four still rendering neutral grey — but §6 rules navy out as a large surface, so navy arrives as the label and the wash behind the active item, never as a navy sidebar. Group labels stay neutral: they head the navigation rather than belonging to it. The second nav item shows the cascade pulse."
+          description="A navy rail and a navy top bar — a deliberate departure from §6, which rules navy out as a large surface. That rule still holds for the canvas: the page behind the cards stays --surface-2 and no content surface is navy. Everything navy here is chrome, and it is one token block, so reverting it is twelve lines rather than another sweep of AppShell. The active item inverts to a white wash with navy text and a gold marker down its leading edge — gold as a marker, never as text. The second nav item shows the cascade pulse."
         >
           <ChromePreview />
           <div style={{ marginTop: 16 }}>
@@ -744,6 +958,9 @@ export function StyleGuide() {
                 { token: '--chrome-fg' },
                 { token: '--chrome-fg-muted' },
                 { token: '--chrome-fg-subtle' },
+                { token: '--chrome-active-bg', note: 'active item inverts' },
+                { token: '--chrome-active-fg' },
+                { token: '--chrome-active-marker', note: 'gold, as a marker' },
                 { token: '--chrome-control-bg' },
                 { token: '--chrome-control-hover' },
               ]}

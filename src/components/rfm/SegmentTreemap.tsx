@@ -62,7 +62,7 @@ export function SegmentTreemap({ segments, selectedId, onSelect, animate }: Segm
     };
   }, [segments]);
 
-  const border = readTokenColor('--surface-0', '#FFFFFF');
+  const border = readTokenColor('--surface-0', 'var(--surface-0)');
   const selectedBorder = readTokenColor('--text-heading', '#003087');
 
   if (data.children.length === 0) {
@@ -87,13 +87,13 @@ export function SegmentTreemap({ segments, selectedId, onSelect, animate }: Segm
         innerPadding={3}
         outerPadding={0}
         margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
-        colors={(node) => tiles.get(node.id)?.fill ?? '#E4E7EC'}
+        colors={(node) => tiles.get(node.id)?.fill ?? 'var(--border)'}
         nodeOpacity={1}
         // Selection is a navy edge on an otherwise white gutter. The width is fixed because nivo's
         // treemap only takes a number here — the colour carries the state instead.
         borderWidth={2}
         borderColor={(node: { id: string | number }) => (node.id === selectedId ? selectedBorder : border)}
-        labelTextColor={(node: { id: string | number }) => readableTextOn(tiles.get(String(node.id))?.fill ?? '#FFFFFF')}
+        labelTextColor={(node: { id: string | number }) => readableTextOn(tiles.get(String(node.id))?.fill ?? 'var(--surface-0)')}
         enableParentLabel={false}
         animate={animate}
         motionConfig="gentle"

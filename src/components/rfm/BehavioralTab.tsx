@@ -29,6 +29,7 @@ import { Card, CardHeader, Badge, Tooltip } from '../common';
 import { deriveBehavioralProfile } from '../../services/behavioralEngine';
 import { formatNumber } from '../../utils/format';
 import type { RFMSegment } from '../../types';
+import { axisProps, gridProps, tooltipProps } from '../../styles/chartTheme';
 
 interface BehavioralTabProps {
   segments: RFMSegment[];
@@ -51,11 +52,11 @@ const FREQUENCY_LABELS: Record<string, string> = {
 };
 
 const LIFECYCLE_COLORS: Record<string, string> = {
-  new: '#3B82F6',
-  active: '#22C55E',
-  loyal: '#16A34A',
-  declining: '#F59E0B',
-  dormant: '#EF4444',
+  new: 'var(--sky-500)',
+  active: 'var(--success-700)',
+  loyal: 'var(--success-700)',
+  declining: 'var(--orange-700)',
+  dormant: 'var(--danger-600)',
 };
 
 export function BehavioralTab({ segments }: BehavioralTabProps) {
@@ -92,8 +93,8 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
     <div className="space-y-6">
       {/* Data Source Indicator */}
       <div className="flex items-center gap-2 text-xs">
-        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${hasImportedData ? 'bg-[#DCFCE7] text-[#16A34A]' : 'bg-[#FEF3C7] text-[#D97706]'}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${hasImportedData ? 'bg-[#22C55E]' : 'bg-[#F59E0B]'}`} />
+        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${hasImportedData ? 'bg-[var(--success-light)] text-[var(--success-700)]' : 'bg-[var(--warning-light)] text-[var(--orange-700)]'}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${hasImportedData ? 'bg-[var(--success-700)]' : 'bg-[var(--orange-700)]'}`} />
           {hasImportedData ? 'Imported data' : 'Derived from RFM (εισάγετε data για ακρίβεια)'}
         </span>
       </div>
@@ -107,7 +108,7 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
               i === selectedIdx
                 ? 'text-white shadow-sm'
-                : 'bg-[var(--nts-light-gray)] text-[#4A4A4A] hover:bg-[#E5E5E5]'
+                : 'bg-[var(--nts-light-gray)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
             }`}
             style={i === selectedIdx ? { backgroundColor: item.segment.color } : undefined}
           >
@@ -129,21 +130,21 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
               <Users size={20} style={{ color: segment.color }} />
             </div>
             <div>
-              <p className="text-xs text-[#9CA3AF]">Persona</p>
-              <p className="text-sm font-bold text-[#1A1A1A]">{profile.persona}</p>
+              <p className="text-xs text-[var(--text-muted)]">Persona</p>
+              <p className="text-sm font-bold text-[var(--text-primary)]">{profile.persona}</p>
             </div>
           </div>
         </Card>
         <Card padding="md">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#F0FDF4] flex items-center justify-center">
-              <Heart size={20} className="text-[#22C55E]" />
+            <div className="w-10 h-10 rounded-lg bg-[var(--success-light)] flex items-center justify-center">
+              <Heart size={20} className="text-[var(--success-700)]" />
             </div>
             <div>
-              <p className="text-xs text-[#9CA3AF]">
+              <p className="text-xs text-[var(--text-muted)]">
                 <Tooltip content="Στάδιο στον κύκλο ζωής του πελάτη" size={12}>Lifecycle</Tooltip>
               </p>
-              <p className="text-sm font-bold" style={{ color: LIFECYCLE_COLORS[profile.lifecycle_stage] || '#4A4A4A' }}>
+              <p className="text-sm font-bold" style={{ color: LIFECYCLE_COLORS[profile.lifecycle_stage] || 'var(--text-secondary)' }}>
                 {LIFECYCLE_LABELS[profile.lifecycle_stage] || profile.lifecycle_stage}
               </p>
             </div>
@@ -151,27 +152,27 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
         </Card>
         <Card padding="md">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#EFF6FF] flex items-center justify-center">
-              <ShoppingBag size={20} className="text-[#3B82F6]" />
+            <div className="w-10 h-10 rounded-lg bg-[var(--sky-50)] flex items-center justify-center">
+              <ShoppingBag size={20} className="text-[var(--sky-500)]" />
             </div>
             <div>
-              <p className="text-xs text-[#9CA3AF]">
+              <p className="text-xs text-[var(--text-muted)]">
                 <Tooltip content="Μέση αξία καλαθιού ανά αγορά" size={12}>Μέσο Καλάθι</Tooltip>
               </p>
-              <p className="text-sm font-bold font-mono text-[#1A1A1A]">€{formatNumber(profile.avg_basket_size)}</p>
+              <p className="text-sm font-bold font-mono text-[var(--text-primary)]">€{formatNumber(profile.avg_basket_size)}</p>
             </div>
           </div>
         </Card>
         <Card padding="md">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#FEF3C7] flex items-center justify-center">
-              <Clock size={20} className="text-[#F59E0B]" />
+            <div className="w-10 h-10 rounded-lg bg-[var(--warning-light)] flex items-center justify-center">
+              <Clock size={20} className="text-[var(--orange-700)]" />
             </div>
             <div>
-              <p className="text-xs text-[#9CA3AF]">
+              <p className="text-xs text-[var(--text-muted)]">
                 <Tooltip content="Πόσο συχνά αγοράζει αυτό το segment" size={12}>Συχνότητα</Tooltip>
               </p>
-              <p className="text-sm font-bold text-[#1A1A1A]">{FREQUENCY_LABELS[profile.purchase_frequency] || profile.purchase_frequency}</p>
+              <p className="text-sm font-bold text-[var(--text-primary)]">{FREQUENCY_LABELS[profile.purchase_frequency] || profile.purchase_frequency}</p>
             </div>
           </div>
         </Card>
@@ -185,14 +186,14 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={radarData} margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
-                <PolarGrid stroke="#E5E5E5" />
+                <PolarGrid stroke="var(--border)" />
                 <PolarAngleAxis
                   dataKey="metric"
-                  tick={{ fill: '#4A4A4A', fontSize: 11 }}
+                  tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
                 />
                 <PolarRadiusAxis
                   domain={[0, 100]}
-                  tick={{ fill: '#9CA3AF', fontSize: 10 }}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
                   axisLine={false}
                 />
                 <Radar
@@ -217,11 +218,12 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={channelData} layout="vertical" margin={{ left: 10, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
-                <XAxis type="number" domain={[0, 100]} tick={{ fill: '#9CA3AF', fontSize: 11 }} />
-                <YAxis type="category" dataKey="channel" tick={{ fill: '#4A4A4A', fontSize: 11 }} width={120} />
+                {/* Horizontal bars: the hairlines follow the value axis, the one being compared along. */}
+                <CartesianGrid {...gridProps()} vertical horizontal={false} />
+                <XAxis type="number" domain={[0, 100]} {...axisProps()} />
+                <YAxis type="category" dataKey="channel" {...axisProps()} width={120} />
                 <RechartsTooltip
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: 6, fontSize: 12 }}
+                  {...tooltipProps()}
                   formatter={(v: number | undefined) => [`${(v as number) || 0}%`, 'Score']}
                 />
                 <Bar dataKey="score" fill={segment.color} radius={[0, 4, 4, 0]} barSize={20} />
@@ -238,11 +240,11 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
             icon={<TrendingUp size={18} className="text-[var(--nts-accent-text)]" />}
           />
           <div className="space-y-4 mt-2">
-            <ScoreBar label="Engagement Score" value={profile.engagement_score} color="#3B82F6" tooltip="Βαθμός αλληλεπίδρασης πελάτη (email opens, clicks, visits)" />
-            <ScoreBar label="Upsell Score" value={profile.upsell_score} color="#22C55E" tooltip="Πιθανότητα αναβάθμισης σε premium προϊόντα" />
-            <ScoreBar label="Cross-sell Score" value={profile.cross_sell_score} color="#8B5CF6" tooltip="Πιθανότητα αγοράς από διαφορετική κατηγορία" />
+            <ScoreBar label="Engagement Score" value={profile.engagement_score} color="var(--sky-500)" tooltip="Βαθμός αλληλεπίδρασης πελάτη (email opens, clicks, visits)" />
+            <ScoreBar label="Upsell Score" value={profile.upsell_score} color="var(--success-700)" tooltip="Πιθανότητα αναβάθμισης σε premium προϊόντα" />
+            <ScoreBar label="Cross-sell Score" value={profile.cross_sell_score} color="var(--seg-potential)" tooltip="Πιθανότητα αγοράς από διαφορετική κατηγορία" />
 
-            <div className="border-t border-[#E5E5E5] pt-4 mt-4 space-y-3">
+            <div className="border-t border-[var(--border)] pt-4 mt-4 space-y-3">
               <DetailRow
                 icon={<Monitor size={14} />}
                 label="Device"
@@ -284,15 +286,15 @@ export function BehavioralTab({ segments }: BehavioralTabProps) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              className="p-4 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] hover:border-[var(--nts-accent)]/30 transition-colors"
+              className="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] hover:border-[var(--nts-accent)]/30 transition-colors"
             >
               <div className="flex items-center gap-2 mb-2">
                 <Mail size={14} style={{ color: segment.color }} />
-                <span className="text-sm font-semibold text-[#1A1A1A]">{pref.channel}</span>
+                <span className="text-sm font-semibold text-[var(--text-primary)]">{pref.channel}</span>
               </div>
-              <div className="space-y-1 text-xs text-[#4A4A4A]">
-                <p>Συχνότητα: <span className="font-medium text-[#1A1A1A]">{pref.frequency}</span></p>
-                <p>Καλύτερη ώρα: <span className="font-medium text-[#1A1A1A]">{pref.best_time}</span></p>
+              <div className="space-y-1 text-xs text-[var(--text-secondary)]">
+                <p>Συχνότητα: <span className="font-medium text-[var(--text-primary)]">{pref.frequency}</span></p>
+                <p>Καλύτερη ώρα: <span className="font-medium text-[var(--text-primary)]">{pref.best_time}</span></p>
               </div>
             </motion.div>
           ))}
@@ -306,12 +308,12 @@ function ScoreBar({ label, value, color, tooltip }: { label: string; value: numb
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-[#4A4A4A]">
+        <span className="text-xs text-[var(--text-secondary)]">
           <Tooltip content={tooltip} size={12}>{label}</Tooltip>
         </span>
         <span className="text-xs font-bold font-mono" style={{ color }}>{value}%</span>
       </div>
-      <div className="w-full h-2 bg-[#F5F5F5] rounded-full overflow-hidden">
+      <div className="w-full h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
         <motion.div
           className="h-full rounded-full"
           initial={{ width: 0 }}
@@ -333,14 +335,14 @@ function DetailRow({ icon, label, value, badge, badgeVariant }: {
 }) {
   return (
     <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2 text-[#4A4A4A]">
+      <div className="flex items-center gap-2 text-[var(--text-secondary)]">
         {icon}
         <span className="text-xs">{label}</span>
       </div>
       {badge ? (
         <Badge variant={badgeVariant || 'default'} size="sm">{value}</Badge>
       ) : (
-        <span className="text-xs font-medium text-[#1A1A1A]">{value}</span>
+        <span className="text-xs font-medium text-[var(--text-primary)]">{value}</span>
       )}
     </div>
   );

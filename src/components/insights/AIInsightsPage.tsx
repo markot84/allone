@@ -146,7 +146,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
                   onClick={() => setFilter(type)}
                   className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all border ${
                     filter === type
-                      ? 'bg-[var(--nts-accent)] text-white border-[var(--nts-accent)] shadow-sm'
+                      ? 'btn-gold text-white border-[var(--nts-accent)] shadow-sm'
                       : 'bg-white text-[#4A5568] border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F9FAFB]'
                   }`}
                 >

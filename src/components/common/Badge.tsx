@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { Label } from '@primer/react';
+import type { CSSProperties, ReactNode } from 'react';
+import { MONO } from '../signal';
 
 interface BadgeProps {
   children: ReactNode;
@@ -13,40 +13,46 @@ interface BadgeProps {
   className?: string;
 }
 
-function mapVariant(variant: BadgeProps['variant']): React.ComponentProps<typeof Label>['variant'] {
-  switch (variant) {
-    case 'success':
-      return 'success';
-    case 'warning':
-      return 'attention';
-    case 'danger':
-      return 'danger';
-    case 'info':
-    case 'orange':
-    case 'gold':
-      return 'accent';
-    case 'default':
-    default:
-      return 'secondary';
-  }
-}
+/**
+ * The status chip, one vocabulary with `SignalChip`.
+ *
+ * Primer's `Label` used to carry this, which meant badges were the one place in the app still
+ * showing another design system's greys. Every pair below is a token background with a token text
+ * colour chosen to clear 4.5:1 on it — gold and orange included, which is why neither of them is
+ * ever the text: navy sits on gold (7.40:1) and `--orange-700` sits on `--orange-100`.
+ */
+const VARIANT: Record<NonNullable<BadgeProps['variant']>, { background: string; color: string }> = {
+  default: { background: 'var(--surface-2)', color: 'var(--text-secondary)' },
+  success: { background: 'var(--success-light)', color: 'var(--success-700)' },
+  warning: { background: 'var(--warning-light)', color: 'var(--orange-700)' },
+  danger: { background: 'var(--danger-light)', color: 'var(--danger-600)' },
+  info: { background: 'var(--sky-badge-bg)', color: 'var(--sky-700)' },
+  orange: { background: 'var(--orange-100)', color: 'var(--orange-700)' },
+  gold: { background: 'var(--gold-500)', color: 'var(--navy-500)' },
+};
 
-export function Badge({ 
-  children, 
-  variant = 'default', 
-  size = 'sm',
-  className = '' 
-}: BadgeProps) {
-  const orangeClass = variant === 'orange' ? '!bg-[var(--nts-accent)] !text-white !border-transparent' : '';
-  // Navy on gold measures 7.40:1; gold is never the text.
-  const goldClass = variant === 'gold' ? '!bg-[var(--gold-500)] !text-[var(--navy-500)] !border-transparent' : '';
+export function Badge({ children, variant = 'default', size = 'sm', className = '' }: BadgeProps) {
+  const tone = VARIANT[variant] ?? VARIANT.default;
+  const style: CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    fontFamily: MONO,
+    fontSize: size === 'sm' ? 10 : 11,
+    fontWeight: 700,
+    letterSpacing: '0.1em',
+    // Greek drops its accents in all-caps, and the document declares lang="el", so the browser
+    // applies that rule for us — the same treatment every other chip on the board gets.
+    textTransform: 'uppercase',
+    padding: size === 'sm' ? '4px 9px' : '5px 11px',
+    borderRadius: 999,
+    whiteSpace: 'nowrap',
+    ...tone,
+  };
+
   return (
-    <Label
-      variant={mapVariant(variant)}
-      size={size === 'sm' ? 'small' : 'large'}
-      className={`${orangeClass} ${goldClass} ${className}`.trim()}
-    >
+    <span className={className} style={style}>
       {children}
-    </Label>
+    </span>
   );
 }

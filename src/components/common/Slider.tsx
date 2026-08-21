@@ -85,8 +85,8 @@ export function Slider({
       arrow.style.top = topPos < rect.top ? '100%' : 'auto';
       arrow.style.bottom = topPos < rect.top ? 'auto' : '100%';
       arrow.className = topPos < rect.top 
-        ? 'tooltip-arrow absolute left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1A1A1A]'
-        : 'tooltip-arrow absolute left-1/2 -translate-x-1/2 border-4 border-transparent border-b-[#1A1A1A]';
+        ? 'tooltip-arrow absolute left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[var(--text-primary)]'
+        : 'tooltip-arrow absolute left-1/2 -translate-x-1/2 border-4 border-transparent border-b-[var(--text-primary)]';
     }
   }, [showTooltip]);
 
@@ -117,7 +117,7 @@ export function Slider({
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           {icon && <span className="text-[var(--nts-medium-gray)]">{icon}</span>}
-          <label htmlFor={id} className="text-sm font-medium text-[#1A1A1A]">
+          <label htmlFor={id} className="text-sm font-medium text-[var(--text-primary)]">
             {label}
           </label>
           {tooltip && (
@@ -131,13 +131,13 @@ export function Slider({
             >
               <Info 
                 size={14} 
-                className="text-[#9CA3AF] hover:text-[#6B7280] cursor-help flex-shrink-0 transition-colors" 
+                className="text-[var(--text-muted)] hover:text-[var(--text-muted)] cursor-help flex-shrink-0 transition-colors" 
                 aria-label="More information"
               />
               {showTooltip && (
                 <div
                   ref={tooltipRef}
-                  className="fixed z-[99999] px-3 py-2 bg-[#1A1A1A] text-white text-xs rounded-lg shadow-lg pointer-events-none"
+                  className="fixed z-[99999] px-3 py-2 bg-[var(--text-primary)] text-white text-xs rounded-lg shadow-lg pointer-events-none"
                   style={{
                     whiteSpace: 'normal',
                     wordWrap: 'break-word',
@@ -147,7 +147,7 @@ export function Slider({
                   }}
                 >
                   {tooltip}
-                  <div className="tooltip-arrow absolute left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1A1A1A]" />
+                  <div className="tooltip-arrow absolute left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[var(--text-primary)]" />
                 </div>
               )}
             </div>
@@ -164,7 +164,7 @@ export function Slider({
         </motion.span>
       </div>
       <div className="relative">
-        <div className="h-2 bg-[#E5E5E5] rounded-full overflow-hidden">
+        <div className="h-2 bg-[var(--border)] rounded-full overflow-hidden">
           <motion.div
             className="h-full rounded-full"
             style={{ backgroundColor: color }}

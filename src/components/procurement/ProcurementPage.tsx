@@ -665,7 +665,7 @@ function ColumnFilterDropdown({
       <div className="flex gap-2 px-2 py-2 border-t border-[var(--nts-border-gray)]">
         <button
           onClick={() => onApply(local.length === allValues.length ? [] : local)}
-          className="flex-1 py-1.5 text-[11px] font-semibold bg-[var(--nts-accent)] text-white rounded hover:opacity-90 transition-opacity"
+          className="flex-1 py-1.5 text-[11px] font-semibold btn-gold text-white rounded hover:opacity-90 transition-opacity"
         >
           Εφαρμογή
         </button>
@@ -1050,7 +1050,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                     <span
                       className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold transition-colors duration-200 ${
                         isActive
-                          ? 'bg-[var(--nts-accent)] text-white'
+                          ? 'btn-gold text-white'
                           : 'bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)] group-hover:bg-[var(--nts-border-gray)]'
                       }`}
                     >
@@ -1222,7 +1222,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                         onClick={() => setCurrentPage(page)}
                         className={`min-w-[28px] h-7 px-2 text-[11px] font-medium rounded transition-colors ${
                           page === currentPage
-                            ? 'bg-[var(--nts-accent)] text-white'
+                            ? 'btn-gold text-white'
                             : 'hover:bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)]'
                         }`}
                       >
