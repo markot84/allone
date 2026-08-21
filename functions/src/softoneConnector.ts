@@ -634,7 +634,8 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
           // Product-model field names so the Product Intelligence aggregator consumes softone_items directly.
           sku: r['ITEM.CODE'],
           name: r['ITEM.NAME'],
-          stock_level: erpNum(r['ITEM.MTRL_ITEMTRDATA_QTY1']),
+          // PER-312: ready-to-sell = balance minus units reserved on open sales orders (floored at 0).
+          stock_level: Math.max(0, erpNum(r['ITEM.MTRL_ITEMTRDATA_QTY1']) - erpNum(r['ITEM.SoReserved'])),
           // Retail price (fallback wholesale) for inventory value; the unit lives in MTRUNIT1, not here.
           price: erpNum(r['ITEM.PRICER']) || erpNum(r['ITEM.PRICEW']),
           source: 'softone_api',
