@@ -52,7 +52,8 @@ export function CommercialScenarioPanels({
   const [filter, setFilter] = useState<ImpactFilter>('all');
   const [showDetails, setShowDetails] = useState(false);
   const data = useCommercialScenarioImpacts(period);
-  const { getThumbnailUrl } = useProductThumbnails();
+  // PER-309: don't pull the ~73k magento_products enrichment until there are price rows to decorate.
+  const { getThumbnailUrl } = useProductThumbnails({ enabled: (data.price?.rows.length ?? 0) > 0 });
 
   const cachedAtLabel = data.cachedAt
     ? new Date(data.cachedAt).toLocaleString('el-GR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -143,6 +144,13 @@ export function CommercialScenarioPanels({
 
       {data.isLoading ? (
         <LoadingProgress progress={data.progress} />
+      ) : data.loadError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Η φόρτωση παραγγελιών απέτυχε προσωρινά (πρόβλημα σύνδεσης με τη βάση). Τα αποτελέσματα δεν είναι πλήρη.
+          <button type="button" onClick={data.refresh} className="ml-2 font-semibold underline">
+            Δοκιμή ξανά
+          </button>
+        </div>
       ) : visibleTabs.length === 0 ? (
         <p className="text-sm text-[#6B7280]">
           Δεν υπάρχουν δεδομένα για αποφάσεις στην επιλεγμένη περίοδο.

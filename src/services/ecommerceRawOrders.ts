@@ -144,12 +144,30 @@ function coerceFirestoreCreatedAtString(v: unknown): string {
   return '';
 }
 
-/** YYYY-MM-DD for range filtering (after coercing from Timestamp / Magento string). */
-function createdAtDayKeyFromRow(row: Record<string, unknown>): string {
-  const s = coerceFirestoreCreatedAtString(row.createdAt ?? row.created_at);
-  if (!s) return '';
-  const m = /^(\d{4}-\d{2}-\d{2})/.exec(s);
-  return m?.[1] ?? '';
+/** PER-309: degraded order fetches throw instead of returning fake-empty/partial data. */
+export class EcommerceOrdersFetchError extends Error {
+  platform: string;
+  cause?: unknown;
+  constructor(platform: string, cause?: unknown) {
+    super(`Failed to load ${platform} orders`);
+    this.name = 'EcommerceOrdersFetchError';
+    this.platform = platform;
+    this.cause = cause;
+  }
+}
+
+const TRANSIENT_CODES = new Set(['unavailable', 'deadline-exceeded', 'resource-exhausted', 'aborted']);
+const isTransient = (e: unknown) => TRANSIENT_CODES.has(String((e as { code?: string })?.code ?? ''));
+
+async function withTransientRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (!isTransient(e) || i >= attempts - 1) throw e;
+      await new Promise((r) => setTimeout(r, 1000 * 2 ** i)); // 1s, 2s
+    }
+  }
 }
 
 function normalizeLineItemFromFirestore(raw: unknown): EcommerceRawLineItem {
@@ -652,15 +670,6 @@ async function fetchEcommercePlatformOrdersOnly(
             ? ({ cacheFirst: true } as const)
             : ({ cacheFirst: false, forceServer: true } as const);
 
-        const filterRowsByDateWindow = (incoming: Record<string, unknown>[]) =>
-          incoming.filter((row) => {
-            const day = createdAtDayKeyFromRow(row);
-            if (!day) return false;
-            if (options.sinceDate && day < options.sinceDate) return false;
-            if (options.untilDate && day > options.untilDate) return false;
-            return true;
-          });
-
         // Full-range pagination: for high-volume brands (e.g. ~3.5k/month) a single
         // limit(5000) desc returns only the last 1-2 months → older ones are lost.
         if (hasRange && options.fetchAll) {
@@ -682,13 +691,15 @@ async function fetchEcommercePlatformOrdersOnly(
                 items: Record<string, unknown>[];
                 lastDoc: QueryDocumentSnapshot<DocumentData> | null;
                 totalCount: number;
-              } = await FirestoreService.getDocumentsPaginated<Record<string, unknown>>(collectionName, {
-                brandId,
-                pageSize: PAGE,
-                cursor,
-                constraints: rangeConstraints,
-                skipCount: !isFirstPage,
-              });
+              } = await withTransientRetry(() =>
+                FirestoreService.getDocumentsPaginated<Record<string, unknown>>(collectionName, {
+                  brandId,
+                  pageSize: PAGE,
+                  cursor,
+                  constraints: rangeConstraints,
+                  skipCount: !isFirstPage,
+                })
+              );
               if (isFirstPage) knownTotal = Math.min(page.totalCount, HARD_CAP);
               collected.push(...page.items);
               cursor = page.items.length === PAGE ? page.lastDoc : null;
@@ -697,28 +708,25 @@ async function fetchEcommercePlatformOrdersOnly(
               emitProgress();
             } while (cursor && collected.length < HARD_CAP);
             return collected.map((row) => normalizeRawOrder(platform, row));
-          } catch {
-            // Fall back to the non-paginated path below (e.g. missing index).
+          } catch (error) {
+            // PER-309: discard partials and throw; only failed-precondition (missing index) falls through to the ranged query.
+            if ((error as { code?: string })?.code !== 'failed-precondition') throw new EcommerceOrdersFetchError(platform, error);
           }
         }
 
         let rows: Record<string, unknown>[] = [];
         try {
           if (hasRange) {
-            rows = await FirestoreService.getDocuments<Record<string, unknown>>(
-              collectionName,
-              constraints,
-              brandId,
-              rangedLoadOpts
+            rows = await withTransientRetry(() =>
+              FirestoreService.getDocuments<Record<string, unknown>>(collectionName, constraints, brandId, rangedLoadOpts)
             );
             /** On empty results, retry once with `forceServer` for the same constraints (false-empty cache).
              *  Never read the whole collection here — it scales with total orders, not the range. */
             if (rows.length === 0) {
-              rows = await FirestoreService.getDocuments<Record<string, unknown>>(
-                collectionName,
-                constraints,
-                brandId,
-                { forceServer: true }
+              rows = await withTransientRetry(() =>
+                FirestoreService.getDocuments<Record<string, unknown>>(collectionName, constraints, brandId, {
+                  forceServer: true,
+                })
               );
             }
           } else {
@@ -728,13 +736,8 @@ async function fetchEcommercePlatformOrdersOnly(
           }
         } catch (error) {
           if (!hasRange) throw error;
-          const fallbackRows = await FirestoreService.getDocuments<Record<string, unknown>>(
-            collectionName,
-            [limit(DATA_ANALYSIS_ORDER_LIMIT)],
-            brandId,
-            rangedLoadOpts
-          );
-          rows = filterRowsByDateWindow(fallbackRows);
+          // PER-309: no brandId-only fallback — it returned 0 rows for historical windows and cached the lie.
+          throw new EcommerceOrdersFetchError(platform, error);
         }
         return rows.map((row) => normalizeRawOrder(platform, row));
       })

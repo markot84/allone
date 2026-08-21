@@ -1,6 +1,6 @@
 import { FirestoreService } from './firestore';
 
-const CACHE_PREFIX = 'pp-erp-scenario-v9';
+const CACHE_PREFIX = 'pp-erp-scenario-v10';
 // 7 days: cached across the week (memory + localStorage + Firestore); recomputed only on period change/"Refresh".
 export const SCENARIO_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const REMOTE_COLLECTION = 'commercial_scenario_cache';
@@ -11,7 +11,7 @@ interface CacheEntry<T> {
 }
 
 // Bump when cached-row schema/filtering changes so old Firestore docs don't serve stale payload.
-const REMOTE_CACHE_VERSION = 'v9';
+const REMOTE_CACHE_VERSION = 'v10';
 
 function remoteDocId(brandId: string, fromDate: string, toDate: string): string {
   // Firestore doc id: no '/'; ISO dates are safe.
@@ -67,7 +67,7 @@ export function writeScenarioCache<T>(
     // Quota exceeded: clear ALL old scenario entries (every brand/period) and retry.
     try {
       Object.keys(s)
-        .filter((k) => k.startsWith(`${CACHE_PREFIX}:`) && k !== key)
+        .filter((k) => k.startsWith('pp-erp-scenario-') && k !== key) // PER-309: also sweeps dead pre-v10 keys (TTL never deletes)
         .forEach((k) => s.removeItem(k));
       s.setItem(key, payload);
     } catch {

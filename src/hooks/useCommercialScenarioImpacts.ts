@@ -5,7 +5,6 @@ import { useCampaigns } from './useCampaigns';
 import { useEcommerceSummary } from './useEcommerceSummary';
 import { useProcurement } from './useProcurement';
 import { useProcurementSignals } from './useProcurementSignals';
-import { useProducts } from './useProducts';
 import { ECOMMERCE_ORDER_COLLECTIONS, fetchEcommercePlatformOrders } from '../services/ecommerceRawOrders';
 import {
   buildSkuNameMapFromPricingRows,
@@ -37,12 +36,6 @@ type WindowedScenarioRow = {
   before: SkuWindowMetrics;
   after: SkuWindowMetrics;
   confidence?: 'low' | 'medium' | 'high';
-};
-
-type ProductStockFields = {
-  stock_level?: unknown;
-  available_stock?: unknown;
-  stock_on_hand?: unknown;
 };
 
 const ERP_SCENARIO_CACHE_MS = SCENARIO_CACHE_TTL_MS;
@@ -128,7 +121,6 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
   const { campaigns, isLoading: campaignsLoading } = useCampaigns();
   const procurement = useProcurement({ sheets: ['pricing_policy'] });
   const procurementSignals = useProcurementSignals();
-  const { products } = useProducts();
   const [forceRefreshKey, setForceRefreshKey] = useState(0);
   const [progress, setProgress] = useState<{ loaded: number; total: number } | null>(null);
   const scenarioPlatforms = useMemo(
@@ -151,22 +143,14 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     [procurement.data.pricing_policy]
   );
 
+  // PER-309: procurement signals only — the full products download (~222k docs) froze the page for a stock-column nicety.
   const stockBySku = useMemo<Map<string, number>>(() => {
     const map = new Map<string, number>();
-    // Source 1: products collection (eshop connectors — Shopify, WooCommerce, etc.)
-    for (const p of products) {
-      const sku = String(p.sku || '').trim().toUpperCase();
-      if (!sku) continue;
-      const stockFields = p as typeof p & ProductStockFields;
-      const stock = stockFields.stock_level ?? stockFields.available_stock ?? stockFields.stock_on_hand;
-      if (stock != null) map.set(sku, Number(stock));
-    }
-    // Source 2: procurement signals (ERP / manual import) — overrides if present
     for (const [sku, sig] of Object.entries(procurementSignals.signalsBySku)) {
       if (sig.available_stock != null) map.set(sku.trim().toUpperCase(), sig.available_stock);
     }
     return map;
-  }, [products, procurementSignals.signalsBySku]);
+  }, [procurementSignals.signalsBySku]);
 
   const hasLocalCache = useMemo(
     () =>
@@ -197,9 +181,10 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       forceRefreshKey,
     ],
     queryFn: async () => {
-      if (!brandId || !period) {
-        return emptyPayload();
-      }
+      try {
+        if (!brandId || !period) {
+          return emptyPayload();
+        }
 
       // Use cache unless forced refresh: localStorage first, then Firestore (durable);
       // remote hits get written back to localStorage.
@@ -290,9 +275,13 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
         // Durable Firestore cache (fire-and-forget): so the heavy computation doesn't re-run on reload.
         void writeScenarioCacheRemote(brandId, period.fromDate, period.toDate, cachePayload);
       }
-      setProgress(null);
       return result;
+      } finally {
+        // PER-309: also clears the frozen bar when the fetch throws.
+        setProgress(null);
+      }
     },
+    retry: false, // PER-309: bounded retry lives in the service; default 3 would multiply into ~12 attempts
     initialData: () => {
       if (!brandId || !period?.fromDate || !period?.toDate) return undefined;
       return readScenarioCache<ScenarioPayload>(brandId, period.fromDate, period.toDate)?.data ?? undefined;
@@ -330,6 +319,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     orderCount: query.data?.orderCount ?? 0,
     ordersWithLines: query.data?.ordersWithLines ?? 0,
     isLoading,
+    loadError: query.isError,
     isRefreshing: !!query.data && query.isFetching,
     progress,
     analysisScope: query.data?.analysisScope,

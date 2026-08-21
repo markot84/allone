@@ -185,7 +185,8 @@ export class FirestoreService {
       if (options.cursor) pageConstraints.push(startAfter(options.cursor));
 
       const q = query(collection(db, collectionName), ...pageConstraints);
-      const snap = await getDocs(q);
+      // PER-309: server-only — plain getDocs resolves a truncated page from memory cache on transport loss instead of rejecting.
+      const snap = await getDocsFromServer(q);
 
       const items = snap.docs.map((d) => ({ ...d.data(), id: d.id })) as T[];
       const lastDoc = snap.docs[snap.docs.length - 1] ?? null;

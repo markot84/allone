@@ -89,10 +89,11 @@ function formatPeriodLabel(from: string, to: string): string {
 export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: string) => void } = {}) {
   const { period: dashPeriod, setPeriod: setDashPeriod, periodDates } = useDashPeriod();
   const { customFrom, customTo, setCustomRange } = useGlobalDate();
-  const { getThumbnailUrl } = useProductThumbnails();
   const { items, summary, saveDecisionEvent, isSaving, isLoading, isRefreshing, dataCoverage, period } = useCommercialDecisionMemory(
     periodDates
   );
+  // PER-309: skip the ~73k magento_products enrichment until there are decision cards to decorate.
+  const { getThumbnailUrl } = useProductThumbnails({ enabled: items.length > 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<CommercialDecisionEventType | 'all'>('all');

@@ -6,8 +6,8 @@ import {
   type ThumbnailSource,
 } from '../services/productThumbnailResolver';
 
-export function useProductThumbnails() {
-  const magento = useMagentoProductEnrichment();
+export function useProductThumbnails(options?: { enabled?: boolean }) {
+  const magento = useMagentoProductEnrichment(options);
 
   const maps = useMemo(
     () => ({
