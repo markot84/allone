@@ -36,20 +36,28 @@ describe('rollUpStockTotalsByProduct — warehouse filter', () => {
 
   it('null filter sums every warehouse (default, unchanged behaviour)', () => {
     const totals = rollUpStockTotalsByProduct(stocks, null);
-    expect(totals.get('1')).toEqual({ available: 12, physical: 12 });
-    expect(totals.get('2')).toEqual({ available: 3, physical: 3 });
+    expect(totals.get('1')).toEqual({ available: 12, physical: 12, nonShipped: 0 });
+    expect(totals.get('2')).toEqual({ available: 3, physical: 3, nonShipped: 0 });
   });
 
   it('filter counts only included warehouses', () => {
     const totals = rollUpStockTotalsByProduct(stocks, new Set(['18']));
-    expect(totals.get('1')).toEqual({ available: 5, physical: 5 });
+    expect(totals.get('1')).toEqual({ available: 5, physical: 5, nonShipped: 0 });
   });
 
   it('still emits a {0,0} entry for products absent from the filtered warehouse (zeroes stale stock)', () => {
     const totals = rollUpStockTotalsByProduct(stocks, new Set(['18']));
     // product 2 lives only in GLYFA → must be present-and-zero so the merge-write zeroes it.
     expect(totals.has('2')).toBe(true);
-    expect(totals.get('2')).toEqual({ available: 0, physical: 0 });
+    expect(totals.get('2')).toEqual({ available: 0, physical: 0, nonShipped: 0 });
+  });
+
+  it('sums nonShipped (PER-311 reserved-on-open-orders) per product', () => {
+    const totals = rollUpStockTotalsByProduct(
+      [{ ...stockRow(1, 18, 5), productNonShippedStockQty: 2 }, { ...stockRow(1, 20, 7), productNonShippedStockQty: 1 }],
+      null
+    );
+    expect(totals.get('1')).toEqual({ available: 12, physical: 12, nonShipped: 3 });
   });
 
   it('ignores rows without a productId', () => {

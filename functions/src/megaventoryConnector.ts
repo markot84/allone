@@ -656,6 +656,7 @@ function normalizeInventoryStockRows(raw: any[]): any[] {
           inventoryLocationName: '',
           productPhysicalStockQty: loc.StockPhysical ?? loc.StockOnHand,
           productAvailableStockQty: loc.StockOnHand,
+          productNonShippedStockQty: loc.StockNonShipped, // PER-311: reserved on open sales orders
         });
       }
     } else {
@@ -684,22 +685,23 @@ export function normalizeStockLocations(value: unknown): string[] {
   return Array.from(seen);
 }
 
-/** Roll per-location stock rows up to per-product {available, physical} totals, honoring a warehouse
+/** Roll per-location stock rows up to per-product {available, physical, nonShipped} totals, honoring a warehouse
  * filter (null = all warehouses). A product whose locations are ALL excluded still gets a {0,0} entry,
  * so the merge-write that consumes this map ZEROES it instead of leaving a stale all-location total. */
 export function rollUpStockTotalsByProduct(
   stocks: any[],
   locationFilter: Set<string> | null
-): Map<string, { available: number; physical: number }> {
-  const totals = new Map<string, { available: number; physical: number }>();
+): Map<string, { available: number; physical: number; nonShipped: number }> {
+  const totals = new Map<string, { available: number; physical: number; nonShipped: number }>();
   for (const s of stocks) {
     const pid = String(s.productID || s.ProductId || '');
     if (!pid) continue;
     const locId = String(s.inventoryLocationID || s.InventoryLocationId || '');
-    const cur = totals.get(pid) ?? { available: 0, physical: 0 };
+    const cur = totals.get(pid) ?? { available: 0, physical: 0, nonShipped: 0 };
     if (!locationFilter || locationFilter.has(locId)) {
       cur.available += num(s.productAvailableStockQty || s.ProductAvailableStockQty);
       cur.physical += num(s.productPhysicalStockQty || s.ProductPhysicalStockQty);
+      cur.nonShipped += num(s.productNonShippedStockQty || s.ProductNonShippedStockQty);
     }
     totals.set(pid, cur);
   }
@@ -1092,7 +1094,7 @@ export async function recomputeMegaventoryProductTotals(brandId: string): Promis
   const conn = (await db.doc(`connectors/${brandId}`).get()).data()?.megaventory as Record<string, unknown> | undefined;
   const filter = includedStockLocationIds(conn);
 
-  const totals = new Map<string, { available: number; physical: number }>();
+  const totals = new Map<string, { available: number; physical: number; nonShipped: number }>();
   let cursor: QueryDocumentSnapshot | null = null;
   for (;;) {
     let q = db
@@ -1107,10 +1109,11 @@ export async function recomputeMegaventoryProductTotals(brandId: string): Promis
       const pid = String(d.productId || '');
       if (!pid) continue;
       const locId = String(d.locationId || '');
-      const cur = totals.get(pid) ?? { available: 0, physical: 0 };
+      const cur = totals.get(pid) ?? { available: 0, physical: 0, nonShipped: 0 };
       if (!filter || filter.has(locId)) {
         cur.available += num(d.availableStock);
         cur.physical += num(d.physicalStock);
+        cur.nonShipped += num(d.nonShippedStock); // PER-311: 0 for rows synced before the field existed
       }
       totals.set(pid, cur); // registered even when excluded → merge-write zeroes it
     }
@@ -1123,9 +1126,11 @@ export async function recomputeMegaventoryProductTotals(brandId: string): Promis
     id: `mv_p_${pid}`,
     data: {
       productId: pid,
-      stockOnHand: t.physical, // PER-300: shelf units, not MV on-hand (adds unreceived orders)
+      // PER-300: shelf units, not MV on-hand (adds unreceived orders); PER-311: minus units reserved on open sales orders.
+      stockOnHand: Math.max(0, t.physical - t.nonShipped),
       availableStockTotal: t.available,
       physicalStockTotal: t.physical,
+      nonShippedStockTotal: t.nonShipped,
     },
   }));
   if (items.length) await writeBatch(db, 'megaventory_products', brandId, items);
@@ -2195,6 +2200,7 @@ export async function fetchMegaventoryData(
           locationName: s.inventoryLocationAbbreviation || s.InventoryLocationName || '',
           physicalStock: num(s.productPhysicalStockQty || s.ProductPhysicalStockQty),
           availableStock: num(s.productAvailableStockQty || s.ProductAvailableStockQty),
+          nonShippedStock: num(s.productNonShippedStockQty || s.ProductNonShippedStockQty), // PER-311
           source: 'megaventory_api',
         },
       }));
@@ -2217,9 +2223,11 @@ export async function fetchMegaventoryData(
         id: `mv_p_${pid}`,
         data: {
           productId: pid,
-          stockOnHand: t.physical, // PER-300: shelf units, not MV on-hand (adds unreceived orders)
+          // PER-300: shelf units, not MV on-hand (adds unreceived orders); PER-311: minus units reserved on open sales orders.
+          stockOnHand: Math.max(0, t.physical - t.nonShipped),
           availableStockTotal: t.available,
           physicalStockTotal: t.physical,
+          nonShippedStockTotal: t.nonShipped,
         },
       }));
       if (totalItems.length) await writeBatch(db, 'megaventory_products', brandId, totalItems);
