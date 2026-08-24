@@ -147,13 +147,13 @@ function claimFirstReadOfDay(brandId: string): boolean {
   }
 }
 
-/** Collapsed is the default: expanded, the card runs the full height of the dashboard hero row
- *  before anyone has asked to read it. Only an explicit expand (stored as '0') opens it. */
+/** Expanded is the default: the briefing now owns the whole hero row, so there is room to read it
+ *  without asking. Only an explicit collapse (stored as '1') closes it. */
 function loadCollapsedPref(brandId: string): boolean {
   try {
-    return localStorage.getItem(`perf-plus-briefing-collapsed:${brandId}`) !== '0';
+    return localStorage.getItem(`perf-plus-briefing-collapsed:${brandId}`) === '1';
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -168,7 +168,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
   const [briefing, setBriefing] = useState<BriefingResult | null>(() =>
     brandId ? loadBriefingFromStorage(brandId, period) : null
   );
-  const [collapsed, setCollapsed] = useState(() => (brandId ? loadCollapsedPref(brandId) : true));
+  const [collapsed, setCollapsed] = useState(() => (brandId ? loadCollapsedPref(brandId) : false));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Ref: tracks whether auto-regen already ran for this metricsReady→true transition. */
