@@ -88,6 +88,11 @@ const REV_PERF_LABEL_ESHOP_BLEND = 'Organic + καμπάνιες (εκτίμησ
 const DASHBOARD_LOADING_TIMEOUT_MS = 1800;
 const FINANCIAL_GATE_TIMEOUT_MS = 1800;
 const BRIEFING_CONTEXT_TIMEOUT_MS = 6000;
+
+/** Platform ROAS, Marketing expenses, Μέσο καλάθι and Δεσμευμένο κεφάλαιο are switched off for this
+ *  build so the Morning Briefing gets the whole row. Nothing is deleted — flip this back to `true`
+ *  (and drop `.dash-hero-grid--briefing-wide` from the grid) to restore the four tiles. */
+const SHOW_SECONDARY_KPIS: boolean = false;
 /** Ads standalone efficiency chart (not a comparison against revenue). */
 // Fixed (not accent): the ads efficiency chart is multi-series — following the accent
 // would clash with ADS_SPEND_COLOR.
@@ -1236,7 +1241,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
         {/* ── Hero, briefing, KPI row ────────────────────────────────────────────────────────── */}
         {currentBrand && !dashboardOverviewLoading && (
-          <div className="dash-hero-grid">
+          <div className={`dash-hero-grid${SHOW_SECONDARY_KPIS ? '' : ' dash-hero-grid--briefing-wide'}`}>
             <SignalCard
               elevated
               padding={0}
@@ -1363,82 +1368,88 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 ) : null}
               </div>
 
-              <SignalCard padding={20} style={{ gap: 8 }}>
-                <MetricTile
-                  label={isB2B ? 'Demand spend' : 'Marketing expenses'}
-                  size={30}
-                  value={
-                    hasCampaigns || marketingOverheadPeriod.total > 0
-                      ? formatCurrencyCompact(totalMarketingExpenses)
-                      : '€0'
-                  }
-                  note={
-                    periodDeltas.expensesMoM !== null
-                      ? `${periodDeltas.expensesMoM >= 0 ? '+' : '−'}${formatNumber(Math.abs(periodDeltas.expensesMoM), 1)}% vs προηγ. μήνα`
-                      : campaignMetrics.cpa > 0
-                        ? `CPA €${formatNumber(campaignMetrics.cpa, 1)}`
-                        : '—'
-                  }
-                  // Spend climbing is not good news, so the delta inverts.
-                  noteDirection={directionOf(periodDeltas.expensesMoM, false)}
-                />
-              </SignalCard>
+              {SHOW_SECONDARY_KPIS && (
+                <SignalCard padding={20} style={{ gap: 8 }}>
+                  <MetricTile
+                    label={isB2B ? 'Demand spend' : 'Marketing expenses'}
+                    size={30}
+                    value={
+                      hasCampaigns || marketingOverheadPeriod.total > 0
+                        ? formatCurrencyCompact(totalMarketingExpenses)
+                        : '€0'
+                    }
+                    note={
+                      periodDeltas.expensesMoM !== null
+                        ? `${periodDeltas.expensesMoM >= 0 ? '+' : '−'}${formatNumber(Math.abs(periodDeltas.expensesMoM), 1)}% vs προηγ. μήνα`
+                        : campaignMetrics.cpa > 0
+                          ? `CPA €${formatNumber(campaignMetrics.cpa, 1)}`
+                          : '—'
+                    }
+                    // Spend climbing is not good news, so the delta inverts.
+                    noteDirection={directionOf(periodDeltas.expensesMoM, false)}
+                  />
+                </SignalCard>
+              )}
             </div>
 
-            <SignalCard padding={20} style={{ gap: 8 }}>
-              <MetricTile
-                label="Platform ROAS"
-                size={30}
-                value={campaignMetrics.roas > 0 ? `${formatNumber(campaignMetrics.roas, 2)}×` : '—'}
-                valueColor={campaignMetrics.roas >= 1 ? 'var(--success-700)' : undefined}
-                note={
-                  campaignMetrics.totalSpend > 0
-                    ? `${formatCurrencyCompact(campaignMetrics.totalRevenue)} από ${formatCurrencyCompact(campaignMetrics.totalSpend)}`
-                    : 'χωρίς δαπάνη στην περίοδο'
-                }
-                noteDirection="flat"
-              />
-            </SignalCard>
+            {SHOW_SECONDARY_KPIS && (
+              <>
+                <SignalCard padding={20} style={{ gap: 8 }}>
+                  <MetricTile
+                    label="Platform ROAS"
+                    size={30}
+                    value={campaignMetrics.roas > 0 ? `${formatNumber(campaignMetrics.roas, 2)}×` : '—'}
+                    valueColor={campaignMetrics.roas >= 1 ? 'var(--success-700)' : undefined}
+                    note={
+                      campaignMetrics.totalSpend > 0
+                        ? `${formatCurrencyCompact(campaignMetrics.totalRevenue)} από ${formatCurrencyCompact(campaignMetrics.totalSpend)}`
+                        : 'χωρίς δαπάνη στην περίοδο'
+                    }
+                    noteDirection="flat"
+                  />
+                </SignalCard>
 
-            <SignalCard padding={20} style={{ gap: 8 }}>
-              <MetricTile
-                label={isB2B ? 'Demand conversions' : 'Μέσο καλάθι (AOV)'}
-                size={30}
-                value={
-                  isB2B
-                    ? formatNumber(campaignMetrics.totalConversions)
-                    : periodDeltas.aov > 0
-                      ? `€${formatNumber(periodDeltas.aov, 2)}`
-                      : '—'
-                }
-                note={
-                  isB2B
-                    ? 'ενέργειες υψηλής πρόθεσης'
-                    : periodDeltas.aovMoM !== null
-                      ? `${periodDeltas.aovMoM >= 0 ? '+' : '−'}${formatNumber(Math.abs(periodDeltas.aovMoM), 1)}% vs προηγ. μήνα`
-                      : periodDeltas.hasEshopAov
-                        ? 'από παραγγελίες e-shop'
-                        : 'από καμπάνιες'
-                }
-                noteDirection={isB2B ? 'flat' : directionOf(periodDeltas.aovMoM)}
-              />
-            </SignalCard>
+                <SignalCard padding={20} style={{ gap: 8 }}>
+                  <MetricTile
+                    label={isB2B ? 'Demand conversions' : 'Μέσο καλάθι (AOV)'}
+                    size={30}
+                    value={
+                      isB2B
+                        ? formatNumber(campaignMetrics.totalConversions)
+                        : periodDeltas.aov > 0
+                          ? `€${formatNumber(periodDeltas.aov, 2)}`
+                          : '—'
+                    }
+                    note={
+                      isB2B
+                        ? 'ενέργειες υψηλής πρόθεσης'
+                        : periodDeltas.aovMoM !== null
+                          ? `${periodDeltas.aovMoM >= 0 ? '+' : '−'}${formatNumber(Math.abs(periodDeltas.aovMoM), 1)}% vs προηγ. μήνα`
+                          : periodDeltas.hasEshopAov
+                            ? 'από παραγγελίες e-shop'
+                            : 'από καμπάνιες'
+                    }
+                    noteDirection={isB2B ? 'flat' : directionOf(periodDeltas.aovMoM)}
+                  />
+                </SignalCard>
 
-            <SignalCard padding={20} style={{ gap: 8 }}>
-              <MetricTile
-                label="Δεσμευμένο κεφάλαιο"
-                size={30}
-                value={tiedCapital > 0 ? formatCurrencyCompact(tiedCapital) : '—'}
-                note={
-                  deadStock && deadStock.count > 0
-                    ? `σε ${formatNumber(deadStock.count)} αδρανή SKUs`
-                    : productsCount > 0
-                      ? `σε ${formatNumber(productsCount)} SKUs`
-                      : 'χωρίς δεδομένα αποθέματος'
-                }
-                noteDirection="flat"
-              />
-            </SignalCard>
+                <SignalCard padding={20} style={{ gap: 8 }}>
+                  <MetricTile
+                    label="Δεσμευμένο κεφάλαιο"
+                    size={30}
+                    value={tiedCapital > 0 ? formatCurrencyCompact(tiedCapital) : '—'}
+                    note={
+                      deadStock && deadStock.count > 0
+                        ? `σε ${formatNumber(deadStock.count)} αδρανή SKUs`
+                        : productsCount > 0
+                          ? `σε ${formatNumber(productsCount)} SKUs`
+                          : 'χωρίς δεδομένα αποθέματος'
+                    }
+                    noteDirection="flat"
+                  />
+                </SignalCard>
+              </>
+            )}
           </div>
         )}
 

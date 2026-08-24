@@ -530,6 +530,16 @@ h1, h2, h3, h4, h5, h6 {
   min-width: 0;
 }
 
+/* With the four secondary KPI tiles switched off there is no second row to fill: the hero keeps its
+   two columns on one row and the briefing takes columns 3–5 on its own. */
+.dash-hero-grid--briefing-wide .dash-hero-card {
+  grid-row: auto;
+}
+
+.dash-hero-grid--briefing-wide .dash-briefing-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* Below the desktop width the hero can no longer share its rows, so it takes a full row of its
    own and the KPI cards pair up underneath. */
 @media (max-width: 1199px) {
