@@ -16,7 +16,7 @@ const CHANNEL_COLORS: Record<string, string> = {
   'Google Ads': '#22C55E',
   Meta: '#2563EB',
   Other: '#F59E0B',
-  TikTok: '#000000',
+  TikTok: '#06B6D4',
   LinkedIn: '#0A66C2',
   Pinterest: '#E60023',
   Skroutz: '#F68B24',
@@ -182,8 +182,7 @@ export function ChannelPerformanceHistoryCard({
             />
             <Legend />
             {realPerformanceHistory.channels.map((ch) => {
-              const hasData = realPerformanceHistory.rows.some((d) => (d[ch] as number) > 0);
-              if (!hasData) return null;
+              // PER-308: render zero-ROAS channels too — a channel with spend but no purchase value (TikTok) must stay visible.
               const color = CHANNEL_COLORS[ch] || '#6B7280';
               return (
                 <Line key={ch} type="monotone" dataKey={ch} stroke={color} strokeWidth={2.5} name={ch} dot={{ r: 4, fill: color }} connectNulls />
