@@ -501,6 +501,33 @@ describe('segments import from purchase documents (PER-278)', () => {
     expect(isCustomerLevelData(out)).toBe(true);
   });
 
+  it('UI download templates flow through the correct paths (kept in sync with DataImport.tsx)', () => {
+    const invoicesTemplate = [
+      'customer_id,email,invoice_no,invoice_date,total',
+      'C-1001,customer1@example.com,INV-0001,2026-05-14,61.40',
+      'C-1001,customer1@example.com,INV-0087,2026-08-02,120.00',
+      'C-1002,customer2@example.com,INV-0042,2026-07-21,35.90',
+    ].join('\n');
+    const inv = csvToObjects(parseCSV(invoicesTemplate), 'segments');
+    expect(inv).toHaveLength(3);
+    expect(isInvoiceLevelData(inv)).toBe(true);
+    const computed = computeRfmRowsFromInvoices(inv);
+    expect(computed).toHaveLength(2);
+    expect(computed.find((r) => r.customer_id === 'C-1001')!.frequency).toBe('2');
+    expect(computed.find((r) => r.customer_id === 'C-1001')!.monetary).toBe('181.40');
+    expect(isCustomerLevelData(computed)).toBe(true);
+
+    const resultsTemplate = [
+      'customer_id,email,segment,recency,frequency,monetary,rfm_score',
+      'C-1001,customer1@example.com,Champions,12,8,940.50,5-5-5',
+      'C-1002,customer2@example.com,At Risk,213,1,61.40,2-1-2',
+    ].join('\n');
+    const res = csvToObjects(parseCSV(resultsTemplate), 'segments');
+    expect(res).toHaveLength(2);
+    expect(isInvoiceLevelData(res)).toBe(false);
+    expect(isCustomerLevelData(res)).toBe(true);
+  });
+
   it('finds the real header row under a preamble (e-tennis Customer List export)', () => {
     const rows = [
       ['CUSTOMER LIST — At Risk', '', '', '', '', '', '', ''],

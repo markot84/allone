@@ -39,6 +39,19 @@ with open("PROCUREMENT_TEMPLATE.xlsx", "rb") as f:
     resp = requests.post(url, headers=headers, files={"file": f}, data={"type": "procurement"})
 print(resp.json())`;
 
+function downloadCsvTemplate(csvContent: string, filename: string) {
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 function ProcurementApiInfo() {
   const [activeTab, setActiveTab] = useState<'curl' | 'python'>('curl');
   const [copied, setCopied] = useState(false);
@@ -925,6 +938,56 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                   <FileText size={14} className="mr-1" />
                   Download Template
                 </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Templates — Segments (PER-278): invoices file (RFM computed) or ready-made RFM results */}
+          {importMode === 'standard' && selectedType === 'segments' && (
+            <div className="border-t border-[#E5E5E5] pt-4 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className="text-sm font-medium text-[#1A1A1A]">
+                  Αρχείο παραστατικών πωλήσεων (το RFM υπολογίζεται αυτόματα) ή έτοιμα αποτελέσματα RFM
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => {
+                      downloadCsvTemplate(
+                        [
+                          'customer_id,email,invoice_no,invoice_date,total',
+                          'C-1001,customer1@example.com,INV-0001,2026-05-14,61.40',
+                          'C-1001,customer1@example.com,INV-0087,2026-08-02,120.00',
+                          'C-1002,customer2@example.com,INV-0042,2026-07-21,35.90',
+                        ].join('\n'),
+                        'segments_invoices_template.csv'
+                      );
+                      toast.success('Template παραστατικών κατέβηκε!');
+                    }}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    <FileText size={14} className="mr-1" />
+                    Template παραστατικών
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      downloadCsvTemplate(
+                        [
+                          'customer_id,email,segment,recency,frequency,monetary,rfm_score',
+                          'C-1001,customer1@example.com,Champions,12,8,940.50,5-5-5',
+                          'C-1002,customer2@example.com,At Risk,213,1,61.40,2-1-2',
+                        ].join('\n'),
+                        'segments_rfm_results_template.csv'
+                      );
+                      toast.success('Template αποτελεσμάτων RFM κατέβηκε!');
+                    }}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    <FileText size={14} className="mr-1" />
+                    Template αποτελεσμάτων RFM
+                  </Button>
+                </div>
               </div>
             </div>
           )}
