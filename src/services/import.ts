@@ -508,8 +508,10 @@ export function csvToObjects(csvRows: string[][], type?: ImportType): Record<str
   // Try to find header row if first row doesn't look like headers
   let headerRowIndex = 0;
   if (csvRows.length > 1) {
-    const headerKeywords = type === 'campaigns' 
+    const headerKeywords = type === 'campaigns'
       ? ['campaign', 'month', 'impressions', 'clicks', 'cost', 'conversions', 'roas', 'purchases', 'spent', 'amount spent', 'purchase roas', 'reporting starts', 'result type']
+      : type === 'segments' // PER-278: exports/invoice files carry preamble rows before the real header
+      ? ['segment', 'customer', 'email', 'recency', 'frequency', 'monetary', 'rfm', 'invoice', 'date', 'amount', 'total', 'ημερομηνία', 'πελάτ', 'παραστατικό', 'ποσό', 'αξία', 'όνομα']
       : ['sku', 'product', 'name', 'category', 'price', 'stock', 'cost', 'revenue', 'margin', 'quantity', 'item', 'id', 'title', 'item_id', 'κωδικός', 'περιγραφή', 'ομάδα', 'τιμή', 'διαθεσιμότητα', 'απόθεμα'];
     
     let bestMatch = 0;

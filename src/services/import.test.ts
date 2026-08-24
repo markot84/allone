@@ -501,6 +501,21 @@ describe('segments import from purchase documents (PER-278)', () => {
     expect(isCustomerLevelData(out)).toBe(true);
   });
 
+  it('finds the real header row under a preamble (e-tennis Customer List export)', () => {
+    const rows = [
+      ['CUSTOMER LIST — At Risk', '', '', '', '', '', '', ''],
+      ['Brand', 'e-tennis', '', 'Total', '3380', '', '', ''],
+      ['Generated', '2026-08-20', '', '', '', '', '', ''],
+      [''],
+      ['Customer ID', 'Email', 'Όνομα', 'Segment', 'Recency', 'Frequency', 'Monetary', 'RFM Score'],
+      ['email_hash:abc', 'k@x.gr', 'Κώστας', 'At Risk', '213', '1', '61.4', '2-5-3'],
+    ];
+    const objects = csvToObjects(rows, 'segments');
+    expect(objects).toHaveLength(1);
+    expect(objects[0].segment).toBe('At Risk');
+    expect(isCustomerLevelData(objects)).toBe(true);
+  });
+
   it('csvToObjects keeps date-bearing rows for segments (date-range skip is products-only)', () => {
     const rows = parseCSV('customer_id,invoice_date,total,invoice_no\nC1,2026-08-20,50,INV-1\nC2,15/08/2026,30,INV-2');
     const objects = csvToObjects(rows, 'segments');
