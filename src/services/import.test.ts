@@ -470,6 +470,18 @@ describe('segments import from purchase documents (PER-278)', () => {
     expect(isInvoiceLevelData([invoice('C1', '2026-08-01', '50', 'INV-1')])).toBe(true);
   });
 
+  it('detects the NTS sales-lines export headers (Συναλλαγή/Ημερ/νία/Αξία πώλησης/Συναλλασσόμενος)', () => {
+    const row = {
+      'Συναλλαγή': '1229695', 'Ημερ/νία': '2024-10-24 00:00:00', 'Κωδικός': '034-662-0050',
+      'Ποσ. πώλησης': '2', 'Αξία πώλησης': '27.8', 'Συναλλασσόμενος': '30-01-0184', 'Επωνυμία': 'ACME AE',
+    };
+    expect(isInvoiceLevelData([row])).toBe(true);
+    const out = computeRfmRowsFromInvoices([row, { ...row, 'Συναλλαγή': '1229696', 'Αξία πώλησης': '10' }]);
+    expect(out).toHaveLength(1);
+    expect(out[0].frequency).toBe('2');
+    expect(out[0].monetary).toBe('37.80');
+  });
+
   it('does NOT flag customer-level RFM results as invoices', () => {
     expect(isInvoiceLevelData([{ customer_id: 'C1', segment: 'Champions', recency: '5', frequency: '3', monetary: '100' }])).toBe(false);
   });

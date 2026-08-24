@@ -1500,10 +1500,10 @@ function validateCampaignRow(
 }
 
 // PER-278: Segments import also accepts a purchase-documents file (row = invoice) and computes RFM here.
-const INVOICE_DATE_COLS = ['invoice_date', 'doc_date', 'order_date', 'transaction_date', 'ημερομηνία', 'ημ/νία', 'date'];
-const INVOICE_AMOUNT_COLS = ['net_total', 'grand_total', 'total_amount', 'καθαρή_αξία', 'συνολική_αξία', 'total', 'amount', 'value', 'ποσό', 'αξία', 'σύνολο'];
-const INVOICE_CUSTOMER_COLS = ['customer_id', 'customerid', 'client_id', 'user_id', 'κωδικός_πελάτη', 'πελάτης', 'customer'];
-const INVOICE_DOC_COLS = ['invoice_no', 'doc_no', 'doc_number', 'document_number', 'αριθμός_παραστατικού', 'παραστατικό', 'order_id', 'invoice', 'document'];
+const INVOICE_DATE_COLS = ['invoice_date', 'doc_date', 'order_date', 'transaction_date', 'ημερομηνία', 'ημ/νία', 'ημερ/νία', 'date'];
+const INVOICE_AMOUNT_COLS = ['net_total', 'grand_total', 'total_amount', 'καθαρή_αξία', 'συνολική_αξία', 'αξία_πώλησης', 'total', 'amount', 'value', 'ποσό', 'αξία', 'σύνολο'];
+const INVOICE_CUSTOMER_COLS = ['customer_id', 'customerid', 'client_id', 'user_id', 'κωδικός_πελάτη', 'συναλλασσόμενος', 'πελάτης', 'customer'];
+const INVOICE_DOC_COLS = ['invoice_no', 'doc_no', 'doc_number', 'document_number', 'αριθμός_παραστατικού', 'παραστατικό', 'συναλλαγή', 'order_id', 'invoice', 'document'];
 
 /** Purchase-documents file: has date + amount + customer columns, and NO segment/score columns. */
 export function isInvoiceLevelData(objects: Record<string, string>[]): boolean {
@@ -2225,10 +2225,12 @@ export async function importFile(
         }
 
         if (isCustomerLevelData(objects)) {
-          await FirestoreService.deleteCollection('segments', brandId);
           const { segments: aggregated, customersBySegment } = aggregateCustomersToSegments(objects);
           validSegments = aggregated;
           result.warnings.push(`Aggregated ${objects.length} customers into ${validSegments.length} segments`);
+          // PER-278: replace existing data only once there is something valid to write — a failed parse must not wipe the brand.
+          if (validSegments.length === 0) break;
+          await FirestoreService.deleteCollection('segments', brandId);
 
           // Store customer-level data per segment for Action Pack exports
           await FirestoreService.deleteCollection('segment_customers', brandId);
@@ -2251,8 +2253,7 @@ export async function importFile(
             }
           }
         } else {
-          // Segment-level: each row = one segment — replace existing first
-          await FirestoreService.deleteCollection('segments', brandId);
+          // Segment-level: each row = one segment
           validSegments = [];
           for (let i = 0; i < objects.length; i++) {
             const validation = validateSegmentRow(objects[i], i);
@@ -2265,6 +2266,14 @@ export async function importFile(
               }
             }
           }
+          // PER-278: replace only when at least one row validated — never wipe on an all-invalid file.
+          if (validSegments.length === 0) {
+            if (result.failed > MAX_ERRORS_DISPLAY) {
+              result.errors.push(`...and ${result.failed - MAX_ERRORS_DISPLAY} more validation errors`);
+            }
+            break;
+          }
+          await FirestoreService.deleteCollection('segments', brandId);
         }
 
         // Batch import to Firestore (500/batch, 3 concurrent)
