@@ -11,8 +11,9 @@ describe('sync_failure_alert (PER-193)', () => {
     });
     expect(alert).not.toBeNull();
     expect(alert!.severity).toBe('critical');
-    expect(alert!.title).toContain('1 connector');
-    expect(alert!.data.failing).toEqual([{ id: 'meta', error: 'Meta token expired — reconnect required' }]);
+    expect(alert!.title).toBe('Αποτυχία συγχρονισμού: Meta');
+    expect(alert!.description).toBe('Meta: Η σύνδεση έληξε — χρειάζεται επανασύνδεση');
+    expect(alert!.data.failing).toEqual([{ id: 'meta', label: 'Meta', error: 'Meta token expired — reconnect required' }]);
   });
 
   it('returns null when no connected connector has an error', () => {

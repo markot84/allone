@@ -1,6 +1,7 @@
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 import { ALERT } from './utils/alertKeys';
+import { CONNECTOR_DOC_KEY } from './connectorSyncStatus';
 
 let _db: Firestore;
 function db() {
@@ -50,6 +51,22 @@ type AlertSeverity = 'info' | 'warning' | 'critical';
 /** connectors/{brandId} doc: per-connector state maps (PER-193). */
 type ConnectorStates = Record<string, { connected?: boolean; lastSyncError?: string }> | null;
 
+/** doc key → display label, inverted from the nightly-wave map. */
+const CONNECTOR_LABEL: Record<string, string> = Object.fromEntries(
+  Object.entries(CONNECTOR_DOC_KEY).map(([label, key]) => [key, label])
+);
+
+/** Human phrase for an email/alert — raw error text stays in data.failing only. */
+function humanizeSyncError(error: string): string {
+  if (/401|403|token|expired|unauthoriz|unauthentic|reconnect|invalid_grant|access/i.test(error)) {
+    return 'Η σύνδεση έληξε — χρειάζεται επανασύνδεση';
+  }
+  if (/deadline|timeout|timed out|unavailable|503|502|econnreset|etimedout|network/i.test(error)) {
+    return 'Προσωρινό σφάλμα επικοινωνίας — θα επαναληφθεί αυτόματα';
+  }
+  return 'Σφάλμα συγχρονισμού — δείτε λεπτομέρειες στην εφαρμογή';
+}
+
 interface NewAlert {
   triggerId: string;
   triggerLabel: string;
@@ -81,15 +98,15 @@ export const SERVER_TRIGGERS: Record<string, {
       if (!connectors) return null;
       const failing = Object.entries(connectors)
         .filter(([, s]) => s && typeof s === 'object' && s.connected === true && s.lastSyncError)
-        .map(([id, s]) => ({ id, error: String(s.lastSyncError).slice(0, 200) }));
+        .map(([id, s]) => ({ id, label: CONNECTOR_LABEL[id] || id, error: String(s.lastSyncError).slice(0, 200) }));
       if (failing.length === 0) return null;
       return {
         triggerId: 'sync_failure_alert',
         triggerLabel: 'Sync Failure Alert',
         triggerGroup: 'data',
         severity: 'critical',
-        title: `Αποτυχία συγχρονισμού σε ${failing.length} connector${failing.length > 1 ? 's' : ''}`,
-        description: failing.map((f) => `${f.id}: ${f.error}`).join(' · '),
+        title: `Αποτυχία συγχρονισμού: ${failing.map((f) => f.label).join(', ')}`,
+        description: failing.map((f) => `${f.label}: ${humanizeSyncError(f.error)}`).join(' · '),
         suggestions: [
           'Ελέγξτε τη σύνδεση στη σελίδα Δεδομένα → Συνδέσεις',
           'Αν το token έχει λήξει, κάντε επανασύνδεση του connector',
