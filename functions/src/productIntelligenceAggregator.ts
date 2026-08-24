@@ -259,12 +259,14 @@ interface StockThresholds {
   lowDaysOfCover: number;
   excessDaysOfCover: number;
   newStockGraceDays: number;
+  deadStockDays: number;
 }
 const DEFAULT_STOCK_THRESHOLDS: StockThresholds = {
   velocityWindowDays: SALES_PERIOD_DAYS,
   lowDaysOfCover: 30,
   excessDaysOfCover: 120,
   newStockGraceDays: 60,
+  deadStockDays: 60,
 };
 /** Platform floor for supplier lead time (days) when neither supplier nor brand default sets one. */
 const DEFAULT_LEAD_DAYS = 30;
@@ -307,6 +309,7 @@ function resolveStockThresholds(raw: unknown): StockThresholds {
     lowDaysOfCover: pos(r.lowDaysOfCover, DEFAULT_STOCK_THRESHOLDS.lowDaysOfCover),
     excessDaysOfCover: pos(r.excessDaysOfCover, DEFAULT_STOCK_THRESHOLDS.excessDaysOfCover),
     newStockGraceDays: pos(r.newStockGraceDays, DEFAULT_STOCK_THRESHOLDS.newStockGraceDays),
+    deadStockDays: pos(r.deadStockDays, DEFAULT_STOCK_THRESHOLDS.deadStockDays),
   };
 }
 
@@ -326,9 +329,8 @@ function stockBucket(
     if (daysOfStock > t.excessDaysOfCover) return 'excess';
     return 'healthy';
   }
-  // No recent sales. With a real receipt date, 'dead' means sitting beyond the grace window; within grace
-  // it's newly received, not dead. Without an age signal, keep the stock-presence/lifetime fallback.
-  if (shelfAgeDays != null) return shelfAgeDays > t.newStockGraceDays ? 'dead' : 'healthy';
+  // PER-310: no recent sales → 'dead' only beyond both the grace and dead-stock thresholds; no age signal → lifetime fallback.
+  if (shelfAgeDays != null) return shelfAgeDays > Math.max(t.newStockGraceDays, t.deadStockDays) ? 'dead' : 'healthy';
   if (qtySoldPeriod == null) return 'healthy';
   return qtySoldLifetime != null && qtySoldLifetime > 0 ? 'dead' : 'healthy';
 }
