@@ -12,6 +12,7 @@ const TRIGGER_SECTION: Record<string, string> = {
   customers: 'rfm',
   campaigns: 'campaigns',
   seasonal: 'calendar',
+  data: 'data',
   analytics: 'analytics',
   competitive: 'competitive',
   procurement: 'procurement',
