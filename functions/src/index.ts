@@ -2139,6 +2139,8 @@ export const processMegaventorySyncJobs = onSchedule(
         logger.warn(`[MegaventoryJob] ${job.brandId} lost job ownership before finalization (stale-swept or re-claimed) — keeping the sweep's verdict`);
         return;
       }
+      // PER-288: the job's final verdict owns lastSyncError for continuation runs.
+      await persistConnectorSyncError(job.brandId, 'megaventory', completedClean ? null : result.error || 'Megaventory sync did not complete');
       logger.info(`[MegaventoryJob] Completed catalog refresh for ${job.brandId}: ${JSON.stringify(result)}`);
 
       try {
