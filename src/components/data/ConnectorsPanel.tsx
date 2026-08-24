@@ -1605,10 +1605,10 @@ function MetaSystemUserModal({
             <p style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: 600, color: '#0C4A6E' }}>Πώς φτιάχνεις το token (μία φορά):</p>
             <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: '#0C4A6E', lineHeight: 1.6 }}>
               <li>Άνοιξε <strong>Meta Business Settings → Users → System Users</strong>.</li>
-              <li>Δημιούργησε ή διάλεξε έναν System User και πάτησε <strong>«Generate new token»</strong>.</li>
-              <li>Διάλεξε την εφαρμογή μας, λήξη <strong>«Never»</strong> και permission <strong>ads_read</strong>.</li>
-              <li>Στα <strong>Assets → Ad Accounts</strong> ανάθεσε τον διαφημιστικό λογαριασμό στον System User.</li>
-              <li>Αντίγραψε το token και επικόλλησέ το εδώ.</li>
+              <li>Δημιούργησε ή διάλεξε έναν System User (ρόλος <strong>Employee</strong> αρκεί).</li>
+              <li>Πάτησε <strong>Assign Assets</strong> και ανάθεσε στον System User τον διαφημιστικό λογαριασμό (<strong>Ad Accounts</strong>).</li>
+              <li>Πάτησε <strong>«Generate new token»</strong>, διάλεξε την εφαρμογή μας, λήξη <strong>«Never»</strong> και permission <strong>ads_read</strong>. Αν η εφαρμογή δεν εμφανίζεται στη λίστα, δεν έχει συνδεθεί με το business portfolio — επικοινώνησε μαζί μας.</li>
+              <li>Το token εμφανίζεται μία φορά — αντίγραψέ το αμέσως και επικόλλησέ το εδώ.</li>
             </ol>
             <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: '8px', fontSize: '12px', color: '#0369A1', fontWeight: 600 }}>
               Άνοιγμα Business Settings ↗
