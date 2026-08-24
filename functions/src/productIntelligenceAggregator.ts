@@ -1215,14 +1215,19 @@ function summaryForProducts(products: CompactProduct[]): InventorySummaryPayload
   return empty;
 }
 
+// PER-304: raised from 250 (e-tennis lost the tail); bound guards doc/payload size only.
+const FACET_LIST_CAP = 1000;
+
 function categoryCounts(products: CompactProduct[]): Array<{ name: string; count: number }> {
   const counts = new Map<string, number>();
   for (const product of products) {
-    if (product.category) counts.set(product.category, (counts.get(product.category) || 0) + 1);
+    for (const id of categoryIds(product)) {
+      if (id !== '__EMPTY_CAT__') counts.set(id, (counts.get(id) || 0) + 1);
+    }
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 250)
+    .slice(0, FACET_LIST_CAP)
     .map(([name, count]) => ({ name, count }));
 }
 
@@ -1233,7 +1238,7 @@ function brandCounts(products: CompactProduct[]): Array<{ name: string; count: n
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 250)
+    .slice(0, FACET_LIST_CAP)
     .map(([name, count]) => ({ name, count }));
 }
 
@@ -1252,27 +1257,27 @@ function facetCounts(
   rows: CompactProduct[],
   params: ProductIntelligenceQueryParams,
   omit: 'categories' | 'brands' | 'tags',
-  idFn: (product: CompactProduct) => string,
+  idsFn: (product: CompactProduct) => string[],
 ): Array<{ id: string; count: number }> {
   const scoped = { ...params, [omit]: undefined };
   const counts = new Map<string, number>();
   for (const product of rows) {
     if (!matchesQuery(product, scoped)) continue;
-    const id = idFn(product);
-    if (!id) continue;
-    counts.set(id, (counts.get(id) || 0) + 1);
+    for (const id of idsFn(product)) {
+      if (id) counts.set(id, (counts.get(id) || 0) + 1);
+    }
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 250)
+    .slice(0, FACET_LIST_CAP)
     .map(([id, count]) => ({ id, count }));
 }
 
 function buildQueryFacets(rows: CompactProduct[], params: ProductIntelligenceQueryParams): QueryFacets {
   return {
-    categories: facetCounts(rows, params, 'categories', categoryId),
-    brands: facetCounts(rows, params, 'brands', (p) => text(p.brand)), // empty brand dropped
-    tags: facetCounts(rows, params, 'tags', effectiveTagId),
+    categories: facetCounts(rows, params, 'categories', categoryIds),
+    brands: facetCounts(rows, params, 'brands', (p) => [text(p.brand)].filter(Boolean)), // empty brand dropped
+    tags: facetCounts(rows, params, 'tags', (p) => [effectiveTagId(p)]),
   };
 }
 
@@ -1303,8 +1308,10 @@ function ymd(value: string | undefined): string | null {
   return d.toISOString().slice(0, 10);
 }
 
-function categoryId(product: CompactProduct): string {
-  return text(product.category) || '__EMPTY_CAT__';
+// PER-304: a product belongs to both its leaf category and its parent (subcategory holds e.g. «Ρακέτες Τένις»).
+function categoryIds(product: CompactProduct): string[] {
+  const ids = [...new Set([text(product.category), text(product.subcategory)].filter(Boolean))];
+  return ids.length ? ids : ['__EMPTY_CAT__'];
 }
 
 function brandFilterId(product: CompactProduct): string {
@@ -1336,7 +1343,7 @@ function matchesQuery(product: CompactProduct, params: ProductIntelligenceQueryP
 
   if (params.categories?.length) {
     const allowed = new Set(params.categories);
-    if (!allowed.has(categoryId(product))) return false;
+    if (!categoryIds(product).some((id) => allowed.has(id))) return false;
   }
 
   if (params.brands?.length) {
