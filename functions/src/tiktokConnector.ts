@@ -664,7 +664,8 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
         const batch = getDb().batch();
         const slice = campaigns.slice(i, i + batchSize);
         for (const campaign of slice) {
-          batch.set(getDb().collection('campaigns').doc(campaign.id), campaign, { merge: true });
+          // PER-308: full overwrite — payload already carries the merged history; {merge:true} kept stale "… 00:00:00" day keys alive forever.
+          batch.set(getDb().collection('campaigns').doc(campaign.id), campaign);
         }
         await batch.commit();
       }
