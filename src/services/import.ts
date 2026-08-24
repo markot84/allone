@@ -502,7 +502,7 @@ async function getObjectsFromXmlFile(
 }
 
 // Convert CSV rows to objects (supports finding header row for campaigns and products)
-function csvToObjects(csvRows: string[][], type?: ImportType): Record<string, string>[] {
+export function csvToObjects(csvRows: string[][], type?: ImportType): Record<string, string>[] {
   if (csvRows.length === 0) return [];
   
   // Try to find header row if first row doesn't look like headers
@@ -582,8 +582,8 @@ function csvToObjects(csvRows: string[][], type?: ImportType): Record<string, st
         continue;
       }
     } else {
-      // For products, skip date ranges
-      const looksLikeDateRange = row.some(cell => {
+      // For products, skip date ranges. PER-278: never for segments — invoice rows carry real dates.
+      const looksLikeDateRange = type !== 'segments' && row.some(cell => {
         const str = String(cell).toLowerCase();
         return str.includes('january') || str.includes('february') || str.includes('march') || 
                str.includes('2025') || str.includes('2026') || str.match(/\d{4}[_-]\d{1,2}[_-]\d{1,2}/);
@@ -1497,6 +1497,121 @@ function validateCampaignRow(
   return { valid: true, data: campaign };
 }
 
+// PER-278: Segments import also accepts a purchase-documents file (row = invoice) and computes RFM here.
+const INVOICE_DATE_COLS = ['invoice_date', 'doc_date', 'order_date', 'transaction_date', 'ημερομηνία', 'ημ/νία', 'date'];
+const INVOICE_AMOUNT_COLS = ['net_total', 'grand_total', 'total_amount', 'καθαρή_αξία', 'συνολική_αξία', 'total', 'amount', 'value', 'ποσό', 'αξία', 'σύνολο'];
+const INVOICE_CUSTOMER_COLS = ['customer_id', 'customerid', 'client_id', 'user_id', 'κωδικός_πελάτη', 'πελάτης', 'customer'];
+const INVOICE_DOC_COLS = ['invoice_no', 'doc_no', 'doc_number', 'document_number', 'αριθμός_παραστατικού', 'παραστατικό', 'order_id', 'invoice', 'document'];
+
+/** Purchase-documents file: has date + amount + customer columns, and NO segment/score columns. */
+export function isInvoiceLevelData(objects: Record<string, string>[]): boolean {
+  if (objects.length === 0) return false;
+  const normCols = new Set(
+    Object.keys(objects[0]).map((k) => k.toLowerCase().replace(/\s+/g, '_').replace(/[()]/g, ''))
+  );
+  const hasCol = (names: string[]) => names.some((n) => normCols.has(n));
+  if (hasCol(['segment', 'rfm_segment', 'segment_name', 'rfm_score'])) return false;
+  return hasCol(INVOICE_DATE_COLS) && hasCol(INVOICE_AMOUNT_COLS) && hasCol([...INVOICE_CUSTOMER_COLS, 'email']);
+}
+
+/** Parse invoice dates: ISO/`new Date()`-parsable, dd/mm/yyyy, or Excel serial (sheet_to_json raw). */
+function parseInvoiceDate(raw: string): Date | null {
+  const s = (raw || '').trim();
+  if (!s) return null;
+  if (/^\d{5}(\.\d+)?$/.test(s)) {
+    const serial = parseFloat(s);
+    if (serial > 20000 && serial < 60000) return new Date(Math.round((serial - 25569) * 86400000));
+  }
+  const dm = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/);
+  if (dm) return new Date(Date.UTC(+dm[3], +dm[2] - 1, +dm[1]));
+  const d = new Date(s);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
+/** Parse amounts with EU/Greek formats: "1.234,56", "1,234.56", "€ 61,40". */
+function parseInvoiceAmount(raw: string): number {
+  const s = (raw || '').replace(/[€\s]/g, '');
+  if (!s) return 0;
+  const norm = s.lastIndexOf(',') > s.lastIndexOf('.')
+    ? s.replace(/\./g, '').replace(',', '.')
+    : s.replace(/,/g, '');
+  return parseFloat(norm) || 0;
+}
+
+// Mirrors functions/src/dataAnalysisRfmAggregator.ts assignQuintileScores — ties share a score.
+function assignQuintileScores(values: number[], lowIsHighScore: boolean): number[] {
+  const n = values.length;
+  const rows = values.map((value, index) => ({ value, index })).sort((a, b) => (lowIsHighScore ? a.value - b.value : b.value - a.value));
+  const scores = new Array<number>(n).fill(1);
+  let prevValue: number | undefined;
+  let prevScore = 5;
+  for (let i = 0; i < n; i += 1) {
+    const row = rows[i];
+    if (!row) continue;
+    let score = 5 - Math.min(4, Math.floor((i * 5) / n));
+    if (prevValue !== undefined && row.value === prevValue) score = prevScore;
+    scores[row.index] = score;
+    prevValue = row.value;
+    prevScore = score;
+  }
+  return scores;
+}
+
+// Mirrors functions/src/dataAnalysisRfmAggregator.ts segmentFromRfmScores.
+function segmentFromRfmScores(r: number, f: number, m: number): string {
+  if (r >= 4 && f >= 4 && m >= 3) return 'Champions';
+  if (f <= 2 && r >= 4 && m >= 2) return 'Recent Customers';
+  if (f <= 2 && r >= 4) return 'New Customers';
+  if (r >= 3 && f >= 3 && m >= 3) return 'Loyal Customers';
+  if (r >= 3 && f >= 2 && f <= 3 && m >= 2) return 'Potential Loyalists';
+  if (r <= 2 && f >= 4 && m >= 4) return "Can't Lose Them";
+  if (r <= 2 && f >= 3 && m >= 3) return 'At Risk';
+  if (r >= 2 && r <= 3 && f >= 2 && f <= 3) return 'Customers Needing Attention';
+  if (r <= 2 && f <= 2 && m <= 2) return 'Hibernating';
+  if (r === 1) return 'Lost';
+  return 'Potential Loyalists';
+}
+
+/** Group invoice rows per customer, score R/F/M by quintile, return customer-level rows. */
+export function computeRfmRowsFromInvoices(objects: Record<string, string>[]): Record<string, string>[] {
+  type Agg = { id: string; email: string; lastMs: number; docs: Set<string>; rows: number; monetary: number };
+  const byCustomer = new Map<string, Agg>();
+  for (const row of objects) {
+    const email = pick(row, 'email', 'e-mail', 'mail').trim().toLowerCase();
+    const id = pick(row, ...INVOICE_CUSTOMER_COLS).trim();
+    const key = id || email;
+    if (!key) continue;
+    const date = parseInvoiceDate(pick(row, ...INVOICE_DATE_COLS));
+    if (!date) continue;
+    const agg = byCustomer.get(key) || { id: key, email, lastMs: 0, docs: new Set<string>(), rows: 0, monetary: 0 };
+    agg.lastMs = Math.max(agg.lastMs, date.getTime());
+    const doc = pick(row, ...INVOICE_DOC_COLS).trim();
+    if (doc) agg.docs.add(doc);
+    agg.rows += 1;
+    agg.monetary += parseInvoiceAmount(pick(row, ...INVOICE_AMOUNT_COLS));
+    if (!agg.email && email) agg.email = email;
+    byCustomer.set(key, agg);
+  }
+  const customers = [...byCustomer.values()];
+  if (customers.length === 0) return [];
+  // Recency reference = latest document in the file (deterministic for historical exports).
+  const refMs = Math.max(...customers.map((c) => c.lastMs));
+  const recencyDays = customers.map((c) => Math.round((refMs - c.lastMs) / 86400000));
+  const frequency = customers.map((c) => (c.docs.size > 0 ? c.docs.size : c.rows));
+  const rScores = assignQuintileScores(recencyDays, true);
+  const fScores = assignQuintileScores(frequency, false);
+  const mScores = assignQuintileScores(customers.map((c) => c.monetary), false);
+  return customers.map((c, i) => ({
+    customer_id: c.id,
+    email: c.email,
+    segment: segmentFromRfmScores(rScores[i], fScores[i], mScores[i]),
+    recency: String(recencyDays[i]),
+    frequency: String(frequency[i]),
+    monetary: c.monetary.toFixed(2),
+    rfm_score: `${rScores[i]}-${fScores[i]}-${mScores[i]}`,
+  }));
+}
+
 export interface SegmentCustomerRecord {
   customerId: string;
   email?: string;
@@ -2099,6 +2214,13 @@ export async function importFile(
 
       case 'segments': {
         let validSegments: RFMSegment[];
+
+        // PER-278: purchase-documents file → compute RFM here, then reuse the customer-level path.
+        if (isInvoiceLevelData(objects)) {
+          const invoiceCount = objects.length;
+          objects = computeRfmRowsFromInvoices(objects);
+          result.warnings.push(`Υπολογίστηκε RFM από ${invoiceCount} παραστατικά → ${objects.length} πελάτες`);
+        }
 
         if (isCustomerLevelData(objects)) {
           await FirestoreService.deleteCollection('segments', brandId);

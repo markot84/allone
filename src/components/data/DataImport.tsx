@@ -546,7 +546,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Data Import</h2>}
         description={
           <p className="text-sm text-[#4A4A4A] sm:text-base">
-            Import από CSV/Excel ή URL. Υποστηρίζονται: Products, Segments, Campaigns, Analytics. Για προϊόντα: ERP export, Google Ads, Meta Catalog.
+            Import από CSV/Excel ή URL. Υποστηρίζονται: Products, Segments, Campaigns, Analytics. Για προϊόντα: ERP export, Google Ads, Meta Catalog. Για Segments: αρχείο παραστατικών πωλήσεων (πελάτης, ημερομηνία, ποσό) — το RFM υπολογίζεται αυτόματα.
           </p>
         }
       />
