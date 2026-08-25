@@ -1,4 +1,7 @@
-# Performance+ — project instructions
+# allone — project instructions
+
+The app is **allone**, forked from the client's Performance+. The design docs keep their original
+filenames; the product name in anything user-facing is allone.
 
 ## UI rules (v2)
 
@@ -23,35 +26,48 @@ withdraws the dark canvas in favour of a white background.
 
 ### Tokens
 
-- Every colour comes from `src/styles/tokens.css`. **No hex values inside components.**
-- The `--nts-*` names are a legacy bridge that re-points ~4.000 pre-existing hardcoded colours at
-  the new palette. Migrate components to the real tokens as you touch them; the bridge should
-  shrink over time.
+- Every colour comes from `src/styles/tokens.css`. **No new hex values inside components** — about
+  1.300 survive in 47 files from before the palette, and they go as you touch the file. The rule is
+  a direction of travel, not a description of the current state.
+- The `--nts-*` names are a legacy bridge that re-points pre-existing hardcoded colours at the new
+  palette (~1.500 uses left). Migrate components to the real tokens as you touch them; the bridge
+  should shrink over time.
 - Every numeric field carries `font-variant-numeric: tabular-nums` — use `.metric`, `.kpi-value`
   or `data-numeric`, which already apply it.
 - Any imported component is recoloured with these tokens before it is committed. An import that
   still shows its own default colours is not finished.
 
+### The Signal Board vocabulary
+
+`src/components/signal/` is the app's shared design language — `SignalCard`, `SignalEyebrow`,
+`SignalCardHeader`, `MetricTile`, `SignalChip`, `LegendKey`, `PillButton`, `SignalSkeleton` and the
+chart set in `SignalCharts.tsx`. Every page imports it from `../signal`; a page never rolls its own
+card, and never reaches into another page's folder for one. If two pages need the same thing, extend
+the vocabulary rather than writing a local variant.
+
 ### Component sourcing
 
-- Look for something ready first: `npx shadcn search @tremor -q "<keyword>"`.
-- Base: shadcn/ui + Tremor. Accents: Magic UI, Motion Primitives — and only in the two places the
-  brief names (ROI counters, Morning Briefing).
-- Charts: Tremor for standard ones, Nivo for radar / sankey / treemap.
-- Write a custom component only when the search returns nothing suitable, and say what you searched.
-- Do not mix more than three registries, and avoid "cinematic" libraries such as Aceternity — they
-  read as decoration in a decision tool.
+- The UI is written here, not assembled from registries. shadcn/ui, Tremor, Magic UI and Motion
+  Primitives were the original plan and **none of them are installed** — do not add one for
+  something `signal/` or `common/` already covers.
+- Charts: **Recharts** for standard ones, **Nivo** for radar / sankey / treemap. Both take their
+  colours from `src/styles/chartTheme.ts` — `axisProps()`, `gridProps()`, `tooltipProps()`,
+  `seriesColor()`, `nivoTheme()` — never inline hex.
+- Long tables use `@tanstack/react-virtual` (the pattern is in `ProductIntelligence.tsx`).
+- Before writing a new component, check `src/components/signal/` and `src/components/common/`.
 
 ### Motion
 
-- Only Motion or `@formkit/auto-animate`. No scattered CSS keyframes.
+- Only `framer-motion` (v12). `@formkit/auto-animate` is not installed.
 - Three durations, and nothing else: **150ms** state / **300ms** reorder / **450ms** reveal (once).
   They exist as `--dur-state`, `--dur-reorder`, `--dur-reveal` with `--ease-out`.
+- Keyframes belong in `tokens.css` and `index.css` — named and reused, never re-declared inside a
+  component.
 - `prefers-reduced-motion` is honoured globally in `tokens.css`; do not defeat it locally.
 - Forbidden: parallax, particle backgrounds, glassmorphism, gradient meshes, infinite loops,
   typewriter effects.
-- Motion is concentrated in the Strategy Weights Configurator. Spread evenly across every module,
-  it reads as a template.
+- Strategy carries the most motion (the Weights Configurator). Elsewhere it is per-interaction, not
+  per-module decoration — spread evenly across every module, it reads as a template.
 
 ### Hidden sections
 
