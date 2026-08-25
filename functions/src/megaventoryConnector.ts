@@ -315,7 +315,7 @@ async function deleteMegaventoryCustomReportRows(db: Firestore, brandId: string)
     for (const doc of snap.docs) {
       batch.delete(doc.ref);
     }
-    await batch.commit();
+    await commitWithRetry(batch);
     deleted += snap.size;
     snap = await db.collection(CUSTOM_REPORT_COLLECTION).where('brandId', '==', brandId).limit(400).get();
   }
@@ -1173,6 +1173,25 @@ function sanitizeFirestoreDocId(raw: string): string {
   return s;
 }
 
+// One transient gRPC stall (DEADLINE_EXCEEDED/UNAVAILABLE) on a single commit was aborting whole nightly syncs.
+export async function commitWithRetry(
+  batch: { commit(): Promise<unknown> },
+  attempts = 3,
+  delayMs = 2000
+): Promise<void> {
+  for (let i = 0; ; i++) {
+    try {
+      await batch.commit();
+      return;
+    } catch (err) {
+      const code = (err as { code?: number | string })?.code;
+      const transient = code === 4 || code === 8 || code === 13 || code === 14;
+      if (i >= attempts - 1 || !transient) throw err;
+      await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+    }
+  }
+}
+
 async function writeBatch(
   db: Firestore,
   collection: string,
@@ -1190,7 +1209,7 @@ async function writeBatch(
         { merge: true }
       );
     }
-    await batch.commit();
+    await commitWithRetry(batch);
   }
 }
 
@@ -1208,7 +1227,7 @@ export async function mergeMegaventoryApiCatalogProducts(
     for (const doc of apiCatalogDocs.slice(i, i + 500)) {
       batch.delete(doc.ref);
     }
-    await batch.commit();
+    await commitWithRetry(batch);
   }
 
   const reportSkus = new Set<string>();
@@ -1294,7 +1313,7 @@ export async function mergeMegaventoryApiCatalogProducts(
   for (let i = 0; i < normalizedPatches.length; i += 400) {
     const batch = db.batch();
     for (const p of normalizedPatches.slice(i, i + 400)) batch.set(p.ref, p.data, { merge: true });
-    await batch.commit();
+    await commitWithRetry(batch);
   }
   if (!items.length) return 0;
   await writeBatch(db, 'products', brandId, items);
@@ -1496,7 +1515,7 @@ async function writeReceiptChunkMap(
   existing.docs.forEach((d) => batch.delete(d.ref));
   chunks.forEach((json, i) => batch.set(chunksCol.doc(String(i)), { [field]: json }));
   batch.set(parent, { brandId, ...meta(chunks.length, skus.length), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  await batch.commit();
+  await commitWithRetry(batch);
   return skus.length;
 }
 
@@ -1522,7 +1541,7 @@ async function upsertMissingSuppliers(db: Firestore, brandId: string, names: Ite
     for (const snap of missing.slice(i, i + 400)) {
       batch.set(snap.ref, { name: wanted.get(snap.id), brandId, source: 'megaventory_receipts', updatedAt: FieldValue.serverTimestamp() });
     }
-    await batch.commit();
+    await commitWithRetry(batch);
   }
   return missing.length;
 }
@@ -2362,7 +2381,7 @@ export async function fetchMegaventoryData(
               { merge: true }
             );
           }
-          await batch.commit();
+          await commitWithRetry(batch);
         }
 
         // Zero stock rows of newly tombstoned products (preserve forensics in stockAtDeletion).
@@ -2384,7 +2403,7 @@ export async function fetchMegaventoryData(
                 updatedAt: FieldValue.serverTimestamp(),
               }, { merge: true });
             }
-            await batch.commit();
+            await commitWithRetry(batch);
             zeroedStockRows += Math.min(400, updates.length - i);
           }
         }
@@ -2403,7 +2422,7 @@ export async function fetchMegaventoryData(
                 { merge: true }
               );
             }
-            await batch.commit();
+            await commitWithRetry(batch);
             unmarked += Math.min(400, toUnmark.length - i);
           }
         }
