@@ -1,16 +1,21 @@
-# Performance+ Enterprise Dashboard
+# allone
 
-A modern, enterprise-grade dashboard application for marketing performance management and customer segmentation.
+A marketing and data-analysis dashboard: customer segmentation, campaign and channel
+performance, product intelligence and commercial strategy.
 
-## Features
+Forked from a client product called Performance+, whose name survives in some filenames.
 
-- **Strategy Weights Configurator**: Configure product prioritization factors
-- **RFM Analysis**: Customer segmentation insights
-- **Product Intelligence**: Inventory & product performance
-- **Channel Activation**: AI-powered channel recommendations
-- **Content Strategy**: Align content with commercial strategy
-- **ROI Attribution**: Measure Performance+ impact
-- **AI Insights**: Actionable recommendations
+## Sections
+
+The visible build is the Marketing & Data Analysis product — eleven sections:
+
+Dashboard · Data Analysis (RFM) · Competitive Intelligence · Commercial Strategy · Campaigns ·
+E-commerce · Web Analytics (GA4) · Brand Profile · Content Strategy · Product Intelligence ·
+Data Import
+
+Nineteen further sections exist in the codebase, compile, and are switched off through
+`HIDDEN_SECTIONS` in `src/config/modules.ts`. Nothing was deleted — removing an id restores a
+section.
 
 ## Tech Stack
 
@@ -23,34 +28,41 @@ A modern, enterprise-grade dashboard application for marketing performance manag
 
 ## Development
 
+**[DEVELOPING.md](DEVELOPING.md) is the full guide** — setup, local development, commit conventions
+and deploys. The short version:
+
 ```bash
+nvm use 22                     # Node 22 is required
 npm install
-npm run dev
+(cd functions && npm install)
+cp .env.example .env           # real values from Marios
+npm run dev                    # http://localhost:5173
 ```
 
-## Build
+## Checks
 
 ```bash
-npm run build
+npm run lint     # passes at <=415 warnings
+npm test
+npm run build    # dev does not typecheck; this does
 ```
 
 ## Deploy
 
-Firebase Hosting + Cloud Functions + Firestore. **Two independent switches govern a deploy** — they must agree:
+One Firebase project, `allone-9e685`, serving **https://allone-9e685.web.app**. The `staging` and
+`production` aliases in `.firebaserc` both resolve to it — they select a *build mode*, not an
+environment, and only decide whether tracking pixels load. A deploy is always live.
 
-- **What the bundle talks to** (baked at build time): the `.env` `VITE_FIREBASE_*` config, selected by the Vite build mode — `npm run build` = **staging** config, `npm run build:production` = **production** config.
-- **Where the artifacts are uploaded** (deploy time): the Firebase CLI `--project` flag, resolved via `.firebaserc` (`staging` → `performanceplus-staging`, `production` → `performance-plus-4a5b2`).
+**Setup:** `npm install -g firebase-tools`, then `firebase login`.
 
-Mixing them (e.g. a staging-mode build deployed to production) ships the wrong Firebase config to the live site. The npm scripts pair them correctly:
+| Command | Deploys |
+|---|---|
+| `npm run firebase:deploy` | hosting (the usual one) |
+| `npm run firebase:deploy:functions` | functions |
+| `npm run firebase:deploy:full` | hosting + functions + Firestore and storage rules |
+| `npm run firebase:deploy:full:production` | the same, built in production mode |
+| `npm run deploy:full` | full deploy, then commits and pushes tracked changes |
 
-**Setup:** `npm install -g firebase-tools` then `firebase login`.
-
-| Command | Build mode | Target (`--project`) | Scope |
-|---|---|---|---|
-| `npm run firebase:deploy` | staging | staging | hosting only |
-| `npm run firebase:deploy:functions` | — | staging | functions only |
-| `npm run firebase:deploy:full` (= `:full:staging`) | staging | staging | everything |
-| `npm run firebase:deploy:full:production` | production | production | everything |
-| `npm run deploy:full` | staging | staging | everything, then `git add -u` + commit + push |
-
-**Live URLs:** staging `https://performanceplus-staging.web.app` · production `https://performance-plus-4a5b2.web.app`.
+**Never deploy to `performance-plus-4a5b2` or `performanceplus-staging`** — those are the client's
+live projects and the signed-in account can reach them. Always deploy through the
+`npm run firebase:deploy*` scripts; never a bare `firebase deploy` or a raw `--project <id>`.

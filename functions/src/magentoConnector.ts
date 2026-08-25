@@ -547,7 +547,7 @@ async function writeMagentoParentLinks(
   sawFullLinkSet: boolean,
 ): Promise<void> {
   try {
-    let existing: Record<string, string> = {};
+    const existing: Record<string, string> = {};
     if (!sawFullLinkSet && runLinks.size > 0) {
       const snap = await db.collection('magento_parent_links').doc(brandId).collection('chunks').get();
       for (const d of snap.docs) Object.assign(existing, JSON.parse(String(d.data().skuStatsJson || '{}')));
