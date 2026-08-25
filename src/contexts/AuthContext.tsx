@@ -28,7 +28,7 @@ import { validatePassword } from '../utils/passwordPolicy';
 import { setCurrentUid } from '../utils/authState';
 import { logger } from '../utils/logger';
 import { CLIENT_ALERT } from '../utils/alertKeys';
-import { FirestoreService } from '../services/firestore';
+import { FirestoreService, withFirestoreRetry } from '../services/firestore';
 import { loadSuperAdmins } from '../services/appConfig';
 
 interface AuthContextValue {
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user?.uid) return;
     const ensureProfile = async () => {
-      const existing = await FirestoreService.getDocument('users', user.uid);
+      const existing = await withFirestoreRetry(() => FirestoreService.getDocument('users', user.uid));
       if (!existing) {
         // Don't set brandIds here — acceptInvite may have run first; setting []
         // would overwrite invite data. Leave brandIds for acceptInvite/BrandCreateForm.

@@ -33,7 +33,7 @@ const FEATURES = [
 ];
 
 export function BrandOnboarding({ children }: BrandOnboardingProps) {
-  const { brands, loading, refreshBrands } = useBrand();
+  const { brands, loading, loadFailed, refreshBrands } = useBrand();
   const { signOut, user, isSuperAdmin } = useAuth();
   const [step, setStep] = useState<Step>('welcome');
   const [brandCreated, setBrandCreated] = useState(false);
@@ -56,6 +56,19 @@ export function BrandOnboarding({ children }: BrandOnboardingProps) {
   if (isSuperAdmin) return <>{children}</>;
 
   if (brands.length > 0 && !brandCreated) return <>{children}</>;
+
+  // Connection problem, not a brand-less account — onboarding here reads as "my account is gone".
+  if (loadFailed) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4 bg-[var(--nts-light-gray)] text-center">
+        <p className="text-lg font-semibold">Πρόβλημα σύνδεσης</p>
+        <p className="text-sm text-gray-600 max-w-sm">
+          Δεν ήταν δυνατή η φόρτωση των δεδομένων του λογαριασμού σας. Ελέγξτε τη σύνδεσή σας και δοκιμάστε ξανά.
+        </p>
+        <Button onClick={() => refreshBrands()}>Δοκιμή ξανά</Button>
+      </div>
+    );
+  }
   if (brandCreated && step === 'done') return <>{children}</>;
 
   const handleBack = async () => {

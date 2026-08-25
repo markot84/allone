@@ -8,7 +8,7 @@ import {
   type ReactNode
 } from 'react';
 import { useAuth } from '../hooks';
-import { FirestoreService } from '../services/firestore';
+import { FirestoreService, withFirestoreRetry } from '../services/firestore';
 import { logger } from '../utils/logger';
 import { CLIENT_ALERT } from '../utils/alertKeys';
 import type { Brand } from '../types';
@@ -17,6 +17,8 @@ interface BrandContextValue {
   currentBrand: Brand | null;
   brands: Brand[];
   loading: boolean;
+  /** Last brand load died on a transient error — connection problem, not "no brands". */
+  loadFailed: boolean;
   setCurrentBrand: (brand: Brand | null) => void;
   refreshBrands: () => Promise<void>;
 }
@@ -49,6 +51,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [currentBrand, setCurrentBrandState] = useState<Brand | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   // Generation guard: a fast user/brand switch can fire refreshBrands again mid-await; only the
   // latest run may commit its setState, so a stale resolve can't clobber a newer brand list.
   const reqIdRef = useRef(0);
@@ -63,6 +66,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       return;
     }
     setLoading(true);
+    setLoadFailed(false);
     const cachedBrand = getStoredBrandSnapshot(user.uid);
     if (cachedBrand) {
       setBrands((prev) => (prev.some((b) => b.id === cachedBrand.id) ? prev : [cachedBrand, ...prev]));
@@ -74,7 +78,8 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     if (!isSuperAdminResolved) return;
     try {
       if (isSuperAdmin) {
-        const allBrands = await FirestoreService.getDocuments<Brand>('brands', [], null, { forceServer: true });
+        const allBrands = await withFirestoreRetry(() =>
+          FirestoreService.getDocuments<Brand>('brands', [], null, { forceServer: true }));
         if (isStale()) return;
         const brandList = allBrands.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'el'));
         setBrands(brandList);
@@ -91,15 +96,18 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       }
 
       let profile: { brandIds?: string[]; defaultBrandId?: string } | null = null;
+      let profileFetchFailed = false;
       try {
-        profile = await FirestoreService.getDocumentWithTimeout<{ brandIds?: string[]; defaultBrandId?: string }>(
-          'users',
-          user.uid,
-          15000
-        );
+        profile = await withFirestoreRetry(() =>
+          FirestoreService.getDocumentWithTimeout<{ brandIds?: string[]; defaultBrandId?: string }>(
+            'users',
+            user.uid,
+            15000
+          ));
       } catch (e) {
         logger.error('refreshBrands: user profile fetch failed or timed out', { err: e });
         profile = null;
+        profileFetchFailed = true;
       }
       const fromProfile = profile?.brandIds ?? [];
       const fromMembers = await FirestoreService.getBrandIdsFromMembershipDocuments(user.uid);
@@ -107,6 +115,8 @@ export function BrandProvider({ children }: { children: ReactNode }) {
 
       if (isStale()) return;
       if (brandIds.length === 0) {
+        // Failed profile fetch + empty membership ≠ proven brand-less user — surface a connection problem.
+        if (profileFetchFailed) setLoadFailed(true);
         setBrands([]);
         setCurrentBrandState(null);
         setLoading(false);
@@ -152,6 +162,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       logger.error('refreshBrands:', { alertKey: CLIENT_ALERT.brandLoadFailed, err });
       if (!isStale() && !cachedBrand) {
+        setLoadFailed(true);
         setBrands([]);
         setCurrentBrandState(null);
       }
@@ -189,6 +200,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     currentBrand,
     brands,
     loading,
+    loadFailed,
     setCurrentBrand,
     refreshBrands,
   };
