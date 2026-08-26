@@ -47,7 +47,7 @@ function getStoredBrandSnapshot(userId: string): Brand | null {
 }
 
 export function BrandProvider({ children }: { children: ReactNode }) {
-  const { user, isSuperAdmin, isSuperAdminResolved } = useAuth();
+  const { user, isSuperAdmin, isSuperAdminResolved, superAdminResolveFailed } = useAuth();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [currentBrand, setCurrentBrandState] = useState<Brand | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,8 +115,8 @@ export function BrandProvider({ children }: { children: ReactNode }) {
 
       if (isStale()) return;
       if (brandIds.length === 0) {
-        // Failed profile fetch + empty membership ≠ proven brand-less user — surface a connection problem.
-        if (profileFetchFailed) setLoadFailed(true);
+        // Failed profile/super-admin fetch + empty membership ≠ proven brand-less user — surface a connection problem.
+        if (profileFetchFailed || superAdminResolveFailed) setLoadFailed(true);
         setBrands([]);
         setCurrentBrandState(null);
         setLoading(false);
@@ -169,7 +169,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     } finally {
       if (!isStale()) setLoading(false);
     }
-  }, [user?.uid, isSuperAdmin, isSuperAdminResolved]);
+  }, [user?.uid, isSuperAdmin, isSuperAdminResolved, superAdminResolveFailed]);
 
   const setCurrentBrand = useCallback((brand: Brand | null) => {
     setCurrentBrandState(brand);

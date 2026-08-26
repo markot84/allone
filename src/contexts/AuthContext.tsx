@@ -5,6 +5,7 @@ import {
   useMemo,
   useState,
   useCallback,
+  useRef,
   type ReactNode
 } from 'react';
 import {
@@ -38,6 +39,10 @@ interface AuthContextValue {
   /** false until the async super-admin lookup settles; consumers branching on
    *  `isSuperAdmin` should wait to avoid rendering the wrong branch first. */
   isSuperAdminResolved: boolean;
+  /** PER-303: last super-admin lookup died on a network error — isSuperAdmin=false is unproven. */
+  superAdminResolveFailed: boolean;
+  /** Re-runs the super-admin lookup (retry path for the connection-error screen). */
+  resolveSuperAdmin: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   /** allowNewUsers: if false, new Google accounts are rejected (sign out + error). */
@@ -57,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isSuperAdminResolved, setIsSuperAdminResolved] = useState(false);
+  const [superAdminResolveFailed, setSuperAdminResolveFailed] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -89,29 +95,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Resolve super-admin flag from Firestore appConfig/superAdmins.uids
   // (same doc the Firestore rules read).
-  useEffect(() => {
-    if (!user?.uid) {
+  // Generation guard: a stale resolve from a fast account switch must not set state for the wrong uid.
+  const saReqRef = useRef(0);
+  const resolveSuperAdmin = useCallback(async () => {
+    const req = ++saReqRef.current;
+    const uid = user?.uid;
+    if (!uid) {
       setIsSuperAdmin(false);
+      setSuperAdminResolveFailed(false);
       setIsSuperAdminResolved(true); // nothing to resolve when signed out
       return;
     }
-    let cancelled = false;
-    setIsSuperAdminResolved(false); // re-resolving for this user
-    loadSuperAdmins()
-      .then((sa) => {
-        if (!cancelled) {
-          setIsSuperAdmin(sa.uids.includes(user.uid));
-          setIsSuperAdminResolved(true);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setIsSuperAdmin(false);
-          setIsSuperAdminResolved(true);
-        }
-      });
-    return () => { cancelled = true; };
+    try {
+      const sa = await loadSuperAdmins();
+      if (req !== saReqRef.current) return;
+      setIsSuperAdmin(sa.uids.includes(uid));
+      setSuperAdminResolveFailed(false);
+    } catch {
+      if (req !== saReqRef.current) return;
+      // Resolve as non-admin so the app doesn't hang, but flag it — the read failing ≠ proven non-admin.
+      setIsSuperAdmin(false);
+      setSuperAdminResolveFailed(true);
+    } finally {
+      if (req === saReqRef.current) setIsSuperAdminResolved(true);
+    }
   }, [user?.uid]);
+
+  useEffect(() => {
+    setIsSuperAdminResolved(!user?.uid); // re-resolving for this user
+    void resolveSuperAdmin();
+  }, [user?.uid, resolveSuperAdmin]);
 
   /** Always allowed for existing accounts — the signup policy does not apply here. */
   const signIn = useCallback(async (email: string, password: string) => {
@@ -140,7 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // new-user signup block.
       const superAdminEmail = result.user.email?.toLowerCase();
       if (superAdminEmail) {
-        const { emails } = await loadSuperAdmins();
+        const { emails } = await loadSuperAdmins().catch(() => ({ emails: [] as string[] }));
         if (emails.includes(superAdminEmail)) return;
       }
 
@@ -199,6 +212,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     isSuperAdmin,
     isSuperAdminResolved,
+    superAdminResolveFailed,
+    resolveSuperAdmin,
     signIn,
     signUp,
     signInWithGoogle,

@@ -34,7 +34,7 @@ const FEATURES = [
 
 export function BrandOnboarding({ children }: BrandOnboardingProps) {
   const { brands, loading, loadFailed, refreshBrands } = useBrand();
-  const { signOut, user, isSuperAdmin } = useAuth();
+  const { signOut, user, isSuperAdmin, resolveSuperAdmin } = useAuth();
   const [step, setStep] = useState<Step>('welcome');
   const [brandCreated, setBrandCreated] = useState(false);
 
@@ -65,7 +65,8 @@ export function BrandOnboarding({ children }: BrandOnboardingProps) {
         <p className="text-sm text-gray-600 max-w-sm">
           Δεν ήταν δυνατή η φόρτωση των δεδομένων του λογαριασμού σας. Ελέγξτε τη σύνδεσή σας και δοκιμάστε ξανά.
         </p>
-        <Button onClick={() => refreshBrands()}>Δοκιμή ξανά</Button>
+        {/* Re-resolve super-admin too — a poisoned lookup, not just brands, can land here (PER-303). */}
+        <Button onClick={() => { void resolveSuperAdmin(); void refreshBrands(); }}>Δοκιμή ξανά</Button>
       </div>
     );
   }
