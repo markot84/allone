@@ -131,6 +131,8 @@ export function useProductIntelligenceAggregate(
     safePage: (pageQuery.isPlaceholderData ? undefined : pageQuery.data?.page) ?? safePage,
     isAggregateLoading: docHook.isLoading,
     isPageLoading: !!aggregate && pageQuery.isPending,
+    // isPending is false during keepPreviousData transitions (status=success with placeholder) — isFetching catches those.
+    isPageFetching: !!aggregate && pageQuery.isFetching,
     isLoading: docHook.isLoading || (!!aggregate && pageQuery.isPending),
     isBuilding: docHook.isBuilding,
     error: docHook.error ?? pageQuery.error,

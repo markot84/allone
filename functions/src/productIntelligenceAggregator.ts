@@ -146,6 +146,7 @@ type QueryFacets = {
 
 const READ_PAGE_SIZE = 1000;
 const TABLE_PAGE_SIZE = 150;
+const EXPORT_PAGE_SIZE = 2000;
 const PAGE_WRITE_BATCH_SIZE = 1;
 const INVENTORY_LOOKUP_CHUNK_BYTES = 850_000;
 const BUCKETS: PageBucket[] = ['all', 'healthy', 'excess', 'dead', 'low', 'no_stock'];
@@ -1669,7 +1670,8 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
   }
 
   const bucket = params.bucket ?? 'all';
-  const pageSize = Math.max(1, Math.min(params.pageSize ?? TABLE_PAGE_SIZE, TABLE_PAGE_SIZE));
+  // PER-318: exports pull big pages; the whole bucket is materialized per call anyway, so a bigger slice is bandwidth-only.
+  const pageSize = Math.max(1, Math.min(params.pageSize ?? TABLE_PAGE_SIZE, EXPORT_PAGE_SIZE));
   const requestedPage = Math.max(1, Math.floor(params.page ?? 1));
   // PER-317: with active filters the summary must cover ALL buckets so the cards can follow the filters.
   const hasFilters = !!(text(params.search) || params.categories?.length || params.brands?.length

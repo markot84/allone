@@ -58,7 +58,8 @@ import { ProductCharts } from './ProductCharts';
 import { downloadProductIntelligenceCsv, downloadProductIntelligenceXlsx } from '../../utils/productIntelligenceExport';
 import type { Product, InventorySummary, InventoryAlert } from '../../types';
 import type { ProductIntelligenceBucket, ProductIntelligenceQuery } from '../../services/productIntelligenceAggregate';
-import { refreshProductIntelligenceOnServer } from '../../services/productIntelligenceAggregate';
+import { refreshProductIntelligenceOnServer, queryAllProductIntelligenceRows, ExportTooLargeError } from '../../services/productIntelligenceAggregate';
+import type { ExportMeta } from '../../utils/productIntelligenceExport';
 import { logger } from '../../utils/logger';
 
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
@@ -462,26 +463,73 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     setCurrentPage(1);
   }, [searchQuery, categoryInclude, brandInclude, tagInclude, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
 
-  const handleQuickExportCsv = () => {
-    if (paginatedProducts.length === 0) {
-      toast.error('Δεν υπάρχουν γραμμές για εξαγωγή.');
-      return;
+  // PER-318: exports cover the FULL filtered set (all pages), not just the visible one.
+  const [isExporting, setIsExporting] = useState(false);
+  const exportMeta = (): ExportMeta => {
+    const filters = [
+      searchQuery.trim() && `αναζήτηση «${searchQuery.trim()}»`,
+      categoryInclude?.length && `κατηγορίες: ${categoryInclude.join(', ')}`,
+      brandInclude?.length && `brands: ${brandInclude.join(', ')}`,
+      tagInclude?.length && `tags: ${tagInclude.join(', ')}`,
+      marginFilter !== 'all' && `margin: ${marginFilter}`,
+      stockAgeFilter !== 'all' && `stock age: ${stockAgeFilter}`,
+      (productDateFrom || productDateTo) && `περίοδος: ${productDateFrom || '…'} – ${productDateTo || '…'}`,
+      includeNoStock && 'με no stock',
+    ].filter(Boolean).join(' · ');
+    return [
+      ['Filters', filters || '—'],
+      ['Bucket', serverBucket],
+      ['Grouping', groupByParent ? 'By parent SKU' : 'Per variant'],
+      ['Sort', `${sortField} ${sortDirection}`],
+    ];
+  };
+  const fetchAllForExport = async (): Promise<Product[]> => {
+    if (!brandId) return [];
+    setIsExporting(true);
+    try {
+      const rows = await queryAllProductIntelligenceRows(brandId, { ...serverQuery, bucket: serverBucket, page: 1 });
+      // Re-apply the client-only post-filters so the export matches the table exactly.
+      let result = includeNoStock ? rows : rows.filter((product) => productStockLevel(product) > 0);
+      if (tagInclude?.includes('price_pending')) result = result.filter((p) => hasPricePending(p));
+      return result;
+    } finally {
+      setIsExporting(false);
     }
-    downloadProductIntelligenceCsv(paginatedProducts, currentBrand?.name);
-    toast.success(`Έγινε λήψη CSV τρέχουσας σελίδας (${formatNumber(paginatedProducts.length)} γραμμές).`);
+  };
+  const exportErrorToast = (e: unknown, kind: string) => {
+    if (e instanceof ExportTooLargeError) {
+      toast.error(`Πολύ μεγάλη εξαγωγή (${formatNumber(e.totalRows)} γραμμές) — περιορίστε τα φίλτρα.`);
+    } else {
+      logger.error(`${kind} export failed`, { err: e });
+      toast.error(`Σφάλμα εξαγωγής ${kind}.`);
+    }
   };
 
-  const handleQuickExportXlsx = async () => {
-    if (paginatedProducts.length === 0) {
+  const handleQuickExportCsv = async () => {
+    if (serverFilteredTotal === 0) {
       toast.error('Δεν υπάρχουν γραμμές για εξαγωγή.');
       return;
     }
     try {
-      await downloadProductIntelligenceXlsx(paginatedProducts, currentBrand?.name);
-      toast.success(`Έγινε λήψη Excel τρέχουσας σελίδας (${formatNumber(paginatedProducts.length)} γραμμές).`);
+      const rows = await fetchAllForExport();
+      downloadProductIntelligenceCsv(rows, currentBrand?.name, exportMeta());
+      toast.success(`Έγινε λήψη CSV (${formatNumber(rows.length)} γραμμές).`);
     } catch (e) {
-      logger.error('Excel export failed', { err: e });
-      toast.error('Σφάλμα εξαγωγής Excel. Δοκιμάστε CSV.');
+      exportErrorToast(e, 'CSV');
+    }
+  };
+
+  const handleQuickExportXlsx = async () => {
+    if (serverFilteredTotal === 0) {
+      toast.error('Δεν υπάρχουν γραμμές για εξαγωγή.');
+      return;
+    }
+    try {
+      const rows = await fetchAllForExport();
+      await downloadProductIntelligenceXlsx(rows, currentBrand?.name, exportMeta());
+      toast.success(`Έγινε λήψη Excel (${formatNumber(rows.length)} γραμμές).`);
+    } catch (e) {
+      exportErrorToast(e, 'Excel');
     }
   };
 
@@ -966,23 +1014,23 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 variant="secondary"
                 size="sm"
                 icon={<FileText size={14} />}
-                onClick={handleQuickExportCsv}
-                disabled={effectiveSourceLoading || paginatedProducts.length === 0}
+                onClick={() => void handleQuickExportCsv()}
+                disabled={effectiveSourceLoading || isExporting || serverFilteredTotal === 0}
                 className="shrink-0"
-                title="Εξαγωγή φιλτραρισμένων σε CSV"
+                title="Εξαγωγή όλων των φιλτραρισμένων γραμμών σε CSV"
               >
-                CSV
+                {isExporting ? 'Λήψη…' : 'CSV'}
               </Button>
               <Button
                 variant="secondary"
                 size="sm"
                 icon={<FileSpreadsheet size={14} />}
                 onClick={() => void handleQuickExportXlsx()}
-                disabled={effectiveSourceLoading || paginatedProducts.length === 0}
+                disabled={effectiveSourceLoading || isExporting || serverFilteredTotal === 0}
                 className="shrink-0"
-                title="Εξαγωγή φιλτραρισμένων σε Excel"
+                title="Εξαγωγή όλων των φιλτραρισμένων γραμμών σε Excel"
               >
-                Excel
+                {isExporting ? 'Λήψη…' : 'Excel'}
               </Button>
             </div>
           </div>
@@ -990,12 +1038,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
         {/* Table — dim + spinner while a query resolves so filter/sort/search clicks never look stuck (PER-319) */}
         <div className="relative">
-          {serverIntelligence.isPageLoading && serverIntelligence.page ? (
+          {serverIntelligence.isPageFetching && serverIntelligence.page ? (
             <div className="absolute inset-0 z-10 flex items-center justify-center">
               <Spinner size="lg" label="Φόρτωση δεδομένων…" />
             </div>
           ) : null}
-        <div className={`overflow-x-auto max-h-[60vh] overflow-y-auto transition-opacity ${serverIntelligence.isPageLoading && serverIntelligence.page ? 'opacity-40 pointer-events-none' : ''}`}>
+        <div className={`overflow-x-auto max-h-[60vh] overflow-y-auto transition-opacity ${serverIntelligence.isPageFetching && serverIntelligence.page ? 'opacity-40 pointer-events-none' : ''}`}>
           <table className="w-full">
             <thead>
               <tr className="bg-[#F5F5F5]">
@@ -1137,9 +1185,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
         filteredProducts={paginatedProducts}
+        getProducts={fetchAllForExport}
+        exportMeta={exportMeta}
+        totalRows={serverFilteredTotal}
         onShowCharts={() => setShowCharts(true)}
         brandName={currentBrand?.name}
-        scopeLabel={`τρέχουσας σελίδας (${formatNumber(paginatedProducts.length)} από ${formatNumber(serverFilteredTotal)})`}
+        scopeLabel={`φιλτραρισμένης προβολής (${formatNumber(serverFilteredTotal)} γραμμές)`}
       />
 
       {/* Charts Modal */}

@@ -141,6 +141,34 @@ export async function queryProductIntelligencePage(
   return json?.result ?? null;
 }
 
+const EXPORT_PAGE_SIZE = 2000;
+export const EXPORT_MAX_ROWS = 250_000;
+
+export class ExportTooLargeError extends Error {
+  totalRows: number;
+  constructor(totalRows: number) {
+    super(`Export too large: ${totalRows} rows`);
+    this.totalRows = totalRows;
+  }
+}
+
+/** PER-318: fetch the ENTIRE filtered/sorted/grouped set by looping the CF with big pages. */
+// ponytail: sequential pages, and a nightly rebuild landing mid-loop can dup/skip a boundary row; parallelize/version if it ever matters.
+export async function queryAllProductIntelligenceRows(
+  brandId: string,
+  query: ProductIntelligenceQuery
+): Promise<Product[]> {
+  const products: Product[] = [];
+  for (let page = 1; ; page += 1) {
+    const res = await queryProductIntelligencePage(brandId, { ...query, page, pageSize: EXPORT_PAGE_SIZE });
+    if (!res) break;
+    if (res.totalRows > EXPORT_MAX_ROWS) throw new ExportTooLargeError(res.totalRows);
+    products.push(...res.products);
+    if (page >= res.totalPages || res.products.length === 0) break;
+  }
+  return products;
+}
+
 export async function refreshProductIntelligenceOnServer(brandId: string): Promise<{ totalCount?: number }> {
   const token = await auth.currentUser?.getIdToken();
   if (!token) throw new Error('Not authenticated');

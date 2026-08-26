@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, FileSpreadsheet, FileText, FileCode, BarChart3, ExternalLink } from 'lucide-react';
 import { Button, ModalHeader } from '../common';
-import { downloadProductIntelligenceCsv, downloadProductIntelligenceXlsx } from '../../utils/productIntelligenceExport';
+import { downloadProductIntelligenceCsv, downloadProductIntelligenceXlsx, type ExportMeta } from '../../utils/productIntelligenceExport';
 import { safeBrandName } from '../../services/reportExport';
 import { logger } from '../../utils/logger';
 import type { Product } from '../../types';
@@ -11,27 +11,47 @@ interface ExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   filteredProducts: Product[];
+  /** PER-318: fetches the FULL filtered set (all pages); falls back to filteredProducts when absent. */
+  getProducts?: () => Promise<Product[]>;
+  exportMeta?: () => ExportMeta;
+  totalRows?: number;
   onShowCharts?: () => void;
   brandName?: string;
   scopeLabel?: string;
 }
 
-export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, brandName, scopeLabel }: ExportModalProps) {
+export function ExportModal({ isOpen, onClose, filteredProducts, getProducts, exportMeta, totalRows, onShowCharts, brandName, scopeLabel }: ExportModalProps) {
   const [showGoogleSheetsModal, setShowGoogleSheetsModal] = useState(false);
-  
+  const [isFetching, setIsFetching] = useState(false);
+
   if (!isOpen) return null;
 
   const brand = safeBrandName(brandName);
   const date = new Date().toISOString().split('T')[0];
 
-  const exportToCSV = () => {
-    downloadProductIntelligenceCsv(filteredProducts, brandName);
-    onClose();
+  const fetchRows = async (): Promise<Product[]> => {
+    if (!getProducts) return filteredProducts;
+    setIsFetching(true);
+    try {
+      return await getProducts();
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
+  const exportToCSV = async () => {
+    try {
+      downloadProductIntelligenceCsv(await fetchRows(), brandName, exportMeta?.());
+      onClose();
+    } catch (error) {
+      logger.error('CSV export error:', { err: error });
+      alert('Σφάλμα κατά την εξαγωγή CSV.');
+    }
   };
 
   const exportToExcel = async () => {
     try {
-      await downloadProductIntelligenceXlsx(filteredProducts, brandName);
+      await downloadProductIntelligenceXlsx(await fetchRows(), brandName, exportMeta?.());
       onClose();
     } catch (error) {
       logger.error('Excel export error:', { err: error });
@@ -39,10 +59,18 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
     }
   };
 
-  const exportToGoogleAdsXml = () => {
+  const exportToGoogleAdsXml = async () => {
     const cdata = (s: string) => String(s).replace(/]]>/g, ']]]]><![CDATA[>');
     const escape = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    const entries = filteredProducts.map((p) => {
+    let rows: Product[];
+    try {
+      rows = await fetchRows();
+    } catch (error) {
+      logger.error('XML export error:', { err: error });
+      alert('Σφάλμα κατά την εξαγωγή XML.');
+      return;
+    }
+    const entries = rows.map((p) => {
       const id = p.sku || p.id;
       const title = p.name || id;
       const price = `${(p.price ?? 0).toFixed(2)} EUR`;
@@ -91,9 +119,15 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
     onClose();
   };
 
-  const exportToGoogleSheets = () => {
-    downloadProductIntelligenceCsv(filteredProducts, brandName);
-    
+  const exportToGoogleSheets = async () => {
+    try {
+      downloadProductIntelligenceCsv(await fetchRows(), brandName, exportMeta?.());
+    } catch (error) {
+      logger.error('CSV export error:', { err: error });
+      alert('Σφάλμα κατά την εξαγωγή CSV.');
+      return;
+    }
+
     // Show modal to ask if user wants to open Google Sheets
     setTimeout(() => {
       setShowGoogleSheetsModal(true);
@@ -139,10 +173,12 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
             {/* Content */}
             <div className="p-6 space-y-3">
               <p className="text-sm text-[#4A4A4A] mb-4">
-                Εξαγωγή <strong>{scopeLabel ?? 'τρέχουσας φιλτραρισμένης προβολής'}</strong>: <strong>{filteredProducts.length}</strong> προϊόντα
+                Εξαγωγή <strong>{scopeLabel ?? 'τρέχουσας φιλτραρισμένης προβολής'}</strong>: <strong>{totalRows ?? filteredProducts.length}</strong> προϊόντα
+                {isFetching ? ' — Λήψη δεδομένων…' : ''}
               </p>
 
               <button
+                disabled={isFetching}
                 onClick={exportToExcel}
                 className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
               >
@@ -156,6 +192,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
               </button>
 
               <button
+                disabled={isFetching}
                 onClick={exportToCSV}
                 className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
               >
@@ -169,6 +206,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
               </button>
 
               <button
+                disabled={isFetching}
                 onClick={exportToGoogleAdsXml}
                 className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
               >
@@ -182,6 +220,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
               </button>
 
               <button
+                disabled={isFetching}
                 onClick={exportToGoogleSheets}
                 className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
               >

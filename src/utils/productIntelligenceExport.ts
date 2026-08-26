@@ -19,14 +19,18 @@ function rowsFromProducts(products: Product[]) {
   ]);
 }
 
+/** PER-318: [label, value] rows describing active filters/grouping/sort so the file self-explains. */
+export type ExportMeta = Array<[string, string]>;
+
 /** UTF-8 CSV download (current filters / selection). */
-export function downloadProductIntelligenceCsv(products: Product[], brandName?: string) {
+export function downloadProductIntelligenceCsv(products: Product[], brandName?: string, meta?: ExportMeta) {
   const brand = safeBrandName(brandName);
   const date = new Date().toISOString().split('T')[0];
   const rows = rowsFromProducts(products);
   const csvContent = [
     ['Brand', sanitizeSpreadsheetCell(brandName || '—')].join(','),
     ['Generated', date].join(','),
+    ...(meta ?? []).map((row) => row.map((cell) => `"${String(sanitizeSpreadsheetCell(cell)).replace(/"/g, '""')}"`).join(',')),
     '',
     HEADERS.join(','),
     // Neutralize formula injection (SEC-M5) per cell before CSV quoting.
@@ -46,11 +50,11 @@ export function downloadProductIntelligenceCsv(products: Product[], brandName?: 
 }
 
 /** .xlsx download (current filters / selection). */
-export async function downloadProductIntelligenceXlsx(products: Product[], brandName?: string) {
+export async function downloadProductIntelligenceXlsx(products: Product[], brandName?: string, meta?: ExportMeta) {
   const XLSX = await import('xlsx');
   const brand = safeBrandName(brandName);
   const date = new Date().toISOString().split('T')[0];
-  const metaRows = [['Brand', brandName || '—'], ['Generated', date], [''], [...HEADERS]];
+  const metaRows = [['Brand', brandName || '—'], ['Generated', date], ...(meta ?? []), [''], [...HEADERS]];
   const rows = products.map((p) => [
     p.sku || '',
     p.name || '',
