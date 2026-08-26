@@ -308,8 +308,8 @@ async function writeDailyAvailabilitySnapshot(brandId: string, products: Compact
       skus: joined,
       updatedAt: FieldValue.serverTimestamp(),
     });
-    // Retention: sweep snapshots older than 400 days (single-field date query, all brands).
-    const cutoff = new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10);
+    // Retention 1200d (> Makis's 3-year analysis window); history is unregenerable, so keep generous.
+    const cutoff = new Date(Date.now() - 1200 * 86400000).toISOString().slice(0, 10);
     const stale = await assertDb().collection('stock_availability').where('date', '<', cutoff).limit(200).get();
     for (const doc of stale.docs) await doc.ref.delete();
   } catch (err) {
