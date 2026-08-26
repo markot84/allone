@@ -1705,7 +1705,14 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
     products: sorted.slice(start, start + pageSize),
     summary: summaryForProducts(filtered),
     ...(collapsed ? { groupedSummary: summaryForProducts(collapsed) } : {}),
-    facets: buildQueryFacets(rows, params),
+    // Grouped reads pull the whole catalog, so facets must re-group + bucket-filter or dropdowns offer options with 0 grouped rows.
+    facets: buildQueryFacets(
+      params.groupByParent
+        ? collapseByParentSku(rows.filter((p) => params.includeNoStock === true || effectiveStock(p) > 0))
+          .filter((row) => bucket === 'all' || row.priority_tag === bucket)
+        : rows,
+      params,
+    ),
   };
 }
 

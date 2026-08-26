@@ -24,6 +24,7 @@ import {
   Card,
   Badge,
   Button,
+  Spinner,
   ProgressBar,
   Tooltip,
   useToast,
@@ -984,8 +985,14 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           </div>
         </div>
 
-        {/* Table — dimmed while a CF query resolves so filter/sort clicks never look stuck (PER-319) */}
-        <div className={`overflow-x-auto max-h-[60vh] overflow-y-auto relative transition-opacity ${serverIntelligence.isPageLoading && serverIntelligence.page ? 'opacity-50 pointer-events-none' : ''}`}>
+        {/* Table — dim + spinner while a query resolves so filter/sort/search clicks never look stuck (PER-319) */}
+        <div className="relative">
+          {serverIntelligence.isPageLoading && serverIntelligence.page ? (
+            <div className="absolute inset-0 z-10 flex items-center justify-center">
+              <Spinner size="lg" label="Φόρτωση δεδομένων…" />
+            </div>
+          ) : null}
+        <div className={`overflow-x-auto max-h-[60vh] overflow-y-auto transition-opacity ${serverIntelligence.isPageLoading && serverIntelligence.page ? 'opacity-40 pointer-events-none' : ''}`}>
           <table className="w-full">
             <thead>
               <tr className="bg-[#F5F5F5]">
@@ -1084,12 +1091,15 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             </tbody>
           </table>
         </div>
+        </div>
 
         {/* Pagination */}
         <div className="p-4 border-t border-[#E5E5E5] flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-[#4A4A4A]">
             {serverFilteredTotal === 0
-              ? 'Δεν βρέθηκαν προϊόντα'
+              ? groupByParent
+                ? 'Δεν βρέθηκαν ομαδοποιημένα προϊόντα σε αυτή την κατάσταση — δοκιμάστε χωρίς «Ομαδοποίηση Parent SKU»'
+                : 'Δεν βρέθηκαν προϊόντα'
               : `Εμφανίζονται ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, serverFilteredTotal)} από ${formatNumber(serverFilteredTotal)} προϊόντα`}
           </p>
           <div className="flex items-center gap-2">
