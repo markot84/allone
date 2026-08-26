@@ -376,11 +376,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [serverIntelligence.safePage, currentPage]);
 
   const inventoryAlerts: InventoryAlert[] = [];
-  // PER-178: with no stock-card bucket selected, the cards follow the active filters (category/brand/
-  // search/margin/date) via the CF's filtered summary; a selected bucket keeps whole-inventory numbers
-  // so the cards stay usable as bucket navigation.
+  // PER-178/317: cards follow active filters whenever the filtered summary covers all buckets — always when grouping (whole-catalog read); ungrouped only without a selected bucket (bucket-only page read).
+  const pageSummary = (serverBucket === 'all' || groupByParent) ? serverIntelligence.page?.summary : undefined;
   const displaySummary =
-    (serverBucket === 'all' ? serverIntelligence.page?.summary : undefined)
+    pageSummary
     ?? serverIntelligence.aggregate?.summary
     ?? EMPTY_INVENTORY_SUMMARY;
   const bucketSub = (variant: { count: number; cost_value?: number }) => {
@@ -439,10 +438,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const totalPages = serverIntelligence.page?.totalPages ?? 1;
   const paginatedProducts = filteredProducts;
   const activeInventoryTotal = useMemo(() => {
-    const s = serverIntelligence.aggregate?.summary;
+    const s = pageSummary ?? serverIntelligence.aggregate?.summary;
     if (!s) return serverFilteredTotal || totalCatalogCount;
     return s.healthy_stock.count + s.low_stock.count + s.excess_stock.count + s.dead_stock.count;
-  }, [serverIntelligence.aggregate?.summary, serverFilteredTotal, totalCatalogCount]);
+  }, [pageSummary, serverIntelligence.aggregate?.summary, serverFilteredTotal, totalCatalogCount]);
   // PER-178: the Active/Total SKUs card follows filters too — the filtered row count when no stock-card
   // bucket is selected, whole-catalog otherwise (matching the health cards' navigation behavior).
   const displayTotalSkus = serverBucket === 'all'
