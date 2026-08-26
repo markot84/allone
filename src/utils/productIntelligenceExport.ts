@@ -1,21 +1,29 @@
 import type { Product } from '../types';
-import { getStockAgeDays } from './productUtils';
+import { getDaysOfStock, getStockAgeDays } from './productUtils';
 import { safeBrandName } from '../services/reportExport';
 import { sanitizeSpreadsheetCell, sanitizeRow } from './spreadsheetSafe';
 
-const HEADERS = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'] as const;
+// Mirrors the PI table columns (Brand + DOS, not the raw stock_age_days the UI never shows).
+const HEADERS = ['SKU', 'Name', 'Category', 'Brand', 'Margin %', 'Stock Level', 'DOS', 'Tag', 'Price', 'Stock Capacity', 'Stock Age Days'] as const;
+
+function dosCell(p: Product): string {
+  const dos = getDaysOfStock(p);
+  return dos === Number.POSITIVE_INFINITY ? '∞' : String(Math.round(dos));
+}
 
 function rowsFromProducts(products: Product[]) {
   return products.map((p) => [
     p.sku || '',
     p.name || '',
     p.category || '',
-    (p.price || 0).toFixed(2),
+    p.brand || '',
     (p.margin_percentage || 0).toFixed(1),
     String(p.stock_level || 0),
+    dosCell(p),
+    p.priority_tag || '',
+    (p.price || 0).toFixed(2),
     String(p.stock_capacity || 0),
     String(getStockAgeDays(p)),
-    p.priority_tag || '',
   ]);
 }
 
@@ -59,12 +67,14 @@ export async function downloadProductIntelligenceXlsx(products: Product[], brand
     p.sku || '',
     p.name || '',
     p.category || '',
-    p.price || 0,
+    p.brand || '',
     p.margin_percentage || 0,
     p.stock_level || 0,
+    dosCell(p),
+    p.priority_tag || '',
+    p.price || 0,
     p.stock_capacity || 0,
     getStockAgeDays(p),
-    p.priority_tag || '',
   ]);
   const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...rows].map(sanitizeRow));
   const wb = XLSX.utils.book_new();
