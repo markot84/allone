@@ -286,6 +286,17 @@ let activeSupplierLeadByName = new Map<string, number>();
 let activeDefaultLeadDays = 0;
 const normSupplierName = (s?: string | null): string => (s ?? '').trim().toLowerCase();
 /** Effective lead time for a product's supplier: per-supplier lead_time, else brand default, else 0. */
+/** Sets the module-level thresholds/lead-times for ONE brand — every stockBucket caller (rebuild AND grouped queries) must run this first or tags are computed with stale/foreign-brand values. */
+async function loadActiveBrandStockContext(brandId: string): Promise<void> {
+  const thresholds = (await assertDb().doc(`brands/${brandId}`).get()).data()?.inventoryThresholds as
+    | Record<string, unknown>
+    | undefined;
+  activeStockThresholds = resolveStockThresholds(thresholds);
+  const rawLead = num(thresholds?.defaultLeadTimeDays);
+  activeDefaultLeadDays = rawLead > 0 ? rawLead : DEFAULT_LEAD_DAYS;
+  activeSupplierLeadByName = await loadSupplierLeadTimes(brandId);
+}
+
 function leadDaysForSupplier(supplier?: string | null): number {
   const perSupplier = activeSupplierLeadByName.get(normSupplierName(supplier));
   return perSupplier != null && perSupplier > 0 ? perSupplier : activeDefaultLeadDays;
@@ -1681,6 +1692,8 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
   const readBucket: PageBucket = params.groupByParent || (hasFilters && bucket !== 'all') ? 'all' : bucket;
   const pageCount = Math.max(1, aggregate.pagesByBucket?.[readBucket] ?? 1);
   const rows = await loadBucketProductsFromPages(params.brandId, readBucket, pageCount);
+  // Grouped re-bucketing recomputes tags via stockBucket — needs THIS brand's thresholds/lead times (PER-317: 289 rows flipped healthy↔low on cold instances).
+  if (params.groupByParent) await loadActiveBrandStockContext(params.brandId);
   const filtered = rows.filter((product) => matchesQuery(product, params));
   // Collapse after filtering (variant-level filters stay precise), before sort/pagination.
   const collapsed = params.groupByParent ? collapseByParentSku(filtered) : null;
@@ -1797,13 +1810,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
   // gating + connector ERP detection) is preserved unchanged.
   const stockOverride = await readStockSourceOverride(brandId);
   // Per-brand stock-health thresholds for this run (defaults preserve current behaviour when unset).
-  const brandInventoryThresholds = (await firestore.doc(`brands/${brandId}`).get()).data()?.inventoryThresholds as
-    | Record<string, unknown>
-    | undefined;
-  activeStockThresholds = resolveStockThresholds(brandInventoryThresholds);
-  const rawLead = num(brandInventoryThresholds?.defaultLeadTimeDays);
-  activeDefaultLeadDays = rawLead > 0 ? rawLead : DEFAULT_LEAD_DAYS;
-  activeSupplierLeadByName = await loadSupplierLeadTimes(brandId);
+  await loadActiveBrandStockContext(brandId);
 
   // Procurement-first: for Enterprise+Procurement brands stock is authoritative from the uploaded
   // procurement file and OVERRIDES any connector catalog.
