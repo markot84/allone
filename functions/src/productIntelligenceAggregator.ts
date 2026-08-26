@@ -1671,8 +1671,12 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
   const bucket = params.bucket ?? 'all';
   const pageSize = Math.max(1, Math.min(params.pageSize ?? TABLE_PAGE_SIZE, TABLE_PAGE_SIZE));
   const requestedPage = Math.max(1, Math.floor(params.page ?? 1));
+  // PER-317: with active filters the summary must cover ALL buckets so the cards can follow the filters.
+  const hasFilters = !!(text(params.search) || params.categories?.length || params.brands?.length
+    || params.tags?.length || (params.margin && params.margin !== 'all')
+    || (params.stockAge && params.stockAge !== 'all') || params.dateFrom || params.dateTo);
   // PER-187: siblings scatter across buckets, so grouping reads the whole catalog and buckets the groups.
-  const readBucket: PageBucket = params.groupByParent ? 'all' : bucket;
+  const readBucket: PageBucket = params.groupByParent || (hasFilters && bucket !== 'all') ? 'all' : bucket;
   const pageCount = Math.max(1, aggregate.pagesByBucket?.[readBucket] ?? 1);
   const rows = await loadBucketProductsFromPages(params.brandId, readBucket, pageCount);
   const filtered = rows.filter((product) => matchesQuery(product, params));
@@ -1680,7 +1684,9 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
   const collapsed = params.groupByParent ? collapseByParentSku(filtered) : null;
   const display = collapsed
     ? collapsed.filter((row) => bucket === 'all' || row.priority_tag === bucket)
-    : filtered;
+    : readBucket === bucket
+      ? filtered
+      : filtered.filter((row) => effectiveTagId(row) === bucket);
   const sorted = sortProducts(
     display,
     params.sortField ?? 'margin_percentage',
@@ -1710,7 +1716,9 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
       params.groupByParent
         ? collapseByParentSku(rows.filter((p) => params.includeNoStock === true || effectiveStock(p) > 0))
           .filter((row) => bucket === 'all' || row.priority_tag === bucket)
-        : rows,
+        : readBucket === bucket
+          ? rows
+          : rows.filter((row) => effectiveTagId(row) === bucket),
       params,
     ),
   };

@@ -376,8 +376,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [serverIntelligence.safePage, currentPage]);
 
   const inventoryAlerts: InventoryAlert[] = [];
-  // PER-178/317: cards follow active filters whenever the filtered summary covers all buckets — always when grouping (whole-catalog read); ungrouped only without a selected bucket (bucket-only page read).
-  const pageSummary = (serverBucket === 'all' || groupByParent) ? serverIntelligence.page?.summary : undefined;
+  // PER-178/317: cards follow filters whenever the CF summary covers all buckets — grouped, no bucket, or any filter active (mirrors the CF's hasFilters read rule); ungrouped bucket-only reads keep whole-catalog cards.
+  const hasActiveFilters = !!(serverQuery.search || serverQuery.categories || serverQuery.brands
+    || serverQuery.tags || serverQuery.margin || serverQuery.stockAge || serverQuery.dateFrom || serverQuery.dateTo);
+  const pageSummary = (serverBucket === 'all' || groupByParent || hasActiveFilters)
+    ? serverIntelligence.page?.summary
+    : undefined;
   const displaySummary =
     pageSummary
     ?? serverIntelligence.aggregate?.summary
