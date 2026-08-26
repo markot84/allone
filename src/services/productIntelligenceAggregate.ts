@@ -20,6 +20,10 @@ export type ProductIntelligenceAggregate = {
   latestSyncAt?: string | null;
   pageSize: number;
   pagesByBucket: Record<ProductIntelligenceBucket, number>;
+  /** PER-319: page counts of the precomputed grouped default view; absent until the brand rebuilds. */
+  groupedPagesByBucket?: Partial<Record<ProductIntelligenceBucket, number>>;
+  /** PER-317: whole-catalog summary after parent collapse (in-stock only). */
+  groupedSummary?: InventorySummary;
   categories: Array<{ name: string; count: number }>;
   brands?: Array<{ name: string; count: number }>;
   summary: InventorySummary;
@@ -79,6 +83,8 @@ export type ProductIntelligenceQueryResult = {
   products: Product[];
   /** Summary over the full filtered set — lets the cards follow active filters (PER-178). */
   summary?: InventorySummary;
+  /** PER-317: same filtered set after parent collapse — dual-count cards; present only when grouping. */
+  groupedSummary?: InventorySummary;
   /** PER-188: actionable dropdown options (absent on the static first-page path). */
   facets?: {
     categories: Array<{ id: string; count: number }>;
@@ -107,9 +113,11 @@ export async function fetchProductIntelligenceAggregate(
 export async function fetchProductIntelligencePage(
   brandId: string,
   bucket: ProductIntelligenceBucket,
-  page: number
+  page: number,
+  grouped = false
 ): Promise<ProductIntelligencePage | null> {
-  const snap = await getDoc(doc(db, 'product_intelligence_pages', `${brandId}_${bucket}_${page}`));
+  const id = grouped ? `${brandId}_g_${bucket}_${page}` : `${brandId}_${bucket}_${page}`;
+  const snap = await getDoc(doc(db, 'product_intelligence_pages', id));
   return snap.exists() ? (snap.data() as ProductIntelligencePage) : null;
 }
 

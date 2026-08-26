@@ -85,9 +85,11 @@ type StockOverlay = {
 type InventorySummaryPayload = {
   total_skus: number;
   total_value: number;
+  /** PER-317: δεσμευμένο κεφάλαιο — cost_price (or price×(1−margin%)) × stock, retail fallback. */
+  total_cost_value: number;
   healthy_stock: { count: number; percentage: number };
-  excess_stock: { count: number; percentage: number; value: number };
-  dead_stock: { count: number; percentage: number; value: number };
+  excess_stock: { count: number; percentage: number; value: number; cost_value: number };
+  dead_stock: { count: number; percentage: number; value: number; cost_value: number };
   low_stock: { count: number; percentage: number };
 };
 
@@ -130,6 +132,8 @@ type ProductIntelligenceQueryResult = {
   products: CompactProduct[];
   /** Summary over the full filtered set (not just the page) so cards can follow active filters (PER-178). */
   summary?: InventorySummaryPayload;
+  /** PER-317: same filtered set after parent collapse — dual-count cards; present only when groupByParent. */
+  groupedSummary?: InventorySummaryPayload;
   /** PER-188: actionable dropdown options (own dimension omitted → Excel semantics). */
   facets?: QueryFacets;
 };
@@ -1185,33 +1189,45 @@ function summaryForProducts(products: CompactProduct[]): InventorySummaryPayload
   const empty: InventorySummaryPayload = {
     total_skus: total,
     total_value: 0,
+    total_cost_value: 0,
     healthy_stock: { count: 0, percentage: 0 },
-    excess_stock: { count: 0, percentage: 0, value: 0 },
-    dead_stock: { count: 0, percentage: 0, value: 0 },
+    excess_stock: { count: 0, percentage: 0, value: 0, cost_value: 0 },
+    dead_stock: { count: 0, percentage: 0, value: 0, cost_value: 0 },
     low_stock: { count: 0, percentage: 0 },
   };
   for (const product of products) {
     const value = Math.max(0, product.stock_level * product.price);
+    const costValue = (product.cost_price ?? 0) > 0
+      ? Math.max(0, product.stock_level * product.cost_price!)
+      : (product.margin_percentage ?? 0) > 0
+        ? Math.max(0, value * (1 - product.margin_percentage! / 100))
+        : value; // no cost signal → retail fallback (measured 4/7.768 rows on e-tennis)
     empty.total_value += value;
+    empty.total_cost_value += costValue;
     if (product.priority_tag === 'healthy') empty.healthy_stock.count += 1;
     if (product.priority_tag === 'low') empty.low_stock.count += 1;
     if (product.priority_tag === 'dead') {
       empty.dead_stock.count += 1;
       empty.dead_stock.value += value;
+      empty.dead_stock.cost_value += costValue;
     }
     if (product.priority_tag === 'excess') {
       empty.excess_stock.count += 1;
       empty.excess_stock.value += value;
+      empty.excess_stock.cost_value += costValue;
     }
   }
   const pct = (count: number) => total > 0 ? Math.round((count / total) * 1000) / 10 : 0;
   empty.total_value = Math.round(empty.total_value);
+  empty.total_cost_value = Math.round(empty.total_cost_value);
   empty.healthy_stock.percentage = pct(empty.healthy_stock.count);
   empty.low_stock.percentage = pct(empty.low_stock.count);
   empty.dead_stock.percentage = pct(empty.dead_stock.count);
   empty.dead_stock.value = Math.round(empty.dead_stock.value);
+  empty.dead_stock.cost_value = Math.round(empty.dead_stock.cost_value);
   empty.excess_stock.percentage = pct(empty.excess_stock.count);
   empty.excess_stock.value = Math.round(empty.excess_stock.value);
+  empty.excess_stock.cost_value = Math.round(empty.excess_stock.cost_value);
   return empty;
 }
 
@@ -1468,7 +1484,15 @@ function bucketRows(products: CompactProduct[], bucket: PageBucket): CompactProd
   });
 }
 
-async function writePageDocs(brandId: string, products: CompactProduct[]): Promise<Record<PageBucket, number>> {
+type PageDocsResult = {
+  pagesByBucket: Record<PageBucket, number>;
+  /** PER-319: page counts for the precomputed grouped default view (`{brand}_g_{bucket}_{page}`). */
+  groupedPagesByBucket: Record<string, number>;
+  /** PER-317: variant vs grouped counts over the same in-stock set, for the dual-count cards. */
+  groupedSummary: InventorySummaryPayload;
+};
+
+async function writePageDocs(brandId: string, products: CompactProduct[]): Promise<PageDocsResult> {
   const firestore = assertDb();
 
   // Build the full new page set first.
@@ -1487,6 +1511,34 @@ async function writePageDocs(brandId: string, products: CompactProduct[]): Promi
           pageSize: TABLE_PAGE_SIZE,
           totalRows: rows.length,
           products: rows.slice((page - 1) * TABLE_PAGE_SIZE, page * TABLE_PAGE_SIZE),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+      });
+    }
+  }
+
+  // PER-319: additive page set in the table's default shape (grouped, in-stock, margin desc); 5 buckets not 6 — no_stock is non-default → CF path.
+  const grouped = collapseByParentSku(products.filter((p) => effectiveStock(p) > 0));
+  const groupedSummary = summaryForProducts(grouped);
+  const groupedPagesByBucket: Record<string, number> = {};
+  for (const bucket of ['all', 'healthy', 'excess', 'dead', 'low'] as const) {
+    const rows = sortProducts(
+      bucket === 'all' ? grouped : grouped.filter((r) => r.priority_tag === bucket),
+      'margin_percentage',
+      'desc',
+    );
+    groupedPagesByBucket[bucket] = Math.max(1, Math.ceil(rows.length / TABLE_PAGE_SIZE));
+    for (let page = 1; page <= groupedPagesByBucket[bucket]; page += 1) {
+      writes.push({
+        id: `${brandId}_g_${bucket}_${page}`,
+        data: {
+          brandId,
+          bucket,
+          page,
+          pageSize: TABLE_PAGE_SIZE,
+          totalRows: rows.length,
+          products: rows.slice((page - 1) * TABLE_PAGE_SIZE, page * TABLE_PAGE_SIZE),
+          grouped: true,
           updatedAt: FieldValue.serverTimestamp(),
         },
       });
@@ -1515,7 +1567,7 @@ async function writePageDocs(brandId: string, products: CompactProduct[]): Promi
     staleRefs.slice(i, i + PAGE_WRITE_BATCH_SIZE).forEach((ref) => batch.delete(ref));
     await batch.commit();
   }
-  return pagesByBucket;
+  return { pagesByBucket, groupedPagesByBucket, groupedSummary };
 }
 
 /** Pages to delete after a write-then-cleanup rebuild: existing page docs NOT in the freshly-written
@@ -1625,8 +1677,9 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
   const rows = await loadBucketProductsFromPages(params.brandId, readBucket, pageCount);
   const filtered = rows.filter((product) => matchesQuery(product, params));
   // Collapse after filtering (variant-level filters stay precise), before sort/pagination.
-  const display = params.groupByParent
-    ? collapseByParentSku(filtered).filter((row) => bucket === 'all' || row.priority_tag === bucket)
+  const collapsed = params.groupByParent ? collapseByParentSku(filtered) : null;
+  const display = collapsed
+    ? collapsed.filter((row) => bucket === 'all' || row.priority_tag === bucket)
     : filtered;
   const sorted = sortProducts(
     display,
@@ -1651,6 +1704,7 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
     bucket,
     products: sorted.slice(start, start + pageSize),
     summary: summaryForProducts(filtered),
+    ...(collapsed ? { groupedSummary: summaryForProducts(collapsed) } : {}),
     facets: buildQueryFacets(rows, params),
   };
 }
@@ -1747,7 +1801,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       try {
         const syncVersion = await computeBrandSyncVersion(brandId);
         const summary = summaryForProducts(procProducts);
-        const pagesByBucket = await writePageDocs(brandId, procProducts);
+        const { pagesByBucket, groupedPagesByBucket, groupedSummary } = await writePageDocs(brandId, procProducts);
         const competitiveInventory = await writeCompetitiveInventoryLookup(brandId, procProducts);
         const charts = chartDataForProducts(procProducts);
         await ref.set(
@@ -1765,6 +1819,8 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
             competitiveInventoryChunks: competitiveInventory.chunks,
             pageSize: TABLE_PAGE_SIZE,
             pagesByBucket,
+            groupedPagesByBucket,
+            groupedSummary,
             categories: categoryCounts(procProducts),
             brands: brandCounts(procProducts),
             charts,
@@ -1833,7 +1889,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       return { success: true, skipped: true, brandId };
     }
     const summary = summaryForProducts(products);
-    const pagesByBucket = await writePageDocs(brandId, products);
+    const { pagesByBucket, groupedPagesByBucket, groupedSummary } = await writePageDocs(brandId, products);
     const competitiveInventory = await writeCompetitiveInventoryLookup(brandId, products);
     const charts = chartDataForProducts(products);
     // Which warehouses this aggregate reflects (empty = all) → drives the UI badge so ΚΑΠ-only numbers
@@ -1872,6 +1928,8 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       stockLocationLabels: stockLocationLabelsForBadge,
       pageSize: TABLE_PAGE_SIZE,
       pagesByBucket,
+      groupedPagesByBucket,
+      groupedSummary,
       categories: categoryCounts(products),
       brands: brandCounts(products),
       charts,

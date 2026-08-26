@@ -473,9 +473,11 @@ export interface Product {
 export interface InventorySummary {
   total_skus: number;
   total_value: number;
+  /** PER-317: δεσμευμένο κεφάλαιο (cost×stock); optional — absent on pre-317 aggregates. */
+  total_cost_value?: number;
   healthy_stock: { count: number; percentage: number };
-  excess_stock: { count: number; percentage: number; value: number };
-  dead_stock: { count: number; percentage: number; value: number };
+  excess_stock: { count: number; percentage: number; value: number; cost_value?: number };
+  dead_stock: { count: number; percentage: number; value: number; cost_value?: number };
   low_stock: { count: number; percentage: number };
 }
 

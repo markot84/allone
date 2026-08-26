@@ -273,7 +273,14 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     includeNoStock,
     ...(groupByParent ? { groupByParent: true } : {}),
   }), [PAGE_SIZE, searchQuery, categoryInclude, brandInclude, effectiveTagFilter, marginFilter, stockAgeFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode, includeNoStock, groupByParent]);
-  const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage, serverQuery);
+  // PER-319: gates the precomputed `_g_` page docs — MUST mirror serverQuery, or a new filter silently serves unfiltered static pages.
+  const isDefaultQuery =
+    !searchQuery.trim() &&
+    categoryInclude == null && brandInclude == null && tagInclude == null &&
+    marginFilter === 'all' && stockAgeFilter === 'all' &&
+    !productDateFrom && !productDateTo && !includeNoStock &&
+    groupByParent && sortField === 'margin_percentage' && sortDirection === 'desc';
+  const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage, serverQuery, { staticDefault: isDefaultQuery });
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -375,6 +382,15 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     (serverBucket === 'all' ? serverIntelligence.page?.summary : undefined)
     ?? serverIntelligence.aggregate?.summary
     ?? EMPTY_INVENTORY_SUMMARY;
+  const bucketSub = (variant: { count: number; cost_value?: number }) => {
+    const counts = `${formatNumber(variant.count)} SKUs`;
+    return variant.cost_value != null ? `Κόστος ${formatCurrencyCompact(variant.cost_value)} · ${counts}` : counts;
+  };
+  // PER-317: cards count SKUs, grouped table shows products — show both at the table so a bucket click doesn't read as «λάθος νούμερα».
+  const bucketVariantCount =
+    serverBucket !== 'all' && serverBucket !== 'no_stock' && isDefaultQuery
+      ? { healthy: displaySummary.healthy_stock.count, excess: displaySummary.excess_stock.count, dead: displaySummary.dead_stock.count, low: displaySummary.low_stock.count }[serverBucket]
+      : undefined;
 
   // PER-188: prefer server facets (actionable options); fall back to whole-catalog aggregate lists.
   const facets = serverIntelligence.page?.facets;
@@ -741,10 +757,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           value={displaySummary.excess_stock.value >= 1000
             ? formatCurrencyCompact(displaySummary.excess_stock.value)
             : `€${formatCurrency(displaySummary.excess_stock.value)}`}
-          subValue={`${displaySummary.excess_stock.count} SKUs`}
+          subValue={bucketSub(displaySummary.excess_stock)}
           icon={<AlertTriangle size={20} />}
           color="#F59E0B"
-          tooltip={`Προϊόντα με απόθεμα που καλύπτει πάνω από ${excessDaysOfCover} ημέρες πωλήσεων, με βάση τον τρέχοντα ρυθμό. Το όριο ρυθμίζεται στα «Όρια υγείας αποθέματος».`}
+          tooltip={`Προϊόντα με απόθεμα που καλύπτει πάνω από ${excessDaysOfCover} ημέρες πωλήσεων, με βάση τον τρέχοντα ρυθμό. Αξία = τιμή πώλησης × απόθεμα ανά κωδικό (SKU)· το κόστος = τιμή κόστους × απόθεμα. Με ενεργή ομαδοποίηση ο πίνακας δείχνει προϊόντα (γονείς), όχι κωδικούς. Το όριο ρυθμίζεται στα «Όρια υγείας αποθέματος».`}
           active={stockCardFilter === 'excess'}
           onClick={() => selectStockCardFilter(stockCardFilter === 'excess' ? 'all' : 'excess')}
         />
@@ -753,10 +769,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           value={displaySummary.dead_stock.value >= 1000
             ? formatCurrencyCompact(displaySummary.dead_stock.value)
             : `€${formatCurrency(displaySummary.dead_stock.value)}`}
-          subValue={`${displaySummary.dead_stock.count} SKUs`}
+          subValue={bucketSub(displaySummary.dead_stock)}
           icon={<AlertCircle size={20} />}
           color="#EF4444"
-          tooltip="Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο."
+          tooltip="Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο. Αξία = τιμή πώλησης × απόθεμα ανά κωδικό (SKU)· το κόστος = τιμή κόστους × απόθεμα. Με ενεργή ομαδοποίηση ο πίνακας δείχνει προϊόντα (γονείς), όχι κωδικούς."
           active={stockCardFilter === 'dead'}
           onClick={() => selectStockCardFilter(stockCardFilter === 'dead' ? 'all' : 'dead')}
         />
@@ -938,7 +954,9 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             </div>
             <div className="flex flex-wrap items-end gap-2 sm:ml-auto">
               <div className="text-sm text-[#4A4A4A] min-w-[120px]">
-                {formatNumber(serverFilteredTotal)} γραμμές
+                {bucketVariantCount != null && bucketVariantCount !== serverFilteredTotal
+                  ? `${formatNumber(serverFilteredTotal)} προϊόντα (${formatNumber(bucketVariantCount)} κωδικοί)`
+                  : `${formatNumber(serverFilteredTotal)} γραμμές`}
               </div>
               <Button
                 variant="secondary"
@@ -966,8 +984,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
+        {/* Table — dimmed while a CF query resolves so filter/sort clicks never look stuck (PER-319) */}
+        <div className={`overflow-x-auto max-h-[60vh] overflow-y-auto relative transition-opacity ${serverIntelligence.isPageLoading && serverIntelligence.page ? 'opacity-50 pointer-events-none' : ''}`}>
           <table className="w-full">
             <thead>
               <tr className="bg-[#F5F5F5]">
