@@ -286,6 +286,38 @@ let activeSupplierLeadByName = new Map<string, number>();
 let activeDefaultLeadDays = 0;
 const normSupplierName = (s?: string | null): string => (s ?? '').trim().toLowerCase();
 /** Effective lead time for a product's supplier: per-supplier lead_time, else brand default, else 0. */
+/** PER-320: in-stock SKUs for today's availability snapshot — sorted, deduped. */
+export function availabilitySnapshotSkus(products: CompactProduct[]): string[] {
+  return [...new Set(products.filter((p) => effectiveStock(p) > 0).map((p) => p.sku).filter(Boolean))].sort();
+}
+
+/** PER-320: daily per-brand availability snapshot (`{brand}_{YYYY-MM-DD}`) — the raw history the availability-weighted dead-stock rule needs; accrues forward only, so it must run every nightly. */
+async function writeDailyAvailabilitySnapshot(brandId: string, products: CompactProduct[]): Promise<void> {
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    const skus = availabilitySnapshotSkus(products);
+    const joined = skus.join('\n');
+    if (joined.length > 950_000) {
+      logger.warn(`[ProductIntelligence] ${brandId}: availability snapshot too large (${skus.length} skus) — skipped`);
+      return;
+    }
+    await assertDb().doc(`stock_availability/${brandId}_${day}`).set({
+      brandId,
+      date: day,
+      count: skus.length,
+      skus: joined,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    // Retention: sweep snapshots older than 400 days (single-field date query, all brands).
+    const cutoff = new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10);
+    const stale = await assertDb().collection('stock_availability').where('date', '<', cutoff).limit(200).get();
+    for (const doc of stale.docs) await doc.ref.delete();
+  } catch (err) {
+    // Snapshot failure must never kill the rebuild.
+    logger.warn(`[ProductIntelligence] ${brandId}: availability snapshot failed`, { err });
+  }
+}
+
 /** Sets the module-level thresholds/lead-times for ONE brand — every stockBucket caller (rebuild AND grouped queries) must run this first or tags are computed with stale/foreign-brand values. */
 async function loadActiveBrandStockContext(brandId: string): Promise<void> {
   const thresholds = (await assertDb().doc(`brands/${brandId}`).get()).data()?.inventoryThresholds as
@@ -1825,6 +1857,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       try {
         const syncVersion = await computeBrandSyncVersion(brandId);
         const summary = summaryForProducts(procProducts);
+        await writeDailyAvailabilitySnapshot(brandId, procProducts);
         const { pagesByBucket, groupedPagesByBucket, groupedSummary } = await writePageDocs(brandId, procProducts);
         const competitiveInventory = await writeCompetitiveInventoryLookup(brandId, procProducts);
         const charts = chartDataForProducts(procProducts);
@@ -1913,6 +1946,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       return { success: true, skipped: true, brandId };
     }
     const summary = summaryForProducts(products);
+    await writeDailyAvailabilitySnapshot(brandId, products);
     const { pagesByBucket, groupedPagesByBucket, groupedSummary } = await writePageDocs(brandId, products);
     const competitiveInventory = await writeCompetitiveInventoryLookup(brandId, products);
     const charts = chartDataForProducts(products);
