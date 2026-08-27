@@ -431,6 +431,11 @@ export interface Product {
   composite_score?: number;
   /** Cost price (Cost_Price in template) - optional */
   cost_price?: number;
+  /** PER-323: grouped rows — Σ(price×stock) των παιδιών; honest price range when variants differ. */
+  stock_value?: number;
+  price_min?: number;
+  price_max?: number;
+  variant_count?: number;
   /** Revenue in period (Revenue_Period in template) - optional, used for revenue-based scoring */
   revenue_period?: number;
   /** Qty sold in period (Qty_Sold_Period in template) - optional */

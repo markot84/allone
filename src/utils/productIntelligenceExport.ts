@@ -4,11 +4,23 @@ import { safeBrandName } from '../services/reportExport';
 import { sanitizeSpreadsheetCell, sanitizeRow } from './spreadsheetSafe';
 
 // Mirrors the PI table columns (Brand + DOS, not the raw stock_age_days the UI never shows).
-const HEADERS = ['SKU', 'Name', 'Category', 'Brand', 'Margin %', 'Stock Level', 'DOS', 'Tag', 'Price', 'Stock Capacity', 'Stock Age Days'] as const;
+const HEADERS = ['SKU', 'Name', 'Category', 'Brand', 'Margin %', 'Stock Level', 'DOS', 'Tag', 'Price', 'Value (€)', 'Stock Capacity', 'Stock Age Days'] as const;
 
 function dosCell(p: Product): string {
   const dos = getDaysOfStock(p);
   return dos === Number.POSITIVE_INFINITY ? '∞' : String(Math.round(dos));
+}
+
+// PER-323: additive per row (group rows carry the children's sum) — the column total matches the cards.
+function valueCell(p: Product): number {
+  return Math.round((p.stock_value ?? Math.max(0, (p.price || 0) * (p.stock_level || 0))) * 100) / 100;
+}
+
+// Range groups export as a string; single-price rows stay numeric so spreadsheet math keeps working.
+function priceCell(p: Product): string | number {
+  return p.price_min != null && p.price_max != null && p.price_min < p.price_max
+    ? `${p.price_min.toFixed(2)}–${p.price_max.toFixed(2)}`
+    : Math.round((p.price || 0) * 100) / 100;
 }
 
 function rowsFromProducts(products: Product[]) {
@@ -21,7 +33,8 @@ function rowsFromProducts(products: Product[]) {
     String(p.stock_level || 0),
     dosCell(p),
     p.priority_tag || '',
-    (p.price || 0).toFixed(2),
+    priceCell(p),
+    String(valueCell(p)),
     String(p.stock_capacity || 0),
     String(getStockAgeDays(p)),
   ]);
@@ -72,7 +85,8 @@ export async function downloadProductIntelligenceXlsx(products: Product[], brand
     p.stock_level || 0,
     dosCell(p),
     p.priority_tag || '',
-    p.price || 0,
+    priceCell(p),
+    valueCell(p),
     p.stock_capacity || 0,
     getStockAgeDays(p),
   ]);

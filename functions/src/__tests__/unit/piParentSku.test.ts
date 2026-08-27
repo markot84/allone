@@ -47,6 +47,18 @@ describe('collapseByParentSku', () => {
     expect(out.find((r: { sku: string }) => r.sku === 'Y-1')).toBeTruthy();
   });
 
+  it('computes additive stock_value, price range and stock-weighted margin (PER-323)', () => {
+    const rows = [
+      { ...v('X-1', 'X', 2, 1), price: 30, margin_percentage: 40 },
+      { ...v('X-2', 'X', 6, 1), price: 20, margin_percentage: 20 },
+    ];
+    const g = collapseByParentSku(rows as never).find((r: { sku: string }) => r.sku === 'X');
+    expect(g.stock_value).toBe(2 * 30 + 6 * 20); // 180 — sum of children, not rep price × total stock
+    expect(g.price_min).toBe(20);
+    expect(g.price_max).toBe(30);
+    expect(g.margin_percentage).toBe((40 * 2 + 20 * 6) / 8); // 25 — weighted by stock
+  });
+
   it('picks the same representative regardless of input order on stock ties', () => {
     const a = collapseByParentSku([v('X-1', 'X', 2), v('X-2', 'X', 2)]).find((r: { sku: string }) => r.sku === 'X');
     const b = collapseByParentSku([v('X-2', 'X', 2), v('X-1', 'X', 2)]).find((r: { sku: string }) => r.sku === 'X');

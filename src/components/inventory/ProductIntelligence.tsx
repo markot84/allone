@@ -1070,7 +1070,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                   </span>
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A]">
-                  <Tooltip content="Μικτό περιθώριο κέρδους: (τιμή πώλησης − κόστος) / τιμή πώλησης. Απαιτεί κόστος από το ERP — χωρίς αυτό εμφανίζεται κενό." size={12}>
+                  <Tooltip content="Μικτό περιθώριο κέρδους: (τιμή πώλησης − κόστος) / τιμή πώλησης. Απαιτεί κόστος από το ERP — χωρίς αυτό εμφανίζεται κενό. Στα ομαδοποιημένα προϊόντα: μεσοσταθμικό ανά απόθεμα." size={12}>
                     <button
                       onClick={() => handleSort('margin_percentage')}
                       className="flex items-center gap-1 hover:text-[#1A1A1A]"
@@ -1116,6 +1116,11 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     Price
                     <SortIcon field="price" current={sortField} direction={sortDirection} />
                   </button>
+                </th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden md:table-cell">
+                  <Tooltip content="Τιμή × απόθεμα ανά κωδικό· στα ομαδοποιημένα προϊόντα το άθροισμα των παιδιών — το σύνολο της στήλης ταυτίζεται με τις κάρτες." size={12}>
+                    Αξία
+                  </Tooltip>
                 </th>
                 {benchmarkCount > 0 && (
                   <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
@@ -1373,7 +1378,14 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
       </td>
       <td className="px-3 py-2 hidden sm:table-cell">
         <span className="text-xs font-mono text-[#1A1A1A]">
-          €{formatCurrency(product.price ?? 0, 2)}
+          {product.price_min != null && product.price_max != null && product.price_min < product.price_max
+            ? `€${formatCurrency(product.price_min, 2)}–${formatCurrency(product.price_max, 2)}`
+            : `€${formatCurrency(product.price ?? 0, 2)}`}
+        </span>
+      </td>
+      <td className="px-3 py-2 hidden md:table-cell">
+        <span className="text-xs font-mono text-[#1A1A1A]">
+          €{formatCurrency(product.stock_value ?? Math.max(0, (product.price ?? 0) * (product.stock_level ?? 0)), 2)}
         </span>
       </td>
       {benchmarkMap && (

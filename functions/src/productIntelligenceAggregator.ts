@@ -50,6 +50,10 @@ type CompactProduct = {
   parent_name?: string;
   /** Sibling rows sharing parent_sku (incl. this one). */
   variant_count?: number;
+  /** PER-323: group rows only — Σ(price×stock) των παιδιών (additive, ταυτίζεται με τις κάρτες). */
+  stock_value?: number;
+  price_min?: number;
+  price_max?: number;
   source?: string;
   createdAt?: string;
 };
@@ -1683,6 +1687,12 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
     const stock = sum((p) => p.stock_level);
     const soldPeriod = members.some((p) => p.qty_sold_period != null) ? sum((p) => p.qty_sold_period) : null;
     const soldLifetime = members.some((p) => p.qty_sold_lifetime != null) ? sum((p) => p.qty_sold_lifetime) : null;
+    // PER-323: additive value Σ(price×stock ανά κωδικό), honest price range, stock-weighted margin.
+    const stockValue = Math.round(members.reduce((t, p) => t + Math.max(0, (p.price || 0) * (p.stock_level || 0)), 0) * 100) / 100;
+    const prices = members.map((p) => p.price || 0).filter((v) => v > 0);
+    const weightedMargin = stock > 0
+      ? Math.round(members.reduce((t, p) => t + (p.margin_percentage || 0) * (p.stock_level || 0), 0) / stock * 10) / 10
+      : rep.margin_percentage;
     out.push({
       ...rep,
       id: `parent_${parent}`,
@@ -1696,6 +1706,9 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
       ...(soldLifetime != null ? { qty_sold_lifetime: soldLifetime } : {}),
       ...(lastSale ? { last_sale_at: lastSale } : {}),
       variant_count: members.length,
+      stock_value: stockValue,
+      ...(prices.length > 0 ? { price_min: Math.min(...prices), price_max: Math.max(...prices) } : {}),
+      margin_percentage: weightedMargin,
       // The bucket describes the group, not its representative variant.
       priority_tag: stockBucket(stock, soldPeriod, soldLifetime, null, leadDaysForSupplier(rep.supplier)),
     });
