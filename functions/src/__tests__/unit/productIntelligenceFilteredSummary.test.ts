@@ -49,6 +49,13 @@ describe('summaryForProducts cost values (PER-317)', () => {
     expect(s.total_cost_value).toBe(62);
   });
 
+  it('prefers stock_value/cost_value when rows carry them (grouped rows, PER-323)', () => {
+    const s = summaryForProducts([
+      { ...(row('dead', 10, 5) as object), stock_value: 37, cost_value: 21 } as never,
+    ]);
+    expect(s.dead_stock).toMatchObject({ value: 37, cost_value: 21 });
+  });
+
   it('excess carries cost_value symmetrically', () => {
     const s = summaryForProducts([costRow('excess', 4, 10, { cost_price: 6 })]);
     expect(s.excess_stock).toMatchObject({ count: 1, value: 40, cost_value: 24 });

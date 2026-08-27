@@ -387,11 +387,17 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     pageSummary
     ?? serverIntelligence.aggregate?.summary
     ?? EMPTY_INVENTORY_SUMMARY;
-  const bucketSub = (variant: { count: number; cost_value?: number }) => {
-    const counts = `${formatNumber(variant.count)} SKUs`;
-    return variant.cost_value != null ? `Κόστος ${formatCurrencyCompact(variant.cost_value)} · ${counts}` : counts;
+  // PER-323: with grouping on, cards show whole products (groups) — same population as the table/export; € are honest children sums.
+  const displayGroupedSummary = groupByParent
+    ? (serverIntelligence.page?.groupedSummary ?? serverIntelligence.aggregate?.groupedSummary)
+    : undefined;
+  const cardsSummary = displayGroupedSummary ?? displaySummary;
+  const cardsCountLabel = displayGroupedSummary ? 'προϊόντα' : 'SKUs';
+  const bucketSub = (bucket: { count: number; cost_value?: number }) => {
+    const counts = `${formatNumber(bucket.count)} ${cardsCountLabel}`;
+    return bucket.cost_value != null ? `Κόστος ${formatCurrencyCompact(bucket.cost_value)} · ${counts}` : counts;
   };
-  // PER-317: cards count SKUs, grouped table shows products — show both at the table so a bucket click doesn't read as «λάθος νούμερα».
+  // PER-317: the table line keeps the variant count («Χ προϊόντα (Υ κωδικοί)») as the bridge between the two populations.
   const bucketVariantCount =
     serverBucket !== 'all' && serverBucket !== 'no_stock' && isDefaultQuery
       ? { healthy: displaySummary.healthy_stock.count, excess: displaySummary.excess_stock.count, dead: displaySummary.dead_stock.count, low: displaySummary.low_stock.count }[serverBucket]
@@ -449,9 +455,11 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [pageSummary, serverIntelligence.aggregate?.summary, serverFilteredTotal, totalCatalogCount]);
   // PER-178: the Active/Total SKUs card follows filters too — the filtered row count when no stock-card
   // bucket is selected, whole-catalog otherwise (matching the health cards' navigation behavior).
-  const displayTotalSkus = serverBucket === 'all'
-    ? serverFilteredTotal || (includeNoStock ? totalCatalogCount : activeInventoryTotal)
-    : includeNoStock ? totalCatalogCount : activeInventoryTotal;
+  const displayTotalSkus = displayGroupedSummary
+    ? (serverBucket === 'all' ? serverFilteredTotal || displayGroupedSummary.total_skus : displayGroupedSummary.total_skus)
+    : serverBucket === 'all'
+      ? serverFilteredTotal || (includeNoStock ? totalCatalogCount : activeInventoryTotal)
+      : includeNoStock ? totalCatalogCount : activeInventoryTotal;
   const showMagentoImageAccessNotice =
     hasServerAggregate &&
     productDataSourceLabel === 'ERP' &&
@@ -786,18 +794,20 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       {/* Summary Cards — uses procurement data when available */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <SummaryCard
-          label={includeNoStock ? 'Total SKUs' : 'Active SKUs'}
+          label={displayGroupedSummary ? 'Active Products' : includeNoStock ? 'Total SKUs' : 'Active SKUs'}
           value={formatNumber(displayTotalSkus)}
           icon={<Package size={20} />}
           color="#78716C"
-          tooltip={includeNoStock ? 'Συνολικός αριθμός SKU στο ERP catalog.' : 'Ενεργά SKU με διαθέσιμο απόθεμα/stock signal, η βάση για συμπεράσματα και προτάσεις.'}
+          tooltip={displayGroupedSummary
+            ? 'Ενεργά προϊόντα (ομαδοποιημένα ανά parent SKU) με διαθέσιμο απόθεμα — ο ίδιος πληθυσμός με τον πίνακα.'
+            : includeNoStock ? 'Συνολικός αριθμός SKU στο ERP catalog.' : 'Ενεργά SKU με διαθέσιμο απόθεμα/stock signal, η βάση για συμπεράσματα και προτάσεις.'}
           active={stockCardFilter === 'all'}
           onClick={() => selectStockCardFilter('all')}
         />
         <SummaryCard
           label="Healthy Stock"
-          value={`${displaySummary.healthy_stock.percentage}%`}
-          subValue={formatNumber(displaySummary.healthy_stock.count)}
+          value={`${cardsSummary.healthy_stock.percentage}%`}
+          subValue={formatNumber(cardsSummary.healthy_stock.count)}
           icon={<TrendingUp size={20} />}
           color="#22C55E"
           tooltip="Προϊόντα με υγιή διάρκεια αποθέματος."
@@ -806,32 +816,32 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         />
         <SummaryCard
           label="Excess Stock"
-          value={displaySummary.excess_stock.value >= 1000
-            ? formatCurrencyCompact(displaySummary.excess_stock.value)
-            : `€${formatCurrency(displaySummary.excess_stock.value)}`}
-          subValue={bucketSub(displaySummary.excess_stock)}
+          value={cardsSummary.excess_stock.value >= 1000
+            ? formatCurrencyCompact(cardsSummary.excess_stock.value)
+            : `€${formatCurrency(cardsSummary.excess_stock.value)}`}
+          subValue={bucketSub(cardsSummary.excess_stock)}
           icon={<AlertTriangle size={20} />}
           color="#F59E0B"
-          tooltip={`Προϊόντα με απόθεμα που καλύπτει πάνω από ${excessDaysOfCover} ημέρες πωλήσεων, με βάση τον τρέχοντα ρυθμό. Αξία = τιμή πώλησης × απόθεμα ανά κωδικό (SKU)· το κόστος = τιμή κόστους × απόθεμα. Με ενεργή ομαδοποίηση ο πίνακας δείχνει προϊόντα (γονείς), όχι κωδικούς. Το όριο ρυθμίζεται στα «Όρια υγείας αποθέματος».`}
+          tooltip={`Προϊόντα με απόθεμα που καλύπτει πάνω από ${excessDaysOfCover} ημέρες πωλήσεων, με βάση τον τρέχοντα ρυθμό. Αξία = τιμή πώλησης × απόθεμα ανά κωδικό (SKU)· το κόστος = τιμή κόστους × απόθεμα. Με ενεργή ομαδοποίηση κάρτες και πίνακας μετρούν ολόκληρα προϊόντα (γονείς)· χωρίς ομαδοποίηση, κωδικούς. Το όριο ρυθμίζεται στα «Όρια υγείας αποθέματος».`}
           active={stockCardFilter === 'excess'}
           onClick={() => selectStockCardFilter(stockCardFilter === 'excess' ? 'all' : 'excess')}
         />
         <SummaryCard
           label="Dead Stock"
-          value={displaySummary.dead_stock.value >= 1000
-            ? formatCurrencyCompact(displaySummary.dead_stock.value)
-            : `€${formatCurrency(displaySummary.dead_stock.value)}`}
-          subValue={bucketSub(displaySummary.dead_stock)}
+          value={cardsSummary.dead_stock.value >= 1000
+            ? formatCurrencyCompact(cardsSummary.dead_stock.value)
+            : `€${formatCurrency(cardsSummary.dead_stock.value)}`}
+          subValue={bucketSub(cardsSummary.dead_stock)}
           icon={<AlertCircle size={20} />}
           color="#EF4444"
-          tooltip="Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο. Αξία = τιμή πώλησης × απόθεμα ανά κωδικό (SKU)· το κόστος = τιμή κόστους × απόθεμα. Με ενεργή ομαδοποίηση ο πίνακας δείχνει προϊόντα (γονείς), όχι κωδικούς."
+          tooltip="Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο. Αξία = τιμή πώλησης × απόθεμα ανά κωδικό (SKU)· το κόστος = τιμή κόστους × απόθεμα. Με ενεργή ομαδοποίηση κάρτες και πίνακας μετρούν ολόκληρα προϊόντα (γονείς)· χωρίς ομαδοποίηση, κωδικούς."
           active={stockCardFilter === 'dead'}
           onClick={() => selectStockCardFilter(stockCardFilter === 'dead' ? 'all' : 'dead')}
         />
         <SummaryCard
           label="Low Stock"
-          value={`${displaySummary.low_stock.percentage}%`}
-          subValue={`${displaySummary.low_stock.count} SKUs`}
+          value={`${cardsSummary.low_stock.percentage}%`}
+          subValue={`${formatNumber(cardsSummary.low_stock.count)} ${cardsCountLabel}`}
           icon={<TrendingDown size={20} />}
           color="#8B5CF6"
           tooltip={`Προϊόντα με απόθεμα που καλύπτει έως ${lowDaysOfCover} ημέρες πωλήσεων. Κίνδυνος εξάντλησης. Το όριο ρυθμίζεται στα «Όρια υγείας αποθέματος».`}

@@ -52,6 +52,7 @@ type CompactProduct = {
   variant_count?: number;
   /** PER-323: group rows only — Σ(price×stock) των παιδιών (additive, ταυτίζεται με τις κάρτες). */
   stock_value?: number;
+  cost_value?: number;
   price_min?: number;
   price_max?: number;
   source?: string;
@@ -1234,6 +1235,22 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean, manual = 
   };
 }
 
+/** Retail value of a row's stock — group rows carry the children's sum (PER-323). */
+function rowStockValue(product: CompactProduct): number {
+  return product.stock_value ?? Math.max(0, product.stock_level * product.price);
+}
+
+/** Cost value of a row's stock: cost_price, then margin-derived, then retail fallback; group rows carry the children's sum. */
+function rowCostValue(product: CompactProduct): number {
+  if (product.cost_value != null) return product.cost_value;
+  const value = Math.max(0, product.stock_level * product.price);
+  return (product.cost_price ?? 0) > 0
+    ? Math.max(0, product.stock_level * product.cost_price!)
+    : (product.margin_percentage ?? 0) > 0
+      ? Math.max(0, value * (1 - product.margin_percentage! / 100))
+      : value; // no cost signal → retail fallback (measured 4/7.768 rows on e-tennis)
+}
+
 function summaryForProducts(products: CompactProduct[]): InventorySummaryPayload {
   const total = products.length;
   const empty: InventorySummaryPayload = {
@@ -1246,12 +1263,8 @@ function summaryForProducts(products: CompactProduct[]): InventorySummaryPayload
     low_stock: { count: 0, percentage: 0 },
   };
   for (const product of products) {
-    const value = Math.max(0, product.stock_level * product.price);
-    const costValue = (product.cost_price ?? 0) > 0
-      ? Math.max(0, product.stock_level * product.cost_price!)
-      : (product.margin_percentage ?? 0) > 0
-        ? Math.max(0, value * (1 - product.margin_percentage! / 100))
-        : value; // no cost signal → retail fallback (measured 4/7.768 rows on e-tennis)
+    const value = rowStockValue(product);
+    const costValue = rowCostValue(product);
     empty.total_value += value;
     empty.total_cost_value += costValue;
     if (product.priority_tag === 'healthy') empty.healthy_stock.count += 1;
@@ -1688,7 +1701,8 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
     const soldPeriod = members.some((p) => p.qty_sold_period != null) ? sum((p) => p.qty_sold_period) : null;
     const soldLifetime = members.some((p) => p.qty_sold_lifetime != null) ? sum((p) => p.qty_sold_lifetime) : null;
     // PER-323: additive value Σ(price×stock ανά κωδικό), honest price range, stock-weighted margin.
-    const stockValue = Math.round(members.reduce((t, p) => t + Math.max(0, (p.price || 0) * (p.stock_level || 0)), 0) * 100) / 100;
+    const stockValue = Math.round(members.reduce((t, p) => t + rowStockValue(p), 0) * 100) / 100;
+    const costValue = Math.round(members.reduce((t, p) => t + rowCostValue(p), 0) * 100) / 100;
     const prices = members.map((p) => p.price || 0).filter((v) => v > 0);
     const weightedMargin = stock > 0
       ? Math.round(members.reduce((t, p) => t + (p.margin_percentage || 0) * (p.stock_level || 0), 0) / stock * 10) / 10
@@ -1707,6 +1721,7 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
       ...(lastSale ? { last_sale_at: lastSale } : {}),
       variant_count: members.length,
       stock_value: stockValue,
+      cost_value: costValue,
       ...(prices.length > 0 ? { price_min: Math.min(...prices), price_max: Math.max(...prices) } : {}),
       margin_percentage: weightedMargin,
       // The bucket describes the group, not its representative variant.
