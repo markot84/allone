@@ -59,6 +59,14 @@ function cleanNumber(value: unknown): number | undefined {
   return n === null ? undefined : n;
 }
 
+/** MV ships Stock_Age_Days as an Excel DATE serial (~44-46k) on most rows — convert to an actual age; plausible day-counts pass through. */
+export function normalizeStockAge(value: number | undefined): number | undefined {
+  if (value == null) return value;
+  if (value <= 20000) return value;
+  const todaySerial = Date.now() / 86400000 + 25569;
+  return Math.max(0, Math.round(todaySerial - value));
+}
+
 function cleanDate(value: unknown): string | undefined {
   const s = text(value);
   if (!s) return undefined;
@@ -195,7 +203,7 @@ export async function normalizeMegaventoryCustomReportRows(
     const availableStock = cleanNumber(row.Available_Stock);
     const qtySold = cleanNumber(row.Qty_Sold_Period);
     const revenue = cleanNumber(row.Revenue_Period);
-    const stockAgeDays = cleanNumber(row.Stock_Age_Days);
+    const stockAgeDays = normalizeStockAge(cleanNumber(row.Stock_Age_Days));
     const reorderPoint = cleanNumber(row.Reorder_Point);
     const reorderQty = cleanNumber(row.Reorder_Qty);
     const marginPct = cleanNumber(row['Gross_Margin_%']);
