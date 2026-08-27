@@ -1362,7 +1362,8 @@ function ymd(value: string | undefined): string | null {
   if (!value) return null;
   const raw = text(value);
   if (!raw) return null;
-  const numeric = parseFloat(raw);
+  // Whole-numeric only — parseFloat('2026-08-27…') = 2026 sent every ISO date to year 1905 via the serial branch.
+  const numeric = /^\d+(\.\d+)?$/.test(raw) ? parseFloat(raw) : NaN;
   const d = !Number.isNaN(numeric) && numeric > 0
     ? new Date((numeric - 25569) * 86400 * 1000)
     : new Date(raw);
@@ -2060,6 +2061,7 @@ export async function refreshCompetitiveInventoryLookup(brandId: string): Promis
 
 /** Test-only export — unit tests exercise the real code, not copies. */
 export const __test = {
+  ymd,
   effectiveStock,
   productFromRow,
   stampVariantCounts,
