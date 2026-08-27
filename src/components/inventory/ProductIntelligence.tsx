@@ -1044,7 +1044,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             </div>
           ) : null}
         <div className={`overflow-x-auto max-h-[60vh] overflow-y-auto transition-opacity ${serverIntelligence.isPageFetching && serverIntelligence.page ? 'opacity-40 pointer-events-none' : ''}`}>
-          <table className="w-full">
+          {/* PER-324: sticky on th (not thead) — Chrome ignores sticky on thead; th carries its own bg to cover scrolled rows. */}
+          <table className="w-full [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-[#F5F5F5]">
             <thead>
               <tr className="bg-[#F5F5F5]">
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A]">
