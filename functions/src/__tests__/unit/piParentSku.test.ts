@@ -47,6 +47,12 @@ describe('collapseByParentSku', () => {
     expect(out.find((r: { sku: string }) => r.sku === 'Y-1')).toBeTruthy();
   });
 
+  it('picks the same representative regardless of input order on stock ties', () => {
+    const a = collapseByParentSku([v('X-1', 'X', 2), v('X-2', 'X', 2)]).find((r: { sku: string }) => r.sku === 'X');
+    const b = collapseByParentSku([v('X-2', 'X', 2), v('X-1', 'X', 2)]).find((r: { sku: string }) => r.sku === 'X');
+    expect(a.name).toBe(b.name);
+  });
+
   it('titles the group with the Magento configurable name when the sync carried one', () => {
     const size = (sku: string, name: string, stock: number) =>
       ({ ...v(sku, '101552-100', stock), name, parent_name: 'Ρακέτα τένις Babolat Pure Drive' });

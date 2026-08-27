@@ -1674,7 +1674,9 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
     if (g) g.push(row); else groups.set(row.parent_sku, [row]);
   }
   for (const [parent, members] of groups) {
-    const rep = members.reduce((a, b) => (b.stock_level > a.stock_level ? b : a));
+    // Tie-break by sku — an order-dependent rep made nightly vs CF tags flip on boundary groups (rep.supplier → leadDays).
+    const rep = members.reduce((a, b) =>
+      b.stock_level > a.stock_level || (b.stock_level === a.stock_level && b.sku < a.sku) ? b : a);
     const sum = (f: (p: CompactProduct) => number | undefined) =>
       Math.round(members.reduce((t, p) => t + (f(p) || 0), 0) * 100) / 100;
     const lastSale = members.map((p) => p.last_sale_at || '').sort().pop();
