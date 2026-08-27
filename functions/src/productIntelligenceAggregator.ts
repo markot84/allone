@@ -496,6 +496,8 @@ function overlayFromMegaventoryProduct(row: Record<string, unknown>): StockOverl
     ...(text(row.seasonality_tag) ? { seasonality_tag: text(row.seasonality_tag) } : {}),
     ...(optionalNumber(row.reorder_point) != null ? { reorder_point: optionalNumber(row.reorder_point) } : {}),
     ...(optionalNumber(row.reorder_qty) != null ? { reorder_qty: optionalNumber(row.reorder_qty) } : {}),
+    // ERP rows must carry createdAt too — the «Ημερομηνία εισαγωγής» filter matches on it (was: 0 results for any period).
+    ...(asIsoDate(row.createdAt ?? row.updatedAt) ? { createdAt: asIsoDate(row.createdAt ?? row.updatedAt) } : {}),
     source: 'erp',
   };
 }
@@ -1429,7 +1431,7 @@ function matchesQuery(product: CompactProduct, params: ProductIntelligenceQueryP
   if (params.dateFrom && params.dateTo) {
     const dateValue = params.dateMode === 'first_available'
       ? ymd(product.first_available_date)
-      : ymd(product.createdAt);
+      : ymd(product.createdAt ?? product.first_available_date); // pre-fix page rows lack createdAt — fall back so old pages filter sanely
     if (!dateValue || dateValue < params.dateFrom || dateValue > params.dateTo) return false;
   }
 
