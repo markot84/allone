@@ -1133,6 +1133,11 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     <SortIcon field="price" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
+                  <Tooltip content="Μεσοσταθμικό κόστος κτήσης, όπως το υπολογίζει το ERP από τα παραστατικά αγορών· στα ομαδοποιημένα προϊόντα σταθμισμένο με το απόθεμα κάθε variant. Κενό όταν η πηγή δεν δίνει κόστος." size={12}>
+                    Κόστος κτήσης
+                  </Tooltip>
+                </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden md:table-cell">
                   <Tooltip content="Τιμή × απόθεμα ανά κωδικό· στα ομαδοποιημένα προϊόντα το άθροισμα των παιδιών — το σύνολο της στήλης ταυτίζεται με τις κάρτες." size={12}>
                     Αξία
@@ -1403,6 +1408,13 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
             ? `€${formatCurrency(product.price_min, 2)}–${formatCurrency(product.price_max, 2)}`
             : `€${formatCurrency(product.price ?? 0, 2)}`}
         </span>
+      </td>
+      <td className="px-3 py-2 hidden lg:table-cell">
+        {product.avg_cost != null ? (
+          <span className="text-xs font-mono text-[#1A1A1A]">€{formatCurrency(product.avg_cost, 2)}</span>
+        ) : (
+          <span className="text-[10px] text-[#9CA3AF]">—</span>
+        )}
       </td>
       <td className="px-3 py-2 hidden md:table-cell">
         <span className="text-xs font-mono text-[#1A1A1A]">

@@ -30,6 +30,7 @@ type CompactProduct = {
   priority_tag: StockBucket;
   price: number;
   cost_price?: number;
+  avg_cost?: number;
   list_price?: number;
   qty_sold_period?: number;
   qty_sold_lifetime?: number;
@@ -69,6 +70,7 @@ type StockOverlay = {
   priority_tag: StockBucket;
   price?: number;
   cost_price?: number;
+  avg_cost?: number;
   list_price?: number;
   margin_percentage?: number;
   margin_tier?: 'high' | 'medium' | 'low';
@@ -516,6 +518,7 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     priority_tag: bucket,
     price: Math.round(price * 100) / 100,
     ...(cost > 0 ? { cost_price: Math.round(cost * 100) / 100 } : {}),
+    ...(firstPositive(row.avg_cost, row.avgCost) > 0 ? { avg_cost: Math.round(firstPositive(row.avg_cost, row.avgCost) * 100) / 100 } : {}),
     ...(optionalNumber(row.list_price ?? row.compare_at_price) != null ? { list_price: optionalNumber(row.list_price ?? row.compare_at_price) } : {}),
     ...(qtySold > 0 ? { qty_sold_period: Math.round(qtySold * 100) / 100 } : {}),
     ...(optionalNumber(row.qty_sold_lifetime) != null ? { qty_sold_lifetime: optionalNumber(row.qty_sold_lifetime) } : {}),
@@ -558,6 +561,7 @@ function overlayFromMegaventoryProduct(row: Record<string, unknown>): StockOverl
     priority_tag: bucket,
     ...(price > 0 ? { price: Math.round(price * 100) / 100 } : {}),
     ...(cost > 0 ? { cost_price: Math.round(cost * 100) / 100 } : {}),
+    ...(firstPositive(row.avg_cost, row.avgCost) > 0 ? { avg_cost: Math.round(firstPositive(row.avg_cost, row.avgCost) * 100) / 100 } : {}),
     ...(optionalNumber(row.list_price) != null ? { list_price: optionalNumber(row.list_price) } : {}),
     ...(margin > 0 ? { margin_percentage: Math.round(margin * 10) / 10, margin_tier: marginTier(margin) } : {}),
     ...(qtySold > 0 ? { qty_sold_period: Math.round(qtySold * 100) / 100 } : {}),
@@ -595,6 +599,7 @@ function applyStockOverlay(product: CompactProduct, overlay: StockOverlay, keepS
   next.source = 'erp';
   if (overlay.price != null) next.price = overlay.price;
   if (overlay.cost_price != null) next.cost_price = overlay.cost_price;
+  if (overlay.avg_cost != null) next.avg_cost = overlay.avg_cost;
   if (overlay.list_price != null) next.list_price = overlay.list_price;
   if (overlay.margin_percentage != null) next.margin_percentage = overlay.margin_percentage;
   if (overlay.margin_tier) next.margin_tier = overlay.margin_tier;
@@ -1778,6 +1783,13 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
     const stockValue = Math.round(members.reduce((t, p) => t + rowStockValue(p), 0) * 100) / 100;
     const costValue = Math.round(members.reduce((t, p) => t + rowCostValue(p), 0) * 100) / 100;
     const prices = members.map((p) => p.price || 0).filter((v) => v > 0);
+    // PER-321: stock-weighted avg cost over the variants that have one (omit when none do).
+    const acMembers = members.filter((p) => p.avg_cost != null);
+    const acStock = acMembers.reduce((t, p) => t + (p.stock_level || 0), 0);
+    const groupAvgCost = !acMembers.length ? null
+      : Math.round((acStock > 0
+        ? acMembers.reduce((t, p) => t + p.avg_cost! * (p.stock_level || 0), 0) / acStock
+        : acMembers.reduce((t, p) => t + p.avg_cost!, 0) / acMembers.length) * 100) / 100;
     const weightedMargin = stock > 0
       ? Math.round(members.reduce((t, p) => t + (p.margin_percentage || 0) * (p.stock_level || 0), 0) / stock * 10) / 10
       : rep.margin_percentage;
@@ -1799,6 +1811,7 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
       cost_value: costValue,
       ...(prices.length > 0 ? { price_min: Math.min(...prices), price_max: Math.max(...prices) } : {}),
       margin_percentage: weightedMargin,
+      ...(groupAvgCost != null ? { avg_cost: groupAvgCost } : {}),
       // The bucket describes the group, not its representative variant; dead only when availability history backs it (PER-320).
       priority_tag: groupTag === 'dead' && !availabilityAllowsDead(members.map((m) => m.sku)) ? 'healthy' : groupTag,
       ...(isSlowMoving(soldPeriod ?? undefined, stock) ? { slow_moving: true } : {}),

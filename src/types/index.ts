@@ -439,6 +439,8 @@ export interface Product {
   composite_score?: number;
   /** Cost price (Cost_Price in template) - optional */
   cost_price?: number;
+  /** PER-321: μεσοσταθμικό κόστος κτήσης από το ERP (MV ProductUnitCost)· στα group rows σταθμισμένο με το απόθεμα των variants. */
+  avg_cost?: number;
   /** PER-323: grouped rows — Σ(price×stock) των παιδιών; honest price range when variants differ. */
   stock_value?: number;
   price_min?: number;

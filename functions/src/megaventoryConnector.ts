@@ -1147,6 +1147,16 @@ function num(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** PER-327: MV's computed weighted-average unit cost. Multi-company accounts list one entry per company — take the first computed one (≠ the manual purchase price), else the first. */
+export function mvAvgCost(p: Record<string, unknown>): number | null {
+  const list = Array.isArray(p.ProductUnitCost) ? (p.ProductUnitCost as Record<string, unknown>[]) : [];
+  if (!list.length) return null;
+  const manual = num(p.ProductPurchasePrice);
+  const hit = list.find((c) => Math.abs(num(c?.ProductUnitCost) - manual) > 0.005) ?? list[0];
+  const v = num(hit?.ProductUnitCost);
+  return v > 0 ? v : null;
+}
+
 function isoDate(value: unknown): string {
   if (!value) return '';
   const s = String(value);
@@ -1281,6 +1291,7 @@ export async function mergeMegaventoryApiCatalogProducts(
         ...(String(p.product_subtype ?? '').trim() ? { subcategory: String(p.product_subtype).trim() } : {}),
         price: sell,
         cost_price: purchase,
+        ...(num(p.avgCost) > 0 ? { avg_cost: num(p.avgCost) } : {}),
         stock_level: stock,
         stock_capacity: isDeleted ? 0 : Math.max(stock * 2, stock),
         source: PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE,
@@ -2151,6 +2162,7 @@ export async function fetchMegaventoryData(
             unitOfMeasurement: p.ProductUnitOfMeasurement || '',
             sellingPrice: num(p.ProductSellingPrice),
             purchasePrice: num(p.ProductPurchasePrice),
+            avgCost: mvAvgCost(p),
             // NO stockOnHand here — ProductGet carries no stock fields (ProductStockOnHandTotal doesn't exist);
             // mapping it would write 0 and clobber the real totals the stock walk merges in below.
             source: 'megaventory_api',
