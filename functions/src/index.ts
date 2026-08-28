@@ -2133,6 +2133,12 @@ export const processMegaventorySyncJobs = onSchedule(
           ? { error: FieldValue.delete() }
           : { error: result.error || `Sync did not complete within ${MAX_CONTINUATIONS} continuation passes` }),
       });
+      // The ERP wave dies at the 1800s cap and never stamps success — the continuation is its tail, so it stamps the health record.
+      if (completedClean) {
+        await markNightlyJob('scheduledSyncErp', 'success', {
+          message: `completed via megaventory continuation (${job.brandId})`,
+        }).catch(() => undefined);
+      }
       if (!finalized) {
         // The stale sweep (or a newer claim) took the job from us — its verdict stands. Skip the
         // post-steps too: a newer pass owns the brand now and will refresh aggregates itself.
