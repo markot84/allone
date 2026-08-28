@@ -8,7 +8,7 @@ import type { ProcurementSheetType } from '../types/procurement';
 import { FEED_SOURCE_CONFIG, type FeedSourceType } from '../data/feedSourceConfig';
 import { logger } from '../utils/logger';
 import { supplierDocId } from '../utils/supplierDocId';
-import type { Product, RFMSegment, Campaign } from '../types';
+import type { Product, RFMSegment, Campaign, BehavioralProfile, CategoryAffinity } from '../types';
 
 const BATCH_SIZE = 500; // Firestore limit per writeBatch
 const BATCH_CONCURRENCY = 3;
@@ -1574,28 +1574,110 @@ function segmentFromRfmScores(r: number, f: number, m: number): string {
   return 'Potential Loyalists';
 }
 
-/** Group invoice rows per customer, score R/F/M by quintile, return customer-level rows. */
-export function computeRfmRowsFromInvoices(objects: Record<string, string>[]): Record<string, string>[] {
-  type Agg = { id: string; email: string; lastMs: number; docs: Set<string>; rows: number; monetary: number };
+// PER-325: item-line columns for consumption-mix affinities (airblock: Εμπορ.κατηγορία/Ομάδα/Υποομάδα; Doctoris: Προμηθευτής/Ομάδα).
+const LINE_BRAND_COLS = ['brand', 'μάρκα', 'κατασκευαστής', 'manufacturer', 'προμηθευτής', 'supplier'];
+const LINE_CATEGORY_COLS = ['εμπορ.κατηγορία', 'εμπορική_κατηγορία', 'category', 'κατηγορία', 'ομάδα', 'group'];
+const LINE_SUBCATEGORY_COLS = ['υποομάδα', 'subcategory', 'υποκατηγορία', 'sub_category'];
+const LINE_QTY_COLS = ['ποσ._πώλησης', 'ποσ.1_πώλησης', 'quantity', 'qty', 'ποσότητα'];
+const LINE_PAYMENT_COLS = ['πληρωμή', 'payment', 'τρόπος_πληρωμής', 'payment_method'];
+
+/** Resolve a column list to the header key ONCE, exact match — `pick`'s per-row fuzz mis-keys bare «Κωδικός» as customer id and is too slow at 100k+ lines. */
+function resolveColumn(sample: Record<string, string>, cols: string[]): string | undefined {
+  const byNorm = new Map(Object.keys(sample).map((rk) => [rk.toLowerCase().replace(/\s+/g, '_'), rk]));
+  for (const c of cols) {
+    const rk = byNorm.get(c);
+    if (rk !== undefined) return rk;
+  }
+  return undefined;
+}
+
+type DimAgg = Map<string, { revenue: number; qty: number }>;
+
+function affinityRowsFromDim(dim: DimAgg, segmentRevenue: number, top: number): CategoryAffinity[] {
+  const rows = [...dim.entries()].sort((a, b) => b[1].revenue - a[1].revenue).slice(0, top);
+  const maxRevenue = Math.max(rows[0]?.[1].revenue ?? 0, 1e-6);
+  const denom = Math.max(segmentRevenue, 1e-6);
+  return rows.map(([name, r]) => ({
+    name,
+    affinity: Math.round((r.revenue / maxRevenue) * 100) / 100,
+    avg_order: r.qty > 0 ? Math.round(r.revenue / r.qty) : Math.round(r.revenue),
+    revenue_eur: Math.round(r.revenue * 100) / 100,
+    revenue_share_pct: Math.round((r.revenue / denom) * 1000) / 10,
+  }));
+}
+
+// Mirrors functions/src/dataAnalysisRfmAggregator.ts lifecycleForSegment / frequencyLabel.
+const SEGMENT_LIFECYCLE: Record<string, BehavioralProfile['lifecycle_stage']> = {
+  Champions: 'loyal', 'Loyal Customers': 'loyal',
+  'New Customers': 'new', 'Recent Customers': 'new', 'Potential Loyalists': 'new',
+  'At Risk': 'declining', "Can't Lose Them": 'declining', 'Customers Needing Attention': 'declining',
+  Hibernating: 'dormant', Lost: 'dormant',
+};
+
+function frequencyLabel(annualOrdersPerCustomer: number): BehavioralProfile['purchase_frequency'] {
+  if (annualOrdersPerCustomer >= 180) return 'daily';
+  if (annualOrdersPerCustomer >= 26) return 'weekly';
+  if (annualOrdersPerCustomer >= 8) return 'monthly';
+  if (annualOrdersPerCustomer >= 2) return 'quarterly';
+  return 'rare';
+}
+
+export type InvoiceRfmResult = {
+  rows: Record<string, string>[];
+  /** Keyed like aggregateCustomersToSegments: lowercased segment name, spaces→_. */
+  behavioralBySegment: Map<string, BehavioralProfile>;
+};
+
+/** Group invoice rows per customer, score R/F/M by quintile; also roll up item-line dims per segment (PER-325). */
+export function computeInvoiceRfm(objects: Record<string, string>[]): InvoiceRfmResult {
+  type Agg = { id: string; email: string; firstMs: number; lastMs: number; docs: Set<string>; rows: number; monetary: number };
+  type Line = { key: string; amount: number; qty: number; brand: string; category: string; subcategory: string; payment: string };
   const byCustomer = new Map<string, Agg>();
+  const lines: Line[] = [];
+  const sample = objects[0] ?? {};
+  const col = {
+    email: resolveColumn(sample, ['email', 'e-mail', 'mail']),
+    id: resolveColumn(sample, INVOICE_CUSTOMER_COLS),
+    name: resolveColumn(sample, ['επωνυμία', 'customer_name', 'όνομα']),
+    date: resolveColumn(sample, INVOICE_DATE_COLS),
+    doc: resolveColumn(sample, INVOICE_DOC_COLS),
+    amount: resolveColumn(sample, INVOICE_AMOUNT_COLS),
+    qty: resolveColumn(sample, LINE_QTY_COLS),
+    brand: resolveColumn(sample, LINE_BRAND_COLS),
+    category: resolveColumn(sample, LINE_CATEGORY_COLS),
+    subcategory: resolveColumn(sample, LINE_SUBCATEGORY_COLS),
+    payment: resolveColumn(sample, LINE_PAYMENT_COLS),
+  };
+  const cell = (row: Record<string, string>, k: string | undefined) => (k !== undefined ? (row[k] ?? '').trim() : '');
+  const hasLineDims = col.brand !== undefined || col.category !== undefined || col.subcategory !== undefined;
   for (const row of objects) {
-    const email = pick(row, 'email', 'e-mail', 'mail').trim().toLowerCase();
-    const id = pick(row, ...INVOICE_CUSTOMER_COLS).trim();
-    const key = id || email;
+    const email = cell(row, col.email).toLowerCase();
+    const key = cell(row, col.id) || email || cell(row, col.name).toLocaleUpperCase('el-GR');
     if (!key) continue;
-    const date = parseInvoiceDate(pick(row, ...INVOICE_DATE_COLS));
+    const date = parseInvoiceDate(cell(row, col.date));
     if (!date) continue;
-    const agg = byCustomer.get(key) || { id: key, email, lastMs: 0, docs: new Set<string>(), rows: 0, monetary: 0 };
+    const agg = byCustomer.get(key) || { id: key, email, firstMs: Infinity, lastMs: 0, docs: new Set<string>(), rows: 0, monetary: 0 };
+    agg.firstMs = Math.min(agg.firstMs, date.getTime());
     agg.lastMs = Math.max(agg.lastMs, date.getTime());
-    const doc = pick(row, ...INVOICE_DOC_COLS).trim();
-    if (doc) agg.docs.add(doc);
+    const docNo = cell(row, col.doc);
+    if (docNo) agg.docs.add(docNo);
     agg.rows += 1;
-    agg.monetary += parseInvoiceAmount(pick(row, ...INVOICE_AMOUNT_COLS));
+    const amount = parseInvoiceAmount(cell(row, col.amount));
+    agg.monetary += amount;
     if (!agg.email && email) agg.email = email;
     byCustomer.set(key, agg);
+    if (hasLineDims) lines.push({
+      key,
+      amount,
+      qty: parseInvoiceAmount(cell(row, col.qty)),
+      brand: cell(row, col.brand),
+      category: cell(row, col.category),
+      subcategory: cell(row, col.subcategory),
+      payment: cell(row, col.payment),
+    });
   }
   const customers = [...byCustomer.values()];
-  if (customers.length === 0) return [];
+  if (customers.length === 0) return { rows: [], behavioralBySegment: new Map() };
   // Recency reference = latest document in the file (deterministic for historical exports).
   const refMs = Math.max(...customers.map((c) => c.lastMs));
   const recencyDays = customers.map((c) => Math.round((refMs - c.lastMs) / 86400000));
@@ -1603,15 +1685,108 @@ export function computeRfmRowsFromInvoices(objects: Record<string, string>[]): R
   const rScores = assignQuintileScores(recencyDays, true);
   const fScores = assignQuintileScores(frequency, false);
   const mScores = assignQuintileScores(customers.map((c) => c.monetary), false);
-  return customers.map((c, i) => ({
-    customer_id: c.id,
-    email: c.email,
-    segment: segmentFromRfmScores(rScores[i], fScores[i], mScores[i]),
-    recency: String(recencyDays[i]),
-    frequency: String(frequency[i]),
-    monetary: c.monetary.toFixed(2),
-    rfm_score: `${rScores[i]}-${fScores[i]}-${mScores[i]}`,
-  }));
+  const segmentByCustomer = new Map<string, string>();
+  const rows = customers.map((c, i) => {
+    const segment = segmentFromRfmScores(rScores[i], fScores[i], mScores[i]);
+    segmentByCustomer.set(c.id, segment);
+    return {
+      customer_id: c.id,
+      email: c.email,
+      segment,
+      recency: String(recencyDays[i]),
+      frequency: String(frequency[i]),
+      monetary: c.monetary.toFixed(2),
+      rfm_score: `${rScores[i]}-${fScores[i]}-${mScores[i]}`,
+    };
+  });
+
+  // PER-325: per-segment consumption mix from item-line columns; segments without line dims get no behavioral (honest empty state).
+  type SegAgg = {
+    revenue: number; count: number; orders: number; firstMs: number; lastMs: number;
+    sumR: number; sumF: number; sumM: number;
+    brand: DimAgg; category: DimAgg; subcategory: DimAgg; payments: Map<string, number>;
+  };
+  const bySegment = new Map<string, SegAgg>();
+  const segAgg = (name: string): SegAgg => {
+    let s = bySegment.get(name);
+    if (!s) {
+      s = { revenue: 0, count: 0, orders: 0, firstMs: Infinity, lastMs: 0, sumR: 0, sumF: 0, sumM: 0, brand: new Map(), category: new Map(), subcategory: new Map(), payments: new Map() };
+      bySegment.set(name, s);
+    }
+    return s;
+  };
+  customers.forEach((c, i) => {
+    const s = segAgg(segmentByCustomer.get(c.id)!);
+    s.revenue += c.monetary;
+    s.count += 1;
+    s.orders += frequency[i];
+    s.firstMs = Math.min(s.firstMs, c.firstMs);
+    s.lastMs = Math.max(s.lastMs, c.lastMs);
+    s.sumR += rScores[i];
+    s.sumF += fScores[i];
+    s.sumM += mScores[i];
+  });
+  const addDim = (dim: DimAgg, name: string, amount: number, qty: number) => {
+    if (!name) return;
+    const e = dim.get(name) || { revenue: 0, qty: 0 };
+    e.revenue += amount;
+    e.qty += qty;
+    dim.set(name, e);
+  };
+  for (const line of lines) {
+    const seg = segmentByCustomer.get(line.key);
+    if (!seg) continue;
+    const s = bySegment.get(seg)!;
+    addDim(s.brand, line.brand, line.amount, line.qty);
+    addDim(s.category, line.category, line.amount, line.qty);
+    addDim(s.subcategory, line.subcategory, line.amount, line.qty);
+    if (line.payment) s.payments.set(line.payment, (s.payments.get(line.payment) ?? 0) + 1);
+  }
+
+  const totalRevenue = customers.reduce((t, c) => t + c.monetary, 0);
+  const totalOrders = frequency.reduce((t, f) => t + f, 0);
+  const globalAov = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+  const clamp = (v: number) => Math.max(0, Math.min(100, v));
+  const behavioralBySegment = new Map<string, BehavioralProfile>();
+  for (const [name, s] of bySegment) {
+    if (s.brand.size === 0 && s.category.size === 0 && s.subcategory.size === 0) continue;
+    // Mirrors functions/src/dataAnalysisRfmAggregator.ts behavioralProfile scoring so both sources read alike.
+    const avgBasket = s.orders > 0 ? s.revenue / s.orders : 0;
+    const daysWindow = Math.max(30, Math.ceil((s.lastMs - s.firstMs) / 86400000) + 1);
+    const annualOrdersPerCustomer = s.count > 0 ? (s.orders / s.count) * (365 / daysWindow) : 0;
+    const avgR = s.sumR / s.count;
+    const avgF = s.sumF / s.count;
+    const avgM = s.sumM / s.count;
+    const revenueShare = totalRevenue > 0 ? s.revenue / totalRevenue : 0;
+    const diversity = Math.min(1, s.category.size / 6);
+    const topPayment = [...s.payments.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
+    behavioralBySegment.set(name.toLowerCase().replace(/\s+/g, '_'), {
+      preferred_channels: [],
+      purchase_frequency: frequencyLabel(annualOrdersPerCustomer),
+      avg_basket_size: Math.round(avgBasket),
+      peak_hours: [],
+      peak_days: [],
+      payment_method: topPayment,
+      device_preference: 'mixed',
+      category_affinity: affinityRowsFromDim(s.category, s.revenue, 6),
+      ...(s.brand.size > 0 ? { brand_affinity: affinityRowsFromDim(s.brand, s.revenue, 10) } : {}),
+      ...(s.subcategory.size > 0 ? { subcategory_affinity: affinityRowsFromDim(s.subcategory, s.revenue, 10) } : {}),
+      upsell_score: Math.round(clamp(avgM * 16 + revenueShare * 45 + (avgBasket > globalAov ? 15 : 0))),
+      cross_sell_score: Math.round(clamp(35 + diversity * 45 + avgF * 4)),
+      price_sensitivity: avgBasket >= globalAov * 1.25 || avgM >= 4 ? 'low' : avgBasket < globalAov * 0.75 || avgM <= 2 ? 'high' : 'medium',
+      engagement_score: Math.round(clamp(avgR * 13 + avgF * 8 + avgM * 4)),
+      persona: name,
+      lifecycle_stage: SEGMENT_LIFECYCLE[name] ?? 'active',
+      communication_preferences: [],
+    });
+  }
+
+  return { rows, behavioralBySegment };
+}
+
+/** Back-compat wrapper — customer-level rows only. */
+export function computeRfmRowsFromInvoices(objects: Record<string, string>[]): Record<string, string>[] {
+  return computeInvoiceRfm(objects).rows;
 }
 
 export interface SegmentCustomerRecord {
@@ -2218,15 +2393,23 @@ export async function importFile(
         let validSegments: RFMSegment[];
 
         // PER-278: purchase-documents file → compute RFM here, then reuse the customer-level path.
+        let invoiceBehavioral: Map<string, BehavioralProfile> | undefined;
         if (isInvoiceLevelData(objects)) {
           const invoiceCount = objects.length;
-          objects = computeRfmRowsFromInvoices(objects);
+          const computed = computeInvoiceRfm(objects);
+          objects = computed.rows;
+          invoiceBehavioral = computed.behavioralBySegment;
           result.warnings.push(`Υπολογίστηκε RFM από ${invoiceCount} παραστατικά → ${objects.length} πελάτες`);
+          if (invoiceBehavioral.size > 0) result.warnings.push('Υπολογίστηκε mix κατανάλωσης από τις γραμμές ειδών του αρχείου');
         }
 
         if (isCustomerLevelData(objects)) {
           const { segments: aggregated, customersBySegment } = aggregateCustomersToSegments(objects);
-          validSegments = aggregated;
+          // PER-325: attach line-derived consumption mix (aggregate keys segments the same way: lowercased name, spaces→_).
+          validSegments = aggregated.map((s) => {
+            const behavioral = invoiceBehavioral?.get(s.name.toLowerCase().replace(/\s+/g, '_'));
+            return behavioral ? { ...s, behavioral } : s;
+          });
           result.warnings.push(`Aggregated ${objects.length} customers into ${validSegments.length} segments`);
           // PER-278: replace existing data only once there is something valid to write — a failed parse must not wipe the brand.
           if (validSegments.length === 0) break;

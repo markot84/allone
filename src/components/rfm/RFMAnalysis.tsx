@@ -1448,10 +1448,15 @@ function SegmentDetail({
                   ? 'Δεν υπάρχουν δεδομένα γραμμών προϊόντων για αυτό το segment'
                   : 'Δεν υπάρχουν δεδομένα για αυτή τη διάσταση'}
               </p>
-              {segmentsDataSource === 'ecommerce' && (
+              {segmentsDataSource === 'ecommerce' ? (
                 <p className="mt-2 max-w-md text-xs leading-relaxed text-[#6B7280]">
                   Το RFM από e-shop χρειάζεται γραμμές παραγγελίας (SKU/title/product id). Μετά από πλήρες sync των connectors,
                   εδώ εμφανίζονται πραγματικές κατηγορίες και — όταν φορτώνει ο catalog — μάρκες/υποκατηγορίες από το κατάστημα και το ERP.
+                </p>
+              ) : (
+                <p className="mt-2 max-w-md text-xs leading-relaxed text-[#6B7280]">
+                  Το mix κατανάλωσης υπολογίζεται από τις γραμμές ειδών του αρχείου εισαγωγής. Ανεβάστε αρχείο παραστατικών
+                  με στήλες ειδών ανά γραμμή (π.χ. κατηγορία, ομάδα, μάρκα/προμηθευτής, κωδικός, αξία) για να εμφανιστεί εδώ.
                 </p>
               )}
             </div>
@@ -1473,6 +1478,10 @@ function SegmentDetail({
               <p className="text-xs text-[#6B7280] leading-relaxed">
                 Δεν εντοπίστηκε brand στο catalog για τις γραμμές του segment (ή όλα ως «Λοιπά»).
               </p>
+            ) : behavioral && segmentsDataSource !== 'ecommerce' ? (
+              <p className="text-xs text-[#6B7280] leading-relaxed">
+                Το αρχείο εισαγωγής δεν περιείχε στήλη μάρκας/προμηθευτή ανά γραμμή.
+              </p>
             ) : (
               <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
             )}
@@ -1489,6 +1498,10 @@ function SegmentDetail({
             ) : fromComputedOrders && hasCatalogRollups ? (
               <p className="text-xs text-[#6B7280] leading-relaxed">
                 Δεν υπάρχουν υποκατηγορίες στο catalog (π.χ. δεύτερο επίπεδο Woo ή ERP subcategory).
+              </p>
+            ) : behavioral && segmentsDataSource !== 'ecommerce' ? (
+              <p className="text-xs text-[#6B7280] leading-relaxed">
+                Το αρχείο εισαγωγής δεν περιείχε στήλη υποομάδας/υποκατηγορίας ανά γραμμή.
               </p>
             ) : (
               <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
