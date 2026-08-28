@@ -28,7 +28,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { XMLParser } from 'fast-xml-parser';
-import { previewFileForProducts, isCustomerLevelData, parseCSV, detectDelimiter, isHeaderlessStatSheet, validateProduct } from './import';
+import { previewFileForProducts, isCustomerLevelData, isInvoiceLevelData, computeRfmRowsFromInvoices, parseCSV, detectDelimiter, isHeaderlessStatSheet, validateProduct, csvToObjects } from './import';
 import { makeProduct } from '../test/helpers';
 
 // ── Minimal DOMParser polyfill (DOM surface used by the two XML parsers) ──────
@@ -459,6 +459,117 @@ describe('import.ts — product feed parsing & routing (previewFileForProducts)'
       ];
       expect(isCustomerLevelData(rows)).toBe(true);
     });
+  });
+});
+
+describe('segments import from purchase documents (PER-278)', () => {
+  const invoice = (customer_id: string, date: string, total: string, invoice_no: string, email = '') =>
+    ({ customer_id, invoice_date: date, total, invoice_no, email });
+
+  it('detects an invoice-level file (date + amount + customer, no segment)', () => {
+    expect(isInvoiceLevelData([invoice('C1', '2026-08-01', '50', 'INV-1')])).toBe(true);
+  });
+
+  it('detects the NTS sales-lines export headers (Συναλλαγή/Ημερ/νία/Αξία πώλησης/Συναλλασσόμενος)', () => {
+    const row = {
+      'Συναλλαγή': '1229695', 'Ημερ/νία': '2024-10-24 00:00:00', 'Κωδικός': '034-662-0050',
+      'Ποσ. πώλησης': '2', 'Αξία πώλησης': '27.8', 'Συναλλασσόμενος': '30-01-0184', 'Επωνυμία': 'ACME AE',
+    };
+    expect(isInvoiceLevelData([row])).toBe(true);
+    const out = computeRfmRowsFromInvoices([row, { ...row, 'Συναλλαγή': '1229696', 'Αξία πώλησης': '10' }]);
+    expect(out).toHaveLength(1);
+    expect(out[0].frequency).toBe('2');
+    expect(out[0].monetary).toBe('37.80');
+  });
+
+  it('does NOT flag customer-level RFM results as invoices', () => {
+    expect(isInvoiceLevelData([{ customer_id: 'C1', segment: 'Champions', recency: '5', frequency: '3', monetary: '100' }])).toBe(false);
+  });
+
+  it('computes per-customer R/F/M and segments from invoice rows', () => {
+    const rows = [
+      // C1: 3 invoices, recent, high value → top scores
+      invoice('C1', '2026-08-20', '400,50', 'INV-1'),
+      invoice('C1', '15/08/2026', '€ 300', 'INV-2'),
+      invoice('C1', '2026-07-01', '250', 'INV-3'),
+      // C2: 1 old small invoice
+      invoice('C2', '2026-01-10', '20', 'INV-4'),
+      // C3: duplicate rows of the same document count once
+      invoice('C3', '2026-06-01', '50', 'INV-5'),
+      invoice('C3', '2026-06-01', '50', 'INV-5'),
+    ];
+    const out = computeRfmRowsFromInvoices(rows);
+    expect(out).toHaveLength(3);
+    const c1 = out.find((r) => r.customer_id === 'C1')!;
+    expect(c1.recency).toBe('0'); // reference = latest doc in file
+    expect(c1.frequency).toBe('3');
+    expect(c1.monetary).toBe('950.50'); // EU decimals + € parsed
+    expect(c1.rfm_score).toBe('5-5-5');
+    expect(c1.segment).toBe('Champions');
+    const c3 = out.find((r) => r.customer_id === 'C3')!;
+    expect(c3.frequency).toBe('1'); // distinct invoice_no, not row count
+    expect(c3.monetary).toBe('100.00');
+    // Output flows through the existing customer-level path
+    expect(isCustomerLevelData(out)).toBe(true);
+  });
+
+  it('UI download templates flow through the correct paths (kept in sync with DataImport.tsx)', () => {
+    const invoicesTemplate = [
+      'customer_id,email,invoice_no,invoice_date,total',
+      'C-1001,customer1@example.com,INV-0001,2026-05-14,61.40',
+      'C-1001,customer1@example.com,INV-0087,2026-08-02,120.00',
+      'C-1002,customer2@example.com,INV-0042,2026-07-21,35.90',
+    ].join('\n');
+    const inv = csvToObjects(parseCSV(invoicesTemplate), 'segments');
+    expect(inv).toHaveLength(3);
+    expect(isInvoiceLevelData(inv)).toBe(true);
+    const computed = computeRfmRowsFromInvoices(inv);
+    expect(computed).toHaveLength(2);
+    expect(computed.find((r) => r.customer_id === 'C-1001')!.frequency).toBe('2');
+    expect(computed.find((r) => r.customer_id === 'C-1001')!.monetary).toBe('181.40');
+    expect(isCustomerLevelData(computed)).toBe(true);
+
+    const resultsTemplate = [
+      'customer_id,email,segment,recency,frequency,monetary,rfm_score',
+      'C-1001,customer1@example.com,Champions,12,8,940.50,5-5-5',
+      'C-1002,customer2@example.com,At Risk,213,1,61.40,2-1-2',
+    ].join('\n');
+    const res = csvToObjects(parseCSV(resultsTemplate), 'segments');
+    expect(res).toHaveLength(2);
+    expect(isInvoiceLevelData(res)).toBe(false);
+    expect(isCustomerLevelData(res)).toBe(true);
+  });
+
+  it('finds the real header row under a preamble (e-tennis Customer List export)', () => {
+    const rows = [
+      ['CUSTOMER LIST — At Risk', '', '', '', '', '', '', ''],
+      ['Brand', 'e-tennis', '', 'Total', '3380', '', '', ''],
+      ['Generated', '2026-08-20', '', '', '', '', '', ''],
+      [''],
+      ['Customer ID', 'Email', 'Όνομα', 'Segment', 'Recency', 'Frequency', 'Monetary', 'RFM Score'],
+      ['email_hash:abc', 'k@x.gr', 'Κώστας', 'At Risk', '213', '1', '61.4', '2-5-3'],
+    ];
+    const objects = csvToObjects(rows, 'segments');
+    expect(objects).toHaveLength(1);
+    expect(objects[0].segment).toBe('At Risk');
+    expect(isCustomerLevelData(objects)).toBe(true);
+  });
+
+  it('csvToObjects keeps date-bearing rows for segments (date-range skip is products-only)', () => {
+    const rows = parseCSV('customer_id,invoice_date,total,invoice_no\nC1,2026-08-20,50,INV-1\nC2,15/08/2026,30,INV-2');
+    const objects = csvToObjects(rows, 'segments');
+    expect(objects).toHaveLength(2);
+    expect(isInvoiceLevelData(objects)).toBe(true);
+  });
+
+  it('handles Excel serial dates and skips rows without customer or date', () => {
+    const out = computeRfmRowsFromInvoices([
+      invoice('C1', '46234', '10', 'INV-1'), // serial ≈ 2026-07-26
+      invoice('', '2026-08-01', '10', 'INV-2'),
+      invoice('C2', '', '10', 'INV-3'),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].customer_id).toBe('C1');
   });
 });
 

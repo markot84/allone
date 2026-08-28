@@ -55,6 +55,13 @@ describe('stockBucket — shelf-age (real receipt date)', () => {
     expect(stockBucket(5, 30, 0, 365)).toBe('low'); // selling now → days-of-stock wins over age
   });
 
+  it('PER-310: deadStockDays beyond grace delays the dead cutoff', () => {
+    const t = { velocityWindowDays: 30, lowDaysOfCover: 30, excessDaysOfCover: 120, newStockGraceDays: 60, deadStockDays: 90 };
+    expect(stockBucket(5, 0, 0, 75, 0, t)).toBe('healthy'); // past grace but under the 90-day dead threshold
+    expect(stockBucket(5, 0, 0, 91, 0, t)).toBe('dead');
+    expect(stockBucket(5, 0, 0, 50, 0, { ...t, deadStockDays: 30 })).toBe('healthy'); // grace still protects new stock
+  });
+
   it('falls back to lifetime rule when shelf age is unknown (behaviour-preserving)', () => {
     expect(stockBucket(5, 0, 12, null)).toBe('dead'); // sold before, stopped, no age signal
     expect(stockBucket(5, 0, 0, null)).toBe('healthy'); // never sold, no age signal → not dead

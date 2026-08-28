@@ -566,7 +566,8 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
             const campaignName = String(
               mets.campaign_name ?? dims.campaign_name ?? row.campaign_name ?? `Campaign ${campaignId}`
             ).trim();
-            const statDay = String(dims.stat_time_day ?? row.stat_time_day ?? '').trim();
+            // PER-308: TikTok returns "YYYY-MM-DD 00:00:00" — keep plain YMD like every other connector.
+            const statDay = String(dims.stat_time_day ?? row.stat_time_day ?? '').trim().slice(0, 10);
             if (!campaignId || !statDay) continue;
 
             const spend = parseFiniteNumber(mets.spend ?? row.spend);
@@ -636,8 +637,13 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
         for (const campaign of campaigns) {
           const existing = existingById.get(campaign.id);
           if (!existing) continue;
+          // PER-308: re-key stored history to plain YMD so old "… 00:00:00" keys heal on merge.
+          const existingDaily = Object.fromEntries(
+            Object.entries((existing.dailyMetrics || {}) as AggregatedTikTokCampaign['dailyMetrics'])
+              .map(([day, row]) => [day.slice(0, 10), row])
+          );
           campaign.dailyMetrics = {
-            ...((existing.dailyMetrics || {}) as AggregatedTikTokCampaign['dailyMetrics']),
+            ...existingDaily,
             ...campaign.dailyMetrics,
           };
           campaign.start_date = String(existing.start_date || campaign.start_date);
@@ -658,7 +664,8 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
         const batch = getDb().batch();
         const slice = campaigns.slice(i, i + batchSize);
         for (const campaign of slice) {
-          batch.set(getDb().collection('campaigns').doc(campaign.id), campaign, { merge: true });
+          // PER-308: full overwrite — payload already carries the merged history; {merge:true} kept stale "… 00:00:00" day keys alive forever.
+          batch.set(getDb().collection('campaigns').doc(campaign.id), campaign);
         }
         await batch.commit();
       }

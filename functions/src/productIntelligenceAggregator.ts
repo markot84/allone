@@ -50,6 +50,11 @@ type CompactProduct = {
   parent_name?: string;
   /** Sibling rows sharing parent_sku (incl. this one). */
   variant_count?: number;
+  /** PER-323: group rows only — Σ(price×stock) των παιδιών (additive, ταυτίζεται με τις κάρτες). */
+  stock_value?: number;
+  cost_value?: number;
+  price_min?: number;
+  price_max?: number;
   source?: string;
   createdAt?: string;
 };
@@ -85,9 +90,11 @@ type StockOverlay = {
 type InventorySummaryPayload = {
   total_skus: number;
   total_value: number;
+  /** PER-317: δεσμευμένο κεφάλαιο — cost_price (or price×(1−margin%)) × stock, retail fallback. */
+  total_cost_value: number;
   healthy_stock: { count: number; percentage: number };
-  excess_stock: { count: number; percentage: number; value: number };
-  dead_stock: { count: number; percentage: number; value: number };
+  excess_stock: { count: number; percentage: number; value: number; cost_value: number };
+  dead_stock: { count: number; percentage: number; value: number; cost_value: number };
   low_stock: { count: number; percentage: number };
 };
 
@@ -130,6 +137,8 @@ type ProductIntelligenceQueryResult = {
   products: CompactProduct[];
   /** Summary over the full filtered set (not just the page) so cards can follow active filters (PER-178). */
   summary?: InventorySummaryPayload;
+  /** PER-317: same filtered set after parent collapse — dual-count cards; present only when groupByParent. */
+  groupedSummary?: InventorySummaryPayload;
   /** PER-188: actionable dropdown options (own dimension omitted → Excel semantics). */
   facets?: QueryFacets;
 };
@@ -142,6 +151,7 @@ type QueryFacets = {
 
 const READ_PAGE_SIZE = 1000;
 const TABLE_PAGE_SIZE = 150;
+const EXPORT_PAGE_SIZE = 2000;
 const PAGE_WRITE_BATCH_SIZE = 1;
 const INVENTORY_LOOKUP_CHUNK_BYTES = 850_000;
 const BUCKETS: PageBucket[] = ['all', 'healthy', 'excess', 'dead', 'low', 'no_stock'];
@@ -259,12 +269,14 @@ interface StockThresholds {
   lowDaysOfCover: number;
   excessDaysOfCover: number;
   newStockGraceDays: number;
+  deadStockDays: number;
 }
 const DEFAULT_STOCK_THRESHOLDS: StockThresholds = {
   velocityWindowDays: SALES_PERIOD_DAYS,
   lowDaysOfCover: 30,
   excessDaysOfCover: 120,
   newStockGraceDays: 60,
+  deadStockDays: 60,
 };
 /** Platform floor for supplier lead time (days) when neither supplier nor brand default sets one. */
 const DEFAULT_LEAD_DAYS = 30;
@@ -279,6 +291,49 @@ let activeSupplierLeadByName = new Map<string, number>();
 let activeDefaultLeadDays = 0;
 const normSupplierName = (s?: string | null): string => (s ?? '').trim().toLowerCase();
 /** Effective lead time for a product's supplier: per-supplier lead_time, else brand default, else 0. */
+/** PER-320: in-stock SKUs for today's availability snapshot — sorted, deduped. */
+export function availabilitySnapshotSkus(products: CompactProduct[]): string[] {
+  return [...new Set(products.filter((p) => effectiveStock(p) > 0).map((p) => p.sku).filter(Boolean))].sort();
+}
+
+/** PER-320: daily per-brand availability snapshot (`{brand}_{YYYY-MM-DD}`) — the raw history the availability-weighted dead-stock rule needs; accrues forward only, so it must run every nightly. */
+async function writeDailyAvailabilitySnapshot(brandId: string, products: CompactProduct[]): Promise<void> {
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    const skus = availabilitySnapshotSkus(products);
+    const joined = skus.join('\n');
+    if (joined.length > 950_000) {
+      logger.warn(`[ProductIntelligence] ${brandId}: availability snapshot too large (${skus.length} skus) — skipped`);
+      return;
+    }
+    await assertDb().doc(`stock_availability/${brandId}_${day}`).set({
+      brandId,
+      date: day,
+      count: skus.length,
+      skus: joined,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    // Retention 1200d (> Makis's 3-year analysis window); history is unregenerable, so keep generous.
+    const cutoff = new Date(Date.now() - 1200 * 86400000).toISOString().slice(0, 10);
+    const stale = await assertDb().collection('stock_availability').where('date', '<', cutoff).limit(200).get();
+    for (const doc of stale.docs) await doc.ref.delete();
+  } catch (err) {
+    // Snapshot failure must never kill the rebuild.
+    logger.warn(`[ProductIntelligence] ${brandId}: availability snapshot failed`, { err });
+  }
+}
+
+/** Sets the module-level thresholds/lead-times for ONE brand — every stockBucket caller (rebuild AND grouped queries) must run this first or tags are computed with stale/foreign-brand values. */
+async function loadActiveBrandStockContext(brandId: string): Promise<void> {
+  const thresholds = (await assertDb().doc(`brands/${brandId}`).get()).data()?.inventoryThresholds as
+    | Record<string, unknown>
+    | undefined;
+  activeStockThresholds = resolveStockThresholds(thresholds);
+  const rawLead = num(thresholds?.defaultLeadTimeDays);
+  activeDefaultLeadDays = rawLead > 0 ? rawLead : DEFAULT_LEAD_DAYS;
+  activeSupplierLeadByName = await loadSupplierLeadTimes(brandId);
+}
+
 function leadDaysForSupplier(supplier?: string | null): number {
   const perSupplier = activeSupplierLeadByName.get(normSupplierName(supplier));
   return perSupplier != null && perSupplier > 0 ? perSupplier : activeDefaultLeadDays;
@@ -307,6 +362,7 @@ function resolveStockThresholds(raw: unknown): StockThresholds {
     lowDaysOfCover: pos(r.lowDaysOfCover, DEFAULT_STOCK_THRESHOLDS.lowDaysOfCover),
     excessDaysOfCover: pos(r.excessDaysOfCover, DEFAULT_STOCK_THRESHOLDS.excessDaysOfCover),
     newStockGraceDays: pos(r.newStockGraceDays, DEFAULT_STOCK_THRESHOLDS.newStockGraceDays),
+    deadStockDays: pos(r.deadStockDays, DEFAULT_STOCK_THRESHOLDS.deadStockDays),
   };
 }
 
@@ -326,9 +382,8 @@ function stockBucket(
     if (daysOfStock > t.excessDaysOfCover) return 'excess';
     return 'healthy';
   }
-  // No recent sales. With a real receipt date, 'dead' means sitting beyond the grace window; within grace
-  // it's newly received, not dead. Without an age signal, keep the stock-presence/lifetime fallback.
-  if (shelfAgeDays != null) return shelfAgeDays > t.newStockGraceDays ? 'dead' : 'healthy';
+  // PER-310: no recent sales → 'dead' only beyond both the grace and dead-stock thresholds; no age signal → lifetime fallback.
+  if (shelfAgeDays != null) return shelfAgeDays > Math.max(t.newStockGraceDays, t.deadStockDays) ? 'dead' : 'healthy';
   if (qtySoldPeriod == null) return 'healthy';
   return qtySoldLifetime != null && qtySoldLifetime > 0 ? 'dead' : 'healthy';
 }
@@ -446,6 +501,8 @@ function overlayFromMegaventoryProduct(row: Record<string, unknown>): StockOverl
     ...(text(row.seasonality_tag) ? { seasonality_tag: text(row.seasonality_tag) } : {}),
     ...(optionalNumber(row.reorder_point) != null ? { reorder_point: optionalNumber(row.reorder_point) } : {}),
     ...(optionalNumber(row.reorder_qty) != null ? { reorder_qty: optionalNumber(row.reorder_qty) } : {}),
+    // ERP rows must carry createdAt too — the «Ημερομηνία εισαγωγής» filter matches on it (was: 0 results for any period).
+    ...(asIsoDate(row.createdAt ?? row.updatedAt) ? { createdAt: asIsoDate(row.createdAt ?? row.updatedAt) } : {}),
     source: 'erp',
   };
 }
@@ -1178,49 +1235,78 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean, manual = 
   };
 }
 
+/** Retail value of a row's stock — group rows carry the children's sum (PER-323). */
+function rowStockValue(product: CompactProduct): number {
+  return product.stock_value ?? Math.max(0, product.stock_level * product.price);
+}
+
+/** Cost value of a row's stock: cost_price, then margin-derived, then retail fallback; group rows carry the children's sum. */
+function rowCostValue(product: CompactProduct): number {
+  if (product.cost_value != null) return product.cost_value;
+  const value = Math.max(0, product.stock_level * product.price);
+  return (product.cost_price ?? 0) > 0
+    ? Math.max(0, product.stock_level * product.cost_price!)
+    : (product.margin_percentage ?? 0) > 0
+      ? Math.max(0, value * (1 - product.margin_percentage! / 100))
+      : value; // no cost signal → retail fallback (measured 4/7.768 rows on e-tennis)
+}
+
 function summaryForProducts(products: CompactProduct[]): InventorySummaryPayload {
   const total = products.length;
   const empty: InventorySummaryPayload = {
     total_skus: total,
     total_value: 0,
+    total_cost_value: 0,
     healthy_stock: { count: 0, percentage: 0 },
-    excess_stock: { count: 0, percentage: 0, value: 0 },
-    dead_stock: { count: 0, percentage: 0, value: 0 },
+    excess_stock: { count: 0, percentage: 0, value: 0, cost_value: 0 },
+    dead_stock: { count: 0, percentage: 0, value: 0, cost_value: 0 },
     low_stock: { count: 0, percentage: 0 },
   };
   for (const product of products) {
-    const value = Math.max(0, product.stock_level * product.price);
+    const value = rowStockValue(product);
+    const costValue = rowCostValue(product);
     empty.total_value += value;
+    empty.total_cost_value += costValue;
     if (product.priority_tag === 'healthy') empty.healthy_stock.count += 1;
     if (product.priority_tag === 'low') empty.low_stock.count += 1;
     if (product.priority_tag === 'dead') {
       empty.dead_stock.count += 1;
       empty.dead_stock.value += value;
+      empty.dead_stock.cost_value += costValue;
     }
     if (product.priority_tag === 'excess') {
       empty.excess_stock.count += 1;
       empty.excess_stock.value += value;
+      empty.excess_stock.cost_value += costValue;
     }
   }
   const pct = (count: number) => total > 0 ? Math.round((count / total) * 1000) / 10 : 0;
   empty.total_value = Math.round(empty.total_value);
+  empty.total_cost_value = Math.round(empty.total_cost_value);
   empty.healthy_stock.percentage = pct(empty.healthy_stock.count);
   empty.low_stock.percentage = pct(empty.low_stock.count);
   empty.dead_stock.percentage = pct(empty.dead_stock.count);
   empty.dead_stock.value = Math.round(empty.dead_stock.value);
+  empty.dead_stock.cost_value = Math.round(empty.dead_stock.cost_value);
   empty.excess_stock.percentage = pct(empty.excess_stock.count);
   empty.excess_stock.value = Math.round(empty.excess_stock.value);
+  empty.excess_stock.cost_value = Math.round(empty.excess_stock.cost_value);
   return empty;
 }
+
+// PER-304: raised from 250 (e-tennis lost the tail); bound guards doc/payload size only.
+const FACET_LIST_CAP = 1000;
 
 function categoryCounts(products: CompactProduct[]): Array<{ name: string; count: number }> {
   const counts = new Map<string, number>();
   for (const product of products) {
-    if (product.category) counts.set(product.category, (counts.get(product.category) || 0) + 1);
+    for (const id of categoryIds(product)) {
+      if (id !== '__EMPTY_CAT__') counts.set(id, (counts.get(id) || 0) + 1);
+    }
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 250)
+    .slice(0, FACET_LIST_CAP)
     .map(([name, count]) => ({ name, count }));
 }
 
@@ -1231,7 +1317,7 @@ function brandCounts(products: CompactProduct[]): Array<{ name: string; count: n
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 250)
+    .slice(0, FACET_LIST_CAP)
     .map(([name, count]) => ({ name, count }));
 }
 
@@ -1250,27 +1336,27 @@ function facetCounts(
   rows: CompactProduct[],
   params: ProductIntelligenceQueryParams,
   omit: 'categories' | 'brands' | 'tags',
-  idFn: (product: CompactProduct) => string,
+  idsFn: (product: CompactProduct) => string[],
 ): Array<{ id: string; count: number }> {
   const scoped = { ...params, [omit]: undefined };
   const counts = new Map<string, number>();
   for (const product of rows) {
     if (!matchesQuery(product, scoped)) continue;
-    const id = idFn(product);
-    if (!id) continue;
-    counts.set(id, (counts.get(id) || 0) + 1);
+    for (const id of idsFn(product)) {
+      if (id) counts.set(id, (counts.get(id) || 0) + 1);
+    }
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 250)
+    .slice(0, FACET_LIST_CAP)
     .map(([id, count]) => ({ id, count }));
 }
 
 function buildQueryFacets(rows: CompactProduct[], params: ProductIntelligenceQueryParams): QueryFacets {
   return {
-    categories: facetCounts(rows, params, 'categories', categoryId),
-    brands: facetCounts(rows, params, 'brands', (p) => text(p.brand)), // empty brand dropped
-    tags: facetCounts(rows, params, 'tags', effectiveTagId),
+    categories: facetCounts(rows, params, 'categories', categoryIds),
+    brands: facetCounts(rows, params, 'brands', (p) => [text(p.brand)].filter(Boolean)), // empty brand dropped
+    tags: facetCounts(rows, params, 'tags', (p) => [effectiveTagId(p)]),
   };
 }
 
@@ -1293,7 +1379,8 @@ function ymd(value: string | undefined): string | null {
   if (!value) return null;
   const raw = text(value);
   if (!raw) return null;
-  const numeric = parseFloat(raw);
+  // Whole-numeric only — parseFloat('2026-08-27…') = 2026 sent every ISO date to year 1905 via the serial branch.
+  const numeric = /^\d+(\.\d+)?$/.test(raw) ? parseFloat(raw) : NaN;
   const d = !Number.isNaN(numeric) && numeric > 0
     ? new Date((numeric - 25569) * 86400 * 1000)
     : new Date(raw);
@@ -1301,8 +1388,10 @@ function ymd(value: string | undefined): string | null {
   return d.toISOString().slice(0, 10);
 }
 
-function categoryId(product: CompactProduct): string {
-  return text(product.category) || '__EMPTY_CAT__';
+// PER-304: a product belongs to both its leaf category and its parent (subcategory holds e.g. «Ρακέτες Τένις»).
+function categoryIds(product: CompactProduct): string[] {
+  const ids = [...new Set([text(product.category), text(product.subcategory)].filter(Boolean))];
+  return ids.length ? ids : ['__EMPTY_CAT__'];
 }
 
 function brandFilterId(product: CompactProduct): string {
@@ -1334,7 +1423,7 @@ function matchesQuery(product: CompactProduct, params: ProductIntelligenceQueryP
 
   if (params.categories?.length) {
     const allowed = new Set(params.categories);
-    if (!allowed.has(categoryId(product))) return false;
+    if (!categoryIds(product).some((id) => allowed.has(id))) return false;
   }
 
   if (params.brands?.length) {
@@ -1360,7 +1449,7 @@ function matchesQuery(product: CompactProduct, params: ProductIntelligenceQueryP
   if (params.dateFrom && params.dateTo) {
     const dateValue = params.dateMode === 'first_available'
       ? ymd(product.first_available_date)
-      : ymd(product.createdAt);
+      : ymd(product.createdAt ?? product.first_available_date); // pre-fix page rows lack createdAt — fall back so old pages filter sanely
     if (!dateValue || dateValue < params.dateFrom || dateValue > params.dateTo) return false;
   }
 
@@ -1459,7 +1548,15 @@ function bucketRows(products: CompactProduct[], bucket: PageBucket): CompactProd
   });
 }
 
-async function writePageDocs(brandId: string, products: CompactProduct[]): Promise<Record<PageBucket, number>> {
+type PageDocsResult = {
+  pagesByBucket: Record<PageBucket, number>;
+  /** PER-319: page counts for the precomputed grouped default view (`{brand}_g_{bucket}_{page}`). */
+  groupedPagesByBucket: Record<string, number>;
+  /** PER-317: variant vs grouped counts over the same in-stock set, for the dual-count cards. */
+  groupedSummary: InventorySummaryPayload;
+};
+
+async function writePageDocs(brandId: string, products: CompactProduct[]): Promise<PageDocsResult> {
   const firestore = assertDb();
 
   // Build the full new page set first.
@@ -1478,6 +1575,34 @@ async function writePageDocs(brandId: string, products: CompactProduct[]): Promi
           pageSize: TABLE_PAGE_SIZE,
           totalRows: rows.length,
           products: rows.slice((page - 1) * TABLE_PAGE_SIZE, page * TABLE_PAGE_SIZE),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+      });
+    }
+  }
+
+  // PER-319: additive page set in the table's default shape (grouped, in-stock, margin desc); 5 buckets not 6 — no_stock is non-default → CF path.
+  const grouped = collapseByParentSku(products.filter((p) => effectiveStock(p) > 0));
+  const groupedSummary = summaryForProducts(grouped);
+  const groupedPagesByBucket: Record<string, number> = {};
+  for (const bucket of ['all', 'healthy', 'excess', 'dead', 'low'] as const) {
+    const rows = sortProducts(
+      bucket === 'all' ? grouped : grouped.filter((r) => r.priority_tag === bucket),
+      'margin_percentage',
+      'desc',
+    );
+    groupedPagesByBucket[bucket] = Math.max(1, Math.ceil(rows.length / TABLE_PAGE_SIZE));
+    for (let page = 1; page <= groupedPagesByBucket[bucket]; page += 1) {
+      writes.push({
+        id: `${brandId}_g_${bucket}_${page}`,
+        data: {
+          brandId,
+          bucket,
+          page,
+          pageSize: TABLE_PAGE_SIZE,
+          totalRows: rows.length,
+          products: rows.slice((page - 1) * TABLE_PAGE_SIZE, page * TABLE_PAGE_SIZE),
+          grouped: true,
           updatedAt: FieldValue.serverTimestamp(),
         },
       });
@@ -1506,7 +1631,7 @@ async function writePageDocs(brandId: string, products: CompactProduct[]): Promi
     staleRefs.slice(i, i + PAGE_WRITE_BATCH_SIZE).forEach((ref) => batch.delete(ref));
     await batch.commit();
   }
-  return pagesByBucket;
+  return { pagesByBucket, groupedPagesByBucket, groupedSummary };
 }
 
 /** Pages to delete after a write-then-cleanup rebuild: existing page docs NOT in the freshly-written
@@ -1566,13 +1691,22 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
     if (g) g.push(row); else groups.set(row.parent_sku, [row]);
   }
   for (const [parent, members] of groups) {
-    const rep = members.reduce((a, b) => (b.stock_level > a.stock_level ? b : a));
+    // Tie-break by sku — an order-dependent rep made nightly vs CF tags flip on boundary groups (rep.supplier → leadDays).
+    const rep = members.reduce((a, b) =>
+      b.stock_level > a.stock_level || (b.stock_level === a.stock_level && b.sku < a.sku) ? b : a);
     const sum = (f: (p: CompactProduct) => number | undefined) =>
       Math.round(members.reduce((t, p) => t + (f(p) || 0), 0) * 100) / 100;
     const lastSale = members.map((p) => p.last_sale_at || '').sort().pop();
     const stock = sum((p) => p.stock_level);
     const soldPeriod = members.some((p) => p.qty_sold_period != null) ? sum((p) => p.qty_sold_period) : null;
     const soldLifetime = members.some((p) => p.qty_sold_lifetime != null) ? sum((p) => p.qty_sold_lifetime) : null;
+    // PER-323: additive value Σ(price×stock ανά κωδικό), honest price range, stock-weighted margin.
+    const stockValue = Math.round(members.reduce((t, p) => t + rowStockValue(p), 0) * 100) / 100;
+    const costValue = Math.round(members.reduce((t, p) => t + rowCostValue(p), 0) * 100) / 100;
+    const prices = members.map((p) => p.price || 0).filter((v) => v > 0);
+    const weightedMargin = stock > 0
+      ? Math.round(members.reduce((t, p) => t + (p.margin_percentage || 0) * (p.stock_level || 0), 0) / stock * 10) / 10
+      : rep.margin_percentage;
     out.push({
       ...rep,
       id: `parent_${parent}`,
@@ -1586,6 +1720,10 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
       ...(soldLifetime != null ? { qty_sold_lifetime: soldLifetime } : {}),
       ...(lastSale ? { last_sale_at: lastSale } : {}),
       variant_count: members.length,
+      stock_value: stockValue,
+      cost_value: costValue,
+      ...(prices.length > 0 ? { price_min: Math.min(...prices), price_max: Math.max(...prices) } : {}),
+      margin_percentage: weightedMargin,
       // The bucket describes the group, not its representative variant.
       priority_tag: stockBucket(stock, soldPeriod, soldLifetime, null, leadDaysForSupplier(rep.supplier)),
     });
@@ -1608,17 +1746,27 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
   }
 
   const bucket = params.bucket ?? 'all';
-  const pageSize = Math.max(1, Math.min(params.pageSize ?? TABLE_PAGE_SIZE, TABLE_PAGE_SIZE));
+  // PER-318: exports pull big pages; the whole bucket is materialized per call anyway, so a bigger slice is bandwidth-only.
+  const pageSize = Math.max(1, Math.min(params.pageSize ?? TABLE_PAGE_SIZE, EXPORT_PAGE_SIZE));
   const requestedPage = Math.max(1, Math.floor(params.page ?? 1));
+  // PER-317: with active filters the summary must cover ALL buckets so the cards can follow the filters.
+  const hasFilters = !!(text(params.search) || params.categories?.length || params.brands?.length
+    || params.tags?.length || (params.margin && params.margin !== 'all')
+    || (params.stockAge && params.stockAge !== 'all') || params.dateFrom || params.dateTo);
   // PER-187: siblings scatter across buckets, so grouping reads the whole catalog and buckets the groups.
-  const readBucket: PageBucket = params.groupByParent ? 'all' : bucket;
+  const readBucket: PageBucket = params.groupByParent || (hasFilters && bucket !== 'all') ? 'all' : bucket;
   const pageCount = Math.max(1, aggregate.pagesByBucket?.[readBucket] ?? 1);
   const rows = await loadBucketProductsFromPages(params.brandId, readBucket, pageCount);
+  // Grouped re-bucketing recomputes tags via stockBucket — needs THIS brand's thresholds/lead times (PER-317: 289 rows flipped healthy↔low on cold instances).
+  if (params.groupByParent) await loadActiveBrandStockContext(params.brandId);
   const filtered = rows.filter((product) => matchesQuery(product, params));
   // Collapse after filtering (variant-level filters stay precise), before sort/pagination.
-  const display = params.groupByParent
-    ? collapseByParentSku(filtered).filter((row) => bucket === 'all' || row.priority_tag === bucket)
-    : filtered;
+  const collapsed = params.groupByParent ? collapseByParentSku(filtered) : null;
+  const display = collapsed
+    ? collapsed.filter((row) => bucket === 'all' || row.priority_tag === bucket)
+    : readBucket === bucket
+      ? filtered
+      : filtered.filter((row) => effectiveTagId(row) === bucket);
   const sorted = sortProducts(
     display,
     params.sortField ?? 'margin_percentage',
@@ -1642,7 +1790,17 @@ export async function queryProductIntelligenceRows(params: ProductIntelligenceQu
     bucket,
     products: sorted.slice(start, start + pageSize),
     summary: summaryForProducts(filtered),
-    facets: buildQueryFacets(rows, params),
+    ...(collapsed ? { groupedSummary: summaryForProducts(collapsed) } : {}),
+    // Grouped reads pull the whole catalog, so facets must re-group + bucket-filter or dropdowns offer options with 0 grouped rows.
+    facets: buildQueryFacets(
+      params.groupByParent
+        ? collapseByParentSku(rows.filter((p) => params.includeNoStock === true || effectiveStock(p) > 0))
+          .filter((row) => bucket === 'all' || row.priority_tag === bucket)
+        : readBucket === bucket
+          ? rows
+          : rows.filter((row) => effectiveTagId(row) === bucket),
+      params,
+    ),
   };
 }
 
@@ -1717,13 +1875,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
   // gating + connector ERP detection) is preserved unchanged.
   const stockOverride = await readStockSourceOverride(brandId);
   // Per-brand stock-health thresholds for this run (defaults preserve current behaviour when unset).
-  const brandInventoryThresholds = (await firestore.doc(`brands/${brandId}`).get()).data()?.inventoryThresholds as
-    | Record<string, unknown>
-    | undefined;
-  activeStockThresholds = resolveStockThresholds(brandInventoryThresholds);
-  const rawLead = num(brandInventoryThresholds?.defaultLeadTimeDays);
-  activeDefaultLeadDays = rawLead > 0 ? rawLead : DEFAULT_LEAD_DAYS;
-  activeSupplierLeadByName = await loadSupplierLeadTimes(brandId);
+  await loadActiveBrandStockContext(brandId);
 
   // Procurement-first: for Enterprise+Procurement brands stock is authoritative from the uploaded
   // procurement file and OVERRIDES any connector catalog.
@@ -1738,7 +1890,8 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       try {
         const syncVersion = await computeBrandSyncVersion(brandId);
         const summary = summaryForProducts(procProducts);
-        const pagesByBucket = await writePageDocs(brandId, procProducts);
+        await writeDailyAvailabilitySnapshot(brandId, procProducts);
+        const { pagesByBucket, groupedPagesByBucket, groupedSummary } = await writePageDocs(brandId, procProducts);
         const competitiveInventory = await writeCompetitiveInventoryLookup(brandId, procProducts);
         const charts = chartDataForProducts(procProducts);
         await ref.set(
@@ -1756,6 +1909,8 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
             competitiveInventoryChunks: competitiveInventory.chunks,
             pageSize: TABLE_PAGE_SIZE,
             pagesByBucket,
+            groupedPagesByBucket,
+            groupedSummary,
             categories: categoryCounts(procProducts),
             brands: brandCounts(procProducts),
             charts,
@@ -1824,7 +1979,8 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       return { success: true, skipped: true, brandId };
     }
     const summary = summaryForProducts(products);
-    const pagesByBucket = await writePageDocs(brandId, products);
+    await writeDailyAvailabilitySnapshot(brandId, products);
+    const { pagesByBucket, groupedPagesByBucket, groupedSummary } = await writePageDocs(brandId, products);
     const competitiveInventory = await writeCompetitiveInventoryLookup(brandId, products);
     const charts = chartDataForProducts(products);
     // Which warehouses this aggregate reflects (empty = all) → drives the UI badge so ΚΑΠ-only numbers
@@ -1863,6 +2019,8 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       stockLocationLabels: stockLocationLabelsForBadge,
       pageSize: TABLE_PAGE_SIZE,
       pagesByBucket,
+      groupedPagesByBucket,
+      groupedSummary,
       categories: categoryCounts(products),
       brands: brandCounts(products),
       charts,
@@ -1933,6 +2091,7 @@ export async function refreshCompetitiveInventoryLookup(brandId: string): Promis
 
 /** Test-only export — unit tests exercise the real code, not copies. */
 export const __test = {
+  ymd,
   effectiveStock,
   productFromRow,
   stampVariantCounts,

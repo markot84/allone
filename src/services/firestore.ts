@@ -57,6 +57,28 @@ function stripUndefinedDeep(value: unknown): unknown {
 }
 
 // Generic CRUD operations
+// Transient failures a quick retry usually clears; anything else rethrows immediately.
+const RETRYABLE_CODES = new Set(['unavailable', 'deadline-exceeded', 'resource-exhausted', 'internal']);
+
+export function isTransientFirestoreError(err: unknown): boolean {
+  const code = (err as { code?: string })?.code ?? '';
+  return RETRYABLE_CODES.has(code) || (err instanceof Error && /firestore timeout/i.test(err.message));
+}
+
+export async function withFirestoreRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i === attempts - 1 || !isTransientFirestoreError(err)) throw err;
+      await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 export class FirestoreService {
   // Get single document
   static async getDocument<T>(collectionName: string, docId: string): Promise<T | null> {
@@ -185,7 +207,8 @@ export class FirestoreService {
       if (options.cursor) pageConstraints.push(startAfter(options.cursor));
 
       const q = query(collection(db, collectionName), ...pageConstraints);
-      const snap = await getDocs(q);
+      // PER-309: server-only — plain getDocs resolves a truncated page from memory cache on transport loss instead of rejecting.
+      const snap = await getDocsFromServer(q);
 
       const items = snap.docs.map((d) => ({ ...d.data(), id: d.id })) as T[];
       const lastDoc = snap.docs[snap.docs.length - 1] ?? null;

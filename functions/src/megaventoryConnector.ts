@@ -315,7 +315,7 @@ async function deleteMegaventoryCustomReportRows(db: Firestore, brandId: string)
     for (const doc of snap.docs) {
       batch.delete(doc.ref);
     }
-    await batch.commit();
+    await commitWithRetry(batch);
     deleted += snap.size;
     snap = await db.collection(CUSTOM_REPORT_COLLECTION).where('brandId', '==', brandId).limit(400).get();
   }
@@ -656,6 +656,7 @@ function normalizeInventoryStockRows(raw: any[]): any[] {
           inventoryLocationName: '',
           productPhysicalStockQty: loc.StockPhysical ?? loc.StockOnHand,
           productAvailableStockQty: loc.StockOnHand,
+          productNonShippedStockQty: loc.StockNonShipped, // PER-311: reserved on open sales orders
         });
       }
     } else {
@@ -684,22 +685,23 @@ export function normalizeStockLocations(value: unknown): string[] {
   return Array.from(seen);
 }
 
-/** Roll per-location stock rows up to per-product {available, physical} totals, honoring a warehouse
+/** Roll per-location stock rows up to per-product {available, physical, nonShipped} totals, honoring a warehouse
  * filter (null = all warehouses). A product whose locations are ALL excluded still gets a {0,0} entry,
  * so the merge-write that consumes this map ZEROES it instead of leaving a stale all-location total. */
 export function rollUpStockTotalsByProduct(
   stocks: any[],
   locationFilter: Set<string> | null
-): Map<string, { available: number; physical: number }> {
-  const totals = new Map<string, { available: number; physical: number }>();
+): Map<string, { available: number; physical: number; nonShipped: number }> {
+  const totals = new Map<string, { available: number; physical: number; nonShipped: number }>();
   for (const s of stocks) {
     const pid = String(s.productID || s.ProductId || '');
     if (!pid) continue;
     const locId = String(s.inventoryLocationID || s.InventoryLocationId || '');
-    const cur = totals.get(pid) ?? { available: 0, physical: 0 };
+    const cur = totals.get(pid) ?? { available: 0, physical: 0, nonShipped: 0 };
     if (!locationFilter || locationFilter.has(locId)) {
       cur.available += num(s.productAvailableStockQty || s.ProductAvailableStockQty);
       cur.physical += num(s.productPhysicalStockQty || s.ProductPhysicalStockQty);
+      cur.nonShipped += num(s.productNonShippedStockQty || s.ProductNonShippedStockQty);
     }
     totals.set(pid, cur);
   }
@@ -1092,7 +1094,7 @@ export async function recomputeMegaventoryProductTotals(brandId: string): Promis
   const conn = (await db.doc(`connectors/${brandId}`).get()).data()?.megaventory as Record<string, unknown> | undefined;
   const filter = includedStockLocationIds(conn);
 
-  const totals = new Map<string, { available: number; physical: number }>();
+  const totals = new Map<string, { available: number; physical: number; nonShipped: number }>();
   let cursor: QueryDocumentSnapshot | null = null;
   for (;;) {
     let q = db
@@ -1107,10 +1109,11 @@ export async function recomputeMegaventoryProductTotals(brandId: string): Promis
       const pid = String(d.productId || '');
       if (!pid) continue;
       const locId = String(d.locationId || '');
-      const cur = totals.get(pid) ?? { available: 0, physical: 0 };
+      const cur = totals.get(pid) ?? { available: 0, physical: 0, nonShipped: 0 };
       if (!filter || filter.has(locId)) {
         cur.available += num(d.availableStock);
         cur.physical += num(d.physicalStock);
+        cur.nonShipped += num(d.nonShippedStock); // PER-311: 0 for rows synced before the field existed
       }
       totals.set(pid, cur); // registered even when excluded → merge-write zeroes it
     }
@@ -1123,9 +1126,11 @@ export async function recomputeMegaventoryProductTotals(brandId: string): Promis
     id: `mv_p_${pid}`,
     data: {
       productId: pid,
-      stockOnHand: t.physical, // PER-300: shelf units, not MV on-hand (adds unreceived orders)
+      // PER-300: shelf units, not MV on-hand (adds unreceived orders); PER-311: minus units reserved on open sales orders.
+      stockOnHand: Math.max(0, t.physical - t.nonShipped),
       availableStockTotal: t.available,
       physicalStockTotal: t.physical,
+      nonShippedStockTotal: t.nonShipped,
     },
   }));
   if (items.length) await writeBatch(db, 'megaventory_products', brandId, items);
@@ -1168,6 +1173,25 @@ function sanitizeFirestoreDocId(raw: string): string {
   return s;
 }
 
+// One transient gRPC stall (DEADLINE_EXCEEDED/UNAVAILABLE) on a single commit was aborting whole nightly syncs.
+export async function commitWithRetry(
+  batch: { commit(): Promise<unknown> },
+  attempts = 3,
+  delayMs = 2000
+): Promise<void> {
+  for (let i = 0; ; i++) {
+    try {
+      await batch.commit();
+      return;
+    } catch (err) {
+      const code = (err as { code?: number | string })?.code;
+      const transient = code === 4 || code === 8 || code === 13 || code === 14;
+      if (i >= attempts - 1 || !transient) throw err;
+      await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+    }
+  }
+}
+
 async function writeBatch(
   db: Firestore,
   collection: string,
@@ -1185,7 +1209,7 @@ async function writeBatch(
         { merge: true }
       );
     }
-    await batch.commit();
+    await commitWithRetry(batch);
   }
 }
 
@@ -1203,7 +1227,7 @@ export async function mergeMegaventoryApiCatalogProducts(
     for (const doc of apiCatalogDocs.slice(i, i + 500)) {
       batch.delete(doc.ref);
     }
-    await batch.commit();
+    await commitWithRetry(batch);
   }
 
   const reportSkus = new Set<string>();
@@ -1289,7 +1313,7 @@ export async function mergeMegaventoryApiCatalogProducts(
   for (let i = 0; i < normalizedPatches.length; i += 400) {
     const batch = db.batch();
     for (const p of normalizedPatches.slice(i, i + 400)) batch.set(p.ref, p.data, { merge: true });
-    await batch.commit();
+    await commitWithRetry(batch);
   }
   if (!items.length) return 0;
   await writeBatch(db, 'products', brandId, items);
@@ -1491,7 +1515,7 @@ async function writeReceiptChunkMap(
   existing.docs.forEach((d) => batch.delete(d.ref));
   chunks.forEach((json, i) => batch.set(chunksCol.doc(String(i)), { [field]: json }));
   batch.set(parent, { brandId, ...meta(chunks.length, skus.length), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  await batch.commit();
+  await commitWithRetry(batch);
   return skus.length;
 }
 
@@ -1517,7 +1541,7 @@ async function upsertMissingSuppliers(db: Firestore, brandId: string, names: Ite
     for (const snap of missing.slice(i, i + 400)) {
       batch.set(snap.ref, { name: wanted.get(snap.id), brandId, source: 'megaventory_receipts', updatedAt: FieldValue.serverTimestamp() });
     }
-    await batch.commit();
+    await commitWithRetry(batch);
   }
   return missing.length;
 }
@@ -2195,6 +2219,7 @@ export async function fetchMegaventoryData(
           locationName: s.inventoryLocationAbbreviation || s.InventoryLocationName || '',
           physicalStock: num(s.productPhysicalStockQty || s.ProductPhysicalStockQty),
           availableStock: num(s.productAvailableStockQty || s.ProductAvailableStockQty),
+          nonShippedStock: num(s.productNonShippedStockQty || s.ProductNonShippedStockQty), // PER-311
           source: 'megaventory_api',
         },
       }));
@@ -2217,9 +2242,11 @@ export async function fetchMegaventoryData(
         id: `mv_p_${pid}`,
         data: {
           productId: pid,
-          stockOnHand: t.physical, // PER-300: shelf units, not MV on-hand (adds unreceived orders)
+          // PER-300: shelf units, not MV on-hand (adds unreceived orders); PER-311: minus units reserved on open sales orders.
+          stockOnHand: Math.max(0, t.physical - t.nonShipped),
           availableStockTotal: t.available,
           physicalStockTotal: t.physical,
+          nonShippedStockTotal: t.nonShipped,
         },
       }));
       if (totalItems.length) await writeBatch(db, 'megaventory_products', brandId, totalItems);
@@ -2354,7 +2381,7 @@ export async function fetchMegaventoryData(
               { merge: true }
             );
           }
-          await batch.commit();
+          await commitWithRetry(batch);
         }
 
         // Zero stock rows of newly tombstoned products (preserve forensics in stockAtDeletion).
@@ -2376,7 +2403,7 @@ export async function fetchMegaventoryData(
                 updatedAt: FieldValue.serverTimestamp(),
               }, { merge: true });
             }
-            await batch.commit();
+            await commitWithRetry(batch);
             zeroedStockRows += Math.min(400, updates.length - i);
           }
         }
@@ -2395,7 +2422,7 @@ export async function fetchMegaventoryData(
                 { merge: true }
               );
             }
-            await batch.commit();
+            await commitWithRetry(batch);
             unmarked += Math.min(400, toUnmark.length - i);
           }
         }

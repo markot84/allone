@@ -663,13 +663,21 @@ export async function fetchOpenCartData(brandId: string): Promise<{
 
       const pageProdItems: { id: string; data: Record<string, unknown> }[] = [];
       for (const p of products) {
+        // PER-314: rows key the id as `id` (no product_id — everything collapsed onto oc_undefined); name lives in product_description.
+        const pid = p.product_id ?? p.productId ?? p.id;
+        if (pid == null) continue; // never re-create the collapsed oc_undefined doc
+        const desc = Array.isArray(p.product_description)
+          ? p.product_description[0]
+          : p.product_description && typeof p.product_description === 'object'
+            ? Object.values(p.product_description)[0]
+            : null;
         pageProdItems.push({
-          id: `oc_${p.product_id || p.productId}`,
+          id: `oc_${pid}`,
           data: {
-            productId: String(p.product_id || p.productId || ''),
-            name: p.name || '',
+            productId: String(pid ?? ''),
+            name: p.name || (desc as { name?: string } | null)?.name || '',
             model: p.model || '',
-            sku: p.sku || p.model || String(p.product_id || p.productId || ''),
+            sku: p.sku || p.model || String(pid ?? ''),
             price: parseFloat(p.price || '0'),
             quantity: parseInt(p.quantity || '0', 10),
             status: p.status === '1' || p.status === true ? 'active' : 'inactive',

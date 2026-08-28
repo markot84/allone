@@ -171,8 +171,7 @@ export function ChannelPerformanceHistoryCard({
             />
             <Legend {...legendProps()} />
             {realPerformanceHistory.channels.map((ch) => {
-              const hasData = realPerformanceHistory.rows.some((d) => (d[ch] as number) > 0);
-              if (!hasData) return null;
+              // PER-308: render zero-ROAS channels too — a channel with spend but no purchase value (TikTok) must stay visible.
               const color = channelLineColor(ch);
               return (
                 <Line key={ch} type="monotone" dataKey={ch} stroke={color} strokeWidth={2.5} name={ch} dot={{ r: 3, fill: color, strokeWidth: 0 }} connectNulls />

@@ -95,6 +95,8 @@ function newestDate(...values: unknown[]): Date | null {
 }
 
 const ECOMMERCE_CONNECTOR_IDS = new Set<ConnectorId>(['shopify', 'woocommerce', 'opencart', 'magento']);
+// PER-289: auth-looking sync errors — same pattern as functions/src/serverAlerts.ts humanizeSyncError.
+const AUTH_SYNC_ERROR_RE = /401|403|token|expired|unauthoriz|unauthentic|reconnect|invalid_grant|access/i;
 
 function ecommerceSyncHealth(
   state: {
@@ -1612,10 +1614,10 @@ function MetaSystemUserModal({
             <p style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: 600, color: 'var(--sky-700)' }}>Πώς φτιάχνεις το token (μία φορά):</p>
             <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: 'var(--sky-700)', lineHeight: 1.6 }}>
               <li>Άνοιξε <strong>Meta Business Settings → Users → System Users</strong>.</li>
-              <li>Δημιούργησε ή διάλεξε έναν System User και πάτησε <strong>«Generate new token»</strong>.</li>
-              <li>Διάλεξε την εφαρμογή μας, λήξη <strong>«Never»</strong> και permission <strong>ads_read</strong>.</li>
-              <li>Στα <strong>Assets → Ad Accounts</strong> ανάθεσε τον διαφημιστικό λογαριασμό στον System User.</li>
-              <li>Αντίγραψε το token και επικόλλησέ το εδώ.</li>
+              <li>Δημιούργησε ή διάλεξε έναν System User (ρόλος <strong>Employee</strong> αρκεί).</li>
+              <li>Πάτησε <strong>Assign Assets</strong> και ανάθεσε στον System User τον διαφημιστικό λογαριασμό (<strong>Ad Accounts</strong>).</li>
+              <li>Πάτησε <strong>«Generate new token»</strong>, διάλεξε την εφαρμογή μας, λήξη <strong>«Never»</strong> και permission <strong>ads_read</strong>. Αν η εφαρμογή δεν εμφανίζεται στη λίστα, δεν έχει συνδεθεί με το business portfolio — επικοινώνησε μαζί μας.</li>
+              <li>Το token εμφανίζεται μία φορά — αντίγραψέ το αμέσως και επικόλλησέ το εδώ.</li>
             </ol>
             <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: '8px', fontSize: '12px', color: 'var(--sky-700)', fontWeight: 600 }}>
               Άνοιγμα Business Settings ↗
@@ -3419,6 +3421,9 @@ export function ConnectorsPanel() {
                 const metaTokenExpired = metaExpiresAt != null && metaExpiresAt <= Date.now();
                 const metaNeedsReconnect =
                   conn.id === 'meta' && (recentFailedAttempt || metaTokenExpired || metaExpiringSoon);
+                // PER-289: auth-looking lastSyncError → reconnect prompt for any connector.
+                const authSyncError = connectorSyncError.length > 0 && AUTH_SYNC_ERROR_RE.test(connectorSyncError);
+                const needsReconnect = metaNeedsReconnect || (isConnected && authSyncError);
                 const identityLines = getConnectorIdentityLines(conn.id, state);
                 const usesCompactDetails = conn.id === 'magento' || conn.group === 'operations';
                 const detailsExpanded = !usesCompactDetails || expandedConnectorDetails[conn.id] === true;
@@ -3696,13 +3701,15 @@ export function ConnectorsPanel() {
                         </Button>
                       ) : isConnected ? (
                         <>
-                          {metaNeedsReconnect && (
+                          {needsReconnect && (
                             <Button
                               variant="primary"
                               size="sm"
                               onClick={() => handleConnect(conn.id)}
                               disabled={!canManageConnectors || isConnecting}
-                              title="Δημιουργία νέας σύνδεσης Meta (μόνιμο token ή Facebook login)"
+                              title={conn.id === 'meta'
+                                ? 'Δημιουργία νέας σύνδεσης Meta (μόνιμο token ή Facebook login)'
+                                : 'Το σφάλμα συγχρονισμού δείχνει πρόβλημα πρόσβασης — δημιουργήστε νέα σύνδεση'}
                             >
                               {isConnecting ? (
                                 <Spinner size="sm" className="mr-1" />
@@ -3713,7 +3720,7 @@ export function ConnectorsPanel() {
                             </Button>
                           )}
                           <Button
-                            variant={metaNeedsReconnect ? 'secondary' : 'primary'}
+                            variant={needsReconnect ? 'secondary' : 'primary'}
                             size="sm"
                             onClick={() => handleSync(conn.id)}
                             disabled={isSyncing || !canManageConnectors}

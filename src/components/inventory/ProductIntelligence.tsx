@@ -25,6 +25,7 @@ import {
   Card,
   Badge,
   Button,
+  Spinner,
   ProgressBar,
   Tooltip,
   useToast,
@@ -62,7 +63,8 @@ import { ProductCharts } from './ProductCharts';
 import { downloadProductIntelligenceCsv, downloadProductIntelligenceXlsx } from '../../utils/productIntelligenceExport';
 import type { Product, InventorySummary, InventoryAlert } from '../../types';
 import type { ProductIntelligenceBucket, ProductIntelligenceQuery } from '../../services/productIntelligenceAggregate';
-import { refreshProductIntelligenceOnServer } from '../../services/productIntelligenceAggregate';
+import { refreshProductIntelligenceOnServer, queryAllProductIntelligenceRows, ExportTooLargeError } from '../../services/productIntelligenceAggregate';
+import type { ExportMeta } from '../../utils/productIntelligenceExport';
 import { logger } from '../../utils/logger';
 
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
@@ -78,7 +80,7 @@ const STOCK_TAG_LABELS: Record<string, string> = {
   dead: 'Dead Stock', no_stock: 'No Stock', price_pending: 'Price Pending',
 };
 const productStockLevel = (product: Product): number =>
-  Number(product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0) || 0;
+  getEffectiveStockLevel(product); // PER-306: one canonical stock order
 const productDisplayTag = (product: Product): string =>
   productStockLevel(product) <= 0 ? 'no_stock' : hasPricePending(product) ? 'price_pending' : String(product.priority_tag || '');
 const EMPTY_INVENTORY_SUMMARY: InventorySummary = {
@@ -287,7 +289,14 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     includeNoStock,
     ...(groupByParent ? { groupByParent: true } : {}),
   }), [PAGE_SIZE, searchQuery, categoryInclude, brandInclude, effectiveTagFilter, marginFilter, stockAgeFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode, includeNoStock, groupByParent]);
-  const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage, serverQuery);
+  // PER-319: gates the precomputed `_g_` page docs — MUST mirror serverQuery, or a new filter silently serves unfiltered static pages.
+  const isDefaultQuery =
+    !searchQuery.trim() &&
+    categoryInclude == null && brandInclude == null && tagInclude == null &&
+    marginFilter === 'all' && stockAgeFilter === 'all' &&
+    !productDateFrom && !productDateTo && !includeNoStock &&
+    groupByParent && sortField === 'margin_percentage' && sortDirection === 'desc';
+  const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage, serverQuery, { staticDefault: isDefaultQuery });
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -382,13 +391,31 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [serverIntelligence.safePage, currentPage]);
 
   const inventoryAlerts: InventoryAlert[] = [];
-  // PER-178: with no stock-card bucket selected, the cards follow the active filters (category/brand/
-  // search/margin/date) via the CF's filtered summary; a selected bucket keeps whole-inventory numbers
-  // so the cards stay usable as bucket navigation.
+  // PER-178/317: cards follow filters whenever the CF summary covers all buckets — grouped, no bucket, or any filter active (mirrors the CF's hasFilters read rule); ungrouped bucket-only reads keep whole-catalog cards.
+  const hasActiveFilters = !!(serverQuery.search || serverQuery.categories || serverQuery.brands
+    || serverQuery.tags || serverQuery.margin || serverQuery.stockAge || serverQuery.dateFrom || serverQuery.dateTo);
+  const pageSummary = (serverBucket === 'all' || groupByParent || hasActiveFilters)
+    ? serverIntelligence.page?.summary
+    : undefined;
   const displaySummary =
-    (serverBucket === 'all' ? serverIntelligence.page?.summary : undefined)
+    pageSummary
     ?? serverIntelligence.aggregate?.summary
     ?? EMPTY_INVENTORY_SUMMARY;
+  // PER-323: with grouping on, cards show whole products (groups) — same population as the table/export; € are honest children sums.
+  const displayGroupedSummary = groupByParent
+    ? (serverIntelligence.page?.groupedSummary ?? serverIntelligence.aggregate?.groupedSummary)
+    : undefined;
+  const cardsSummary = displayGroupedSummary ?? displaySummary;
+  const cardsCountLabel = displayGroupedSummary ? 'προϊόντα' : 'SKUs';
+  const bucketSub = (bucket: { count: number; cost_value?: number }) => {
+    const counts = `${formatNumber(bucket.count)} ${cardsCountLabel}`;
+    return bucket.cost_value != null ? `Κόστος ${formatCurrencyCompact(bucket.cost_value)} · ${counts}` : counts;
+  };
+  // PER-317: the table line keeps the variant count («Χ προϊόντα (Υ κωδικοί)») as the bridge between the two populations.
+  const bucketVariantCount =
+    serverBucket !== 'all' && serverBucket !== 'no_stock' && isDefaultQuery
+      ? { healthy: displaySummary.healthy_stock.count, excess: displaySummary.excess_stock.count, dead: displaySummary.dead_stock.count, low: displaySummary.low_stock.count }[serverBucket]
+      : undefined;
 
   // PER-188: prefer server facets (actionable options); fall back to whole-catalog aggregate lists.
   const facets = serverIntelligence.page?.facets;
@@ -462,22 +489,24 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     virtualRows.length > 0 ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end : 0;
   /** The velocity column only earns its width when the catalogue actually carries sales windows. */
   const showVelocity = useMemo(() => hasVelocityData(paginatedProducts), [paginatedProducts]);
-  const columnCount = 7 + (showVelocity ? 1 : 0) + (benchmarkCount > 0 ? 1 : 0);
+  const columnCount = 9 + (showVelocity ? 1 : 0) + (benchmarkCount > 0 ? 1 : 0);
 
   /** A new page or a new sort order is a new list — start it at the top, not mid-scroll. */
   useEffect(() => {
     tableScrollRef.current?.scrollTo({ top: 0 });
   }, [currentPage, sortField, sortDirection]);
   const activeInventoryTotal = useMemo(() => {
-    const s = serverIntelligence.aggregate?.summary;
+    const s = pageSummary ?? serverIntelligence.aggregate?.summary;
     if (!s) return serverFilteredTotal || totalCatalogCount;
     return s.healthy_stock.count + s.low_stock.count + s.excess_stock.count + s.dead_stock.count;
-  }, [serverIntelligence.aggregate?.summary, serverFilteredTotal, totalCatalogCount]);
+  }, [pageSummary, serverIntelligence.aggregate?.summary, serverFilteredTotal, totalCatalogCount]);
   // PER-178: the Active/Total SKUs card follows filters too — the filtered row count when no stock-card
   // bucket is selected, whole-catalog otherwise (matching the health cards' navigation behavior).
-  const displayTotalSkus = serverBucket === 'all'
-    ? serverFilteredTotal || (includeNoStock ? totalCatalogCount : activeInventoryTotal)
-    : includeNoStock ? totalCatalogCount : activeInventoryTotal;
+  const displayTotalSkus = displayGroupedSummary
+    ? (serverBucket === 'all' ? serverFilteredTotal || displayGroupedSummary.total_skus : displayGroupedSummary.total_skus)
+    : serverBucket === 'all'
+      ? serverFilteredTotal || (includeNoStock ? totalCatalogCount : activeInventoryTotal)
+      : includeNoStock ? totalCatalogCount : activeInventoryTotal;
   const showMagentoImageAccessNotice =
     hasServerAggregate &&
     productDataSourceLabel === 'ERP' &&
@@ -489,26 +518,73 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     setCurrentPage(1);
   }, [searchQuery, categoryInclude, brandInclude, tagInclude, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
 
-  const handleQuickExportCsv = () => {
-    if (paginatedProducts.length === 0) {
-      toast.error('Δεν υπάρχουν γραμμές για εξαγωγή.');
-      return;
+  // PER-318: exports cover the FULL filtered set (all pages), not just the visible one.
+  const [isExporting, setIsExporting] = useState(false);
+  const exportMeta = (): ExportMeta => {
+    const filters = [
+      searchQuery.trim() && `αναζήτηση «${searchQuery.trim()}»`,
+      categoryInclude?.length && `κατηγορίες: ${categoryInclude.join(', ')}`,
+      brandInclude?.length && `brands: ${brandInclude.join(', ')}`,
+      tagInclude?.length && `tags: ${tagInclude.join(', ')}`,
+      marginFilter !== 'all' && `margin: ${marginFilter}`,
+      stockAgeFilter !== 'all' && `stock age: ${stockAgeFilter}`,
+      (productDateFrom || productDateTo) && `περίοδος: ${productDateFrom || '…'} – ${productDateTo || '…'}`,
+      includeNoStock && 'με no stock',
+    ].filter(Boolean).join(' · ');
+    return [
+      ['Filters', filters || '—'],
+      ['Bucket', serverBucket],
+      ['Grouping', groupByParent ? 'By parent SKU' : 'Per variant'],
+      ['Sort', `${sortField} ${sortDirection}`],
+    ];
+  };
+  const fetchAllForExport = async (): Promise<Product[]> => {
+    if (!brandId) return [];
+    setIsExporting(true);
+    try {
+      const rows = await queryAllProductIntelligenceRows(brandId, { ...serverQuery, bucket: serverBucket, page: 1 });
+      // Re-apply the client-only post-filters so the export matches the table exactly.
+      let result = includeNoStock ? rows : rows.filter((product) => productStockLevel(product) > 0);
+      if (tagInclude?.includes('price_pending')) result = result.filter((p) => hasPricePending(p));
+      return result;
+    } finally {
+      setIsExporting(false);
     }
-    downloadProductIntelligenceCsv(paginatedProducts, currentBrand?.name);
-    toast.success(`Έγινε λήψη CSV τρέχουσας σελίδας (${formatNumber(paginatedProducts.length)} γραμμές).`);
+  };
+  const exportErrorToast = (e: unknown, kind: string) => {
+    if (e instanceof ExportTooLargeError) {
+      toast.error(`Πολύ μεγάλη εξαγωγή (${formatNumber(e.totalRows)} γραμμές) — περιορίστε τα φίλτρα.`);
+    } else {
+      logger.error(`${kind} export failed`, { err: e });
+      toast.error(`Σφάλμα εξαγωγής ${kind}.`);
+    }
   };
 
-  const handleQuickExportXlsx = async () => {
-    if (paginatedProducts.length === 0) {
+  const handleQuickExportCsv = async () => {
+    if (serverFilteredTotal === 0) {
       toast.error('Δεν υπάρχουν γραμμές για εξαγωγή.');
       return;
     }
     try {
-      await downloadProductIntelligenceXlsx(paginatedProducts, currentBrand?.name);
-      toast.success(`Έγινε λήψη Excel τρέχουσας σελίδας (${formatNumber(paginatedProducts.length)} γραμμές).`);
+      const rows = await fetchAllForExport();
+      downloadProductIntelligenceCsv(rows, currentBrand?.name, exportMeta());
+      toast.success(`Έγινε λήψη CSV (${formatNumber(rows.length)} γραμμές).`);
     } catch (e) {
-      logger.error('Excel export failed', { err: e });
-      toast.error('Σφάλμα εξαγωγής Excel. Δοκιμάστε CSV.');
+      exportErrorToast(e, 'CSV');
+    }
+  };
+
+  const handleQuickExportXlsx = async () => {
+    if (serverFilteredTotal === 0) {
+      toast.error('Δεν υπάρχουν γραμμές για εξαγωγή.');
+      return;
+    }
+    try {
+      const rows = await fetchAllForExport();
+      await downloadProductIntelligenceXlsx(rows, currentBrand?.name, exportMeta());
+      toast.success(`Έγινε λήψη Excel (${formatNumber(rows.length)} γραμμές).`);
+    } catch (e) {
+      exportErrorToast(e, 'Excel');
     }
   };
 
@@ -761,18 +837,20 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       {/* Summary Cards — uses procurement data when available */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <SummaryCard
-          label={includeNoStock ? 'Total SKUs' : 'Active SKUs'}
+          label={displayGroupedSummary ? 'Active Products' : includeNoStock ? 'Total SKUs' : 'Active SKUs'}
           value={formatNumber(displayTotalSkus)}
           icon={<Package size={20} />}
-          color="var(--text-muted)"
-          tooltip={includeNoStock ? 'Συνολικός αριθμός SKU στο ERP catalog.' : 'Ενεργά SKU με διαθέσιμο απόθεμα/stock signal, η βάση για συμπεράσματα και προτάσεις.'}
+                color="var(--text-muted)"
+                tooltip={displayGroupedSummary
+                  ? 'Ενεργά προϊόντα (ομαδοποιημένα ανά parent SKU) με διαθέσιμο απόθεμα — ο ίδιος πληθυσμός με τον πίνακα.'
+                  : includeNoStock ? 'Συνολικός αριθμός SKU στο ERP catalog.' : 'Ενεργά SKU με διαθέσιμο απόθεμα/stock signal, η βάση για συμπεράσματα και προτάσεις.'}
           active={stockCardFilter === 'all'}
           onClick={() => selectStockCardFilter('all')}
         />
         <SummaryCard
           label="Healthy Stock"
-          value={`${displaySummary.healthy_stock.percentage}%`}
-          subValue={formatNumber(displaySummary.healthy_stock.count)}
+          value={`${cardsSummary.healthy_stock.percentage}%`}
+          subValue={formatNumber(cardsSummary.healthy_stock.count)}
           icon={<TrendingUp size={20} />}
           color="var(--success-700)"
           tooltip="Προϊόντα με υγιή διάρκεια αποθέματος."
@@ -781,32 +859,32 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         />
         <SummaryCard
           label="Excess Stock"
-          value={displaySummary.excess_stock.value >= 1000
-            ? formatCurrencyCompact(displaySummary.excess_stock.value)
-            : `€${formatCurrency(displaySummary.excess_stock.value)}`}
-          subValue={`${displaySummary.excess_stock.count} SKUs`}
+          value={cardsSummary.excess_stock.value >= 1000
+            ? formatCurrencyCompact(cardsSummary.excess_stock.value)
+            : `€${formatCurrency(cardsSummary.excess_stock.value)}`}
+          subValue={bucketSub(cardsSummary.excess_stock)}
           icon={<AlertTriangle size={20} />}
-          color="var(--orange-700)"
-          tooltip={`Προϊόντα με απόθεμα που καλύπτει πάνω από ${excessDaysOfCover} ημέρες πωλήσεων, με βάση τον τρέχοντα ρυθμό. Το όριο ρυθμίζεται στα «Όρια υγείας αποθέματος».`}
+                color="var(--orange-700)"
+                tooltip={`Προϊόντα με απόθεμα που καλύπτει πάνω από ${excessDaysOfCover} ημέρες πωλήσεων, με βάση τον τρέχοντα ρυθμό. Αξία = τιμή πώλησης × απόθεμα ανά κωδικό (SKU)· το κόστος = τιμή κόστους × απόθεμα. Με ενεργή ομαδοποίηση κάρτες και πίνακας μετρούν ολόκληρα προϊόντα (γονείς)· χωρίς ομαδοποίηση, κωδικούς. Το όριο ρυθμίζεται στα «Όρια υγείας αποθέματος».`}
           active={stockCardFilter === 'excess'}
           onClick={() => selectStockCardFilter(stockCardFilter === 'excess' ? 'all' : 'excess')}
         />
         <SummaryCard
           label="Dead Stock"
-          value={displaySummary.dead_stock.value >= 1000
-            ? formatCurrencyCompact(displaySummary.dead_stock.value)
-            : `€${formatCurrency(displaySummary.dead_stock.value)}`}
-          subValue={`${displaySummary.dead_stock.count} SKUs`}
+          value={cardsSummary.dead_stock.value >= 1000
+            ? formatCurrencyCompact(cardsSummary.dead_stock.value)
+            : `€${formatCurrency(cardsSummary.dead_stock.value)}`}
+          subValue={bucketSub(cardsSummary.dead_stock)}
           icon={<AlertCircle size={20} />}
-          color="var(--danger-600)"
-          tooltip="Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο."
+                color="var(--danger-600)"
+                tooltip="Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο. Αξία = τιμή πώλησης × απόθεμα ανά κωδικό (SKU)· το κόστος = τιμή κόστους × απόθεμα. Με ενεργή ομαδοποίηση κάρτες και πίνακας μετρούν ολόκληρα προϊόντα (γονείς)· χωρίς ομαδοποίηση, κωδικούς."
           active={stockCardFilter === 'dead'}
           onClick={() => selectStockCardFilter(stockCardFilter === 'dead' ? 'all' : 'dead')}
         />
         <SummaryCard
           label="Low Stock"
-          value={`${displaySummary.low_stock.percentage}%`}
-          subValue={`${displaySummary.low_stock.count} SKUs`}
+          value={`${cardsSummary.low_stock.percentage}%`}
+          subValue={`${formatNumber(cardsSummary.low_stock.count)} ${cardsCountLabel}`}
           icon={<TrendingDown size={20} />}
           color="var(--seg-potential)"
           tooltip={`Προϊόντα με απόθεμα που καλύπτει έως ${lowDaysOfCover} ημέρες πωλήσεων. Κίνδυνος εξάντλησης. Το όριο ρυθμίζεται στα «Όρια υγείας αποθέματος».`}
@@ -981,39 +1059,52 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             </div>
             <div className="flex flex-wrap items-end gap-2 sm:ml-auto">
               <div className="text-sm text-[var(--text-secondary)] min-w-[120px]">
-                {formatNumber(serverFilteredTotal)} γραμμές
+                {bucketVariantCount != null && bucketVariantCount !== serverFilteredTotal
+                  ? `${formatNumber(serverFilteredTotal)} προϊόντα (${formatNumber(bucketVariantCount)} κωδικοί)`
+                  : `${formatNumber(serverFilteredTotal)} γραμμές`}
               </div>
               <Button
                 variant="secondary"
                 size="sm"
                 icon={<FileText size={14} />}
-                onClick={handleQuickExportCsv}
-                disabled={effectiveSourceLoading || paginatedProducts.length === 0}
+                onClick={() => void handleQuickExportCsv()}
+                disabled={effectiveSourceLoading || isExporting || serverFilteredTotal === 0}
                 className="shrink-0"
-                title="Εξαγωγή φιλτραρισμένων σε CSV"
+                title="Εξαγωγή όλων των φιλτραρισμένων γραμμών σε CSV"
               >
-                CSV
+                {isExporting ? 'Λήψη…' : 'CSV'}
               </Button>
               <Button
                 variant="secondary"
                 size="sm"
                 icon={<FileSpreadsheet size={14} />}
                 onClick={() => void handleQuickExportXlsx()}
-                disabled={effectiveSourceLoading || paginatedProducts.length === 0}
+                disabled={effectiveSourceLoading || isExporting || serverFilteredTotal === 0}
                 className="shrink-0"
-                title="Εξαγωγή φιλτραρισμένων σε Excel"
+                title="Εξαγωγή όλων των φιλτραρισμένων γραμμών σε Excel"
               >
-                Excel
+                {isExporting ? 'Λήψη…' : 'Excel'}
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Table */}
-        <div ref={tableScrollRef} className="overflow-x-auto max-h-[60vh] overflow-y-auto">
-          <table className="data-table">
-            <thead className="sticky top-0 z-10">
-              <tr className="bg-[var(--surface-2)]">
+        {/* Table — dim + spinner while a query resolves so filter/sort/search clicks never look stuck (PER-319) */}
+        <div className="relative">
+          {serverIntelligence.isPageFetching && serverIntelligence.page ? (
+            <div className="absolute inset-0 z-10 flex items-center justify-center">
+              <Spinner size="lg" label="Φόρτωση δεδομένων…" />
+            </div>
+          ) : null}
+        <div
+          ref={tableScrollRef}
+          className={`overflow-x-auto max-h-[60vh] overflow-y-auto transition-opacity ${serverIntelligence.isPageFetching && serverIntelligence.page ? 'opacity-40 pointer-events-none' : ''}`}
+        >
+          {/* PER-324: sticky belongs on th, not thead — Chrome ignores it on thead. .data-table--sticky
+              carries it, and .data-table's own th background covers the rows scrolling underneath. */}
+          <table className="data-table data-table--sticky">
+            <thead>
+              <tr>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)]">
                   <button
                     onClick={() => handleSort('name')}
@@ -1036,7 +1127,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                   </span>
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)]">
-                  <Tooltip content="Μικτό περιθώριο κέρδους: (τιμή πώλησης − κόστος) / τιμή πώλησης. Απαιτεί κόστος από το ERP — χωρίς αυτό εμφανίζεται κενό." size={12}>
+                  <Tooltip content="Μικτό περιθώριο κέρδους: (τιμή πώλησης − κόστος) / τιμή πώλησης. Απαιτεί κόστος από το ERP — χωρίς αυτό εμφανίζεται κενό. Στα ομαδοποιημένα προϊόντα: μεσοσταθμικό ανά απόθεμα." size={12}>
                     <button
                       onClick={() => handleSort('margin_percentage')}
                       className="flex items-center gap-1 hover:text-[var(--text-primary)]"
@@ -1082,6 +1173,11 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     Price
                     <SortIcon field="price" current={sortField} direction={sortDirection} />
                   </button>
+                </th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden md:table-cell">
+                  <Tooltip content="Τιμή × απόθεμα ανά κωδικό· στα ομαδοποιημένα προϊόντα το άθροισμα των παιδιών — το σύνολο της στήλης ταυτίζεται με τις κάρτες." size={12}>
+                    Αξία
+                  </Tooltip>
                 </th>
                 {showVelocity && (
                   <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden md:table-cell">
@@ -1136,12 +1232,15 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             </tbody>
           </table>
         </div>
+        </div>
 
         {/* Pagination */}
         <div className="p-4 border-t border-[var(--border)] flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-[var(--text-secondary)]">
             {serverFilteredTotal === 0
-              ? 'Δεν βρέθηκαν προϊόντα'
+              ? groupByParent
+                ? 'Δεν βρέθηκαν ομαδοποιημένα προϊόντα σε αυτή την κατάσταση — δοκιμάστε χωρίς «Ομαδοποίηση Parent SKU»'
+                : 'Δεν βρέθηκαν προϊόντα'
               : `Εμφανίζονται ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, serverFilteredTotal)} από ${formatNumber(serverFilteredTotal)} προϊόντα`}
           </p>
           <div className="flex items-center gap-2">
@@ -1176,9 +1275,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
         filteredProducts={paginatedProducts}
+        getProducts={fetchAllForExport}
+        exportMeta={exportMeta}
+        totalRows={serverFilteredTotal}
         onShowCharts={() => setShowCharts(true)}
         brandName={currentBrand?.name}
-        scopeLabel={`τρέχουσας σελίδας (${formatNumber(paginatedProducts.length)} από ${formatNumber(serverFilteredTotal)})`}
+        scopeLabel={`φιλτραρισμένης προβολής (${formatNumber(serverFilteredTotal)} γραμμές)`}
       />
 
       {/* Charts Modal */}
@@ -1377,7 +1479,14 @@ function ProductRow({
       </td>
       <td className="px-3 py-2 hidden sm:table-cell">
         <span className="text-xs font-mono text-[var(--text-primary)]" data-numeric>
-          €{formatCurrency(product.price ?? 0, 2)}
+          {product.price_min != null && product.price_max != null && product.price_min < product.price_max
+            ? `€${formatCurrency(product.price_min, 2)}–${formatCurrency(product.price_max, 2)}`
+            : `€${formatCurrency(product.price ?? 0, 2)}`}
+        </span>
+      </td>
+      <td className="px-3 py-2 hidden md:table-cell">
+        <span className="text-xs font-mono text-[var(--text-primary)]" data-numeric>
+          €{formatCurrency(product.stock_value ?? Math.max(0, (product.price ?? 0) * (product.stock_level ?? 0)), 2)}
         </span>
       </td>
       {showVelocity && (

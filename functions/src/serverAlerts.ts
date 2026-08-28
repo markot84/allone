@@ -1,6 +1,7 @@
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
 import { ALERT } from './utils/alertKeys';
+import { CONNECTOR_DOC_KEY } from './connectorSyncStatus';
 
 let _db: Firestore;
 function db() {
@@ -47,6 +48,25 @@ interface CampaignAggregates {
 
 type AlertSeverity = 'info' | 'warning' | 'critical';
 
+/** connectors/{brandId} doc: per-connector state maps (PER-193). */
+type ConnectorStates = Record<string, { connected?: boolean; lastSyncError?: string }> | null;
+
+/** doc key → display label, inverted from the nightly-wave map. */
+const CONNECTOR_LABEL: Record<string, string> = Object.fromEntries(
+  Object.entries(CONNECTOR_DOC_KEY).map(([label, key]) => [key, label])
+);
+
+/** Human phrase for an email/alert — raw error text stays in data.failing only. */
+function humanizeSyncError(error: string): string {
+  if (/401|403|token|expired|unauthoriz|unauthentic|reconnect|invalid_grant|access/i.test(error)) {
+    return 'Η σύνδεση έληξε — χρειάζεται επανασύνδεση';
+  }
+  if (/deadline|timeout|timed out|unavailable|503|502|econnreset|etimedout|network/i.test(error)) {
+    return 'Προσωρινό σφάλμα επικοινωνίας — θα επαναληφθεί αυτόματα';
+  }
+  return 'Σφάλμα συγχρονισμού — δείτε λεπτομέρειες στην εφαρμογή';
+}
+
 interface NewAlert {
   triggerId: string;
   triggerLabel: string;
@@ -58,7 +78,7 @@ interface NewAlert {
   data: Record<string, unknown>;
 }
 
-const SERVER_TRIGGERS: Record<string, {
+export const SERVER_TRIGGERS: Record<string, {
   label: string;
   group: string;
   defaultThreshold: number;
@@ -67,8 +87,35 @@ const SERVER_TRIGGERS: Record<string, {
     products: ProductAggregates | null,
     segments: SegmentAggregates | null,
     campaigns: CampaignAggregates | null,
+    connectors: ConnectorStates,
   ) => NewAlert | null;
 }> = {
+  sync_failure_alert: {
+    label: 'Sync Failure Alert',
+    group: 'data',
+    defaultThreshold: 0,
+    evaluate: (_threshold, _products, _segments, _campaigns, connectors) => {
+      if (!connectors) return null;
+      const failing = Object.entries(connectors)
+        .filter(([, s]) => s && typeof s === 'object' && s.connected === true && s.lastSyncError)
+        .map(([id, s]) => ({ id, label: CONNECTOR_LABEL[id] || id, error: String(s.lastSyncError).slice(0, 200) }));
+      if (failing.length === 0) return null;
+      return {
+        triggerId: 'sync_failure_alert',
+        triggerLabel: 'Sync Failure Alert',
+        triggerGroup: 'data',
+        severity: 'critical',
+        title: `Αποτυχία συγχρονισμού: ${failing.map((f) => f.label).join(', ')}`,
+        description: failing.map((f) => `${f.label}: ${humanizeSyncError(f.error)}`).join(' · '),
+        suggestions: [
+          'Ελέγξτε τη σύνδεση στη σελίδα Δεδομένα → Συνδέσεις',
+          'Αν το token έχει λήξει, κάντε επανασύνδεση του connector',
+        ],
+        data: { failing },
+      };
+    },
+  },
+
   dead_stock_alert: {
     label: 'Dead Stock Alert',
     group: 'inventory',
@@ -250,15 +297,17 @@ async function getExistingActiveAlerts(brandId: string): Promise<Set<string>> {
 
 async function getAggregates(brandId: string) {
   const aggRef = db().collection('brands').doc(brandId).collection('aggregates');
-  const [pSnap, sSnap, cSnap] = await Promise.all([
+  const [pSnap, sSnap, cSnap, connSnap] = await Promise.all([
     aggRef.doc('products').get(),
     aggRef.doc('segments').get(),
     aggRef.doc('campaigns').get(),
+    db().doc(`connectors/${brandId}`).get(),
   ]);
   return {
     products: pSnap.exists ? (pSnap.data() as ProductAggregates) : null,
     segments: sSnap.exists ? (sSnap.data() as SegmentAggregates) : null,
     campaigns: cSnap.exists ? (cSnap.data() as CampaignAggregates) : null,
+    connectors: connSnap.exists ? (connSnap.data() as ConnectorStates) : null,
   };
 }
 
@@ -284,7 +333,7 @@ async function evaluateBrand(brandId: string): Promise<number> {
     }
 
     const threshold = config.threshold ?? def.defaultThreshold;
-    const result = def.evaluate(threshold, aggregates.products, aggregates.segments, aggregates.campaigns);
+    const result = def.evaluate(threshold, aggregates.products, aggregates.segments, aggregates.campaigns, aggregates.connectors);
 
     await db().doc(`automation_settings/${brandId}`).set({
       triggers: { [triggerId]: { lastCheckedAt: now.toISOString() } },

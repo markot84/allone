@@ -363,7 +363,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
 
   const resolvedSource: SegmentsDataSource = useMemo(() => {
     if (shouldUseAggregate) return 'ecommerce';
-    if (isDataAnalysis) return 'none';
+    // Import-only brands (no computable server aggregate) fall back to imported segments; order hydration stays off for this page.
+    if (isDataAnalysis) return importSegmentsAvailable ? 'import' : 'none';
     if (orderRfm.canCompute) return 'ecommerce';
     if (ordersQueryEnabled && (ordersPending || aggregateIsBuilding || isDataAnalysisAggregatePending)) return 'none';
     if (sourcePref === 'external' && importSegmentsAvailable) return 'import';

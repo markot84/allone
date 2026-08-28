@@ -12,7 +12,7 @@ import { deriveBehavioralProfile, derivePredictiveMetrics } from './behavioralEn
 
 /** Trigger groups evaluated server-side only (scheduledAlerts); client lacks the full
  * product list, so skip them before any updateTrigger write (read + full-map rewrite). */
-const SERVER_ONLY_TRIGGER_GROUPS = new Set<string>(['inventory']);
+const SERVER_ONLY_TRIGGER_GROUPS = new Set<string>(['inventory', 'data']);
 
 interface EvaluationContext {
   brandId: string;

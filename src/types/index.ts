@@ -105,6 +105,8 @@ export interface Brand {
     excessDaysOfCover?: number;
     /** Grace days after receipt before unsold stock counts as "dead". Default 60. */
     newStockGraceDays?: number;
+    /** Days without sales after which stock counts as "dead" (PER-310). Default 60. */
+    deadStockDays?: number;
     /** Brand-wide fallback supplier lead time (days), used when a supplier has no lead_time. Default 30. */
     defaultLeadTimeDays?: number;
     /** Brand-wide fallback Target Days of Stock, used when a supplier has no tod. Default 60. */
@@ -429,6 +431,11 @@ export interface Product {
   composite_score?: number;
   /** Cost price (Cost_Price in template) - optional */
   cost_price?: number;
+  /** PER-323: grouped rows — Σ(price×stock) των παιδιών; honest price range when variants differ. */
+  stock_value?: number;
+  price_min?: number;
+  price_max?: number;
+  variant_count?: number;
   /** Revenue in period (Revenue_Period in template) - optional, used for revenue-based scoring */
   revenue_period?: number;
   /** Qty sold in period (Qty_Sold_Period in template) - optional */
@@ -471,9 +478,11 @@ export interface Product {
 export interface InventorySummary {
   total_skus: number;
   total_value: number;
+  /** PER-317: δεσμευμένο κεφάλαιο (cost×stock); optional — absent on pre-317 aggregates. */
+  total_cost_value?: number;
   healthy_stock: { count: number; percentage: number };
-  excess_stock: { count: number; percentage: number; value: number };
-  dead_stock: { count: number; percentage: number; value: number };
+  excess_stock: { count: number; percentage: number; value: number; cost_value?: number };
+  dead_stock: { count: number; percentage: number; value: number; cost_value?: number };
   low_stock: { count: number; percentage: number };
 }
 

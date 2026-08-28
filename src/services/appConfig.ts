@@ -11,6 +11,7 @@
  */
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { withFirestoreRetry } from './firestore';
 import { logger } from '../utils/logger';
 
 export interface SuperAdminsConfig {
@@ -34,7 +35,7 @@ export async function loadSuperAdmins(): Promise<SuperAdminsConfig> {
   if (superAdminsPromise) return superAdminsPromise;
   superAdminsPromise = (async () => {
     try {
-      const snap = await getDoc(doc(db, 'appConfig', 'superAdmins'));
+      const snap = await withFirestoreRetry(() => getDoc(doc(db, 'appConfig', 'superAdmins')));
       const data = snap.exists() ? (snap.data() as Record<string, unknown>) : {};
       superAdminsCache = {
         uids: coerceStringArray(data.uids),
@@ -42,9 +43,10 @@ export async function loadSuperAdmins(): Promise<SuperAdminsConfig> {
       };
       return superAdminsCache;
     } catch (err) {
+      // PER-303: never cache a failed read — one transient error must not lock super admins out for the session.
       logger.warn('[appConfig] superAdmins fetch failed', { err });
-      superAdminsCache = { uids: [], emails: [] };
-      return superAdminsCache;
+      superAdminsPromise = null;
+      throw err;
     }
   })();
   return superAdminsPromise;

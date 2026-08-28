@@ -43,3 +43,19 @@ describe('buildQueryFacets — omit-one dependent options (PER-188)', () => {
     expect(withNoStock.tags.map((t) => t.id)).toContain('no_stock');
   });
 });
+
+describe('category facet includes subcategory (PER-304)', () => {
+  const racquet = productFromRow('p5', { sku: 'WR001', brand: 'Wilson', category: 'Blade', subcategory: 'Ρακέτες Τένις', stock_level: 5, qty_sold_period: 10 }, 'erp')!;
+  const all = [...rows, racquet];
+
+  it('subcategory appears as a selectable category with its count', () => {
+    const f = buildQueryFacets(all, { brandId: 'b' });
+    expect(ids(f.categories)).toContain('Ρακέτες Τένις');
+    expect(ids(f.categories)).toContain('Blade');
+  });
+
+  it('filtering by the subcategory value matches the product', () => {
+    const f = buildQueryFacets(all, { brandId: 'b', categories: ['Ρακέτες Τένις'] });
+    expect(ids(f.brands)).toEqual(['Wilson']);
+  });
+});

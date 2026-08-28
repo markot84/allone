@@ -33,3 +33,31 @@ describe('summaryForProducts (PER-178 filtered cards)', () => {
     expect(s.dead_stock.count).toBe(0);
   });
 });
+
+describe('summaryForProducts cost values (PER-317)', () => {
+  const costRow = (tag: string, stock: number, price: number, extra: Record<string, number>) =>
+    ({ ...(row(tag, stock, price) as object), ...extra, id: tag + stock + JSON.stringify(extra) }) as never;
+
+  it('uses cost_price, then margin, then retail fallback', () => {
+    const s = summaryForProducts([
+      costRow('dead', 10, 5, { cost_price: 3 }),          // 30 via cost_price
+      costRow('dead', 10, 4, { margin_percentage: 50 }),  // 40 retail → 20 via margin
+      costRow('dead', 2, 6, {}),                          // 12 retail fallback
+    ]);
+    expect(s.dead_stock.value).toBe(50 + 40 + 12);
+    expect(s.dead_stock.cost_value).toBe(30 + 20 + 12);
+    expect(s.total_cost_value).toBe(62);
+  });
+
+  it('prefers stock_value/cost_value when rows carry them (grouped rows, PER-323)', () => {
+    const s = summaryForProducts([
+      { ...(row('dead', 10, 5) as object), stock_value: 37, cost_value: 21 } as never,
+    ]);
+    expect(s.dead_stock).toMatchObject({ value: 37, cost_value: 21 });
+  });
+
+  it('excess carries cost_value symmetrically', () => {
+    const s = summaryForProducts([costRow('excess', 4, 10, { cost_price: 6 })]);
+    expect(s.excess_stock).toMatchObject({ count: 1, value: 40, cost_value: 24 });
+  });
+});

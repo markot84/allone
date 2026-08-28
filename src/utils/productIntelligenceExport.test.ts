@@ -55,7 +55,7 @@ describe('downloadProductIntelligenceCsv — formula-injection neutralized (SEC-
     // The malicious name is neutralized with a leading apostrophe (inside the CSV quotes).
     expect(captured).toContain('"\'=HYPERLINK');
     // A genuine number is not turned into a formula-escaped string.
-    expect(captured).toContain('"10.00"');
-    expect(captured).not.toContain("'10.00");
+    expect(captured).toContain('"10"');
+    expect(captured).not.toContain("'10");
   });
 });

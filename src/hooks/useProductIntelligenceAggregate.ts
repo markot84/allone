@@ -47,7 +47,7 @@ export function useProductIntelligenceAggregate(
   bucket: ProductIntelligenceBucket,
   page: number,
   query: Omit<ProductIntelligenceQuery, 'bucket' | 'page'> = {},
-  opts?: { staticFirstPage?: boolean },
+  opts?: { staticFirstPage?: boolean; staticDefault?: boolean },
 ) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
@@ -60,12 +60,38 @@ export function useProductIntelligenceAggregate(
   const aggregate = docHook.aggregate;
   const safePage = useMemo(() => Math.max(1, page), [page]);
   const useStaticFirstPage = opts?.staticFirstPage === true && safePage === 1;
+  // PER-319: precomputed grouped default view (any page/bucket via getDoc); absent field = not-yet-rebuilt brand → CF path.
+  const useStaticDefault =
+    opts?.staticDefault === true && aggregate?.groupedPagesByBucket?.[bucket] != null;
 
   const pageQuery = useQuery({
     // 'static'|'cf' key discriminator keeps the static page doc and CF result from clobbering each other.
-    queryKey: ['productIntelligencePage', brandId, bucket, safePage, queryKey, aggregate?.syncVersion ?? syncVersion, useStaticFirstPage ? 'static' : 'cf'],
+    queryKey: ['productIntelligencePage', brandId, bucket, safePage, queryKey, aggregate?.syncVersion ?? syncVersion, useStaticDefault ? 'static-g' : useStaticFirstPage ? 'static' : 'cf'],
     queryFn: async () => {
       if (!brandId) return null;
+      if (useStaticDefault && aggregate) {
+        const totalPages = aggregate.groupedPagesByBucket?.[bucket] ?? 1;
+        const pageDoc = await fetchProductIntelligencePage(brandId, bucket, Math.min(safePage, totalPages), true);
+        if (pageDoc) {
+          const result: ProductIntelligenceQueryResult = {
+            brandId,
+            status: 'ready',
+            sourceLabel: aggregate.sourceLabel,
+            sourceKind: aggregate.sourceKind,
+            totalCount: aggregate.totalCount,
+            totalRows: pageDoc.totalRows,
+            page: pageDoc.page,
+            pageSize: pageDoc.pageSize,
+            totalPages,
+            bucket,
+            products: pageDoc.products,
+            summary: aggregate.summary,
+            groupedSummary: aggregate.groupedSummary,
+          };
+          return result;
+        }
+        // Missing grouped page doc (mid-rebuild edge) → CF fallback below.
+      }
       if (useStaticFirstPage) {
         // Static page doc (1 read) for unfiltered page 1, avoiding the CF's whole-bucket resolve
         // (~1.5k reads/call). Synthesize the QueryResult from page doc + aggregate.
@@ -101,9 +127,12 @@ export function useProductIntelligenceAggregate(
   return {
     aggregate,
     page: pageQuery.data,
-    safePage: pageQuery.data?.page ?? safePage,
+    // Placeholder (previous page's) data must not report its page — the component's sync-effect would bounce back.
+    safePage: (pageQuery.isPlaceholderData ? undefined : pageQuery.data?.page) ?? safePage,
     isAggregateLoading: docHook.isLoading,
     isPageLoading: !!aggregate && pageQuery.isPending,
+    // isPending is false during keepPreviousData transitions (status=success with placeholder) — isFetching catches those.
+    isPageFetching: !!aggregate && pageQuery.isFetching,
     isLoading: docHook.isLoading || (!!aggregate && pageQuery.isPending),
     isBuilding: docHook.isBuilding,
     error: docHook.error ?? pageQuery.error,

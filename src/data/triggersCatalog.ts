@@ -8,9 +8,20 @@ export const TRIGGER_GROUPS = [
   { id: 'analytics', label: 'Web Analytics (GA4)' },
   { id: 'competitive', label: 'Ανταγωνισμός & Τιμές' },
   { id: 'procurement', label: 'Procurement (Enterprise)' },
+  { id: 'data', label: 'Δεδομένα & Συγχρονισμός' },
 ] as const;
 
 export const TRIGGERS_CATALOG: TriggerDefinition[] = [
+  // ── Data & Sync ──
+  {
+    id: 'sync_failure_alert',
+    label: 'Αποτυχία συγχρονισμού connector',
+    description: 'Ειδοποίηση όταν κάποιος συνδεδεμένος connector αποτύχει στο νυχτερινό sync',
+    group: 'data',
+    planRequired: 'growth',
+    defaultInterval: 1,
+  },
+
   // ── Inventory & Products ──
   {
     id: 'dead_stock_alert',
