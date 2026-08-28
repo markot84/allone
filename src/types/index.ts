@@ -428,6 +428,8 @@ export interface Product {
   /** Days in stock / catalog — optional (e.g. procurement feed without an age column). */
   stock_age_days?: number;
   priority_tag?: string;
+  /** PER-320: sells but extremely slowly — chip orthogonal to priority_tag. */
+  slow_moving?: boolean;
   price: number;
   /** Compare/list price from ERP when available. */
   compare_at_price?: number;

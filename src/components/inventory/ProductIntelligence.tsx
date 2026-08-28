@@ -69,10 +69,10 @@ const PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT = 5000;
 
 const EMPTY_CATEGORY_ID = '__EMPTY_CAT__';
 /** Fixed priority_tag values (inventory intelligence) — always shown in the filter even if the client catalog lacks the field. */
-const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead', 'no_stock', 'price_pending'] as const;
+const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead', 'slow_moving', 'no_stock', 'price_pending'] as const;
 const STOCK_TAG_LABELS: Record<string, string> = {
   healthy: 'Healthy Stock', low: 'Low Stock', excess: 'Excess Stock',
-  dead: 'Dead Stock', no_stock: 'No Stock', price_pending: 'Price Pending',
+  dead: 'Dead Stock', slow_moving: 'Slow Moving', no_stock: 'No Stock', price_pending: 'Price Pending',
 };
 const productStockLevel = (product: Product): number =>
   getEffectiveStockLevel(product); // PER-306: one canonical stock order
@@ -1370,6 +1370,7 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
         </span>
       </td>
       <td className="px-3 py-2 hidden lg:table-cell">
+        <div className="flex flex-wrap items-center gap-1">
         {productDisplayTag(product) ? (
           <Badge
             variant={
@@ -1391,6 +1392,10 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
         ) : (
           <span className="text-[10px] text-[#9CA3AF]">—</span>
         )}
+        {product.slow_moving && (
+          <Badge variant="info" size="sm">Slow Moving</Badge>
+        )}
+        </div>
       </td>
       <td className="px-3 py-2 hidden sm:table-cell">
         <span className="text-xs font-mono text-[#1A1A1A]">

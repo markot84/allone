@@ -52,6 +52,26 @@ describe('applyAvailabilityDeadGate', () => {
     expect(rows.map((r: { priority_tag: string }) => r.priority_tag)).toEqual(['dead', 'healthy', 'excess']);
   });
 
+  it('stamps the slow_moving chip: 0<velocity<0.1/day, tag untouched (PER-320 B)', () => {
+    const rows = [
+      { ...p('S1', 'healthy'), qty_sold_period: 2 },  // 0.067/day → chip
+      { ...p('S2', 'healthy'), qty_sold_period: 9 },  // 0.3/day → no chip
+      { ...p('S3', 'dead') },                          // no sales → dead path, no chip
+    ] as never[];
+    applyAvailabilityDeadGate(rows);
+    expect(rows.map((r: { slow_moving?: boolean; priority_tag: string }) => [r.slow_moving ?? false, r.priority_tag])).toEqual(
+      [[true, 'healthy'], [false, 'healthy'], [false, 'dead']]);
+  });
+
+  it('collapseByParentSku stamps the group chip from summed velocity', () => {
+    const rows = [
+      { ...p('G-1', 'healthy'), parent_sku: 'G', qty_sold_period: 1 },
+      { ...p('G-2', 'healthy'), parent_sku: 'G', qty_sold_period: 1 },
+    ];
+    const [group] = collapseByParentSku(rows as never[]);
+    expect(group.slow_moving).toBe(true); // 2/30 = 0.067/day
+  });
+
   it('collapseByParentSku gates the group tag by member availability', () => {
     avail({ 'P-1': 2 }, 100); // 2% availability → group must not be dead
     const rows = [

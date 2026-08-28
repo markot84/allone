@@ -55,6 +55,8 @@ type CompactProduct = {
   cost_value?: number;
   price_min?: number;
   price_max?: number;
+  /** PER-320: sells, but below slowMovingMaxDailySales — orthogonal chip, the priority_tag stays. */
+  slow_moving?: boolean;
   source?: string;
   createdAt?: string;
 };
@@ -370,7 +372,13 @@ function availabilityAllowsDead(skus: string | string[]): boolean {
   return (days / denom) * 100 >= activeStockThresholds.deadStockAvailabilityPct;
 }
 
-/** Final tag pass: dead not backed by availability history becomes healthy — one gate instead of one per stockBucket caller. */
+/** PER-320 Phase B: has sales but below the slow-moving velocity ceiling — a chip next to the tag, never a bucket change. */
+function isSlowMoving(soldPeriod: number | undefined, stock: number): boolean {
+  const velocity = (soldPeriod ?? 0) / activeStockThresholds.velocityWindowDays;
+  return stock > 0 && velocity > 0 && velocity < activeStockThresholds.slowMovingMaxDailySales;
+}
+
+/** Final tag pass: dead not backed by availability history becomes healthy — one gate instead of one per stockBucket caller — and slow movers get their chip. */
 function applyAvailabilityDeadGate(products: Iterable<CompactProduct>, brandId?: string): number {
   let demoted = 0;
   for (const p of products) {
@@ -378,6 +386,7 @@ function applyAvailabilityDeadGate(products: Iterable<CompactProduct>, brandId?:
       p.priority_tag = 'healthy';
       demoted += 1;
     }
+    if (isSlowMoving(p.qty_sold_period, effectiveStock(p))) p.slow_moving = true;
   }
   if (demoted > 0 && brandId) logger.info(`[ProductIntelligence] ${brandId}: ${demoted} dead→healthy on availability history (PER-320)`);
   return demoted;
@@ -1420,7 +1429,7 @@ function buildQueryFacets(rows: CompactProduct[], params: ProductIntelligenceQue
   return {
     categories: facetCounts(rows, params, 'categories', categoryIds),
     brands: facetCounts(rows, params, 'brands', (p) => [text(p.brand)].filter(Boolean)), // empty brand dropped
-    tags: facetCounts(rows, params, 'tags', (p) => [effectiveTagId(p)]),
+    tags: facetCounts(rows, params, 'tags', (p) => (p.slow_moving ? [effectiveTagId(p), 'slow_moving'] : [effectiveTagId(p)])),
   };
 }
 
@@ -1497,7 +1506,8 @@ function matchesQuery(product: CompactProduct, params: ProductIntelligenceQueryP
 
   if (params.tags?.length) {
     const allowed = new Set(params.tags.map((tag) => tag.toLowerCase()));
-    if (!allowed.has(effectiveTag)) return false;
+    // slow_moving is a chip, not a bucket — it matches on its own flag (PER-320).
+    if (!allowed.has(effectiveTag) && !(allowed.has('slow_moving') && product.slow_moving)) return false;
   }
 
   if (params.margin && params.margin !== 'all' && product.margin_tier !== params.margin) return false;
@@ -1791,6 +1801,7 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
       margin_percentage: weightedMargin,
       // The bucket describes the group, not its representative variant; dead only when availability history backs it (PER-320).
       priority_tag: groupTag === 'dead' && !availabilityAllowsDead(members.map((m) => m.sku)) ? 'healthy' : groupTag,
+      ...(isSlowMoving(soldPeriod ?? undefined, stock) ? { slow_moving: true } : {}),
     });
   }
   return out;
