@@ -270,6 +270,9 @@ interface StockThresholds {
   excessDaysOfCover: number;
   newStockGraceDays: number;
   deadStockDays: number;
+  deadStockWindowDays: number;
+  deadStockAvailabilityPct: number;
+  slowMovingMaxDailySales: number;
 }
 const DEFAULT_STOCK_THRESHOLDS: StockThresholds = {
   velocityWindowDays: SALES_PERIOD_DAYS,
@@ -277,6 +280,10 @@ const DEFAULT_STOCK_THRESHOLDS: StockThresholds = {
   excessDaysOfCover: 120,
   newStockGraceDays: 60,
   deadStockDays: 60,
+  // PER-320: dead needs the SKU available ≥pct% of the observed window; slowMovingMaxDailySales reserved for Phase B.
+  deadStockWindowDays: 180,
+  deadStockAvailabilityPct: 80,
+  slowMovingMaxDailySales: 0.1,
 };
 /** Platform floor for supplier lead time (days) when neither supplier nor brand default sets one. */
 const DEFAULT_LEAD_DAYS = 30;
@@ -323,6 +330,59 @@ async function writeDailyAvailabilitySnapshot(brandId: string, products: Compact
   }
 }
 
+/** PER-320: availability history for the current brand — sku → in-stock days inside the dead window, plus how many days were observed at all. */
+type AvailabilityCounts = { bySku: Map<string, number>; observedDays: number };
+let activeAvailability: AvailabilityCounts | null = null;
+const availabilityCache = new Map<string, AvailabilityCounts>();
+
+/** Window ends YESTERDAY — today's snapshot is written mid-rebuild, so including it would diverge nightly vs CF tags (the PER-317 parity trap). */
+async function loadAvailabilityCounts(brandId: string, windowDays: number): Promise<AvailabilityCounts> {
+  const cacheKey = `${brandId}:${new Date().toISOString().slice(0, 10)}:${windowDays}`;
+  const cached = availabilityCache.get(cacheKey);
+  if (cached) return cached;
+  const firestore = assertDb();
+  const refs = [];
+  for (let i = 1; i <= windowDays; i++) {
+    refs.push(firestore.doc(`stock_availability/${brandId}_${new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)}`));
+  }
+  const bySku = new Map<string, number>();
+  let observedDays = 0;
+  for (let i = 0; i < refs.length; i += 100) {
+    for (const snap of await firestore.getAll(...refs.slice(i, i + 100))) {
+      const skus = text(snap.data()?.skus);
+      if (!snap.exists || !skus) continue;
+      observedDays += 1;
+      for (const sku of skus.split('\n')) bySku.set(sku, (bySku.get(sku) ?? 0) + 1);
+    }
+  }
+  const counts = { bySku, observedDays };
+  if (availabilityCache.size > 50) availabilityCache.clear();
+  availabilityCache.set(cacheKey, counts);
+  return counts;
+}
+
+/** PER-320: dead requires the SKU in stock ≥pct% of min(window, observed) days; no history → allow (phase-in). Groups pass member skus (available when any variant was). */
+function availabilityAllowsDead(skus: string | string[]): boolean {
+  const a = activeAvailability;
+  if (!a || a.observedDays <= 0) return true;
+  const denom = Math.min(activeStockThresholds.deadStockWindowDays, a.observedDays);
+  const days = Array.isArray(skus) ? Math.max(0, ...skus.map((s) => a.bySku.get(s) ?? 0)) : a.bySku.get(skus) ?? 0;
+  return (days / denom) * 100 >= activeStockThresholds.deadStockAvailabilityPct;
+}
+
+/** Final tag pass: dead not backed by availability history becomes healthy — one gate instead of one per stockBucket caller. */
+function applyAvailabilityDeadGate(products: Iterable<CompactProduct>, brandId?: string): number {
+  let demoted = 0;
+  for (const p of products) {
+    if (p.priority_tag === 'dead' && !availabilityAllowsDead(p.sku)) {
+      p.priority_tag = 'healthy';
+      demoted += 1;
+    }
+  }
+  if (demoted > 0 && brandId) logger.info(`[ProductIntelligence] ${brandId}: ${demoted} dead→healthy on availability history (PER-320)`);
+  return demoted;
+}
+
 /** Sets the module-level thresholds/lead-times for ONE brand — every stockBucket caller (rebuild AND grouped queries) must run this first or tags are computed with stale/foreign-brand values. */
 async function loadActiveBrandStockContext(brandId: string): Promise<void> {
   const thresholds = (await assertDb().doc(`brands/${brandId}`).get()).data()?.inventoryThresholds as
@@ -332,6 +392,7 @@ async function loadActiveBrandStockContext(brandId: string): Promise<void> {
   const rawLead = num(thresholds?.defaultLeadTimeDays);
   activeDefaultLeadDays = rawLead > 0 ? rawLead : DEFAULT_LEAD_DAYS;
   activeSupplierLeadByName = await loadSupplierLeadTimes(brandId);
+  activeAvailability = await loadAvailabilityCounts(brandId, activeStockThresholds.deadStockWindowDays);
 }
 
 function leadDaysForSupplier(supplier?: string | null): number {
@@ -363,6 +424,9 @@ function resolveStockThresholds(raw: unknown): StockThresholds {
     excessDaysOfCover: pos(r.excessDaysOfCover, DEFAULT_STOCK_THRESHOLDS.excessDaysOfCover),
     newStockGraceDays: pos(r.newStockGraceDays, DEFAULT_STOCK_THRESHOLDS.newStockGraceDays),
     deadStockDays: pos(r.deadStockDays, DEFAULT_STOCK_THRESHOLDS.deadStockDays),
+    deadStockWindowDays: pos(r.deadStockWindowDays, DEFAULT_STOCK_THRESHOLDS.deadStockWindowDays),
+    deadStockAvailabilityPct: Math.min(100, pos(r.deadStockAvailabilityPct, DEFAULT_STOCK_THRESHOLDS.deadStockAvailabilityPct)),
+    slowMovingMaxDailySales: pos(r.slowMovingMaxDailySales, DEFAULT_STOCK_THRESHOLDS.slowMovingMaxDailySales),
   };
 }
 
@@ -1707,6 +1771,7 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
     const weightedMargin = stock > 0
       ? Math.round(members.reduce((t, p) => t + (p.margin_percentage || 0) * (p.stock_level || 0), 0) / stock * 10) / 10
       : rep.margin_percentage;
+    const groupTag = stockBucket(stock, soldPeriod, soldLifetime, null, leadDaysForSupplier(rep.supplier));
     out.push({
       ...rep,
       id: `parent_${parent}`,
@@ -1724,8 +1789,8 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
       cost_value: costValue,
       ...(prices.length > 0 ? { price_min: Math.min(...prices), price_max: Math.max(...prices) } : {}),
       margin_percentage: weightedMargin,
-      // The bucket describes the group, not its representative variant.
-      priority_tag: stockBucket(stock, soldPeriod, soldLifetime, null, leadDaysForSupplier(rep.supplier)),
+      // The bucket describes the group, not its representative variant; dead only when availability history backs it (PER-320).
+      priority_tag: groupTag === 'dead' && !availabilityAllowsDead(members.map((m) => m.sku)) ? 'healthy' : groupTag,
     });
   }
   return out;
@@ -1889,6 +1954,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       );
       try {
         const syncVersion = await computeBrandSyncVersion(brandId);
+        applyAvailabilityDeadGate(procProducts, brandId);
         const summary = summaryForProducts(procProducts);
         await writeDailyAvailabilitySnapshot(brandId, procProducts);
         const { pagesByBucket, groupedPagesByBucket, groupedSummary } = await writePageDocs(brandId, procProducts);
@@ -1911,6 +1977,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
             pagesByBucket,
             groupedPagesByBucket,
             groupedSummary,
+            availabilityObservedDays: activeAvailability?.observedDays ?? 0,
             categories: categoryCounts(procProducts),
             brands: brandCounts(procProducts),
             charts,
@@ -1978,6 +2045,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       }, { merge: true });
       return { success: true, skipped: true, brandId };
     }
+    applyAvailabilityDeadGate(products, brandId);
     const summary = summaryForProducts(products);
     await writeDailyAvailabilitySnapshot(brandId, products);
     const { pagesByBucket, groupedPagesByBucket, groupedSummary } = await writePageDocs(brandId, products);
@@ -2021,6 +2089,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       pagesByBucket,
       groupedPagesByBucket,
       groupedSummary,
+      availabilityObservedDays: activeAvailability?.observedDays ?? 0,
       categories: categoryCounts(products),
       brands: brandCounts(products),
       charts,
@@ -2105,4 +2174,9 @@ export const __test = {
   applyStockOverlay,
   classifyAggregateRecovery,
   buildQueryFacets,
+  availabilityAllowsDead,
+  applyAvailabilityDeadGate,
+  setActiveAvailability: (a: AvailabilityCounts | null) => { activeAvailability = a; },
+  resolveStockThresholds,
+  setActiveStockThresholds: (t: StockThresholds) => { activeStockThresholds = t; },
 };

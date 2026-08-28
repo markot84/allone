@@ -107,6 +107,10 @@ export interface Brand {
     newStockGraceDays?: number;
     /** Days without sales after which stock counts as "dead" (PER-310). Default 60. */
     deadStockDays?: number;
+    /** Availability-history window (days) for the dead rule (PER-320). Default 180. */
+    deadStockWindowDays?: number;
+    /** Min % of the observed window a SKU must be in stock for "dead" (PER-320). Default 80. */
+    deadStockAvailabilityPct?: number;
     /** Brand-wide fallback supplier lead time (days), used when a supplier has no lead_time. Default 30. */
     defaultLeadTimeDays?: number;
     /** Brand-wide fallback Target Days of Stock, used when a supplier has no tod. Default 60. */

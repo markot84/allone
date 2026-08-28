@@ -226,6 +226,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const brandId = currentBrand?.id ?? null;
   const lowDaysOfCover = currentBrand?.inventoryThresholds?.lowDaysOfCover ?? 30;
   const excessDaysOfCover = currentBrand?.inventoryThresholds?.excessDaysOfCover ?? 120;
+  const deadStockWindowDays = currentBrand?.inventoryThresholds?.deadStockWindowDays ?? 180;
+  const deadStockAvailabilityPct = currentBrand?.inventoryThresholds?.deadStockAvailabilityPct ?? 80;
   const { isEnterprise } = usePlan();
   const procurementModuleEnabled = currentBrand?.enabledModules?.procurement !== false;
   const { signalsBySku: piProcurementSignals } = useProcurementSignals();
@@ -392,6 +394,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     ? (serverIntelligence.page?.groupedSummary ?? serverIntelligence.aggregate?.groupedSummary)
     : undefined;
   const cardsSummary = displayGroupedSummary ?? displaySummary;
+  const availabilityObserved = serverIntelligence.aggregate?.availabilityObservedDays ?? 0;
+  const availabilityHistoryNote = availabilityObserved > 0 && availabilityObserved < deadStockWindowDays
+    ? ` Τρέχον ιστορικό διαθεσιμότητας: ${availabilityObserved} ημέρες (ο κανόνας οξύνεται όσο συμπληρώνεται).`
+    : '';
   const cardsCountLabel = displayGroupedSummary ? 'προϊόντα' : 'SKUs';
   const bucketSub = (bucket: { count: number; cost_value?: number }) => {
     const counts = `${formatNumber(bucket.count)} ${cardsCountLabel}`;
@@ -834,7 +840,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={bucketSub(cardsSummary.dead_stock)}
           icon={<AlertCircle size={20} />}
           color="#EF4444"
-          tooltip="Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο. Αξία = τιμή πώλησης × απόθεμα ανά κωδικό (SKU)· το κόστος = τιμή κόστους × απόθεμα. Με ενεργή ομαδοποίηση κάρτες και πίνακας μετρούν ολόκληρα προϊόντα (γονείς)· χωρίς ομαδοποίηση, κωδικούς."
+          tooltip={`Προϊόντα χωρίς πωλήσεις που ήταν διαθέσιμα τουλάχιστον στο ${deadStockAvailabilityPct}% του παραθύρου ${deadStockWindowDays} ημερών — δεσμεύουν κεφάλαιο.${availabilityHistoryNote} Αξία = τιμή πώλησης × απόθεμα ανά κωδικό (SKU)· το κόστος = τιμή κόστους × απόθεμα. Με ενεργή ομαδοποίηση κάρτες και πίνακας μετρούν ολόκληρα προϊόντα (γονείς)· χωρίς ομαδοποίηση, κωδικούς. Τα όρια ρυθμίζονται στα «Όρια υγείας αποθέματος».`}
           active={stockCardFilter === 'dead'}
           onClick={() => selectStockCardFilter(stockCardFilter === 'dead' ? 'all' : 'dead')}
         />

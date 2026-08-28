@@ -24,6 +24,8 @@ export type ProductIntelligenceAggregate = {
   groupedPagesByBucket?: Partial<Record<ProductIntelligenceBucket, number>>;
   /** PER-317: whole-catalog summary after parent collapse (in-stock only). */
   groupedSummary?: InventorySummary;
+  /** PER-320: days of availability history the dead rule saw at rebuild (0 = phase-in, rule inactive). */
+  availabilityObservedDays?: number;
   categories: Array<{ name: string; count: number }>;
   brands?: Array<{ name: string; count: number }>;
   summary: InventorySummary;
