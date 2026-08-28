@@ -3032,10 +3032,23 @@ async function executeBrandNightlyWave(
   }
 }
 
-async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: NightlyJobKey): Promise<void> {
+async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: NightlyJobKey, resumeOnly = false): Promise<void> {
   return runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
   const startedAt = Date.now();
-  await markNightlyJob(jobKey, 'running', { message: `Nightly wave "${wave}" started` });
+  // PER-326: the wave can die at the 1800s cap — per-brand progress lets a resume run finish only the leftovers.
+  const today = new Date().toISOString().slice(0, 10);
+  const healthRef = db.doc('system_health/nightly_jobs');
+  const jobRecord = ((await healthRef.get()).data()?.jobs as Record<string, { progress?: { date?: string; done?: string[] }; lastSuccessAt?: { toDate?: () => Date } }> | undefined)?.[jobKey];
+  const doneToday = new Set(jobRecord?.progress?.date === today ? jobRecord?.progress?.done ?? [] : []);
+  // Stale (yesterday's) progress must be reset BEFORE any arrayUnion, or old brands leak into today's done-list.
+  if (jobRecord?.progress && jobRecord.progress.date !== today) {
+    await healthRef.update({ [`jobs.${jobKey}.progress`]: { date: today, done: [] } }).catch(() => undefined);
+  }
+  if (resumeOnly && jobRecord?.lastSuccessAt?.toDate?.()?.toISOString().slice(0, 10) === today) {
+    logger.info(`[ScheduledSync] "${wave}" resume skipped — main run already succeeded today`);
+    return;
+  }
+  await markNightlyJob(jobKey, 'running', { message: `Nightly wave "${wave}" started${doneToday.size ? ` (resuming, ${doneToday.size} brands done)` : ''}` });
   logger.info(`[ScheduledSync] Starting "${wave}" wave`);
 
   try {
@@ -3045,9 +3058,11 @@ async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: Ni
     const concurrency = wave === 'ecommerce' ? 1 : NIGHTLY_CONNECTOR_SYNC_CONCURRENCY;
     await runPool(connectorsSnap.docs, concurrency, async (docSnap) => {
       const brandId = docSnap.id;
+      if (doneToday.has(brandId)) return;
       const data = docSnap.data();
       try {
         await executeBrandNightlyWave(brandId, data, wave);
+        await healthRef.set({ jobs: { [jobKey]: { progress: { date: today, done: FieldValue.arrayUnion(brandId) } } } }, { merge: true }).catch(() => undefined);
       } catch (err) {
         failedConnectorBrands += 1;
         logger.error(`[ScheduledSync/${wave}] Unexpected failure for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
@@ -3059,6 +3074,7 @@ async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: Ni
       durationMs,
       message: `Wave "${wave}" ok. connectors=${connectorsSnap.size} failedBrands=${failedConnectorBrands}`,
     });
+    await healthRef.update({ [`jobs.${jobKey}.progress`]: FieldValue.delete() }).catch(() => undefined);
     logger.info(`[ScheduledSync] "${wave}" wave completed`);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -3143,6 +3159,12 @@ export const scheduledSyncMarketing = onSchedule(
 export const scheduledSyncEcommerce = onSchedule(
   { ...nightlyConnectorScheduleBase, ...OPENCART_EGRESS_OPTIONS, schedule: 'every day 05:20', memory: '4GiB' as const, cpu: 2 },
   async () => runNightlyConnectorWaveJob('ecommerce', 'scheduledSyncEcommerce')
+);
+
+/** PER-326: finishes the ecommerce wave's leftover brands when the 05:20 run died at the 1800s cap; no-op after a clean run. */
+export const scheduledSyncEcommerceResume = onSchedule(
+  { ...nightlyConnectorScheduleBase, ...OPENCART_EGRESS_OPTIONS, schedule: 'every day 07:20', memory: '4GiB' as const, cpu: 2 },
+  async () => runNightlyConnectorWaveJob('ecommerce', 'scheduledSyncEcommerce', true)
 );
 
 /** GA4 + Search Console — 05:40 */
