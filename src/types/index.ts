@@ -111,6 +111,8 @@ export interface Brand {
     deadStockWindowDays?: number;
     /** Min % of the observed window a SKU must be in stock for "dead" (PER-320). Default 80. */
     deadStockAvailabilityPct?: number;
+    /** Daily-sales ceiling below which a selling product is chipped "Slow Moving" (PER-320). Default 0.1. */
+    slowMovingMaxDailySales?: number;
     /** Brand-wide fallback supplier lead time (days), used when a supplier has no lead_time. Default 30. */
     defaultLeadTimeDays?: number;
     /** Brand-wide fallback Target Days of Stock, used when a supplier has no tod. Default 60. */
