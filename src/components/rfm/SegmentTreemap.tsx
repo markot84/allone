@@ -63,7 +63,7 @@ export function SegmentTreemap({ segments, selectedId, onSelect, animate }: Segm
   }, [segments]);
 
   const border = readTokenColor('--surface-0', 'var(--surface-0)');
-  const selectedBorder = readTokenColor('--text-heading', '#003087');
+  const selectedBorder = readTokenColor('--text-heading', '#204892');
 
   if (data.children.length === 0) {
     return (

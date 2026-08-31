@@ -22,11 +22,22 @@
   --brand-sky:     #005ECD;
 
   /* ============ NAVY scale ============ */
-  --navy-900: #00225E;   /* shade 30% — hover on navy elements */
-  --navy-700: #002973;   /* shade 15% */
-  --navy-500: #003087;   /* base */
-  --navy-100: #BFCBE1;   /* tint 75% — borders, dividers, ghost states */
-  --navy-50:  #E6EAF3;   /* tint 90% — subtle section backgrounds */
+  /* SOFTENING PASS, second round. The first round moved the data colours and left navy alone, and
+     the result was invisible: navy is what actually covers the screen — the full-height rail, the
+     top bar, and --text-heading on every h1/h2/h3 in the app. At #003087 that is a fully saturated
+     11.85:1 held in peripheral vision all day, which is the fatigue the client is describing.
+     The base is lifted +0.07 in OKLCH lightness with chroma down 15%, hue untouched; the four
+     other steps are the same shade/tint operations this ramp has always used (×0.70, ×0.85, 75%
+     and 90% toward white), so the ramp stays one decision rather than five.
+     --brand-navy above is deliberately NOT moved: it is the logo swatch, and colors.md fixes it.
+     What moves is where navy is SPENT — chrome and headings — which is a usage decision. Every
+     pair the chrome depends on was re-measured: white on the rail 8.74:1, nav labels 5.69:1,
+     headings on white 8.74:1 and on a card 8.43:1. Reverting is these five lines. */
+  --navy-900: #163266;   /* shade 30% — hover on navy elements (was #00225E) */
+  --navy-700: #1B3D7C;   /* shade 15% (was #002973) */
+  --navy-500: #204892;   /* base — softened from the #003087 brand swatch */
+  --navy-100: #C7D1E4;   /* tint 75% — borders, dividers, ghost states (was #BFCBE1) */
+  --navy-50:  #E9EDF4;   /* tint 90% — subtle section backgrounds (was #E6EAF3) */
 
   /* ============ ORANGE scale ============ */
   --orange-700: #B24508; /* shade 30% — AA-safe orange text on white (5.61:1) */
@@ -105,14 +116,14 @@
   /* ============ APP CHROME — rail and top bar ============ */
   /* The chrome is a role block, not a set of values: switching it back to a white bar is changing
      the twelve lines below, not sweeping AppShell again. It has now been switched the other way —
-     the Signal Board artboard draws a navy #003087 rail and a navy top bar, which is a deliberate
+     the Signal Board artboard draws a navy rail and a navy top bar, which is a deliberate
      departure from colors.md §6 ("navy is never a large-surface background"). That rule still holds
      for the CANVAS: the page behind the cards stays --surface-2, and no content surface is navy.
      Everything navy is chrome, and reverting is this block. */
   --chrome-bg:             var(--navy-500);  /* rail + top bar surface */
   --chrome-border:         var(--navy-700);  /* rail edge and the hairlines inside it */
-  --chrome-fg:             var(--surface-0); /* primary chrome text — 12.4:1 on navy */
-  --chrome-fg-muted:       var(--navy-100);  /* inactive nav labels and icons — 7.3:1 on navy */
+  --chrome-fg:             var(--surface-0); /* primary chrome text — 8.7:1 on navy */
+  --chrome-fg-muted:       var(--navy-100);  /* inactive nav labels and icons — 5.7:1 on navy */
   /* Group labels share the muted step here. On white they were kept neutral so the navy labels had
      something to sit under; on a navy rail a neutral grey would simply disappear, and the hierarchy
      is carried by the mono/uppercase/letterspaced treatment instead of by hue. */

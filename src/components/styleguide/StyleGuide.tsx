@@ -41,7 +41,7 @@ import type { Product, RFMSegment } from '../../types';
 type Swatch = { token: string; note?: string };
 
 const BRAND: Swatch[] = [
-  { token: '--brand-navy', note: 'dominant — text, headings, branding' },
+  { token: '--brand-navy', note: 'the logo swatch — fixed; chrome and headings spend the softened --navy-500' },
   { token: '--brand-orange', note: 'the only primary-action colour' },
   { token: '--brand-gold', note: 'badge background only, never text' },
   { token: '--brand-sky', note: 'links, secondary CTA, info' },
