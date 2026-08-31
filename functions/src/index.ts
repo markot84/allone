@@ -3182,6 +3182,12 @@ export const scheduledSyncErp = onSchedule(
   async () => runNightlyConnectorWaveJob('erp', 'scheduledSyncErp')
 );
 
+/** ERP resume — 06:35: the e-tennis stock walk rides the 1800s cap (~03:28 finish, hard-killed some nights); reruns only the brands the main run didn't checkpoint. */
+export const scheduledSyncErpResume = onSchedule(
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 06:35', memory: '4GiB' as const, cpu: 2 },
+  async () => runNightlyConnectorWaveJob('erp', 'scheduledSyncErp', true)
+);
+
 /** Stock / competition — 06:40 (after the 06:00 ERP wave + up to a 30min timeout) */
 export const scheduledSyncFollowups = onSchedule(
   { ...nightlyConnectorScheduleBase, schedule: 'every day 06:40' },
