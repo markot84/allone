@@ -21,9 +21,9 @@ const TIKTOK_REPORT_URL = `${TIKTOK_API_BASE}/open_api/${TIKTOK_API_VERSION}/rep
 const TIKTOK_HISTORY_YEARS = 3;
 
 const BASE_REPORT_METRICS = ['spend', 'impressions', 'clicks', 'ctr', 'conversion'];
-// BASIC report rejects `conversion_value`/`purchase_value`; `total_purchase_value` is the
-// accepted revenue field the row parser reads first.
-const VALUE_REPORT_METRICS = ['total_purchase_value'];
+// BASIC report rejects `conversion_value`/`purchase_value`; `total_purchase_value` is read first.
+// Complete-Payment pixels report value under `total_complete_payment_rate` (TikTok's misnamed "Total Complete Payment Value") — the parser takes whichever is positive.
+const VALUE_REPORT_METRICS = ['total_purchase_value', 'total_complete_payment_rate'];
 
 type TikTokApiEnvelope<T> = {
   code?: number;
@@ -581,7 +581,7 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
               row.total_purchase_value ??
               row.purchase_value ??
               row.conversion_value
-            );
+            ) || parseFiniteNumber(mets.total_complete_payment_rate ?? row.total_complete_payment_rate);
 
             const existing = campaignMap.get(campaignId) || {
               id: `tiktok_${advertiserId}_${campaignId}`,
