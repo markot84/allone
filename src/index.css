@@ -144,6 +144,86 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: inset 3px 0 0 var(--chrome-active-marker);
 }
 
+/* Group headlines are buttons now: the rail ships every group shut except the current one, so the
+   headline is the only thing standing between the user and its items. It reads as a label, not a
+   control, until it is hovered or focused. */
+.rail-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 6px 10px 5px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--chrome-fg-subtle);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-state) var(--ease-out), color var(--dur-state) var(--ease-out);
+}
+
+.rail-group:hover {
+  background-color: var(--chrome-control-hover);
+  color: var(--chrome-fg);
+}
+
+.rail-group-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-group-chevron {
+  transition: transform var(--dur-state) var(--ease-out);
+}
+
+/* Something is waiting inside a shut group. */
+.rail-group-dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--gold-500);
+}
+
+.rail-group-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--chrome-border);
+  display: block;
+}
+
+/* 0fr → 1fr animates to the panel's own height without measuring it in JS. */
+.rail-group-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-reorder) var(--ease-out);
+}
+
+.rail-group-panel[data-expanded='true'] {
+  grid-template-rows: 1fr;
+}
+
+/* A shut group's links must leave the tab order and the accessibility tree — clipping them to zero
+   height does neither. `visibility` does both, and delaying it by the panel's own duration keeps the
+   items on screen for the length of the close. */
+.rail-group-items {
+  visibility: hidden;
+  transition: visibility 0s linear var(--dur-reorder);
+}
+
+.rail-group-panel[data-expanded='true'] .rail-group-items {
+  visibility: visible;
+  transition-delay: 0s;
+}
+
 .rail-control,
 .rail-account,
 .brand-eyebrow {
@@ -165,6 +245,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Focus has to be visible against navy, and the browser default outline is not. */
 .rail-nav-item:focus-visible,
+.rail-group:focus-visible,
 .rail-control:focus-visible,
 .rail-account:focus-visible,
 .brand-eyebrow:focus-visible,

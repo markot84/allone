@@ -26,10 +26,12 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2, HeartHandshake, MapPin, ClipboardList, Palette, Lightbulb } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2, HeartHandshake, MapPin, ClipboardList, Palette, Lightbulb, ChevronRight } from 'lucide-react';
 import { NotificationBell } from '../coordination/NotificationBell';
 
 const RAIL_OPEN_KEY = 'perf-plus-rail-open';
+/** Which nav groups are expanded. Absent on a first visit — see `readOpenGroups`. */
+const RAIL_GROUPS_KEY = 'allone-rail-groups';
 
 /** The artboard's second face: every number, key cap, tab and eyebrow label is set in it. */
 const MONO = "'JetBrains Mono', monospace";
@@ -48,7 +50,7 @@ type TimestampLike = { toMillis?: () => number; seconds?: number };
 const NAV_GROUP_LABELS: Record<NavGroup, string> = {
   business: 'Business',
   commerce: 'Market & Data',
-  commercial: 'Commercial Strategy & Sales',
+  commercial: 'Strategy & Sales',
   marketing: 'Marketing',
   procurement: 'Procurement',
   finance: 'Finance',
@@ -101,6 +103,26 @@ function useCascadeHighlight(): Set<string> {
   return lit;
 }
 
+/** Groups expanded on a first visit: none. The group holding the current section opens on its own,
+ * which is the only one worth showing before the user has said otherwise. */
+function readOpenGroups(): Set<NavGroup> {
+  if (typeof localStorage === 'undefined') return new Set();
+  const raw = localStorage.getItem(RAIL_GROUPS_KEY);
+  if (!raw) return new Set();
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((g): g is NavGroup => typeof g === 'string' && g in NAV_GROUP_LABELS));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeOpenGroups(groups: Set<NavGroup>) {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(RAIL_GROUPS_KEY, JSON.stringify([...groups]));
+}
+
 /**
  * The rail's navigation list.
  *
@@ -109,6 +131,10 @@ function useCascadeHighlight(): Set<string> {
  * active item — had to be forced through `!important` overrides in `index.css`. The list is a
  * dozen lines of flexbox; owning it is cheaper than fighting a component that wants to look like
  * something else.
+ *
+ * The groups are accordions: only the one holding the current section is open by default, so the
+ * rail costs a headline per group instead of a headline plus every item under it. What the user
+ * opens by hand is remembered (`RAIL_GROUPS_KEY`).
  */
 function RailNav({
   navItems,
@@ -122,6 +148,7 @@ function RailNav({
   onSelect: (id: AppSectionId) => void;
 }) {
   const cascadeLit = useCascadeHighlight();
+  const [openGroups, setOpenGroups] = useState<Set<NavGroup>>(readOpenGroups);
 
   const isCurrent = (item: NavItem) =>
     activeSection === item.id || (item.id === 'data' && activeSection.startsWith('data-'));
@@ -134,6 +161,28 @@ function RailNav({
     return acc;
   }, []);
 
+  /** Navigating into a shut group opens it — the rail would otherwise contradict the page. It stays
+   * a normal group afterwards, so the headline can still shut it again. Adjusting during render
+   * rather than in an effect: the open set is derived from the section, not synchronised with
+   * anything outside React, so an effect would only add a wasted pass. Only a deliberate toggle is
+   * written to storage; this one re-derives itself from the section on the next load. */
+  const currentGroup = navItems.find((item) => isCurrent(item))?.group ?? null;
+  const [autoOpenedFor, setAutoOpenedFor] = useState<NavGroup | null>(null);
+  if (currentGroup && currentGroup !== autoOpenedFor) {
+    setAutoOpenedFor(currentGroup);
+    setOpenGroups((prev) => (prev.has(currentGroup) ? prev : new Set(prev).add(currentGroup)));
+  }
+
+  const toggleGroup = (group: NavGroup) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      writeOpenGroups(next);
+      return next;
+    });
+  };
+
   const handleClick = (e: React.MouseEvent, id: AppSectionId) => {
     // Let the browser handle ctrl/cmd/shift-click and middle-click so "open in new tab" works;
     // only plain clicks stay in-SPA.
@@ -141,6 +190,79 @@ function RailNav({
     e.preventDefault();
     e.stopPropagation();
     onSelect(id);
+  };
+
+  const renderItem = (item: NavItem) => {
+    const current = isCurrent(item);
+    const Icon = item.icon;
+    return (
+      <a
+        key={item.id}
+        href={`#${item.id}`}
+        title={collapsed ? item.label : undefined}
+        aria-current={current ? 'page' : undefined}
+        onClick={(e) => handleClick(e, item.id)}
+        className={`rail-nav-item${current ? ' rail-nav-item--current' : ''}${
+          cascadeLit.has(item.id) ? ' nav-cascade-pulse' : ''
+        }`}
+        style={
+          collapsed
+            ? {
+                width: 38,
+                height: 26,
+                flex: 'none',
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textDecoration: 'none',
+              }
+            : {
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '7px 10px 7px 20px',
+                borderRadius: 9,
+                fontSize: 13,
+                fontWeight: current ? 700 : 500,
+                textDecoration: 'none',
+              }
+        }
+      >
+        <Icon size={16} />
+        {!collapsed && (
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {item.label}
+            {item.badge && (
+              <span
+                style={{
+                  fontFamily: MONO,
+                  fontSize: 9,
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  padding: '3px 5px',
+                  borderRadius: 999,
+                  background: 'var(--gold-500)',
+                  color: 'var(--navy-900)',
+                }}
+              >
+                {item.badge}
+              </span>
+            )}
+          </span>
+        )}
+      </a>
+    );
   };
 
   return (
@@ -156,104 +278,51 @@ function RailNav({
         alignItems: collapsed ? 'center' : 'stretch',
       }}
     >
-      {groups.map(({ group, items }) => (
-        <div
-          key={group}
-          style={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: collapsed ? 'center' : 'stretch' }}
-        >
-          {!collapsed && (
-            <span
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '6px 10px 4px',
-                fontFamily: MONO,
-                fontSize: 9.5,
-                letterSpacing: '0.15em',
-                textTransform: 'uppercase',
-                color: 'var(--chrome-fg-subtle)',
-                lineHeight: 1.3,
-              }}
+      {groups.map(({ group, items }) => {
+        // The icon rail has no headline to click, so it stays a flat run of icons.
+        if (collapsed) {
+          return (
+            <div
+              key={group}
+              style={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}
             >
-              {NAV_GROUP_LABELS[group]}
-              <span style={{ flex: 1, height: 1, background: 'var(--chrome-border)', display: 'block' }} />
-            </span>
-          )}
-          {items.map((item) => {
-            const current = isCurrent(item);
-            const Icon = item.icon;
-            return (
-              <a
-                key={item.id}
-                href={`#${item.id}`}
-                title={collapsed ? item.label : undefined}
-                aria-current={current ? 'page' : undefined}
-                onClick={(e) => handleClick(e, item.id)}
-                className={`rail-nav-item${current ? ' rail-nav-item--current' : ''}${
-                  cascadeLit.has(item.id) ? ' nav-cascade-pulse' : ''
-                }`}
-                style={
-                  collapsed
-                    ? {
-                        width: 38,
-                        height: 26,
-                        flex: 'none',
-                        borderRadius: 8,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        textDecoration: 'none',
-                      }
-                    : {
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        padding: '7px 10px',
-                        borderRadius: 9,
-                        fontSize: 13,
-                        fontWeight: current ? 700 : 500,
-                        textDecoration: 'none',
-                      }
-                }
-              >
-                <Icon size={16} />
-                {!collapsed && (
-                  <span
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      minWidth: 0,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {item.label}
-                    {item.badge && (
-                      <span
-                        style={{
-                          fontFamily: MONO,
-                          fontSize: 9,
-                          fontWeight: 700,
-                          lineHeight: 1,
-                          padding: '3px 5px',
-                          borderRadius: 999,
-                          background: 'var(--gold-500)',
-                          color: 'var(--navy-900)',
-                        }}
-                      >
-                        {item.badge}
-                      </span>
-                    )}
-                  </span>
-                )}
-              </a>
-            );
-          })}
-        </div>
-      ))}
+              {items.map(renderItem)}
+            </div>
+          );
+        }
+
+        const expanded = openGroups.has(group);
+        // A shut group still has to admit it holds something waiting — the strategy countdown is
+        // the only badge today, and it is the whole reason someone opens that group.
+        const hiddenBadge = !expanded && items.some((item) => item.badge);
+
+        return (
+          <div key={group} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <button
+              type="button"
+              className="rail-group"
+              aria-expanded={expanded}
+              aria-controls={`rail-group-${group}`}
+              onClick={() => toggleGroup(group)}
+            >
+              <ChevronRight
+                size={12}
+                className="rail-group-chevron"
+                style={{ transform: expanded ? 'rotate(90deg)' : 'none', flex: 'none' }}
+                aria-hidden
+              />
+              <span className="rail-group-label">{NAV_GROUP_LABELS[group]}</span>
+              {hiddenBadge && <span className="rail-group-dot" aria-hidden />}
+              <span className="rail-group-rule" aria-hidden />
+            </button>
+            <div id={`rail-group-${group}`} className="rail-group-panel" data-expanded={expanded ? 'true' : 'false'}>
+              <div className="rail-group-items" style={{ display: 'flex', flexDirection: 'column', gap: 1, minHeight: 0, overflow: 'hidden' }}>
+                {items.map(renderItem)}
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

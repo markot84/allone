@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { WeightsRadar } from '../strategy/WeightsRadar';
 import { VelocitySpark } from '../common/VelocitySpark';
 import { SegmentTreemap } from '../rfm/SegmentTreemap';
@@ -287,6 +288,8 @@ function ChromePreview() {
   const items = ['Dashboard', 'Data Analysis', 'Campaigns', 'Product Intelligence'];
   // The pulse runs once and stops, as it must — remounting the item is what replays it for review.
   const [pulseRun, setPulseRun] = useState(0);
+  // The rail ships its groups shut; this is the live toggle, not a still of one.
+  const [groupOpen, setGroupOpen] = useState(true);
   return (
     <div
       style={{
@@ -347,30 +350,43 @@ function ChromePreview() {
             alignContent: 'start',
           }}
         >
-          <span
-            style={{
-              font: '600 10px Inter, sans-serif',
-              color: 'var(--chrome-fg-subtle)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.16em',
-              padding: '4px 8px',
-            }}
+          {/* The real rail classes throughout, so hover, focus, the gold marker and the group
+              accordion are the app's, not a restatement of them. */}
+          <button
+            type="button"
+            className="rail-group"
+            aria-expanded={groupOpen}
+            aria-controls="styleguide-rail-group"
+            onClick={() => setGroupOpen((open) => !open)}
           >
-            Market &amp; Data
-          </span>
-          {items.map((label, index) => (
-            <span
-              key={index === 1 ? `${label}-${pulseRun}` : label}
-              /* The real rail classes, so hover, focus and the gold marker are the app's, not a
-                 restatement of them. */
-              className={`rail-nav-item${index === 0 ? ' rail-nav-item--current' : ''}${
-                index === 1 ? ' nav-cascade-pulse' : ''
-              }`}
-              style={{ font: '500 13px "Plus Jakarta Sans", sans-serif', borderRadius: 9, padding: '7px 10px' }}
-            >
-              {label}
-            </span>
-          ))}
+            <ChevronRight
+              size={12}
+              className="rail-group-chevron"
+              style={{ transform: groupOpen ? 'rotate(90deg)' : 'none', flex: 'none' }}
+              aria-hidden
+            />
+            <span className="rail-group-label">Market &amp; Data</span>
+            <span className="rail-group-rule" aria-hidden />
+          </button>
+          <div id="styleguide-rail-group" className="rail-group-panel" data-expanded={groupOpen ? 'true' : 'false'}>
+            <div className="rail-group-items" style={{ display: 'grid', gap: 2, minHeight: 0, overflow: 'hidden' }}>
+              {items.map((label, index) => (
+                <span
+                  key={index === 1 ? `${label}-${pulseRun}` : label}
+                  className={`rail-nav-item${index === 0 ? ' rail-nav-item--current' : ''}${
+                    index === 1 ? ' nav-cascade-pulse' : ''
+                  }`}
+                  style={{
+                    font: '500 13px "Plus Jakarta Sans", sans-serif',
+                    borderRadius: 9,
+                    padding: '7px 10px 7px 20px',
+                  }}
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
         </nav>
         <div style={{ flex: 1, background: 'var(--app-canvas-bg)', padding: 16 }}>
           <div
