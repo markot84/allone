@@ -98,6 +98,12 @@ export const PRODUCT_COLUMN_MAPPING = [
     alternatives: ['Cost_Price', 'Cost Price', 'cost_price', 'Cost', 'cost', 'Κόστος', 'κόστος']
   },
   {
+    fileColumn: 'Avg_Cost',
+    appField: 'Μεσοσταθμικό κόστος κτήσης',
+    usedIn: 'Optional, PI «Κόστος κτήσης» column',
+    alternatives: ['Avg_Cost', 'Average_Cost', 'avg_cost', 'average_cost', 'Μεσοσταθμικό Κόστος', 'μεσοσταθμικό_κόστος', 'Μέση Τιμή Κτήσης', 'μέση_τιμή_κτήσης']
+  },
+  {
     fileColumn: 'List_Price',
     appField: 'List / compare price',
     usedIn: 'Pricing comparisons, merchandising',
@@ -787,6 +793,8 @@ export function validateProduct(row: Record<string, string>, index: number): { v
   // "cost" from campaigns could be cost_price
   // Greek: "Τιμή αγοράς" = Cost Price (normalized: "τιμή_αγοράς")
   const costPrice = pick(row, 'τιμή_αγοράς', 'cost_price', 'Cost_Price', 'cost', 'Cost', 'κόστος');
+  // A file with only avg_cost also feeds cost_price (pick's substring fuzz on 'cost') — fine: WAC is the best available cost.
+  const avgCost = pick(row, 'avg_cost', 'average_cost', 'Avg_Cost', 'Average_Cost', 'μεσοσταθμικό_κόστος', 'μεσοσταθμικό_κόστος_κτήσης', 'μέση_τιμή_κτήσης');
   const revenuePeriod = pick(row, 'revenue_period', 'revenue', 'revenue_period');
   const qtySoldPeriod = pick(row, 'πωλήσεις', 'qty_sold_period', 'qty_sold', 'quantity_sold', 'sales', 'sold', 'units_sold');
   const qtySoldLast7 = pick(row, 'qty_sold_last_7d', 'qty_sold_7d', 'sales_7d', 'πωλήσεις_7d', 'πωλήσεις_7ημερο');
@@ -931,6 +939,7 @@ export function validateProduct(row: Record<string, string>, index: number): { v
     price: sellPriceNum,
     ...(priority ? { priority_tag: priority } : {}),
     ...(costPrice ? { cost_price: costPriceNum } : {}),
+    ...(avgCost && parseLooseNumber(avgCost) > 0 ? { avg_cost: parseLooseNumber(avgCost) } : {}),
     ...(listPrice ? { list_price: listPriceNum, compare_at_price: listPriceNum } : {}),
     ...(revenuePeriod ? { revenue_period: parseLooseNumber(revenuePeriod) } : {}),
     ...(qtySoldPeriod ? { qty_sold_period: Math.round(parseLooseNumber(qtySoldPeriod)) } : {}),
