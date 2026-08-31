@@ -78,6 +78,7 @@ type StockOverlay = {
   qty_sold_lifetime?: number;
   last_sale_at?: string;
   first_available_date?: string;
+  createdAt?: string;
   category?: string;
   supplier?: string;
   brand?: string;
@@ -609,6 +610,7 @@ function applyStockOverlay(product: CompactProduct, overlay: StockOverlay, keepS
   if (!keepStock && overlay.available_stock != null) next.available_stock = overlay.available_stock;
   if (overlay.last_sale_at) next.last_sale_at = overlay.last_sale_at;
   if (overlay.first_available_date) next.first_available_date = overlay.first_available_date;
+  if (overlay.createdAt) next.createdAt = overlay.createdAt;
   if (overlay.category && (!next.category || next.category === 'Uncategorized')) next.category = overlay.category;
   if (overlay.supplier) next.supplier = overlay.supplier;
   if (overlay.brand) next.brand = overlay.brand;

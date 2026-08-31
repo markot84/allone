@@ -1292,6 +1292,7 @@ export async function mergeMegaventoryApiCatalogProducts(
         price: sell,
         cost_price: purchase,
         ...(num(p.avgCost) > 0 ? { avg_cost: num(p.avgCost) } : {}),
+        ...(String(p.createdAt ?? '').trim() ? { createdAt: String(p.createdAt) } : {}),
         stock_level: stock,
         stock_capacity: isDeleted ? 0 : Math.max(stock * 2, stock),
         source: PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE,
@@ -2163,6 +2164,8 @@ export async function fetchMegaventoryData(
             sellingPrice: num(p.ProductSellingPrice),
             purchasePrice: num(p.ProductPurchasePrice),
             avgCost: mvAvgCost(p),
+            // PER-322: real SKU creation date — without it the «Ημερομηνία εισαγωγής» filter falls back to the sync timestamp and matches everything.
+            ...(isoDate(p.ProductCreationDate) ? { createdAt: isoDate(p.ProductCreationDate) } : {}),
             // NO stockOnHand here — ProductGet carries no stock fields (ProductStockOnHandTotal doesn't exist);
             // mapping it would write 0 and clobber the real totals the stock walk merges in below.
             source: 'megaventory_api',
