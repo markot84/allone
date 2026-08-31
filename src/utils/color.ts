@@ -57,7 +57,7 @@ export function mixWithWhite(value: string, amount: number): string {
  * Needed where the background is computed rather than chosen — a treemap tile whose fill encodes a
  * value cannot have its label colour decided in advance.
  */
-export function readableTextOn(background: string, dark = '#101828', light = '#FFFFFF'): string {
+export function readableTextOn(background: string, dark = '#20293A', light = '#FFFFFF'): string {
   const rgb = toRgb(background);
   if (!rgb) return dark;
   const bg = relativeLuminance(rgb);

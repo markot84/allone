@@ -18,10 +18,10 @@ import { getAlertNavigation } from '../../utils/alertNavigation';
 const TYPE_META: Record<string, { icon: typeof Bell; color: string }> = {
   decision_created: { icon: MessageSquare, color: 'var(--navy-500)' },
   decision_updated: { icon: MessageSquare, color: 'var(--orange-700)' },
-  decision_completed: { icon: MessageSquare, color: 'var(--success-700, #0D804A)' },
+  decision_completed: { icon: MessageSquare, color: 'var(--success-700, #327C51)' },
   task_created: { icon: CheckSquare, color: 'var(--navy-500)' },
   task_assigned: { icon: CheckSquare, color: 'var(--orange-700)' },
-  task_completed: { icon: CheckSquare, color: 'var(--success-700, #0D804A)' },
+  task_completed: { icon: CheckSquare, color: 'var(--success-700, #327C51)' },
   comment_added: { icon: MessageSquare, color: 'var(--text-muted)' },
   member_joined: { icon: Users, color: 'var(--sky-500)' },
 };
@@ -247,7 +247,7 @@ export function NotificationBell({
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0,
                   }}>
-                    <AlertTriangle size={14} style={{ color: alert.severity === 'critical' ? 'var(--danger-600, #CC3A30)' : 'var(--gold-700)' }} />
+                    <AlertTriangle size={14} style={{ color: alert.severity === 'critical' ? 'var(--danger-600, #A63A2D)' : 'var(--gold-700)' }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>

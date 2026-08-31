@@ -55,34 +55,46 @@
   --surface-2:  #F2F4F7; /* hover / slightly deeper layer */
   --border:     #E4E7EC;
 
-  --text-primary:   #101828; /* not navy — clean dark grey for long-form text */
+  /* Softened from #101828 (17.8:1), which is near-black on pure white — the harshest pairing in
+     the app and the one a reader meets on every page. Same neutral ramp, one step lighter in
+     OKLCH with the hue untouched: 14.6:1, still far above the 4.5:1 floor. */
+  --text-primary:   #20293A; /* not navy — clean dark grey for long-form text */
   --text-secondary: #475467;
   /* Darkened from #98A2B3, which measured 2.58:1 on white — under the 4.5:1 the brief calls
      non-negotiable, and under the 3:1 non-text UI needs. This is the next step down the same
-     neutral ramp the rest of the scale comes from (900 #101828 / 600 #475467 / 400 #98A2B3), so
+     neutral ramp the rest of the scale comes from (900 / 600 #475467 / 400 #98A2B3), so
      it reads as the family's own 500 rather than a new colour. Measures 4.97:1. */
   --text-muted:     #667085;
   --text-heading:   var(--navy-500); /* headings and branding DO use navy */
 
   /* ============ SEMANTIC — deliberately distinct from the brand accents ============ */
-  /* Kept away from orange/gold so a red error is never mistaken for an active CTA. */
-  --success: #12B76A;
-  --warning: #F79009;
-  --danger:  #F04438;
+  /* Kept away from orange/gold so a red error is never mistaken for an active CTA.
+     SOFTENING PASS: each of these had its OKLCH chroma cut 20% with lightness and hue held, so the
+     fills calm down without the page washing out and without any contrast ratio moving — a dense
+     page stacks a dozen of them at once, which is what was tiring to read. Previous values are in
+     the trailing comments; the same 20% cut is applied to the text-weight steps and the segments
+     below, so the whole data palette moves together rather than in patches. */
+  --success: #49B275;    /* was #12B76A */
+  --warning: #E99848;    /* was #F79009 */
+  --danger:  #DF5A4D;    /* was #F04438 */
   --info:    var(--sky-500);
 
-  /* Text-weight steps of the same ramps. --success (#12B76A) is 2.3:1 on white and --danger
-     (#F04438) is 3.4:1 — both fine as a fill, neither usable as the "+8,4%" / "−3,8%" figures the
-     dashboard prints beside every metric. These are the AA-safe shades of those same hues. */
-  --success-700: #0D804A; /* positive delta text — 4.7:1 on white, 4.6:1 on --success-light */
-  --danger-700:  #CC3A30; /* negative delta text — 4.8:1 on white */
-  --danger-600:  #B42318; /* critical severity text/marker — 6.4:1 on white, on --danger-light */
+  /* Text-weight steps of the same ramps. --success is 2.7:1 on white and --danger 3.7:1 — both
+     fine as a fill, neither usable as the "+8,4%" / "−3,8%" figures the dashboard prints beside
+     every metric. These are the AA-safe shades of those same hues. */
+  --success-700: #327C51; /* positive delta text — 5.1:1 on white (was #0D804A) */
+  --danger-700:  #BD4D41; /* negative delta text — 4.9:1 on white (was #CC3A30) */
+  --danger-600:  #A63A2D; /* critical severity text/marker — 6.4:1 on white (was #B42318) */
   --sky-badge-bg: #E1EDFC; /* info severity badge fill; --sky-50 is the banner tint, half a step lighter */
 
   /* ============ RFM SEGMENTS ============ */
-  --seg-champions: #12B76A;       /* success green — unambiguously positive */
+  /* Was a second copy of the old #12B76A. It is the success green by intent, so it says so — one
+     decision instead of two hexes drifting apart through the softening pass. */
+  --seg-champions: var(--success); /* success green — unambiguously positive */
   --seg-loyal:     var(--sky-500);
-  --seg-potential: #7A5AF8;       /* unique purple — separates it from the 4 brand colours */
+  /* Chroma cut 20% like the rest, then lightness pulled back a hair: the original measured 4.52:1,
+     so desaturating alone would have dropped it under the 4.5:1 floor. Lands at 4.6:1. */
+  --seg-potential: #7663DD;       /* unique purple — separates it from the 4 brand colours (was #7A5AF8) */
   --seg-at-risk:   var(--gold-700);
   /* Hibernating had no colour of its own and fell through to --seg-lost, which made the two
      largest dormant segments indistinguishable in the share bar. A desaturated navy: same family
