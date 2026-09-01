@@ -1273,6 +1273,28 @@ async function loadMegaventoryProductOverlay(
   return { rowsRead, overlaysApplied, erpOnlyProducts };
 }
 
+/** PER-321: manual-import cost enrichment for connector-driven brands — imported `products` docs supply avg_cost by SKU where the connector gave none; the connector stays authoritative for everything else. */
+async function applyImportedCostOverlay(brandId: string, bySku: Map<string, CompactProduct>): Promise<number> {
+  const snap = await assertDb()
+    .collection('products')
+    .where('brandId', '==', brandId)
+    .where('avg_cost', '>', 0)
+    .select('sku', 'avg_cost')
+    .get()
+    .catch((err) => { logger.warn(`[ProductIntelligence] ${brandId}: imported-cost query failed (missing index?)`, { err }); return null; });
+  if (!snap) return 0;
+  let applied = 0;
+  for (const doc of snap.docs) {
+    const sku = normalizeSku(doc.data().sku);
+    const product = sku ? bySku.get(sku) : undefined;
+    if (!product || product.avg_cost != null) continue;
+    product.avg_cost = Math.round(num(doc.data().avg_cost) * 100) / 100;
+    applied += 1;
+  }
+  if (applied > 0) logger.info(`[ProductIntelligence] ${brandId}: avg_cost enriched from manual import for ${applied} SKUs (PER-321)`);
+  return applied;
+}
+
 async function loadConnectorProducts(brandId: string, hasErp: boolean, manual = false): Promise<{
   products: CompactProduct[];
   sourceRowsRead: number;
@@ -1331,6 +1353,8 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean, manual = 
   const overlay = hasErp
     ? await loadMegaventoryProductOverlay(brandId, bySku, stockResult.byProductId)
     : { rowsRead: 0, overlaysApplied: 0, erpOnlyProducts: 0 };
+  // MV brands excluded — their avg_cost comes from the API catalog itself (re-reading `products` would be a no-op over ~14k docs).
+  if (!manual && megaventoryApiRowsRead === 0) await applyImportedCostOverlay(brandId, bySku);
   // PER-293: brand additions (brands/{id}.nonMerchandise) join the platform demo/non-merch rule.
   const brandSnap = await assertDb().doc(`brands/${brandId}`).get().catch(() => null);
   const isNonStocked = buildIsNonStocked(readNonMerchandise(brandSnap?.data()));
