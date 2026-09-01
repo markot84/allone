@@ -375,10 +375,10 @@ function availabilityAllowsDead(skus: string | string[]): boolean {
   return (days / denom) * 100 >= activeStockThresholds.deadStockAvailabilityPct;
 }
 
-/** PER-320 Phase B: has sales but below the slow-moving velocity ceiling — a chip next to the tag, never a bucket change. */
-function isSlowMoving(soldPeriod: number | undefined, stock: number): boolean {
-  const velocity = (soldPeriod ?? 0) / activeStockThresholds.velocityWindowDays;
-  return stock > 0 && velocity > 0 && velocity < activeStockThresholds.slowMovingMaxDailySales;
+/** PER-320 Phase B: has sales but below the slow-moving velocity ceiling — a chip next to the tag, never a bucket change. `t` required for the same reason as stockBucket's. */
+function isSlowMoving(soldPeriod: number | undefined, stock: number, t: StockThresholds): boolean {
+  const velocity = (soldPeriod ?? 0) / t.velocityWindowDays;
+  return stock > 0 && velocity > 0 && velocity < t.slowMovingMaxDailySales;
 }
 
 /** Final tag pass: dead not backed by availability history becomes healthy — one gate instead of one per stockBucket caller — and slow movers get their chip. */
@@ -389,7 +389,7 @@ function applyAvailabilityDeadGate(products: Iterable<CompactProduct>, brandId?:
       p.priority_tag = 'healthy';
       demoted += 1;
     }
-    if (isSlowMoving(p.qty_sold_period, effectiveStock(p))) p.slow_moving = true;
+    if (isSlowMoving(p.qty_sold_period, effectiveStock(p), thresholdsFor(p.category, p.subcategory, p.supplier))) p.slow_moving = true;
   }
   if (demoted > 0 && brandId) logger.info(`[ProductIntelligence] ${brandId}: ${demoted} dead→healthy on availability history (PER-320)`);
   return demoted;
@@ -401,6 +401,7 @@ async function loadActiveBrandStockContext(brandId: string): Promise<void> {
     | Record<string, unknown>
     | undefined;
   activeStockThresholds = resolveStockThresholds(thresholds);
+  activeThresholdRules = resolveThresholdRules(thresholds?.thresholdOverrides, activeStockThresholds);
   const rawLead = num(thresholds?.defaultLeadTimeDays);
   activeDefaultLeadDays = rawLead > 0 ? rawLead : DEFAULT_LEAD_DAYS;
   activeSupplierLeadByName = await loadSupplierLeadTimes(brandId);
@@ -442,13 +443,56 @@ function resolveStockThresholds(raw: unknown): StockThresholds {
   };
 }
 
+// PER-320 Phase C: only these 5 keys are overridable — velocityWindowDays would fork the DOS denominator against matchesQuery/export/compositeScore constants; the availability-gate pair (deadStockWindowDays/Pct) would force an availabilityCache-key rework.
+const OVERRIDABLE_THRESHOLD_KEYS = ['lowDaysOfCover', 'excessDaysOfCover', 'newStockGraceDays', 'deadStockDays', 'slowMovingMaxDailySales'] as const;
+type ThresholdRule = { cats: Set<string>; sups: Set<string>; t: StockThresholds };
+let activeThresholdRules: ThresholdRule[] = [];
+
+/** PER-320 Phase C: sanitize untrusted brand-doc rules (firestore.rules validate nothing here) into precompiled full-threshold rules; scope-less/empty/garbage rules dropped, ≤50 kept. */
+function resolveThresholdRules(raw: unknown, base: StockThresholds): ThresholdRule[] {
+  if (!Array.isArray(raw)) return [];
+  const rules: ThresholdRule[] = [];
+  for (const r of raw.slice(0, 50)) {
+    if (!r || typeof r !== 'object') continue;
+    const o = r as Record<string, unknown>;
+    const strs = (v: unknown) => (Array.isArray(v) ? v.filter((s) => typeof s === 'string' && s.trim()) as string[] : []);
+    const cats = new Set(strs(o.categories).map((s) => s.trim()));
+    const sups = new Set(strs(o.suppliers).map((s) => normSupplierName(s)));
+    if (!cats.size && !sups.size) continue;
+    const th = o.thresholds && typeof o.thresholds === 'object' ? (o.thresholds as Record<string, unknown>) : {};
+    const t = { ...base };
+    let any = false;
+    for (const k of OVERRIDABLE_THRESHOLD_KEYS) {
+      const v = th[k];
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0) { t[k] = v; any = true; }
+    }
+    if (!any) continue;
+    rules.push({ cats, sups, t });
+  }
+  return rules;
+}
+
+/** PER-320 Phase C: thresholds for a row — first rule matching (category OR subcategory, PER-304 union) AND supplier wins wholesale; none → brand thresholds. */
+// ponytail: linear scan over ≤50 rules; memoize only if rebuild wall-time measurably regresses.
+function thresholdsFor(category?: string | null, subcategory?: string | null, supplier?: string | null): StockThresholds {
+  if (!activeThresholdRules.length) return activeStockThresholds;
+  const sup = normSupplierName(supplier);
+  for (const r of activeThresholdRules) {
+    if (r.cats.size && !((category && r.cats.has(category)) || (subcategory && r.cats.has(subcategory)))) continue;
+    if (r.sups.size && !r.sups.has(sup)) continue;
+    return r.t;
+  }
+  return activeStockThresholds;
+}
+
 function stockBucket(
   stockLevel: number,
   qtySoldPeriod: number | null,
-  qtySoldLifetime: number | null = null,
-  shelfAgeDays: number | null = null,
-  leadDays = 0,
-  t: StockThresholds = activeStockThresholds
+  qtySoldLifetime: number | null,
+  shelfAgeDays: number | null,
+  leadDays: number,
+  // Required (no default) — the compiler forces every present and future call site through thresholdsFor.
+  t: StockThresholds
 ): StockBucket {
   if (stockLevel <= 0) return 'no_stock';
   if (qtySoldPeriod != null && qtySoldPeriod > 0) {
@@ -502,7 +546,7 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     row.qty_sold_period != null || row.qtySoldPeriod != null || row.qty_sold_last_30d != null || row.qtySold != null;
   const qtySoldLifetime = firstPositive(row.qty_sold_lifetime, row.qtySoldLifetime);
   const margin = num(row.margin_percentage) || (price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0);
-  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null, qtySoldLifetime, null, leadDaysForSupplier(text(row.supplier)));
+  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null, qtySoldLifetime, null, leadDaysForSupplier(text(row.supplier)), thresholdsFor(category, path[1], text(row.supplier)));
   const product: CompactProduct = {
     id: docId,
     ...(text(row.productId ?? row.ProductID ?? row.ProductId) ? { productId: text(row.productId ?? row.ProductID ?? row.ProductId) } : {}),
@@ -553,7 +597,7 @@ function overlayFromMegaventoryProduct(row: Record<string, unknown>): StockOverl
   const price = firstPositive(row.price, row.sell_price, row.list_price, row.sellingPrice);
   const cost = firstPositive(row.cost_price, row.costPrice, row.purchasePrice);
   const margin = num(row.margin_percentage) || (price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0);
-  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null, null, null, leadDaysForSupplier(text(row.supplier)));
+  const bucket = stockBucket(stock, hasPeriodField ? qtySold : null, null, null, leadDaysForSupplier(text(row.supplier)), thresholdsFor(text(row.category ?? row.category_name), null, text(row.supplier)));
   return {
     stock_level: Math.round(stock * 100) / 100,
     stock_capacity: Math.max(Math.round(stock * 2 * 100) / 100, Math.round(stock * 100) / 100, 1),
@@ -596,7 +640,7 @@ function applyStockOverlay(product: CompactProduct, overlay: StockOverlay, keepS
     next.stock_level = overlay.stock_level;
     next.stock_capacity = overlay.stock_capacity;
   }
-  next.priority_tag = stockBucket(effectiveStock, finalQtySold, null, null, leadDaysForSupplier(overlay.supplier ?? next.supplier));
+  next.priority_tag = stockBucket(effectiveStock, finalQtySold, null, null, leadDaysForSupplier(overlay.supplier ?? next.supplier), thresholdsFor(overlay.category ?? next.category, next.subcategory, overlay.supplier ?? next.supplier));
   next.source = 'erp';
   if (overlay.price != null) next.price = overlay.price;
   if (overlay.cost_price != null) next.cost_price = overlay.cost_price;
@@ -1018,7 +1062,7 @@ function applyMegaventoryStockOverlay(products: Map<string, CompactProduct>, sto
     product.stock_on_hand = Math.round(stock.physical * 100) / 100;
     product.available_stock = Math.round(stock.available * 100) / 100;
     product.stock_capacity = Math.max(Math.round(stockLevel * 2 * 100) / 100, Math.round(stockLevel * 100) / 100, 1);
-    product.priority_tag = stockBucket(stockLevel, qtySold, null, null, leadDaysForSupplier(product.supplier));
+    product.priority_tag = stockBucket(stockLevel, qtySold, null, null, leadDaysForSupplier(product.supplier), thresholdsFor(product.category, product.subcategory, product.supplier));
     applied += 1;
   }
   return applied;
@@ -1094,7 +1138,7 @@ function applySkuStatsOverlay(products: Map<string, CompactProduct>, statsBySku:
     if (qtySoldPeriod > 0) product.qty_sold_period = Math.round(qtySoldPeriod * 100) / 100;
     if (num(stats.sold) > 0) product.qty_sold_lifetime = Math.round(num(stats.sold) * 100) / 100;
     if (stats.lastSaleAt) product.last_sale_at = stats.lastSaleAt;
-    product.priority_tag = stockBucket(product.stock_level, qtySoldPeriod, num(stats.sold), null, leadDaysForSupplier(product.supplier));
+    product.priority_tag = stockBucket(product.stock_level, qtySoldPeriod, num(stats.sold), null, leadDaysForSupplier(product.supplier), thresholdsFor(product.category, product.subcategory, product.supplier));
     applied += 1;
   }
   return applied;
@@ -1176,7 +1220,8 @@ function applyReceiptDateOverlay(
         product.qty_sold_period ?? null,
         product.qty_sold_lifetime ?? null,
         shelfAge >= 0 ? shelfAge : null,
-        leadDaysForSupplier(product.supplier)
+        leadDaysForSupplier(product.supplier),
+        thresholdsFor(product.category, product.subcategory, product.supplier)
       );
     }
     applied += 1;
@@ -1795,7 +1840,9 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
     const weightedMargin = stock > 0
       ? Math.round(members.reduce((t, p) => t + (p.margin_percentage || 0) * (p.stock_level || 0), 0) / stock * 10) / 10
       : rep.margin_percentage;
-    const groupTag = stockBucket(stock, soldPeriod, soldLifetime, null, leadDaysForSupplier(rep.supplier));
+    // Group thresholds follow the representative variant — the same rep that already decides lead time.
+    const repThresholds = thresholdsFor(rep.category, rep.subcategory, rep.supplier);
+    const groupTag = stockBucket(stock, soldPeriod, soldLifetime, null, leadDaysForSupplier(rep.supplier), repThresholds);
     out.push({
       ...rep,
       id: `parent_${parent}`,
@@ -1816,7 +1863,7 @@ function collapseByParentSku(rows: CompactProduct[]): CompactProduct[] {
       ...(groupAvgCost != null ? { avg_cost: groupAvgCost } : {}),
       // The bucket describes the group, not its representative variant; dead only when availability history backs it (PER-320).
       priority_tag: groupTag === 'dead' && !availabilityAllowsDead(members.map((m) => m.sku)) ? 'healthy' : groupTag,
-      ...(isSlowMoving(soldPeriod ?? undefined, stock) ? { slow_moving: true } : {}),
+      ...(isSlowMoving(soldPeriod ?? undefined, stock, repThresholds) ? { slow_moving: true } : {}),
     });
   }
   return out;
@@ -2205,4 +2252,7 @@ export const __test = {
   setActiveAvailability: (a: AvailabilityCounts | null) => { activeAvailability = a; },
   resolveStockThresholds,
   setActiveStockThresholds: (t: StockThresholds) => { activeStockThresholds = t; },
+  resolveThresholdRules,
+  thresholdsFor,
+  setActiveThresholdRules: (r: ThresholdRule[]) => { activeThresholdRules = r; },
 };

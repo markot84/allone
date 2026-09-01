@@ -3,7 +3,8 @@
 import { describe, it, expect } from 'vitest';
 import { __test } from '../../productIntelligenceAggregator';
 
-const { productFromRow, stockBucket } = __test;
+const { productFromRow, stockBucket, resolveStockThresholds } = __test;
+const T = resolveStockThresholds(undefined);
 
 // stockBucket is exercised through productFromRow's classification of a catalog row.
 function bucketOf(row: Record<string, unknown>) {
@@ -44,15 +45,15 @@ describe('stockBucket via productFromRow — dead vs new', () => {
 describe('stockBucket — shelf-age (real receipt date)', () => {
   // signature: stockBucket(stock, qtySoldPeriod, qtySoldLifetime, shelfAgeDays, leadDays, thresholds)
   it('no recent sales + shelf age beyond grace → dead', () => {
-    expect(stockBucket(5, 0, 0, 200)).toBe('dead'); // 200 days on the shelf, never sold → genuinely dead
+    expect(stockBucket(5, 0, 0, 200, 0, T)).toBe('dead'); // 200 days on the shelf, never sold → genuinely dead
   });
 
   it('no recent sales + shelf age within grace → not dead (newly received)', () => {
-    expect(stockBucket(5, 0, 12, 10)).toBe('healthy'); // received 10 days ago, even with old lifetime sales
+    expect(stockBucket(5, 0, 12, 10, 0, T)).toBe('healthy'); // received 10 days ago, even with old lifetime sales
   });
 
   it('shelf age is ignored when there ARE recent sales', () => {
-    expect(stockBucket(5, 30, 0, 365)).toBe('low'); // selling now → days-of-stock wins over age
+    expect(stockBucket(5, 30, 0, 365, 0, T)).toBe('low'); // selling now → days-of-stock wins over age
   });
 
   it('PER-310: deadStockDays beyond grace delays the dead cutoff', () => {
@@ -63,25 +64,25 @@ describe('stockBucket — shelf-age (real receipt date)', () => {
   });
 
   it('falls back to lifetime rule when shelf age is unknown (behaviour-preserving)', () => {
-    expect(stockBucket(5, 0, 12, null)).toBe('dead'); // sold before, stopped, no age signal
-    expect(stockBucket(5, 0, 0, null)).toBe('healthy'); // never sold, no age signal → not dead
-    expect(stockBucket(5, null, 0, null)).toBe('healthy'); // no period signal at all → healthy
+    expect(stockBucket(5, 0, 12, null, 0, T)).toBe('dead'); // sold before, stopped, no age signal
+    expect(stockBucket(5, 0, 0, null, 0, T)).toBe('healthy'); // never sold, no age signal → not dead
+    expect(stockBucket(5, null, 0, null, 0, T)).toBe('healthy'); // no period signal at all → healthy
   });
 });
 
 describe('stockBucket — lead-time reorder point (PER-276)', () => {
   // low = days-of-cover ≤ lowDaysOfCover(30) + leadDays. Defaults: window 30, low 30, excess 120.
   it("PER-276 example: 11 units, 10 sold/30d, lead 15 → low (cover 33d ≤ 45d)", () => {
-    expect(stockBucket(11, 10)).toBe('healthy'); // no lead → 33d cover > 30 → healthy (baseline)
-    expect(stockBucket(11, 10, 0, null, 15)).toBe('low'); // +15d lead → threshold 45 → low
+    expect(stockBucket(11, 10, 0, null, 0, T)).toBe('healthy'); // no lead → 33d cover > 30 → healthy (baseline)
+    expect(stockBucket(11, 10, 0, null, 15, T)).toBe('low'); // +15d lead → threshold 45 → low
   });
 
   it('lead 0 preserves the old flat-30 low threshold', () => {
-    expect(stockBucket(9, 10)).toBe('low'); // 27d cover ≤ 30 → low regardless of lead
-    expect(stockBucket(40, 10, 0, null, 0)).toBe('healthy'); // 120d cover, no lead → healthy
+    expect(stockBucket(9, 10, 0, null, 0, T)).toBe('low'); // 27d cover ≤ 30 → low regardless of lead
+    expect(stockBucket(40, 10, 0, null, 0, T)).toBe('healthy'); // 120d cover, no lead → healthy
   });
 
   it('lead does not push a well-covered SKU below excess', () => {
-    expect(stockBucket(50, 10, 0, null, 15)).toBe('excess'); // 150d cover > 120 → excess, lead irrelevant
+    expect(stockBucket(50, 10, 0, null, 15, T)).toBe('excess'); // 150d cover > 120 → excess, lead irrelevant
   });
 });

@@ -1,13 +1,22 @@
 import { useState, useEffect, useMemo } from 'react';
+import { AlertTriangle, ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { Card, Button, useToast, Tooltip } from '../common';
+import { ColumnExcelFilter, type ExcelFilterOption } from '../common/ColumnExcelFilter';
 import { useBrand } from '../../hooks/useBrand';
+import { useSuppliers } from '../../hooks/useSuppliers';
+import { useProductIntelligenceAggregateDoc } from '../../hooks/useProductIntelligenceAggregate';
 import { FirestoreService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
 import { logger } from '../../utils/logger';
-import type { Brand } from '../../types';
+import type { Brand, ThresholdOverrideRule } from '../../types';
 
 type Thresholds = NonNullable<Brand['inventoryThresholds']>;
-type FieldKey = Exclude<keyof Thresholds, 'reorderEmailEnabled'>;
+type FieldKey = Exclude<keyof Thresholds, 'reorderEmailEnabled' | 'thresholdOverrides'>;
+type OverrideKey = keyof ThresholdOverrideRule['thresholds'];
+// The 5 rule-overridable knobs (PER-320 Phase C); velocity window + availability-gate fields stay brand-level by design.
+const OVERRIDE_KEYS: OverrideKey[] = ['lowDaysOfCover', 'excessDaysOfCover', 'newStockGraceDays', 'deadStockDays', 'slowMovingMaxDailySales'];
+// The server-canonical value productFromRow coerces empty categories to — never store ''.
+const UNCATEGORIZED = 'Uncategorized';
 
 const FIELDS: { key: FieldKey; label: string; def: number; hint: string; step?: number }[] = [
   { key: 'velocityWindowDays', label: 'Παράθυρο πωλήσεων (ημέρες)', def: 30, hint: 'Σε πόσες ημέρες αναφέρεται η ταχύτητα πωλήσεων.' },
@@ -39,14 +48,40 @@ export function InventoryThresholdsCard() {
 
   const [vals, setVals] = useState<Record<FieldKey, string>>(initial);
   const [reorderEmail, setReorderEmail] = useState(stored?.reorderEmailEnabled ?? false);
+  const [rules, setRules] = useState<ThresholdOverrideRule[]>(stored?.thresholdOverrides ?? []);
   const [saving, setSaving] = useState(false);
   useEffect(() => setVals(initial), [currentBrand?.id, initial]);
   useEffect(() => setReorderEmail(stored?.reorderEmailEnabled ?? false), [currentBrand?.id, stored]);
+  useEffect(() => setRules(stored?.thresholdOverrides ?? []), [currentBrand?.id, stored]);
+
+  const { aggregate } = useProductIntelligenceAggregateDoc();
+  const { suppliers } = useSuppliers();
+  const categoryOptions = useMemo((): ExcelFilterOption[] =>
+    (aggregate?.categories ?? [])
+      .map((c) => ({ id: c.name?.trim() ? c.name : UNCATEGORIZED, label: c.name?.trim() ? c.name : '(Κενή κατηγορία)' }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'el')),
+    [aggregate?.categories]);
+  const supplierOptions = useMemo((): ExcelFilterOption[] =>
+    suppliers
+      .map((s) => s.name?.trim())
+      .filter((n): n is string => !!n)
+      .map((n) => ({ id: n, label: n }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'el')),
+    [suppliers]);
+  const categoryCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of aggregate?.categories ?? []) m.set(c.name?.trim() ? c.name : UNCATEGORIZED, c.count);
+    return m;
+  }, [aggregate?.categories]);
 
   const dirty = useMemo(
-    () => FIELDS.some((f) => vals[f.key] !== initial[f.key]) || reorderEmail !== (stored?.reorderEmailEnabled ?? false),
-    [vals, initial, reorderEmail, stored],
+    () => FIELDS.some((f) => vals[f.key] !== initial[f.key])
+      || reorderEmail !== (stored?.reorderEmailEnabled ?? false)
+      || JSON.stringify(rules) !== JSON.stringify(stored?.thresholdOverrides ?? []),
+    [vals, initial, reorderEmail, rules, stored],
   );
+
+  const ruleInvalid = (r: ThresholdOverrideRule) => !(r.categories?.length || r.suppliers?.length);
 
   const handleSave = async () => {
     if (!currentBrand) return;
@@ -56,6 +91,18 @@ export function InventoryThresholdsCard() {
       if (vals[f.key].trim() !== '' && Number.isFinite(n) && n > 0) next[f.key] = n;
     }
     next.reorderEmailEnabled = reorderEmail;
+    // This card is the ONLY writer of inventoryThresholds — a second writer would recreate the PER-182/183 merge-wipe class.
+    const serialized = rules
+      .filter((r) => !ruleInvalid(r))
+      .map((r) => ({
+        id: r.id,
+        ...(r.label?.trim() ? { label: r.label.trim() } : {}),
+        ...(r.categories?.length ? { categories: r.categories } : {}),
+        ...(r.suppliers?.length ? { suppliers: r.suppliers } : {}),
+        thresholds: Object.fromEntries(Object.entries(r.thresholds).filter(([, v]) => typeof v === 'number' && Number.isFinite(v) && v > 0)),
+      }))
+      .filter((r) => Object.keys(r.thresholds).length > 0);
+    if (serialized.length) next.thresholdOverrides = serialized as ThresholdOverrideRule[];
     setSaving(true);
     try {
       await FirestoreService.updateDocument('brands', currentBrand.id, { inventoryThresholds: next } as Partial<Brand>);
@@ -105,6 +152,78 @@ export function InventoryThresholdsCard() {
             />
           </label>
         ))}
+      </div>
+
+      <div className="mt-5 pt-4 border-t border-[var(--nts-border-gray)]">
+        <div className="flex items-center gap-1.5">
+          <h4 className="text-[13px] font-semibold text-[var(--nts-charcoal)]">Ειδικά όρια ανά κατηγορία/προμηθευτή</h4>
+          <Tooltip content="Ισχύει ο πρώτος κανόνας που ταιριάζει· κενό πεδίο = κληρονομεί την τιμή του brand· σε ομαδοποιημένες γραμμές μετράει η κύρια παραλλαγή· οι αλλαγές εφαρμόζονται στο επόμενο sync προϊόντων." size={13} />
+        </div>
+        {rules.map((r, i) => {
+          const stale = [
+            ...(r.categories ?? []).filter((c) => !categoryOptions.some((o) => o.id === c)),
+            ...(r.suppliers ?? []).filter((s) => !supplierOptions.some((o) => o.id === s)),
+          ];
+          const matchCount = (r.categories ?? []).reduce((t, c) => t + (categoryCounts.get(c) ?? 0), 0);
+          const upd = (patch: Partial<ThresholdOverrideRule>) => setRules((rs) => rs.map((x) => (x.id === r.id ? { ...x, ...patch } : x)));
+          return (
+            <div key={r.id} className="mt-3 p-3 rounded-lg border border-[var(--nts-border-gray)] bg-[#FAFAFA]/60">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={r.label ?? ''}
+                  placeholder={`Κανόνας ${i + 1}`}
+                  onChange={(e) => upd({ label: e.target.value })}
+                  className="w-36 px-2 py-1 rounded-lg border border-[var(--nts-border-gray)] bg-white text-[12px]"
+                />
+                <ColumnExcelFilter label="Κατηγορίες" options={categoryOptions} value={r.categories ?? []} onChange={(v) => upd({ categories: v ?? [] })} selectionMode="additive" />
+                <ColumnExcelFilter label="Προμηθευτές" options={supplierOptions} value={r.suppliers ?? []} onChange={(v) => upd({ suppliers: v ?? [] })} selectionMode="additive" />
+                {r.categories?.length ? <span className="text-[11px] text-[var(--nts-medium-gray)]">~{matchCount.toLocaleString('el')} προϊόντα</span> : null}
+                <span className="flex-1" />
+                <button type="button" disabled={i === 0} onClick={() => setRules((rs) => { const n = [...rs]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; return n; })} className="p-1 text-[var(--nts-medium-gray)] disabled:opacity-30" aria-label="Πάνω"><ArrowUp size={14} /></button>
+                <button type="button" disabled={i === rules.length - 1} onClick={() => setRules((rs) => { const n = [...rs]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; return n; })} className="p-1 text-[var(--nts-medium-gray)] disabled:opacity-30" aria-label="Κάτω"><ArrowDown size={14} /></button>
+                <button type="button" onClick={() => setRules((rs) => rs.filter((x) => x.id !== r.id))} className="p-1 text-red-500" aria-label="Διαγραφή"><Trash2 size={14} /></button>
+              </div>
+              {stale.length > 0 && (
+                <p className="mt-1.5 flex items-center gap-1 text-[11px] text-amber-600"><AlertTriangle size={12} />{stale.join(', ')}: δεν υπάρχει πλέον στον κατάλογο — ο κανόνας δεν θα ταιριάξει.</p>
+              )}
+              {ruleInvalid(r) && (
+                <p className="mt-1.5 text-[11px] text-red-500">Επιλέξτε τουλάχιστον μία κατηγορία ή προμηθευτή — αλλιώς ο κανόνας δεν αποθηκεύεται.</p>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-2">
+                {FIELDS.filter((f) => (OVERRIDE_KEYS as string[]).includes(f.key)).map((f) => (
+                  <label key={f.key} className="flex flex-col gap-0.5">
+                    <span className="flex items-center gap-1 text-[11px] text-[var(--nts-charcoal)]">{f.label}<Tooltip content={f.hint} size={11} /></span>
+                    <input
+                      type="number"
+                      min={f.step ?? 1}
+                      step={f.step ?? 1}
+                      inputMode={f.step ? 'decimal' : 'numeric'}
+                      value={r.thresholds[f.key as OverrideKey] ?? ''}
+                      placeholder={`Κληρονομεί: ${vals[f.key] || f.def}`}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        const th = { ...r.thresholds };
+                        if (e.target.value.trim() === '' || !Number.isFinite(n) || n <= 0) delete th[f.key as OverrideKey];
+                        else th[f.key as OverrideKey] = n;
+                        upd({ thresholds: th });
+                      }}
+                      className="w-full px-2 py-1 rounded-lg border border-[var(--nts-border-gray)] bg-white text-[12px]"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+        <Button
+          variant="secondary"
+          size="sm"
+          className="mt-3"
+          onClick={() => setRules((rs) => [...rs, { id: crypto.randomUUID(), thresholds: {} }])}
+        >
+          <Plus size={14} className="mr-1" /> Προσθήκη κανόνα
+        </Button>
       </div>
 
       <label className="flex items-start gap-2 mt-4 cursor-pointer">
