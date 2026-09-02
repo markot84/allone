@@ -2663,6 +2663,10 @@ const NIGHTLY_JOB_KEYS: NightlyJobKey[] = [
 
 /** A job that hasn't succeeded in this long is considered stale (jobs run daily). */
 const HEALTH_STALE_MS = 28 * 60 * 60 * 1000; // 28h — one missed daily run + slack
+// PER-334: scheduledReorderEmail is weekly (Monday 07:45), so the daily window false-alarmed Tue–Sun.
+const HEALTH_STALE_MS_BY_JOB: Partial<Record<NightlyJobKey, number>> = {
+  scheduledReorderEmail: (7 * 24 + 4) * 60 * 60 * 1000, // one missed weekly run + slack
+};
 
 function tsToMillis(v: unknown): number | null {
   if (v == null) return null;
@@ -2721,7 +2725,7 @@ export const healthWatch = onSchedule(
           continue;
         }
         // Stale: no successful run within the window.
-        if (lastSuccess == null || now - lastSuccess > HEALTH_STALE_MS) {
+        if (lastSuccess == null || now - lastSuccess > (HEALTH_STALE_MS_BY_JOB[job] ?? HEALTH_STALE_MS)) {
           logger.alert(`[HealthWatch] nightly job stale (no recent success)`, {
             alertKey: ALERT.healthWatchStaleJob,
             job,
@@ -4309,7 +4313,8 @@ export const scheduledAggregates = onSchedule(
     schedule: 'every day 07:00',
     timeZone: 'Europe/Athens',
     region: 'europe-west1',
-    memory: '512MiB',
+    // PER-333: segments/campaigns full .get()s ride ~513MiB as dailyMetrics grow; stream them if 1GiB ever tips.
+    memory: '1GiB',
     timeoutSeconds: 300,
   },
   async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
