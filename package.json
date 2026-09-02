@@ -73,7 +73,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "firebase-admin": "^13.6.1",
-    "firebase-tools": "^15.20.0",
+    "firebase-tools": "^15.28.2",
     "globals": "^16.5.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
@@ -94,6 +94,9 @@
       "minimatch": {
         "brace-expansion": "^5.0.5"
       }
-    }
+    },
+    "websocket-driver": "^0.7.5",
+    "dompurify": "^3.4.14",
+    "tar": "^7.5.22"
   }
 }
