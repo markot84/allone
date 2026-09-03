@@ -235,13 +235,6 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   // must come from procurement (procurement-first).
   const expectsProcurementCatalog =
     isEnterprise && procurementModuleEnabled && Object.keys(piProcurementSignals || {}).length > 0;
-  const {
-    getThumbnailUrl,
-    magentoConnected,
-    magentoProductCatalogAccess,
-    magentoProductCount,
-    magentoLastSyncError,
-  } = useProductThumbnails();
   const { suppliers } = useSuppliers();
   const { benchmarks, count: benchmarkCount } = usePriceBenchmarks({ maxDocs: PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT });
   const tagStockBucket = useMemo((): ProductIntelligenceBucket | null => {
@@ -285,6 +278,18 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     !productDateFrom && !productDateTo && !includeNoStock &&
     groupByParent && sortField === 'margin_percentage' && sortDirection === 'desc';
   const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage, serverQuery, { staticDefault: isDefaultQuery });
+  // PER-335: thumbnails fetched only for visible-page SKUs — full magento_products was ~74k docs / minutes on e-tennis.
+  const pageSkus = useMemo(
+    () => (serverIntelligence.page?.products ?? []).map((p) => String(p.sku || '')).filter(Boolean),
+    [serverIntelligence.page?.products]
+  );
+  const {
+    getThumbnailUrl,
+    magentoConnected,
+    magentoProductCatalogAccess,
+    magentoProductCount,
+    magentoLastSyncError,
+  } = useProductThumbnails({ skus: pageSkus });
   const queryClient = useQueryClient();
   const toast = useToast();
 

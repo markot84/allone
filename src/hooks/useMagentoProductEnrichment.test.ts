@@ -47,3 +47,26 @@ describe('useMagentoProductEnrichment helpers', () => {
     });
   });
 });
+
+describe('fetchMagentoProductsForSkus (PER-335 scoped fetch)', () => {
+  it('chunks into 30-value in-queries over sku and itemGroupId, deduping results by id', async () => {
+    const calls: Array<unknown[]> = [];
+    const { FirestoreService } = await import('../services/firestore');
+    const orig = FirestoreService.getDocuments;
+    FirestoreService.getDocuments = (async (...args: unknown[]) => {
+      calls.push(args);
+      // Same doc returned by both the sku and itemGroupId query → must dedupe.
+      return [{ id: 'doc-1', sku: 'A-1' }];
+    }) as typeof FirestoreService.getDocuments;
+    try {
+      const skus = Array.from({ length: 61 }, (_, i) => `SKU-${i}`);
+      const out = await __test.fetchMagentoProductsForSkus('e-tennis', skus);
+      // 61 skus → 3 chunks × 2 queries (sku + itemGroupId)
+      expect(calls.length).toBe(6);
+      expect(calls.every((c) => c[2] === 'e-tennis')).toBe(true);
+      expect(out).toEqual([{ id: 'doc-1', sku: 'A-1' }]);
+    } finally {
+      FirestoreService.getDocuments = orig;
+    }
+  });
+});

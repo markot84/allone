@@ -2,7 +2,7 @@
  * + `connectors/{brandId}.magento`; doesn't touch `products` (merge happens in the UI). */
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { FirestoreService } from '../services/firestore';
 import { useBrand } from './useBrand';
@@ -82,9 +82,31 @@ function inferMagentoMediaBaseUrl(configuredMediaBaseUrl: string, storeUrl: stri
   return `${storeUrl.replace(/\/+$/, '')}/media`;
 }
 
-/** `enabled: false` skips the full magento_products download for pages that only conditionally need it (PER-307). */
-export function useMagentoProductEnrichment(options?: { enabled?: boolean }) {
+/** Firestore `in` filters accept at most 30 values. */
+const IN_CHUNK = 30;
+
+/** PER-335: fetch only rows matching the given SKUs (by `sku` + `itemGroupId` for parent images) instead of the full catalog. */
+async function fetchMagentoProductsForSkus(brandId: string, skus: string[]): Promise<RawMagentoProductDoc[]> {
+  const unique = [...new Set(skus.map((s) => s.trim()).filter(Boolean))];
+  const chunks: string[][] = [];
+  for (let i = 0; i < unique.length; i += IN_CHUNK) chunks.push(unique.slice(i, i + IN_CHUNK));
+  const results = await Promise.all(
+    chunks.flatMap((chunk) => [
+      FirestoreService.getDocuments<RawMagentoProductDoc & { id: string }>('magento_products', [where('sku', 'in', chunk)], brandId),
+      FirestoreService.getDocuments<RawMagentoProductDoc & { id: string }>('magento_products', [where('itemGroupId', 'in', chunk)], brandId),
+    ])
+  );
+  const byId = new Map<string, RawMagentoProductDoc>();
+  for (const docs of results) for (const d of docs) byId.set(d.id, d);
+  return [...byId.values()];
+}
+
+/** `enabled: false` skips the full magento_products download (PER-307); `skus` scopes the fetch to those SKUs only (PER-335). */
+export function useMagentoProductEnrichment(options?: { enabled?: boolean; skus?: string[] }) {
   const enabled = options?.enabled ?? true;
+  const skus = options?.skus;
+  // Stable key: same SKU set in any order → same cached query.
+  const skusKey = skus ? [...new Set(skus.map((s) => s.trim()).filter(Boolean))].sort().join('|') : null;
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
 
@@ -115,9 +137,12 @@ export function useMagentoProductEnrichment(options?: { enabled?: boolean }) {
   });
 
   const productsQuery = useQuery({
-    queryKey: ['magentoProductsRaw', brandId],
+    queryKey: skusKey == null ? ['magentoProductsRaw', brandId] : ['magentoProductsRaw', brandId, skusKey],
     queryFn: async (): Promise<RawMagentoProductDoc[]> => {
       if (!brandId) return [];
+      if (skusKey != null) {
+        return skusKey === '' ? [] : fetchMagentoProductsForSkus(brandId, skusKey.split('|'));
+      }
       return FirestoreService.getDocuments<RawMagentoProductDoc>('magento_products', [], brandId);
     },
     enabled: enabled && !!brandId && (connectorQuery.data?.connected ?? false) && connectorQuery.data?.productCatalogAccess !== false,
@@ -189,4 +214,5 @@ export const __test = {
   buildImageLink,
   buildProductLink,
   inferMagentoMediaBaseUrl,
+  fetchMagentoProductsForSkus,
 };
