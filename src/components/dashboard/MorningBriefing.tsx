@@ -12,6 +12,7 @@ import {
   computeBriefingDataHash,
 } from '../../services/morningBriefing';
 import type { Product, Campaign, RFMSegment, AutomationAlert } from '../../types';
+import { guessRoute } from './guessRoute';
 
 interface MorningBriefingProps {
   brandId: string;
@@ -52,45 +53,6 @@ interface MorningBriefingProps {
   metricsReady?: boolean;
   /** Fingerprint of the values feeding the briefing — when it changes, dataHash is checked and regeneration happens if needed. */
   financeKey?: string;
-}
-
-/** Real app sections — not `inventory` (no such route). */
-type GuessResult = { section: string; hashQuery?: string };
-
-function guessRoute(action: string): GuessResult {
-  const lower = action.toLowerCase();
-  if (lower.includes('ecom') || lower.includes('eshop') || lower.includes('παραγγελι') || lower.includes('aov') || lower.includes('true roas')) {
-    return { section: 'ecommerce' };
-  }
-  if (lower.includes('dead') || lower.includes('νεκρ')) {
-    return { section: 'products', hashQuery: 'stock=dead' };
-  }
-  if (lower.includes('excess') || lower.includes('πλεόνασμα')) {
-    return { section: 'products', hashQuery: 'stock=excess' };
-  }
-  if (lower.includes('high-margin') || lower.includes('high margin') || lower.includes('αναπλήρωση')) {
-    return { section: 'products', hashQuery: 'filter=high-margin-low-stock' };
-  }
-  const pairs: [string, GuessResult][] = [
-    ['campaign', { section: 'campaigns' }],
-    ['καμπάνι', { section: 'campaigns' }],
-    ['stock', { section: 'products' }],
-    ['απόθεμα', { section: 'products' }],
-    ['inventory', { section: 'products' }],
-    ['segment', { section: 'rfm' }],
-    ['at risk', { section: 'rfm' }],
-    ['champions', { section: 'rfm' }],
-    ['rfm', { section: 'rfm' }],
-    ['content', { section: 'calendar' }],
-    ['strategy', { section: 'strategy' }],
-    ['budget', { section: 'channels' }],
-    ['roas', { section: 'roi' }],
-    ['roi', { section: 'roi' }],
-  ];
-  for (const [keyword, route] of pairs) {
-    if (lower.includes(keyword)) return route;
-  }
-  return { section: 'dashboard' };
 }
 
 const SIGNIFICANCE_CHECK_INTERVAL = 15 * 60 * 1000; // 15 minutes
