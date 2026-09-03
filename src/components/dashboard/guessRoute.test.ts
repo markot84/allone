@@ -8,6 +8,10 @@ describe('guessRoute (PER-337)', () => {
     ).toEqual({ section: 'products', hashQuery: 'stock=low' });
     expect(guessRoute('Παραγγείλετε ξανά τους κωδικούς που εξαντλούνται')).toEqual({ section: 'products', hashQuery: 'stock=low' });
     expect(guessRoute('Reorder the low stock bestsellers')).toEqual({ section: 'products', hashQuery: 'stock=low' });
+    expect(guessRoute('Ελέγξτε τη διαθεσιμότητα των προϊόντων υψηλής ζήτησης για την αποφυγή απώλειας πωλήσεων.')).toEqual({
+      section: 'products',
+      hashQuery: 'stock=low',
+    });
   });
 
   it('matches accented AI phrasing on existing routes', () => {
@@ -17,6 +21,10 @@ describe('guessRoute (PER-337)', () => {
     });
     expect(guessRoute('Ελέγξτε τις παραγγελίες e-shop')).toEqual({ section: 'ecommerce' });
     expect(guessRoute('Διακόψτε την καμπάνια «CAMP_new_AW» που δεν αποδίδει')).toEqual({ section: 'campaigns' });
+  });
+
+  it('routes idle-stock phrasing to the dead filter', () => {
+    expect(guessRoute('Δημιουργήστε σχέδιο εκκαθάρισης για τα 13 αδρανή προϊόντα.')).toEqual({ section: 'products', hashQuery: 'stock=dead' });
   });
 
   it('falls back to dashboard for unmatched text', () => {
