@@ -57,6 +57,7 @@ export const ALERT = {
   softoneSyncFailed: 'softone_sync_failed',
   entersoftSyncFailed: 'entersoft_sync_failed',
   epsilonNetSyncFailed: 'epsilon_net_sync_failed',
+  contactPigeonSyncFailed: 'contact_pigeon_sync_failed',
 
   // ── Aggregators / analytics ───────────────────────────────────────────────
   aggregateStatsFailed: 'aggregate_stats_failed',

@@ -77,7 +77,7 @@ interface ConnectorState {
   lastSyncProducts?: number;
 }
 
-type ConnectorId = 'google_ads' | 'meta' | 'tiktok' | 'merchant' | 'ga4' | 'search_console' | 'shopify' | 'woocommerce' | 'opencart' | 'magento' | 'megaventory' | 'softone' | 'epsilon_net' | 'entersoft';
+type ConnectorId = 'google_ads' | 'meta' | 'tiktok' | 'merchant' | 'ga4' | 'search_console' | 'shopify' | 'woocommerce' | 'opencart' | 'magento' | 'megaventory' | 'softone' | 'epsilon_net' | 'entersoft' | 'contact_pigeon';
 
 const CONNECTOR_GROUP_ORDER = ['marketing', 'analytics', 'commerce', 'operations'] as const;
 type ConnectorGroupId = (typeof CONNECTOR_GROUP_ORDER)[number];
@@ -252,6 +252,8 @@ function getConnectorIdentityLines(id: ConnectorId, state: ConnectorState): stri
       return s.email ? [s.email] : [];
     case 'entersoft':
       return s.userId ? [`User: ${s.userId}`] : [];
+    case 'contact_pigeon':
+      return s.connected ? ['Email marketing (API key)'] : [];
     default:
       return [];
   }
@@ -312,6 +314,18 @@ const CONNECTORS: ConnectorConfig[] = [
     syncLabel: 'benchmarks',
     readOnlyNotice: 'Read-only — αποκλειστικά ανάγνωση αναφορών τιμών',
     moduleId: 'competitive',
+    group: 'marketing',
+  },
+  {
+    id: 'contact_pigeon',
+    name: 'ContactPigeon',
+    description: 'Email marketing / automation — λίστες επαφών & προφίλ/ιστορικό ανά επαφή (public API)',
+    icon: '🐦',
+    color: '#00B3A4',
+    syncLabel: 'lists',
+    authType: 'credentials',
+    readOnlyNotice: 'Read-only — αποκλειστικά ανάγνωση δεδομένων μέσω API key',
+    moduleId: 'campaigns',
     group: 'marketing',
   },
   {
@@ -1543,6 +1557,89 @@ function EpsilonNetCredentialsModal({ brandId, onSuccess, onCancel }: { brandId:
   );
 }
 
+/** PER-294: ContactPigeon — single API key (from CP Settings > API), validated via get_lists. */
+function ContactPigeonCredentialsModal({ brandId, onSuccess, onCancel }: { brandId: string; onSuccess: () => void; onCancel: () => void }) {
+  const [apiKey, setApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToast();
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+
+  const handleConnect = async () => {
+    if (!apiKey.trim()) return;
+    setLoading(true);
+    setError('');
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
+        method: 'POST',
+        headers: await connectorRequestHeaders(token),
+        body: JSON.stringify({ brandId, provider: 'contact_pigeon', apiKey: apiKey.trim() }),
+      });
+      const result = await res.json();
+      if (res.ok && result.success !== false && !result.error) {
+        toast.success(`ContactPigeon συνδέθηκε${typeof result.lists === 'number' ? ` (${result.lists} λίστες)` : ''}`);
+        onSuccess();
+      } else {
+        setError(result.error || 'Connection failed');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
+      <div style={{ maxWidth: '460px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+          <div>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>ContactPigeon API</p>
+            <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>API key από Settings &gt; API στο ContactPigeon</p>
+          </div>
+          <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+            <X size={18} />
+          </button>
+        </div>
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>API key</label>
+            <div style={{ position: 'relative' }}>
+              <input type={showKey ? 'text' : 'password'} value={apiKey} onChange={(e) => setApiKey(e.target.value)} style={{ ...inputStyle, paddingRight: '40px' }} />
+              <button type="button" onClick={() => setShowKey(!showKey)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+                {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+          {error && (
+            <div style={{ display: 'flex', gap: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px' }}>
+              <AlertTriangle size={16} className="text-red-600 flex-shrink-0" />
+              <p style={{ margin: 0, fontSize: '12px', color: '#991B1B' }}>{error}</p>
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '10px', padding: '0 24px 20px' }}>
+          <button type="button" onClick={onCancel} disabled={loading} style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px' }}>
+            Άκυρο
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleConnect()}
+            disabled={loading || !apiKey.trim()}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: 'none', backgroundColor: '#00B3A4', color: '#fff', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            {loading && <Spinner size="sm" />}
+            Σύνδεση
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** PER-172: connect Meta with a durable System User token; falls back to Facebook login. */
 function MetaSystemUserModal({
   brandId,
@@ -2291,6 +2388,7 @@ export function ConnectorsPanel() {
   const [megaventoryModal, setMegaventoryModal] = useState(false);
   const [softoneModal, setSoftoneModal] = useState(false);
   const [epsilonNetModal, setEpsilonNetModal] = useState(false);
+  const [contactPigeonModal, setContactPigeonModal] = useState(false);
   const [entersoftModal, setEntersoftModal] = useState(false);
   const [metaTokenModal, setMetaTokenModal] = useState(false);
   const [expandedConnectorDetails, setExpandedConnectorDetails] = useState<Partial<Record<ConnectorId, boolean>>>({});
@@ -2315,6 +2413,7 @@ export function ConnectorsPanel() {
     softone: { connected: false },
     epsilon_net: { connected: false },
     entersoft: { connected: false },
+    contact_pigeon: { connected: false },
   };
 
   // Connectors doc — cached, refetch only after sync/connect/disconnect
@@ -2352,6 +2451,7 @@ export function ConnectorsPanel() {
         softone: connectorsData.softone || { connected: false },
         epsilon_net: connectorsData.epsilon_net || { connected: false },
         entersoft: connectorsData.entersoft || { connected: false },
+        contact_pigeon: connectorsData.contact_pigeon || { connected: false },
       }
     : emptyStates;
 
@@ -2593,7 +2693,9 @@ export function ConnectorsPanel() {
                                 ? 'Το Epsilon Net συνδέθηκε επιτυχώς.'
                                 : connectorKey === 'entersoft'
                                   ? 'Το Entersoft συνδέθηκε επιτυχώς.'
-                                  : 'Η σύνδεση ολοκληρώθηκε.';
+                                  : connectorKey === 'contact_pigeon'
+                                    ? 'Το ContactPigeon συνδέθηκε επιτυχώς.'
+                                    : 'Η σύνδεση ολοκληρώθηκε.';
       toast.success(label);
     },
     [brandId, fetchStates, queryClient, toast]
@@ -2720,6 +2822,10 @@ export function ConnectorsPanel() {
     }
     if (provider === 'epsilon_net') {
       setEpsilonNetModal(true);
+      return;
+    }
+    if (provider === 'contact_pigeon') {
+      setContactPigeonModal(true);
       return;
     }
     if (provider === 'entersoft') {
@@ -2903,6 +3009,13 @@ export function ConnectorsPanel() {
               (typeof result.items === 'number' ? ` · είδη ${result.items}` : '') +
               (typeof result.balances === 'number' ? ` · υπόλοιπα ${result.balances}` : '')
           );
+        } else if (provider === 'contact_pigeon') {
+          const bits = [
+            typeof result.lists === 'number' ? `λίστες ${result.lists}` : '',
+            typeof result.contactsProbed === 'number' && result.contactsProbed > 0 ? `επαφές ${result.contactsProbed}` : '',
+            typeof result.events === 'number' && result.events > 0 ? `events ${result.events}` : '',
+          ].filter(Boolean);
+          toast.success(bits.length ? `ContactPigeon: ${bits.join(' · ')}` : 'ContactPigeon: fetch ok');
         } else if (provider === 'entersoft') {
           const t = result.imported ?? 0;
           toast.success(
@@ -3186,6 +3299,17 @@ export function ConnectorsPanel() {
             fetchStates();
           }}
           onCancel={() => setEpsilonNetModal(false)}
+        />
+      )}
+
+      {contactPigeonModal && brandId && (
+        <ContactPigeonCredentialsModal
+          brandId={brandId}
+          onSuccess={() => {
+            setContactPigeonModal(false);
+            fetchStates();
+          }}
+          onCancel={() => setContactPigeonModal(false)}
         />
       )}
 
