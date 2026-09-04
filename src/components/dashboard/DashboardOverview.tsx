@@ -527,6 +527,28 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     };
   }, [ga4.dailyEntries, periodDates.fromDate, periodDates.toDate]);
 
+  /** `ga4.weeklyChange` compares the last 7 days of the WHOLE GA4 series against the 7 before
+   *  them, wherever the selected period sits. Feeding that to the briefing put a delta from a
+   *  different fortnight next to period figures — and the model opened with it as the most
+   *  urgent finding. Anchor it to the end of the selected period instead. */
+  const ga4WeeklyChangeInPeriod = useMemo(() => {
+    const days = ga4.dailyEntries.filter(
+      (d) => d.date >= periodDates.fromDate && d.date <= periodDates.toDate
+    );
+    if (days.length < 14) return null;
+    const last7 = days.slice(-7);
+    const prev7 = days.slice(-14, -7);
+    const sum = (arr: typeof days, pick: (d: typeof days[number]) => number) =>
+      arr.reduce((acc, d) => acc + (Number(pick(d)) || 0), 0);
+    const pctChange = (previous: number, current: number) =>
+      previous > 0 ? ((current - previous) / previous) * 100 : null;
+    return {
+      sessions: pctChange(sum(prev7, (d) => d.sessions), sum(last7, (d) => d.sessions)),
+      users: pctChange(sum(prev7, (d) => d.totalUsers), sum(last7, (d) => d.totalUsers)),
+      conversions: pctChange(sum(prev7, (d) => d.conversions), sum(last7, (d) => d.conversions)),
+    };
+  }, [ga4.dailyEntries, periodDates.fromDate, periodDates.toDate]);
+
   const ga4SessionsTrend = useMemo(() => {
     const periodDays = ga4.dailyEntries.filter(
       (d) => d.date >= periodDates.fromDate && d.date <= periodDates.toDate
@@ -1161,7 +1183,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
              *  3-year window, and handing that over when the period has no GA4 days reported
              *  ~1,1M sessions for a 30-day window. Zeroed + hasData:false is the honest signal. */
             totals: ga4TotalsInPeriod,
-            weeklyChange: ga4.weeklyChange,
+            weeklyChange: ga4WeeklyChangeInPeriod,
             hasData: ga4.hasData && ga4TotalsInPeriod.hasData,
           }}
           alerts={automationAlerts}

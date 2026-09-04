@@ -483,7 +483,7 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
   if (data.ga4) {
     const wc = data.ga4.weeklyChange;
     const fmt = (v: number | null) => v !== null ? `${v >= 0 ? '+' : ''}${v.toFixed(1)}%` : 'N/A';
-    sections.push(`[TRAFFIC] Sessions: ${formatNumber(data.ga4.sessions)}, Users: ${formatNumber(data.ga4.users)}, New Users: ${formatNumber(data.ga4.newUsers)}, Conversions: ${formatNumber(data.ga4.conversions)}, Bounce: ${data.ga4.bounceRate.toFixed(1)}%${wc ? `, Weekly Δ: Sessions ${fmt(wc.sessions)}, Users ${fmt(wc.users)}, Conversions ${fmt(wc.conversions)}` : ''}`);
+    sections.push(`[TRAFFIC] Sessions: ${formatNumber(data.ga4.sessions)}, Users: ${formatNumber(data.ga4.users)}, New Users: ${formatNumber(data.ga4.newUsers)}, Conversions: ${formatNumber(data.ga4.conversions)}, Bounce: ${data.ga4.bounceRate.toFixed(1)}%${wc ? `, Τάση εντός περιόδου (οι 7 τελευταίες ημέρες της περιόδου έναντι των 7 προηγούμενων): Sessions ${fmt(wc.sessions)}, Users ${fmt(wc.users)}, Conversions ${fmt(wc.conversions)}` : ''}`);
   }
 
   const inv = data.inventory;
