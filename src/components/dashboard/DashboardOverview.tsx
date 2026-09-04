@@ -1156,9 +1156,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           segments={dashboardRfmSegments}
           totalOrganicRevenue={organicRevenueInPeriod}
           ga4={{
-            /** Period-scoped: the prompt states every figure covers ONLY the selected period,
-             *  and the YoY strip compares this against the same window last year. */
-            totals: ga4TotalsInPeriod.hasData ? ga4TotalsInPeriod : ga4.totals,
+            /** Period-scoped, with NO all-time fallback: `ga4.totals` sums the connector's whole
+             *  3-year window, and handing that over when the period has no GA4 days reported
+             *  ~1,1M sessions for a 30-day window. Zeroed + hasData:false is the honest signal. */
+            totals: ga4TotalsInPeriod,
             weeklyChange: ga4.weeklyChange,
             hasData: ga4.hasData && ga4TotalsInPeriod.hasData,
           }}

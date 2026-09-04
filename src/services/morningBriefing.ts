@@ -450,6 +450,17 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
     );
   }
 
+  // Absence of campaign rows is a data gap, not evidence that the brand stopped advertising.
+  // Without this the model wrote "τζίρος αποκλειστικά από οργανικές πηγές, χωρίς καμία
+  // διαφημιστική υποστήριξη" purely because the connectors had delivered nothing for the window.
+  if (data.revenue.campaignCount === 0) {
+    sections.push(
+      `[ΔΙΑΦΗΜΙΣΗ — ΠΡΟΣΟΧΗ] Δεν έχουν φτάσει στο Performance+ δεδομένα καμπανιών για αυτή την περίοδο. ` +
+        'Αυτό ΔΕΝ σημαίνει ότι δεν έγινε διαφήμιση. ΜΗΝ γράψεις ότι ο τζίρος είναι αποκλειστικά οργανικός, ' +
+        'ούτε ότι δεν υπήρξε διαφημιστική υποστήριξη. Ανάφερε ότι λείπουν τα στοιχεία καμπανιών και ότι πρέπει να ελεγχθεί ο συγχρονισμός.'
+    );
+  }
+
   if (ecActive && data.revenue.storeRevenue === 0) {
     sections.push(
       `[ΗΛΕΚΤΡΟΝΙΚΟ ΚΑΤΑΣΤΗΜΑ]` +

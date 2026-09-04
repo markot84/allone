@@ -108,6 +108,9 @@ interface YoyRow {
   format: YoyValueFormat;
   /** Ad spend is not "better" when it rises — it stays neutral instead of green/red. */
   directional: boolean;
+  /** False when the current side was never measured for this window (no GA4 days, no campaigns).
+   * Such a row is dropped: "-100% vs last year" would read as a collapse, not a data gap. */
+  measured: boolean;
 }
 
 function formatYoyValue(value: number, format: YoyValueFormat): string {
@@ -427,17 +430,21 @@ export function MorningBriefing(props: MorningBriefingProps) {
       sessions: props.ga4.totals.sessions,
     };
 
+    // No campaigns overlap this window ⇒ ad cost was not measured, it is not "zero spend".
+    const adsMeasured = props.campaigns.length > 0;
+    const trafficMeasured = props.ga4.hasData;
+
     const allRows: YoyRow[] = [
-      { key: 'revenue', label: 'Έσοδα', current: current.revenue, previous: yoy.previous.revenue, format: 'currency', directional: true },
-      { key: 'orders', label: 'Παραγγελίες', current: current.orders, previous: yoy.previous.orders, format: 'number', directional: true },
-      { key: 'spend', label: 'Διαφ. δαπάνη', current: current.spend, previous: yoy.previous.spend, format: 'currency', directional: false },
-      { key: 'trueRoas', label: 'Τζίρος ανά 1€', current: current.trueRoas, previous: yoy.previous.trueRoas, format: 'ratio', directional: true },
-      { key: 'sessions', label: 'Επισκέψεις', current: current.sessions, previous: yoy.previous.sessions, format: 'number', directional: true },
+      { key: 'revenue', label: 'Έσοδα', current: current.revenue, previous: yoy.previous.revenue, format: 'currency', directional: true, measured: true },
+      { key: 'orders', label: 'Παραγγελίες', current: current.orders, previous: yoy.previous.orders, format: 'number', directional: true, measured: true },
+      { key: 'spend', label: 'Διαφ. δαπάνη', current: current.spend, previous: yoy.previous.spend, format: 'currency', directional: false, measured: adsMeasured },
+      { key: 'trueRoas', label: 'Τζίρος ανά 1€', current: current.trueRoas, previous: yoy.previous.trueRoas, format: 'ratio', directional: true, measured: adsMeasured },
+      { key: 'sessions', label: 'Επισκέψεις', current: current.sessions, previous: yoy.previous.sessions, format: 'number', directional: true, measured: trafficMeasured },
     ];
-    const rows = allRows.filter((row) => row.current > 0 || row.previous > 0);
+    const rows = allRows.filter((row) => row.measured && (row.current > 0 || row.previous > 0));
 
     return rows.length > 0 ? { label: yoy.previousPeriodLabel, rows } : null;
-  }, [props.yearOverYear, props.campaigns, props.ecommerce, props.totalOrganicRevenue, props.ga4.totals.sessions]);
+  }, [props.yearOverYear, props.campaigns, props.ecommerce, props.totalOrganicRevenue, props.ga4.hasData, props.ga4.totals.sessions]);
 
   /** Loading the full order history — KPIs climb but the text must not run ahead. */
   const awaitingEcommMetrics =
