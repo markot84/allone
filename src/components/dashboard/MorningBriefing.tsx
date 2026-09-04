@@ -471,7 +471,10 @@ export function MorningBriefing(props: MorningBriefingProps) {
       { key: 'revenue', label: 'Έσοδα', current: current.revenue, previous: yoy.previous.revenue, format: 'currency', directional: true, measured: true },
       { key: 'orders', label: 'Παραγγελίες', current: current.orders, previous: yoy.previous.orders, format: 'number', directional: true, measured: true },
       { key: 'spend', label: 'Διαφ. δαπάνη', current: current.spend, previous: yoy.previous.spend, format: 'currency', directional: false, measured: adsMeasured },
-      { key: 'trueRoas', label: 'Τζίρος ανά 1€', current: current.trueRoas, previous: yoy.previous.trueRoas, format: 'ratio', directional: true, measured: adsMeasured },
+      // Labelled ROAS at the user's request. The field keeps the name `trueRoas` because
+      // `revenue.roas` already exists and means the platforms' attributed ratio — one label,
+      // two distinct values, so the code has to stay able to tell them apart.
+      { key: 'trueRoas', label: 'ROAS', current: current.trueRoas, previous: yoy.previous.trueRoas, format: 'ratio', directional: true, measured: adsMeasured },
       { key: 'sessions', label: 'Επισκέψεις', current: current.sessions, previous: yoy.previous.sessions, format: 'number', directional: true, measured: trafficMeasured },
     ];
     const rows = allRows.filter((row) => row.measured && (row.current > 0 || row.previous > 0));
