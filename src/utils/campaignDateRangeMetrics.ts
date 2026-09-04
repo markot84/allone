@@ -89,6 +89,20 @@ function scaleConversionActions(
   return out;
 }
 
+/** True when the campaign's own daily series has at least one bucket overlapping the window.
+ * Deliberately the same bucket rule as `applyCampaignDateRangeToMetrics`, so "kept by the filter"
+ * and "can contribute a non-zero figure" stay the same set. */
+function hasDailyMetricsInRange(c: Campaign, dateFrom: string, dateTo: string): boolean {
+  const dm = c.dailyMetrics;
+  if (!dm) return false;
+  const keys = Object.keys(dm);
+  if (keys.length === 0) return false;
+  const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
+  const from = dateFrom || '0000-00-00';
+  const to = dateTo || '9999-99-99';
+  return keys.some((date) => bucketOverlapFraction(date, from, to, { metaMonthBuckets }) > 0);
+}
+
 /** Same filter as Campaigns: campaign schedule overlap with [from, to). */
 export function filterCampaignsByScheduleDateOverlap(
   campaigns: Campaign[],
@@ -99,6 +113,11 @@ export function filterCampaignsByScheduleDateOverlap(
   const from = dateFrom ? new Date(dateFrom).getTime() : 0;
   const to = dateTo ? new Date(dateTo).getTime() + 86400000 : Infinity;
   return campaigns.filter(c => {
+    // Measured activity outranks the declared schedule. The connectors merge historical daily
+    // metrics into a single campaign document, so a campaign whose schedule ended in a past year
+    // can still carry spend inside the requested window; dropping it on the schedule alone made
+    // the period report €0 for windows that genuinely had spend.
+    if (hasDailyMetricsInRange(c, dateFrom, dateTo)) return true;
     const { start, end } = getCampaignScheduleBounds(c);
     const campStart = start ? start.getTime() : null;
     const campEnd = end ? end.getTime() : null;
