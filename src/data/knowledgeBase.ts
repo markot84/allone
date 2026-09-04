@@ -317,6 +317,7 @@ Optional αλλά χρήσιμα:
 - Flow_Group / Product_Segment
 - Seasonality_Tag
 - Priority_Flag
+- Avg_Cost_1 / Avg_Cost_2 / Avg_Cost_3 (μεσοσταθμικό κόστος κτήσης, έως 3 στήλες)
 
 Margin Tier:
 - high: >30%
@@ -327,6 +328,7 @@ Derive logic:
 - Αν λείπει το Gross_Margin_%, υπολογίζεται από Sell_Price και Cost_Price
 - Αν λείπει το Stock_Age_Days, υπολογίζεται από το First_Available_Date
 - Αν υπάρχει Available_Stock, χρησιμοποιείται ως βασικό διαθέσιμο stock στα downstream modules
+- Αν υπάρχουν στήλες Avg_Cost_1/2/3 (ή «Κόστος Κτήσης 1/2/3»), ο μέσος όρος των συμπληρωμένων τιμών γίνεται το «Κόστος κτήσης» στο Product Intelligence
 
 Validation:
 Το σύστημα ελέγχει ότι:
@@ -569,6 +571,9 @@ List_Price, List Price, list_price, Compare_At_Price, compare_at_price, Compare 
 
 Cost Price:
 Cost_Price, Cost Price, cost_price, Cost, cost, Κόστος, κόστος
+
+Μεσοσταθμικό Κόστος Κτήσης (έως 3 στήλες, ο μέσος όρος τους τροφοδοτεί τη στήλη «Κόστος κτήσης» του PI):
+Avg_Cost_1, Avg_Cost_2, Avg_Cost_3, Avg_Cost, Average_Cost, Μεσοσταθμικό Κόστος, Μεσοσταθμικό Κόστος Κτήσης 1/2/3, Κόστος Κτήσης 1/2/3, Μέση Τιμή Κτήσης
 
 Stock On Hand / Stock Level:
 Stock_On_Hand, Stock On Hand, stock_on_hand, Stock_Level, stock_level, Stock, stock, Quantity, quantity, Qty, qty, Inventory, inventory, On_Hand, on_hand, Units, units, Απόθεμα, απόθεμα, Ποσότητα, ποσότητα, Available_Stock, available_stock, Δυναμικό_Υπόλοιπο, δυναμικό_υπόλοιπο, Κίνηση, κίνηση

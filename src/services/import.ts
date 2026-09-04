@@ -98,10 +98,22 @@ export const PRODUCT_COLUMN_MAPPING = [
     alternatives: ['Cost_Price', 'Cost Price', 'cost_price', 'Cost', 'cost', 'Κόστος', 'κόστος']
   },
   {
-    fileColumn: 'Avg_Cost',
-    appField: 'Μεσοσταθμικό κόστος κτήσης',
-    usedIn: 'Optional, PI «Κόστος κτήσης» column',
-    alternatives: ['Avg_Cost', 'Average_Cost', 'avg_cost', 'average_cost', 'Μεσοσταθμικό Κόστος', 'μεσοσταθμικό_κόστος', 'Μέση Τιμή Κτήσης', 'μέση_τιμή_κτήσης']
+    fileColumn: 'Avg_Cost_1',
+    appField: 'Μεσοσταθμικό κόστος κτήσης 1',
+    usedIn: 'Optional, averaged into PI «Κόστος κτήσης»',
+    alternatives: ['Avg_Cost_1', 'avg_cost_1', 'Avg_Cost', 'Average_Cost', 'avg_cost', 'average_cost', 'Μεσοσταθμικό Κόστος', 'μεσοσταθμικό_κόστος', 'Μεσοσταθμικό Κόστος Κτήσης 1', 'μεσοσταθμικό_κόστος_κτήσης_1', 'Κόστος Κτήσης 1', 'κόστος_κτήσης_1', 'Μέση Τιμή Κτήσης', 'μέση_τιμή_κτήσης']
+  },
+  {
+    fileColumn: 'Avg_Cost_2',
+    appField: 'Μεσοσταθμικό κόστος κτήσης 2',
+    usedIn: 'Optional, averaged into PI «Κόστος κτήσης»',
+    alternatives: ['Avg_Cost_2', 'avg_cost_2', 'Μεσοσταθμικό Κόστος Κτήσης 2', 'μεσοσταθμικό_κόστος_κτήσης_2', 'Κόστος Κτήσης 2', 'κόστος_κτήσης_2']
+  },
+  {
+    fileColumn: 'Avg_Cost_3',
+    appField: 'Μεσοσταθμικό κόστος κτήσης 3',
+    usedIn: 'Optional, averaged into PI «Κόστος κτήσης»',
+    alternatives: ['Avg_Cost_3', 'avg_cost_3', 'Μεσοσταθμικό Κόστος Κτήσης 3', 'μεσοσταθμικό_κόστος_κτήσης_3', 'Κόστος Κτήσης 3', 'κόστος_κτήσης_3']
   },
   {
     fileColumn: 'List_Price',
@@ -794,7 +806,13 @@ export function validateProduct(row: Record<string, string>, index: number): { v
   // Greek: "Τιμή αγοράς" = Cost Price (normalized: "τιμή_αγοράς")
   const costPrice = pick(row, 'τιμή_αγοράς', 'cost_price', 'Cost_Price', 'cost', 'Cost', 'κόστος');
   // A file with only avg_cost also feeds cost_price (pick's substring fuzz on 'cost') — fine: WAC is the best available cost.
-  const avgCost = pick(row, 'avg_cost', 'average_cost', 'Avg_Cost', 'Average_Cost', 'μεσοσταθμικό_κόστος', 'μεσοσταθμικό_κόστος_κτήσης', 'μέση_τιμή_κτήσης');
+  // Up to 3 WAC columns; PI «Κόστος κτήσης» = mean of the non-empty ones.
+  const avgCostVals = [
+    pick(row, 'avg_cost_1', 'Avg_Cost_1', 'μεσοσταθμικό_κόστος_κτήσης_1', 'κόστος_κτήσης_1', 'avg_cost', 'average_cost', 'Avg_Cost', 'Average_Cost', 'μεσοσταθμικό_κόστος', 'μεσοσταθμικό_κόστος_κτήσης', 'μέση_τιμή_κτήσης'),
+    pick(row, 'avg_cost_2', 'Avg_Cost_2', 'μεσοσταθμικό_κόστος_κτήσης_2', 'κόστος_κτήσης_2'),
+    pick(row, 'avg_cost_3', 'Avg_Cost_3', 'μεσοσταθμικό_κόστος_κτήσης_3', 'κόστος_κτήσης_3'),
+  ].map((v) => parseLooseNumber(v)).filter((n) => n > 0);
+  const avgCost = avgCostVals.length ? String(Math.round((avgCostVals.reduce((a, b) => a + b, 0) / avgCostVals.length) * 100) / 100) : '';
   const revenuePeriod = pick(row, 'revenue_period', 'revenue', 'revenue_period');
   const qtySoldPeriod = pick(row, 'πωλήσεις', 'qty_sold_period', 'qty_sold', 'quantity_sold', 'sales', 'sold', 'units_sold');
   const qtySoldLast7 = pick(row, 'qty_sold_last_7d', 'qty_sold_7d', 'sales_7d', 'πωλήσεις_7d', 'πωλήσεις_7ημερο');
