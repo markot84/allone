@@ -5,7 +5,7 @@ import {
   computeBriefingYearOverYear,
   briefingHeadlineRevenue,
 } from './morningBriefing';
-import type { AutomationAlert, Campaign, Product, RFMSegment } from '../types';
+import type { AutomationAlert, Campaign, RFMSegment } from '../types';
 
 const PERIOD = { fromDate: '2026-09-01', toDate: '2026-09-03' };
 
@@ -169,7 +169,6 @@ describe('briefingHeadlineRevenue', () => {
 
 describe('collectBriefingData with a year-over-year comparison', () => {
   const base = {
-    products: [] as Product[],
     campaigns: [] as Campaign[],
     segments: [] as RFMSegment[],
     totalOrganicRevenue: 0,
@@ -205,5 +204,49 @@ describe('collectBriefingData with a year-over-year comparison', () => {
     });
 
     expect(computeBriefingDataHash(withYoy)).not.toBe(computeBriefingDataHash(withoutYoy));
+  });
+});
+
+describe('collectBriefingData inventory', () => {
+  const base = {
+    campaigns: [] as Campaign[],
+    segments: [] as RFMSegment[],
+    totalOrganicRevenue: 0,
+    ga4: {
+      totals: { sessions: 0, users: 0, newUsers: 0, bounceRate: 0, conversions: 0 },
+      weeklyChange: null,
+      hasData: false,
+    },
+    alerts: [] as AutomationAlert[],
+    brandName: 'Acme',
+  };
+
+  const piInventory = {
+    totalProducts: 4241,
+    deadStock: 15,
+    lowStock: 88,
+    excessStock: 120,
+    deadStockCapital: 389367,
+    deadStockCapitalIsCost: true,
+    lowStockTopNames: ['Alpha', 'Beta'],
+  };
+
+  it('is null when Product Intelligence has no aggregate, rather than zeroed', () => {
+    expect(collectBriefingData(base).inventory).toBeNull();
+    expect(collectBriefingData({ ...base, inventory: null }).inventory).toBeNull();
+  });
+
+  it('passes the Product Intelligence figures through untouched', () => {
+    expect(collectBriefingData({ ...base, inventory: piInventory }).inventory).toEqual(piInventory);
+  });
+
+  it('feeds the data hash, so a PI rebuild regenerates the briefing', () => {
+    const without = computeBriefingDataHash(collectBriefingData(base));
+    const with15 = computeBriefingDataHash(collectBriefingData({ ...base, inventory: piInventory }));
+    const with16 = computeBriefingDataHash(
+      collectBriefingData({ ...base, inventory: { ...piInventory, deadStock: 16 } })
+    );
+    expect(with15).not.toBe(without);
+    expect(with16).not.toBe(with15);
   });
 });

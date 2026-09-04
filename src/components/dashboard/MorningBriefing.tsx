@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Sparkles, ArrowRight, AlertTriangle, CalendarClock, Clock, Minus, TrendingDown, TrendingUp, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tooltip, FormattedProse, toPlainProseText } from '../common';
-import type { BriefingResult, BriefingYearOverYear } from '../../services/morningBriefing';
+import type { BriefingInventory, BriefingResult, BriefingYearOverYear } from '../../services/morningBriefing';
 import {
   briefingHeadlineRevenue,
   collectBriefingData,
@@ -14,13 +14,14 @@ import {
 } from '../../services/morningBriefing';
 import { calculateCampaignMetrics } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
-import type { Product, Campaign, RFMSegment, AutomationAlert } from '../../types';
+import type { Campaign, RFMSegment, AutomationAlert } from '../../types';
 import { guessRoute } from './guessRoute';
 
 interface MorningBriefingProps {
   brandId: string;
   brandName: string;
-  products: Product[];
+  /** Stock figures from Product Intelligence — never recounted here. Null ⇒ no stock section. */
+  inventory?: BriefingInventory | null;
   campaigns: Campaign[];
   segments: RFMSegment[];
   totalOrganicRevenue: number;
@@ -30,7 +31,6 @@ interface MorningBriefingProps {
     hasData: boolean;
   };
   alerts: AutomationAlert[];
-  supplierTodMap?: Map<string, number>;
   ecommerce?: {
     hasData: boolean;
     totalRevenue: number;
@@ -191,14 +191,13 @@ export function MorningBriefing(props: MorningBriefingProps) {
   briefingLatestRef.current = briefing;
 
   const buildData = useCallback(() => collectBriefingData({
-    products: props.products,
     campaigns: props.campaigns,
     segments: props.segments,
     totalOrganicRevenue: props.totalOrganicRevenue,
     ga4: props.ga4,
     alerts: props.alerts,
     brandName,
-    supplierTodMap: props.supplierTodMap,
+    inventory: props.inventory,
     yearOverYear: props.yearOverYear,
     ecommerce: props.ecommerce
       ? {
@@ -211,7 +210,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
           dataFreshness: props.ecommerce.dataFreshness,
         }
       : undefined,
-  }), [props.products, props.campaigns, props.segments, props.totalOrganicRevenue, props.ga4, props.alerts, brandName, props.supplierTodMap, props.ecommerce, props.yearOverYear]);
+  }), [props.campaigns, props.segments, props.totalOrganicRevenue, props.ga4, props.alerts, brandName, props.inventory, props.ecommerce, props.yearOverYear]);
 
   const buildDataRef = useRef(buildData);
   buildDataRef.current = buildData;
@@ -271,7 +270,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
 
   // First generation only if no briefing exists for today + period
   const hasSubstantiveData =
-    props.products.length > 0 ||
+    (props.inventory?.totalProducts ?? 0) > 0 ||
     props.campaigns.length > 0 ||
     Boolean(props.ecommerce?.connectedPlatforms?.length);
 

@@ -38,9 +38,8 @@ import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { useBrand } from '../../hooks/useBrand';
 import { prefersEshopRevenuePerformance } from '../../utils/revenueSource';
-import { buildSupplierTodMap } from '../../utils/productUtils';
 import { useProductAggregates, useSegmentAggregates } from '../../hooks/useAggregates';
-import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
+import { useProductIntelligenceAggregate, useProductIntelligenceAggregateDoc } from '../../hooks/useProductIntelligenceAggregate';
 import { useProcurementSignals } from '../../hooks/useProcurementSignals';
 import { usePlan } from '../../hooks/usePlan';
 import { usePeriodScopedCampaigns } from '../../hooks/usePeriodScopedCampaigns';
@@ -216,8 +215,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     brandId: null,
     segments: [],
   });
-  const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 }, { staticFirstPage: true });
-  const products = productIntelligence.page?.products ?? [];
+  const productIntelligence = useProductIntelligenceAggregateDoc();
+  /** Named low-stock products for the AI briefing prose — the PI bucket, not the 'all' page's first rows. */
+  const lowStockBucket = useProductIntelligenceAggregate('low', 1, {}, { staticFirstPage: true });
   const { isEnterprise } = usePlan();
   const { signalsBySku: procurementSignals } = useProcurementSignals();
   const { productStats } = useProductAggregates();
@@ -262,10 +262,6 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const showSegmentsStaleSourceNote =
     !segmentsLoading && rfmSegments.length > 0 && segmentsDataSource !== 'ecommerce';
 
-  const supplierTodMap = useMemo(
-    () => buildSupplierTodMap(suppliers, currentBrand?.inventoryThresholds?.defaultTod),
-    [suppliers, currentBrand?.inventoryThresholds?.defaultTod]
-  );
   const productsCount = productIntelligence.aggregate?.totalCount ?? productStats?.totalSkus ?? 0;
   const hasAnyData =
     hasOrganic ||
@@ -718,6 +714,30 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     !ecommAggregateFresh &&
     (ecommDaysSinceLatestRevenue ?? 0) >= 2;
 
+  /** Stock figures for the AI briefing come from Product Intelligence and are NOT recomputed:
+   *  the dashboard only holds the first page of the catalog, so recounting there reported a
+   *  150-row sample as if it were the whole catalog. groupedSummary matches the PI page's
+   *  default (parent-grouped) view, same rule as AI Insights (PER-336). */
+  const briefingInventory = useMemo(() => {
+    const aggregate = productIntelligence.aggregate;
+    const summary = aggregate?.groupedSummary ?? aggregate?.summary;
+    if (!aggregate || !summary) return null;
+    const costValue = summary.dead_stock.cost_value ?? 0;
+    return {
+      totalProducts: summary.total_skus || aggregate.totalCount,
+      deadStock: summary.dead_stock.count,
+      lowStock: summary.low_stock.count,
+      excessStock: summary.excess_stock.count,
+      // PER-317: cost×stock is the real tied capital; retail×stock is the fallback for older aggregates.
+      deadStockCapital: costValue > 0 ? costValue : summary.dead_stock.value,
+      deadStockCapitalIsCost: costValue > 0,
+      lowStockTopNames: (lowStockBucket.page?.products ?? [])
+        .slice(0, 5)
+        .map((p) => p.name)
+        .filter((n): n is string => !!n),
+    };
+  }, [productIntelligence.aggregate, lowStockBucket.page?.products]);
+
   const briefingYearOverYear = useMemo(
     () =>
       computeBriefingYearOverYear({
@@ -1131,7 +1151,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         <MorningBriefing
           brandId={currentBrand.id}
           brandName={currentBrand.name}
-          products={products}
+          inventory={briefingInventory}
           campaigns={periodCampaigns}
           segments={dashboardRfmSegments}
           totalOrganicRevenue={organicRevenueInPeriod}
@@ -1143,7 +1163,6 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             hasData: ga4.hasData && ga4TotalsInPeriod.hasData,
           }}
           alerts={automationAlerts}
-          supplierTodMap={supplierTodMap}
           metricsReady={briefingReady}
           financeKey={briefingFinanceKey}
           ecommerce={{

@@ -2,12 +2,11 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { buildAdvisorySystemPrompt } from '../data/aiAdvisoryFramework';
 import { callGemini } from './geminiProxy';
-import { classifyStockHealth, getProductTod } from '../utils/productUtils';
 import { calculateCampaignMetrics, sumDailyRevenueInPeriod } from '../utils/roiUtils';
 import { formatIsoRangeLabelGr, isIsoDay, shiftPeriodByYears } from '../utils/periodComparison';
 import { formatCurrency, formatNumber } from '../utils/format';
 import { parseJsonObject } from '../utils/aiJson';
-import type { Product, Campaign, RFMSegment, AutomationAlert } from '../types';
+import type { Campaign, RFMSegment, AutomationAlert } from '../types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,14 +39,9 @@ export interface BriefingData {
     conversions: number;
     weeklyChange: { sessions: number | null; users: number | null; conversions: number | null } | null;
   } | null;
-  inventory: {
-    totalProducts: number;
-    deadStock: number;
-    lowStock: number;
-    excessStock: number;
-    deadStockValue: number;
-    lowStockTopNames: string[];
-  };
+  /** Null when Product Intelligence has no aggregate for the brand — the briefing then says
+    * nothing about stock rather than inventing figures. */
+  inventory: BriefingInventory | null;
   segments: {
     total: number;
     totalCustomers: number;
@@ -66,6 +60,22 @@ export interface BriefingData {
   };
   brandName: string;
   yearOverYear?: BriefingYearOverYear;
+}
+
+/** Inventory exactly as Product Intelligence reports it: whole catalog, the brand's stock-health
+ * thresholds, parent grouping — the same numbers the Product Intelligence page shows. The briefing
+ * must never recount these from a page of products. */
+export interface BriefingInventory {
+  totalProducts: number;
+  deadStock: number;
+  lowStock: number;
+  excessStock: number;
+  /** Capital sitting in dead stock. */
+  deadStockCapital: number;
+  /** True when `deadStockCapital` is cost×stock (δεσμευμένο κεφάλαιο); false = retail×stock. */
+  deadStockCapitalIsCost: boolean;
+  /** Names from the PI "low stock" bucket, for the prose. */
+  lowStockTopNames: string[];
 }
 
 export interface BriefingYearOverYear {
@@ -112,7 +122,6 @@ export interface CachedBriefing extends BriefingResult {
 // ── Data Collector ───────────────────────────────────────────────────────────
 
 export function collectBriefingData(params: {
-  products: Product[];
   campaigns: Campaign[];
   segments: RFMSegment[];
   /** Organic $ for the same period as the campaigns / e-shop in the snapshot (e.g. dashboard period). */
@@ -124,7 +133,8 @@ export function collectBriefingData(params: {
   };
   alerts: AutomationAlert[];
   brandName: string;
-  supplierTodMap?: Map<string, number>;
+  /** From Product Intelligence — see `BriefingInventory`. Null/omitted ⇒ no stock section. */
+  inventory?: BriefingInventory | null;
   ecommerce?: {
     hasData: boolean;
     totalRevenue: number;
@@ -142,18 +152,7 @@ export function collectBriefingData(params: {
   /** Same window one year back — see `computeBriefingYearOverYear`. Omitted when not comparable. */
   yearOverYear?: BriefingYearOverYear;
 }): BriefingData {
-  const { products, campaigns, segments, totalOrganicRevenue, ga4, alerts, brandName, supplierTodMap, ecommerce, yearOverYear } = params;
-
-  const classify = (p: Product) => classifyStockHealth(p, getProductTod(p, supplierTodMap));
-  const deadStock = products.filter(p => classify(p) === 'dead');
-  const lowStock = products.filter(p => classify(p) === 'low');
-  const excessStock = products.filter(p => classify(p) === 'excess');
-  const deadStockValue = deadStock.reduce((sum, p) => sum + (p.price || 0) * (p.stock_level || 0), 0);
-
-  const lowStockTopNames = lowStock
-    .sort((a, b) => (b.revenue_period || 0) - (a.revenue_period || 0))
-    .slice(0, 5)
-    .map(p => p.name);
+  const { campaigns, segments, totalOrganicRevenue, ga4, alerts, brandName, inventory, ecommerce, yearOverYear } = params;
 
   const metrics = calculateCampaignMetrics(campaigns);
   const ecommerceSourceActive = Boolean(ecommerce?.hasData);
@@ -205,14 +204,7 @@ export function collectBriefingData(params: {
       conversions: ga4.totals.conversions,
       weeklyChange: ga4.weeklyChange,
     } : null,
-    inventory: {
-      totalProducts: products.length,
-      deadStock: deadStock.length,
-      lowStock: lowStock.length,
-      excessStock: excessStock.length,
-      deadStockValue,
-      lowStockTopNames,
-    },
+    inventory: inventory ?? null,
     segments: {
       total: segments.length,
       totalCustomers: segments.reduce((s, seg) => s + (seg.count || 0), 0),
@@ -340,8 +332,8 @@ function extractSnapshot(data: BriefingData): MetricsSnapshot {
     totalRevenue: headlineRevenue,
     totalSpend: data.revenue.totalSpend,
     roas: data.revenue.roas,
-    deadStock: data.inventory.deadStock,
-    lowStock: data.inventory.lowStock,
+    deadStock: data.inventory?.deadStock ?? 0,
+    lowStock: data.inventory?.lowStock ?? 0,
     criticalAlerts: data.alerts.critical,
     campaignCount: data.revenue.campaignCount,
     atRiskPct: data.segments.atRiskPct,
@@ -475,9 +467,17 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
   }
 
   const inv = data.inventory;
-  sections.push(
-    `[INVENTORY] ${inv.totalProducts} προϊόντα: ${inv.deadStock} σε αδράνεια, ${inv.lowStock} με χαμηλό απόθεμα, ${inv.excessStock} με πλεονάζον απόθεμα${inv.deadStockValue > 0 ? `, Δεσμευμένο κεφάλαιο σε αδρανές απόθεμα: ${formatCurrency(inv.deadStockValue)}` : ''}${inv.lowStockTopNames.length > 0 ? `, Προϊόντα ζήτησης με χαμηλό απόθεμα: ${inv.lowStockTopNames.join(', ')}` : ''}`
-  );
+  if (inv) {
+    const capitalLabel = inv.deadStockCapitalIsCost
+      ? 'Δεσμευμένο κεφάλαιο σε αδρανές απόθεμα (κόστος κτήσης × απόθεμα)'
+      : 'Αξία αδρανούς αποθέματος σε τιμές πώλησης';
+    sections.push(
+      `[ΑΠΟΘΕΜΑ — πηγή: Product Intelligence, ίδια νούμερα με τη σελίδα· μην τα ξαναϋπολογίσεις]` +
+        ` ${formatNumber(inv.totalProducts)} προϊόντα: ${formatNumber(inv.deadStock)} σε αδράνεια, ${formatNumber(inv.lowStock)} με χαμηλό απόθεμα, ${formatNumber(inv.excessStock)} με πλεονάζον απόθεμα` +
+        `${inv.deadStockCapital > 0 ? `. ${capitalLabel}: ${formatCurrency(inv.deadStockCapital)}` : ''}` +
+        `${inv.lowStockTopNames.length > 0 ? `. Προϊόντα ζήτησης με χαμηλό απόθεμα: ${inv.lowStockTopNames.join(', ')}` : ''}`
+    );
+  }
 
   if (data.segments.total > 0) {
     sections.push(`[SEGMENTS] ${data.segments.total} segments, ${formatNumber(data.segments.totalCustomers)} πελάτες, At Risk: ${data.segments.atRiskPct.toFixed(1)}%, Champions: ${data.segments.championsPct.toFixed(1)}%`);
@@ -562,9 +562,9 @@ export function computeBriefingDataHash(data: BriefingData): string {
     data.revenue.storeRevenue,
     data.revenue.orderCount,
     data.revenue.totalSpend,
-    data.inventory.totalProducts,
-    data.inventory.deadStock,
-    data.inventory.lowStock,
+    data.inventory?.totalProducts ?? 0,
+    data.inventory?.deadStock ?? 0,
+    data.inventory?.lowStock ?? 0,
     data.segments.totalCustomers,
     data.alerts.count,
     data.ga4?.sessions ?? 0,
