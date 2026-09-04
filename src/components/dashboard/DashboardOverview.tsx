@@ -80,6 +80,8 @@ import { useAiInsightsData } from '../insights/useAiInsightsData';
 import { useAutomationRunner } from '../../hooks/useAutomationRunner';
 import { useAutomationAlerts } from '../../hooks/useAutomation';
 import { MorningBriefing } from './MorningBriefing';
+import { computeBriefingYearOverYear } from '../../services/morningBriefing';
+import { shiftPeriodByYears } from '../../utils/periodComparison';
 import { StrategyBriefingQuickStrip } from '../coordination/StrategyBriefingQuickStrip';
 import { eachDateInclusiveLocal, computeMarketingOverheadForPeriod } from '../../utils/marketingCostPeriod';
 import { getCostingReal12mTurnover } from '../../utils/procurement12mTurnover';
@@ -443,6 +445,46 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     [ecommHist.ordersByDay, periodDates.fromDate, periodDates.toDate]
   );
 
+  /** Same window one year back — every previous figure is derived exactly like its current twin. */
+  const previousPeriodDates = useMemo(
+    () => shiftPeriodByYears({ fromDate: periodDates.fromDate, toDate: periodDates.toDate }, -1),
+    [periodDates.fromDate, periodDates.toDate]
+  );
+
+  const previousPeriodCampaigns = usePeriodScopedCampaigns(campaignsTyped, previousPeriodDates);
+
+  const previousGa4OrganicEffective = useMemo(
+    () =>
+      mergeGa4OrganicDailyWithChannelFallback(
+        ga4.organicRevenueByDay,
+        ga4.totalOrganicRevenueFromChannels,
+        ga4.dateRange ?? undefined,
+        previousPeriodDates.fromDate,
+        previousPeriodDates.toDate
+      ),
+    [
+      ga4.organicRevenueByDay,
+      ga4.totalOrganicRevenueFromChannels,
+      ga4.dateRange?.start,
+      ga4.dateRange?.end,
+      previousPeriodDates.fromDate,
+      previousPeriodDates.toDate,
+    ]
+  );
+
+  const previousOrganicRevenue = useMemo(() => {
+    const rows = buildRoiTrendSeriesDaily(
+      mergeOrganicByMonthWithGa4(organicByMonth, previousGa4OrganicEffective),
+      [],
+      undefined,
+      previousPeriodDates.fromDate,
+      previousPeriodDates.toDate,
+      false,
+      previousGa4OrganicEffective
+    );
+    return rows.reduce((s, r) => s + r.organic, 0);
+  }, [organicByMonth, previousGa4OrganicEffective, previousPeriodDates.fromDate, previousPeriodDates.toDate]);
+
   /** AOV from real e-shop data (revenue/orders of the period). Reliable, no ad-platform double-counting. */
   const eshopAovInPeriod = useMemo(
     () => (ordersInPeriod > 0 ? storeRevenueInPeriod / ordersInPeriod : 0),
@@ -675,6 +717,33 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     storeRevenueInPeriod > 0 &&
     !ecommAggregateFresh &&
     (ecommDaysSinceLatestRevenue ?? 0) >= 2;
+
+  const briefingYearOverYear = useMemo(
+    () =>
+      computeBriefingYearOverYear({
+        period: { fromDate: periodDates.fromDate, toDate: periodDates.toDate },
+        ecommerceSourceActive: enabledModules.ecommerce && !!ecomm.hasData,
+        revenueByDay: ecommRevenueByDayRecord,
+        ordersByDay: ecommHist.ordersByDay,
+        previousCampaigns: previousPeriodCampaigns,
+        ga4DailyEntries: ga4.dailyEntries,
+        previousOrganicRevenue,
+        historyStartDate: currentBrand?.historyStartDate,
+      }),
+    [
+      periodDates.fromDate,
+      periodDates.toDate,
+      enabledModules.ecommerce,
+      ecomm.hasData,
+      ecommRevenueByDayRecord,
+      ecommHist.ordersByDay,
+      previousPeriodCampaigns,
+      ga4.dailyEntries,
+      previousOrganicRevenue,
+      currentBrand?.historyStartDate,
+    ]
+  );
+
   // Inventory value: Enterprise from procurement_signals (sum tied_capital = stock x cost; PI is
   // hidden there); Growth from the PI aggregate (procurement) or the products aggregate (ERP/import).
   const procurementInventoryValue = useMemo(() => {
@@ -1067,9 +1136,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           segments={dashboardRfmSegments}
           totalOrganicRevenue={organicRevenueInPeriod}
           ga4={{
-            totals: ga4.totals,
+            /** Period-scoped: the prompt states every figure covers ONLY the selected period,
+             *  and the YoY strip compares this against the same window last year. */
+            totals: ga4TotalsInPeriod.hasData ? ga4TotalsInPeriod : ga4.totals,
             weeklyChange: ga4.weeklyChange,
-            hasData: ga4.hasData,
+            hasData: ga4.hasData && ga4TotalsInPeriod.hasData,
           }}
           alerts={automationAlerts}
           supplierTodMap={supplierTodMap}
@@ -1089,6 +1160,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               suspectedSyncGap: hasSuspectedEcommSyncGap,
             },
           }}
+          yearOverYear={briefingYearOverYear}
           onSectionChange={onSectionChange}
           hasAnyData={hasAnyData}
           period={dashPeriod}

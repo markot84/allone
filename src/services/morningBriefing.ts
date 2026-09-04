@@ -3,7 +3,8 @@ import { db } from '../config/firebase';
 import { buildAdvisorySystemPrompt } from '../data/aiAdvisoryFramework';
 import { callGemini } from './geminiProxy';
 import { classifyStockHealth, getProductTod } from '../utils/productUtils';
-import { calculateCampaignMetrics } from '../utils/roiUtils';
+import { calculateCampaignMetrics, sumDailyRevenueInPeriod } from '../utils/roiUtils';
+import { formatIsoRangeLabelGr, isIsoDay, shiftPeriodByYears } from '../utils/periodComparison';
 import { formatCurrency, formatNumber } from '../utils/format';
 import { parseJsonObject } from '../utils/aiJson';
 import type { Product, Campaign, RFMSegment, AutomationAlert } from '../types';
@@ -64,6 +65,19 @@ export interface BriefingData {
     topAlerts: string[];
   };
   brandName: string;
+  yearOverYear?: BriefingYearOverYear;
+}
+
+export interface BriefingYearOverYear {
+  previousPeriodLabel: string;
+  previous: {
+    revenue: number;
+    orders: number;
+    spend: number;
+    roas: number;
+    sessions: number;
+  };
+  hasPreviousData: boolean;
 }
 
 export interface MetricsSnapshot {
@@ -125,8 +139,10 @@ export function collectBriefingData(params: {
       suspectedSyncGap: boolean;
     };
   };
+  /** Same window one year back — see `computeBriefingYearOverYear`. Omitted when not comparable. */
+  yearOverYear?: BriefingYearOverYear;
 }): BriefingData {
-  const { products, campaigns, segments, totalOrganicRevenue, ga4, alerts, brandName, supplierTodMap, ecommerce } = params;
+  const { products, campaigns, segments, totalOrganicRevenue, ga4, alerts, brandName, supplierTodMap, ecommerce, yearOverYear } = params;
 
   const classify = (p: Product) => classifyStockHealth(p, getProductTod(p, supplierTodMap));
   const deadStock = products.filter(p => classify(p) === 'dead');
@@ -211,17 +227,115 @@ export function collectBriefingData(params: {
       topAlerts: activeAlerts.slice(0, 3).map(a => a.title),
     },
     brandName,
+    ...(yearOverYear ? { yearOverYear } : {}),
+  };
+}
+
+/** The one revenue figure the briefing treats as headline, in every place it is quoted:
+ * the e-shop order turnover when that source is active (or non-zero anyway), otherwise the
+ * organic + ads-attributed blend. Snapshot, prompt and the YoY strip must all agree. */
+export function briefingHeadlineRevenue(input: {
+  ecommerceSourceActive: boolean;
+  storeRevenue: number;
+  organicRevenue: number;
+  campaignRevenue: number;
+}): number {
+  if (input.ecommerceSourceActive) return input.storeRevenue;
+  if (input.storeRevenue > 0) return input.storeRevenue;
+  return input.organicRevenue + input.campaignRevenue;
+}
+
+// ── Year-over-Year ───────────────────────────────────────────────────────────
+
+/** Sums the day-keyed order rows inside an inclusive window. */
+function sumOrdersInPeriod(
+  ordersByDay: { date: string; orders: number }[],
+  fromDate: string,
+  toDate: string,
+): number {
+  return ordersByDay.reduce(
+    (sum, r) => (r.date >= fromDate && r.date <= toDate ? sum + (Number(r.orders) || 0) : sum),
+    0,
+  );
+}
+
+/** Sums GA4 sessions inside an inclusive window. */
+function sumSessionsInPeriod(
+  dailyEntries: { date: string; sessions: number }[],
+  fromDate: string,
+  toDate: string,
+): number {
+  return dailyEntries.reduce(
+    (sum, d) => (d.date >= fromDate && d.date <= toDate ? sum + (Number(d.sessions) || 0) : sum),
+    0,
+  );
+}
+
+/** The same window one calendar year back, measured the same way as the current period.
+ *
+ * Returns `undefined` when the comparison cannot be made at all — malformed dates, or a
+ * previous window that ends before the brand's `historyStartDate` (data we deliberately
+ * never read). A window we CAN read but that turns out empty comes back with
+ * `hasPreviousData: false`, so callers stay silent instead of reporting a false -100%. */
+export function computeBriefingYearOverYear(params: {
+  period: { fromDate: string; toDate: string };
+  /** Mirrors `BriefingData.revenue.ecommerceSourceActive` — selects the revenue measure. */
+  ecommerceSourceActive: boolean;
+  /** Full-history e-shop revenue per day (YYYY-MM-DD → €). */
+  revenueByDay?: Record<string, number>;
+  /** Full-history e-shop orders per day. */
+  ordersByDay?: { date: string; orders: number }[];
+  /** Campaigns already schedule-scoped and prorated to the PREVIOUS window. */
+  previousCampaigns?: Campaign[];
+  /** Full-history GA4 daily rows. */
+  ga4DailyEntries?: { date: string; sessions: number }[];
+  /** Organic € for the previous window, derived exactly like the current period's. */
+  previousOrganicRevenue?: number;
+  /** Brand read-side history cutoff (YYYY-MM-DD). */
+  historyStartDate?: string | null;
+}): BriefingYearOverYear | undefined {
+  const { fromDate, toDate } = params.period;
+  if (!isIsoDay(fromDate) || !isIsoDay(toDate) || fromDate > toDate) return undefined;
+
+  const previousPeriod = shiftPeriodByYears({ fromDate, toDate }, -1);
+  const cutoff = params.historyStartDate?.trim();
+  // Nothing of the previous window survives the brand's history clamp → not comparable.
+  if (cutoff && isIsoDay(cutoff) && previousPeriod.toDate < cutoff) return undefined;
+
+  const metrics = calculateCampaignMetrics(params.previousCampaigns ?? []);
+  const storeRevenue = sumDailyRevenueInPeriod(params.revenueByDay, previousPeriod.fromDate, previousPeriod.toDate);
+  const revenue = briefingHeadlineRevenue({
+    ecommerceSourceActive: params.ecommerceSourceActive,
+    storeRevenue,
+    organicRevenue: params.previousOrganicRevenue ?? 0,
+    campaignRevenue: metrics.totalRevenue,
+  });
+
+  const orders = sumOrdersInPeriod(params.ordersByDay ?? [], previousPeriod.fromDate, previousPeriod.toDate);
+  const sessions = sumSessionsInPeriod(params.ga4DailyEntries ?? [], previousPeriod.fromDate, previousPeriod.toDate);
+
+  return {
+    previousPeriodLabel: formatIsoRangeLabelGr(previousPeriod.fromDate, previousPeriod.toDate),
+    previous: {
+      revenue: Math.round(revenue),
+      orders,
+      spend: Math.round(metrics.totalSpend),
+      roas: metrics.roas,
+      sessions,
+    },
+    hasPreviousData: revenue > 0 || orders > 0 || metrics.totalSpend > 0 || sessions > 0,
   };
 }
 
 // ── Metrics Snapshot ─────────────────────────────────────────────────────────
 
 function extractSnapshot(data: BriefingData): MetricsSnapshot {
-  const headlineRevenue = data.revenue.ecommerceSourceActive
-    ? data.revenue.storeRevenue
-    : data.revenue.storeRevenue > 0
-      ? data.revenue.storeRevenue
-      : data.revenue.totalOrganic + data.revenue.totalCampaignRevenue;
+  const headlineRevenue = briefingHeadlineRevenue({
+    ecommerceSourceActive: data.revenue.ecommerceSourceActive,
+    storeRevenue: data.revenue.storeRevenue,
+    organicRevenue: data.revenue.totalOrganic,
+    campaignRevenue: data.revenue.totalCampaignRevenue,
+  });
   return {
     totalRevenue: headlineRevenue,
     totalSpend: data.revenue.totalSpend,
@@ -299,13 +413,13 @@ export function detectSignificantChange(
 
 function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateContext?: string): string {
   const sections: string[] = [];
-  const fallbackBlendedRevenue = data.revenue.totalOrganic + data.revenue.totalCampaignRevenue;
   const ecActive = data.revenue.ecommerceSourceActive;
-  const headlineRevenue = ecActive
-    ? data.revenue.storeRevenue
-    : data.revenue.storeRevenue > 0
-      ? data.revenue.storeRevenue
-      : fallbackBlendedRevenue;
+  const headlineRevenue = briefingHeadlineRevenue({
+    ecommerceSourceActive: ecActive,
+    storeRevenue: data.revenue.storeRevenue,
+    organicRevenue: data.revenue.totalOrganic,
+    campaignRevenue: data.revenue.totalCampaignRevenue,
+  });
 
   sections.push(`[BRAND] "${data.brandName}" — ΚΑΝΟΝΑΣ: Όταν αναφέρεσαι στο brand στο κείμενο, γράψε "το brand ${data.brandName}" ή "για το brand ${data.brandName}". ΠΟΤΕ μην χρησιμοποιείς άρθρο γένους (ο/η/ο) πριν από το brand name.`);
   sections.push(`[ΠΕΡΙΟΔΟΣ ΑΝΑΛΥΣΗΣ] ${periodLabel} — όλα τα νούμερα αφορούν ΜΟΝΟ αυτήν την περίοδο.`);
@@ -386,6 +500,17 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
     sections.push(`[ALERTS] ${data.alerts.count} ενεργά (${data.alerts.critical} critical)${data.alerts.topAlerts.length > 0 ? ': ' + data.alerts.topAlerts.join(' | ') : ''}`);
   }
 
+  if (data.yearOverYear?.hasPreviousData) {
+    sections.push(
+      `[ΣΥΓΚΡΙΣΗ ΜΕ ΠΕΡΣΙ] Η αντίστοιχη περίοδος πέρσι ήταν ${data.yearOverYear.previousPeriodLabel}. ` +
+        `Έσοδα: ${formatCurrency(data.yearOverYear.previous.revenue)}, παραγγελίες: ${formatNumber(data.yearOverYear.previous.orders)}, ` +
+        `διαφημιστική δαπάνη: ${formatCurrency(data.yearOverYear.previous.spend)}, ` +
+        `αποδοτικότητα διαφημίσεων: ${formatNumber(data.yearOverYear.previous.roas, 1)}x, ` +
+        `sessions: ${formatNumber(data.yearOverYear.previous.sessions)}. ` +
+        'Μην αναπτύξεις αυτή τη σύγκριση στο narrative· θα προστεθεί αυτόματα στο τέλος.'
+    );
+  }
+
   if (updateContext) {
     sections.push(`\n[ΣΗΜΑΝΤΙΚΗ ΑΛΛΑΓΗ] ${updateContext} — Δώσε έμφαση σε αυτήν την αλλαγή στο narrative.`);
   }
@@ -443,6 +568,8 @@ export function computeBriefingDataHash(data: BriefingData): string {
     data.segments.totalCustomers,
     data.alerts.count,
     data.ga4?.sessions ?? 0,
+    data.yearOverYear?.previous.revenue ?? 0,
+    data.yearOverYear?.previous.orders ?? 0,
   ].join('|');
   let hash = 0;
   for (let i = 0; i < key.length; i++) {
@@ -455,7 +582,7 @@ export function computeBriefingDataHash(data: BriefingData): string {
 
 const MAX_DAILY_GENERATIONS = 4;
 const MIN_REGEN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour cooldown between auto-updates
-const BRIEFING_CACHE_VERSION = 4;
+const BRIEFING_CACHE_VERSION = 5;
 
 /** Calendar day in local timezone (YYYY-MM-DD) — consistent with "today" for the user */
 export function getLocalDateKey(d = new Date()): string {

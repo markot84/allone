@@ -1,9 +1,10 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { Sparkles, ArrowRight, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Sparkles, ArrowRight, AlertTriangle, CalendarClock, Clock, Minus, TrendingDown, TrendingUp, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tooltip, FormattedProse, toPlainProseText } from '../common';
-import type { BriefingResult } from '../../services/morningBriefing';
+import type { BriefingResult, BriefingYearOverYear } from '../../services/morningBriefing';
 import {
+  briefingHeadlineRevenue,
   collectBriefingData,
   generateMorningBriefing,
   getCachedBriefing,
@@ -11,6 +12,8 @@ import {
   briefingResultFromCache,
   computeBriefingDataHash,
 } from '../../services/morningBriefing';
+import { calculateCampaignMetrics } from '../../utils/roiUtils';
+import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import type { Product, Campaign, RFMSegment, AutomationAlert } from '../../types';
 import { guessRoute } from './guessRoute';
 
@@ -42,6 +45,9 @@ interface MorningBriefingProps {
       suspectedSyncGap: boolean;
     };
   };
+  /** Same window one year back (see `computeBriefingYearOverYear`). Feeds the prompt and the
+   * deterministic comparison strip under the narrative. */
+  yearOverYear?: BriefingYearOverYear;
   onSectionChange?: (section: string, opts?: { hashQuery?: string }) => void;
   hasAnyData: boolean;
   /** Selected dashboard period key (e.g. 'current_month'). Scopes cache & prompt. */
@@ -92,6 +98,77 @@ function loadCollapsedPref(brandId: string): boolean {
   }
 }
 
+type YoyValueFormat = 'currency' | 'number' | 'ratio';
+
+interface YoyRow {
+  key: string;
+  label: string;
+  current: number;
+  previous: number;
+  format: YoyValueFormat;
+  /** Ad spend is not "better" when it rises — it stays neutral instead of green/red. */
+  directional: boolean;
+}
+
+function formatYoyValue(value: number, format: YoyValueFormat): string {
+  if (format === 'currency') return formatCurrencyCompact(value);
+  if (format === 'ratio') return `${formatNumber(value, 1)}x`;
+  return formatNumber(value);
+}
+
+/** Percent change against last year, or null when there is no base to divide by. */
+function yoyChangePct(current: number, previous: number): number | null {
+  if (previous <= 0) return null;
+  return ((current - previous) / previous) * 100;
+}
+
+function YoyComparisonStrip({ label, rows }: { label: string; rows: YoyRow[] }) {
+  return (
+    <div className="mb-4 rounded-xl border border-[var(--nts-border-gray)] bg-[var(--nts-bg-subtle)] px-3 py-2.5">
+      <p className="mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--nts-medium-gray)]">
+        <CalendarClock size={12} className="shrink-0" />
+        Σύγκριση με πέρσι
+        <span className="font-normal normal-case tracking-normal">· {label}</span>
+      </p>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-5">
+        {rows.map((row) => {
+          const pct = yoyChangePct(row.current, row.previous);
+          const flat = pct !== null && Math.abs(pct) < 0.05;
+          const up = pct !== null && !flat && pct > 0;
+          const down = pct !== null && !flat && pct < 0;
+          const DeltaIcon = up ? TrendingUp : down ? TrendingDown : Minus;
+          const deltaColor = !row.directional || pct === null || flat
+            ? 'text-[var(--nts-medium-gray)]'
+            : up
+              ? 'text-[var(--success)]'
+              : 'text-[var(--danger)]';
+          return (
+            <div key={row.key} className="min-w-0">
+              <dt className="truncate text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--nts-medium-gray)]">
+                {row.label}
+              </dt>
+              <dd className="mt-0.5 text-[13px] font-semibold leading-tight text-[var(--nts-charcoal)]">
+                {formatYoyValue(row.current, row.format)}
+              </dd>
+              <dd className={`mt-0.5 flex items-center gap-1 text-[11px] leading-tight ${deltaColor}`}>
+                <DeltaIcon size={11} className="shrink-0" />
+                <span className="font-medium">
+                  {pct === null
+                    ? 'χωρίς περσινή βάση'
+                    : `${pct > 0 ? '+' : ''}${formatNumber(pct, 1)}%`}
+                </span>
+                <span className="truncate text-[var(--nts-medium-gray)]">
+                  πέρσι {formatYoyValue(row.previous, row.format)}
+                </span>
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </div>
+  );
+}
+
 export function MorningBriefing(props: MorningBriefingProps) {
   const { brandId, brandName, hasAnyData, onSectionChange } = props;
   const period = props.period ?? 'current_month';
@@ -122,6 +199,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
     alerts: props.alerts,
     brandName,
     supplierTodMap: props.supplierTodMap,
+    yearOverYear: props.yearOverYear,
     ecommerce: props.ecommerce
       ? {
           hasData: props.ecommerce.hasData,
@@ -133,7 +211,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
           dataFreshness: props.ecommerce.dataFreshness,
         }
       : undefined,
-  }), [props.products, props.campaigns, props.segments, props.totalOrganicRevenue, props.ga4, props.alerts, brandName, props.supplierTodMap, props.ecommerce]);
+  }), [props.products, props.campaigns, props.segments, props.totalOrganicRevenue, props.ga4, props.alerts, brandName, props.supplierTodMap, props.ecommerce, props.yearOverYear]);
 
   const buildDataRef = useRef(buildData);
   buildDataRef.current = buildData;
@@ -329,6 +407,38 @@ export function MorningBriefing(props: MorningBriefingProps) {
     setLoading(false);
   }, [brandId, loading]);
 
+  /** Deterministic YoY block: the model is told NOT to narrate the comparison, we render it. */
+  const yoyComparison = useMemo(() => {
+    const yoy = props.yearOverYear;
+    if (!yoy?.hasPreviousData) return null;
+
+    const metrics = calculateCampaignMetrics(props.campaigns);
+    const storeRevenue = props.ecommerce?.totalRevenue ?? 0;
+    const current = {
+      revenue: briefingHeadlineRevenue({
+        ecommerceSourceActive: Boolean(props.ecommerce?.hasData),
+        storeRevenue,
+        organicRevenue: props.totalOrganicRevenue,
+        campaignRevenue: metrics.totalRevenue,
+      }),
+      orders: props.ecommerce?.orderCount ?? 0,
+      spend: metrics.totalSpend,
+      roas: metrics.roas,
+      sessions: props.ga4.totals.sessions,
+    };
+
+    const allRows: YoyRow[] = [
+      { key: 'revenue', label: 'Έσοδα', current: current.revenue, previous: yoy.previous.revenue, format: 'currency', directional: true },
+      { key: 'orders', label: 'Παραγγελίες', current: current.orders, previous: yoy.previous.orders, format: 'number', directional: true },
+      { key: 'spend', label: 'Διαφ. δαπάνη', current: current.spend, previous: yoy.previous.spend, format: 'currency', directional: false },
+      { key: 'roas', label: 'Έσοδα ανά 1€', current: current.roas, previous: yoy.previous.roas, format: 'ratio', directional: true },
+      { key: 'sessions', label: 'Επισκέψεις', current: current.sessions, previous: yoy.previous.sessions, format: 'number', directional: true },
+    ];
+    const rows = allRows.filter((row) => row.current > 0 || row.previous > 0);
+
+    return rows.length > 0 ? { label: yoy.previousPeriodLabel, rows } : null;
+  }, [props.yearOverYear, props.campaigns, props.ecommerce, props.totalOrganicRevenue, props.ga4.totals.sessions]);
+
   /** Loading the full order history — KPIs climb but the text must not run ahead. */
   const awaitingEcommMetrics =
     !metricsReady && ((props.ecommerce?.connectedPlatforms?.length ?? 0) > 0);
@@ -505,6 +615,10 @@ export function MorningBriefing(props: MorningBriefingProps) {
                 <div className="mb-4 text-[14px] leading-relaxed text-[var(--nts-charcoal)]">
                   <FormattedProse content={briefing.narrative} variant="compact" className="[&_p]:text-[14px] [&_li]:text-[14px]" />
                 </div>
+
+                {yoyComparison && (
+                  <YoyComparisonStrip label={yoyComparison.label} rows={yoyComparison.rows} />
+                )}
 
                 {briefing.actions.length > 0 && (
                   <div className="flex flex-wrap gap-2">
