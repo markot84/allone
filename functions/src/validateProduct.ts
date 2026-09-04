@@ -1,4 +1,4 @@
-import { pick } from './parseFile';
+import { parseLooseNumber, pick } from './parseFile';
 
 export interface ProductData {
   id: string;
@@ -63,7 +63,7 @@ export function validateProduct(
     pick(row, 'avg_cost_1', 'μεσοσταθμικό_κόστος_κτήσης_1', 'κόστος_κτήσης_1', 'avg_cost', 'average_cost', 'μεσοσταθμικό_κόστος', 'μεσοσταθμικό_κόστος_κτήσης', 'μέση_τιμή_κτήσης'),
     pick(row, 'avg_cost_2', 'μεσοσταθμικό_κόστος_κτήσης_2', 'κόστος_κτήσης_2'),
     pick(row, 'avg_cost_3', 'μεσοσταθμικό_κόστος_κτήσης_3', 'κόστος_κτήσης_3'),
-  ].map((v) => parseFloat(String(v ?? '').replace(',', '.')) || 0).filter((n) => n > 0);
+  ].map((v) => parseLooseNumber(v)).filter((n) => n > 0);
   const avgCost = avgCostVals.length ? String(Math.round((avgCostVals.reduce((a, b) => a + b, 0) / avgCostVals.length) * 100) / 100) : '';
   const revenuePeriod = pick(row, 'revenue_period', 'revenue');
   const qtySoldPeriod = pick(row, 'πωλήσεις', 'qty_sold_period', 'qty_sold', 'quantity_sold', 'sales', 'sold', 'units_sold');
@@ -79,18 +79,18 @@ export function validateProduct(
   const stockLevelNum =
     sl.includes('in stock') || sl === 'in_stock' ? 1
     : sl.includes('out of stock') || sl === 'out_of_stock' ? 0
-    : Math.round(parseFloat(String(stockLevel || '0').replace(',', '.')) || 0);
-  const stockCapacityNum = parseInt(stockCapacity || '0', 10) || 0;
-  const sellPriceNum = parseFloat(String(price || '0').replace(',', '.')) || 0;
-  const costPriceNum = parseFloat(String(costPrice || '0').replace(',', '.')) || 0;
+    : Math.round(parseLooseNumber(stockLevel));
+  const stockCapacityNum = Math.round(parseLooseNumber(stockCapacity)) || 0;
+  const sellPriceNum = parseLooseNumber(price);
+  const costPriceNum = parseLooseNumber(costPrice);
 
-  let stockAgeDays = parseInt(stockAge || '0', 10) || 0;
+  let stockAgeDays = Math.round(parseLooseNumber(stockAge)) || 0;
   if (stockAgeDays === 0 && firstAvailableDate && firstAvailableDate.trim() !== '') {
     const computed = daysFromFirstAvailable(firstAvailableDate);
     if (computed !== null && computed >= 0) stockAgeDays = computed;
   }
 
-  let marginPctNum = parseFloat(String(marginPct || '0').replace(',', '.')) || 0;
+  let marginPctNum = parseLooseNumber(marginPct);
   if (sellPriceNum > 0 && costPriceNum > 0) {
     const computed = calcGrossMarginPct(sellPriceNum, costPriceNum);
     if (computed !== null && computed > 0 && (marginPctNum === 0 || !marginPct)) {
@@ -112,9 +112,9 @@ export function validateProduct(
     stock_age_days: stockAgeDays,
     price: sellPriceNum,
     ...(costPrice ? { cost_price: costPriceNum } : {}),
-    ...(avgCost && (parseFloat(String(avgCost).replace(',', '.')) || 0) > 0 ? { avg_cost: parseFloat(String(avgCost).replace(',', '.')) } : {}),
-    ...(revenuePeriod ? { revenue_period: parseFloat(String(revenuePeriod || '0').replace(',', '.')) || 0 } : {}),
-    ...(qtySoldPeriod ? { qty_sold_period: Math.round(parseFloat(String(qtySoldPeriod).replace(',', '.')) || 0) } : {}),
+    ...(avgCost && parseLooseNumber(avgCost) > 0 ? { avg_cost: parseLooseNumber(avgCost) } : {}),
+    ...(revenuePeriod ? { revenue_period: parseLooseNumber(revenuePeriod) } : {}),
+    ...(qtySoldPeriod ? { qty_sold_period: Math.round(parseLooseNumber(qtySoldPeriod)) } : {}),
     ...(firstAvailableDate ? { first_available_date: firstAvailableDate } : {}),
     ...(priority ? { priority_tag: priority } : {}),
     ...(supplier ? { supplier } : {}),
