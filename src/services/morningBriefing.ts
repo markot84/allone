@@ -83,8 +83,10 @@ export interface BriefingYearOverYear {
   previous: {
     revenue: number;
     orders: number;
+    /** Ad cost — the Campaigns table's Cost column (`amount_spent`), not budgeted marketing overhead. */
     spend: number;
-    roas: number;
+    /** True ROAS: e-shop turnover ÷ ad spend. Never the platforms' attributed ROAS. */
+    trueRoas: number;
     sessions: number;
   };
   hasPreviousData: boolean;
@@ -303,6 +305,8 @@ export function computeBriefingYearOverYear(params: {
     campaignRevenue: metrics.totalRevenue,
   });
 
+  // True ROAS — store turnover per ad euro, the measure the business decides on.
+  const trueRoas = metrics.totalSpend > 0 ? storeRevenue / metrics.totalSpend : 0;
   const orders = sumOrdersInPeriod(params.ordersByDay ?? [], previousPeriod.fromDate, previousPeriod.toDate);
   const sessions = sumSessionsInPeriod(params.ga4DailyEntries ?? [], previousPeriod.fromDate, previousPeriod.toDate);
 
@@ -312,7 +316,7 @@ export function computeBriefingYearOverYear(params: {
       revenue: Math.round(revenue),
       orders,
       spend: Math.round(metrics.totalSpend),
-      roas: metrics.roas,
+      trueRoas,
       sessions,
     },
     hasPreviousData: revenue > 0 || orders > 0 || metrics.totalSpend > 0 || sessions > 0,
@@ -416,10 +420,14 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
   sections.push(`[BRAND] "${data.brandName}" — ΚΑΝΟΝΑΣ: Όταν αναφέρεσαι στο brand στο κείμενο, γράψε "το brand ${data.brandName}" ή "για το brand ${data.brandName}". ΠΟΤΕ μην χρησιμοποιείς άρθρο γένους (ο/η/ο) πριν από το brand name.`);
   sections.push(`[ΠΕΡΙΟΔΟΣ ΑΝΑΛΥΣΗΣ] ${periodLabel} — όλα τα νούμερα αφορούν ΜΟΝΟ αυτήν την περίοδο.`);
 
+  // True ROAS (τζίρος e-shop ÷ δαπάνη) is the measure that counts; the platforms' attributed
+  // ratio is only quoted when there is no e-shop turnover to divide, and is labelled as such.
   const evPerAdEuro =
-    data.revenue.totalSpend > 0 && data.revenue.roas > 0
-      ? `Από τα συστήματα διαφημίσεων: περίπου ${formatNumber(data.revenue.roas, 1)}€ έσοδα για κάθε 1€ διαφημιστικής δαπάνης.`
-      : 'Δεν υπάρχει αξιόπιστος λόγος έσοδα προς δαπάνη για την περίοδο.';
+    data.revenue.totalSpend > 0 && data.revenue.trueRoas > 0
+      ? `Πραγματική απόδοση δαπάνης: περίπου ${formatNumber(data.revenue.trueRoas, 1)}€ τζίρος e-shop για κάθε 1€ διαφημιστικής δαπάνης. Αυτό είναι το μέτρο που μετράει — μην αναφέρεις άλλον λόγο απόδοσης.`
+      : data.revenue.totalSpend > 0 && data.revenue.roas > 0
+        ? `Δεν υπάρχει τζίρος e-shop για να μετρηθεί πραγματική απόδοση· οι πλατφόρμες διαφημίσεων καταγράφουν περίπου ${formatNumber(data.revenue.roas, 1)}€ ανά 1€ δαπάνης, νούμερο attribution και όχι εισπράξεις.`
+        : 'Δεν υπάρχει αξιόπιστος λόγος έσοδα προς δαπάνη για την περίοδο.';
 
   if (ecActive) {
     sections.push(
@@ -448,14 +456,9 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
         ` Υπάρχουν δεδομένα e-shop στο Performance+ για την επωνυμία, αλλά ο τζίρος στην επιλεγμένη περίοδο είναι 0 (${formatNumber(data.revenue.orderCount)} παραγγελίες). Αυτό μπορεί να σημαίνει κενό διάστημα ή ότι πρέπει να ελεγχθεί sync/imports — μη συγχέεις τα ads figures με τα έσοδα καταστήματος.`
     );
   } else if (data.revenue.storeRevenue > 0) {
-    const storePerAd =
-      data.revenue.totalSpend > 0 && data.revenue.trueRoas > 0
-        ? `Από πραγματικές παραγγελίες e-shop: περίπου ${formatNumber(data.revenue.trueRoas, 1)}€ τζίρος ανά 1€ διαφήμισης.`
-        : '';
     sections.push(
       `[ΗΛΕΚΤΡΟΝΙΚΟ ΚΑΤΑΣΤΗΜΑ]` +
         ` Τζίρος από παραγγελίες: ${formatCurrency(data.revenue.storeRevenue)}, παραγγελίες: ${formatNumber(data.revenue.orderCount)}, μέσο καλάθι: ${formatCurrency(data.revenue.aov)}.` +
-        ` ${storePerAd}` +
         ` Διαφορά τζίρου καταστήματος έναντι αυτού που «φαίνεται» από τις διαφημίσεις: ${formatCurrency(data.revenue.revenueGap)} (θετικό = ο καταστηματάρχης εισπράττει περισσότερα από όσα καταγράφει μόνο το ads attribution).`
     );
   }
@@ -504,8 +507,8 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
     sections.push(
       `[ΣΥΓΚΡΙΣΗ ΜΕ ΠΕΡΣΙ] Η αντίστοιχη περίοδος πέρσι ήταν ${data.yearOverYear.previousPeriodLabel}. ` +
         `Έσοδα: ${formatCurrency(data.yearOverYear.previous.revenue)}, παραγγελίες: ${formatNumber(data.yearOverYear.previous.orders)}, ` +
-        `διαφημιστική δαπάνη: ${formatCurrency(data.yearOverYear.previous.spend)}, ` +
-        `αποδοτικότητα διαφημίσεων: ${formatNumber(data.yearOverYear.previous.roas, 1)}x, ` +
+        `διαφημιστική δαπάνη (Cost καμπανιών): ${formatCurrency(data.yearOverYear.previous.spend)}, ` +
+        `πραγματική απόδοση δαπάνης: ${formatNumber(data.yearOverYear.previous.trueRoas, 1)}x, ` +
         `sessions: ${formatNumber(data.yearOverYear.previous.sessions)}. ` +
         'Μην αναπτύξεις αυτή τη σύγκριση στο narrative· θα προστεθεί αυτόματα στο τέλος.'
     );

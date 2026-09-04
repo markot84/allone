@@ -53,7 +53,7 @@ describe('computeBriefingYearOverYear', () => {
     expect(yoy!.previousPeriodLabel).toContain('2025');
   });
 
-  it('takes ad spend and efficiency from the previous-window campaigns', () => {
+  it('takes ad spend from the campaigns Cost and reports True ROAS, not attributed ROAS', () => {
     const yoy = computeBriefingYearOverYear({
       period: PERIOD,
       ecommerceSourceActive: true,
@@ -65,7 +65,19 @@ describe('computeBriefingYearOverYear', () => {
     });
 
     expect(yoy!.previous.spend).toBe(200);
-    expect(yoy!.previous.roas).toBeCloseTo(4, 5);
+    // Attributed ROAS here would be 800/200 = 4x; True ROAS is store turnover 400 / 200 = 2x.
+    expect(yoy!.previous.trueRoas).toBeCloseTo(2, 5);
+  });
+
+  it('reports zero True ROAS when there was no ad spend to divide by', () => {
+    const yoy = computeBriefingYearOverYear({
+      period: PERIOD,
+      ecommerceSourceActive: true,
+      revenueByDay: { '2025-09-01': 400 },
+    });
+
+    expect(yoy!.previous.trueRoas).toBe(0);
+    expect(yoy!.hasPreviousData).toBe(true);
   });
 
   it('falls back to organic + ads revenue when the e-shop source is not the headline', () => {

@@ -422,7 +422,8 @@ export function MorningBriefing(props: MorningBriefingProps) {
       }),
       orders: props.ecommerce?.orderCount ?? 0,
       spend: metrics.totalSpend,
-      roas: metrics.roas,
+      // True ROAS: e-shop turnover ÷ ad spend — same measure as the previous-year side.
+      trueRoas: metrics.totalSpend > 0 ? storeRevenue / metrics.totalSpend : 0,
       sessions: props.ga4.totals.sessions,
     };
 
@@ -430,7 +431,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
       { key: 'revenue', label: 'Έσοδα', current: current.revenue, previous: yoy.previous.revenue, format: 'currency', directional: true },
       { key: 'orders', label: 'Παραγγελίες', current: current.orders, previous: yoy.previous.orders, format: 'number', directional: true },
       { key: 'spend', label: 'Διαφ. δαπάνη', current: current.spend, previous: yoy.previous.spend, format: 'currency', directional: false },
-      { key: 'roas', label: 'Έσοδα ανά 1€', current: current.roas, previous: yoy.previous.roas, format: 'ratio', directional: true },
+      { key: 'trueRoas', label: 'Τζίρος ανά 1€', current: current.trueRoas, previous: yoy.previous.trueRoas, format: 'ratio', directional: true },
       { key: 'sessions', label: 'Επισκέψεις', current: current.sessions, previous: yoy.previous.sessions, format: 'number', directional: true },
     ];
     const rows = allRows.filter((row) => row.current > 0 || row.previous > 0);
