@@ -1183,7 +1183,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           yearOverYear={briefingYearOverYear}
           onSectionChange={onSectionChange}
           hasAnyData={hasAnyData}
-          period={dashPeriod}
+          /** Cache scope. A bare 'custom' collides across ranges: the briefing is cached per
+           *  `${day}:${period}`, so two different custom ranges on the same day shared one document
+           *  and the second range was served the first one's text. The dates make it unique. */
+          period={dashPeriod === 'custom' ? `custom:${periodDates.fromDate}:${periodDates.toDate}` : dashPeriod}
           periodLabel={dashPeriod === 'custom' ? `${periodDates.fromDate} — ${periodDates.toDate}` : (GLOBAL_PERIOD_OPTIONS.find(o => o.key === dashPeriod)?.label ?? 'Τρέχων Μήνας')}
         />
       )}
