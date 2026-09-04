@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Tooltip, FormattedProse, toPlainProseText } from '../common';
 import type { BriefingInventory, BriefingResult, BriefingYearOverYear } from '../../services/morningBriefing';
 import {
+  BRIEFING_CACHE_VERSION,
   briefingHeadlineRevenue,
   collectBriefingData,
   generateMorningBriefing,
@@ -68,9 +69,24 @@ const SIGNIFICANCE_CHECK_INTERVAL = 15 * 60 * 1000; // 15 minutes
 /** Small delay after stable KPIs; the heavy work waits on `metricsReady`. */
 const INIT_DELAY_MS = 150;
 
+const BRIEFING_STORAGE_PREFIX = `perf-plus-ai-briefing-v${BRIEFING_CACHE_VERSION}:`;
+
 function briefingStorageKey(brandId: string, period = 'current_month') {
-  return `perf-plus-ai-briefing-v4:${brandId}:${getLocalDateKey()}:${period}`;
+  return `${BRIEFING_STORAGE_PREFIX}${brandId}:${getLocalDateKey()}:${period}`;
 }
+
+/** Drop briefings written under an older prompt so they cannot be re-read after a version bump. */
+function dropStaleBriefingStorage() {
+  try {
+    Object.keys(window.localStorage)
+      .filter((key) => key.startsWith('perf-plus-ai-briefing-v') && !key.startsWith(BRIEFING_STORAGE_PREFIX))
+      .forEach((key) => window.localStorage.removeItem(key));
+  } catch {
+    /* private mode / quota — nothing to clean up then. */
+  }
+}
+
+if (typeof window !== 'undefined') dropStaleBriefingStorage();
 
 function loadBriefingFromStorage(brandId: string, period = 'current_month'): BriefingResult | null {
   try {

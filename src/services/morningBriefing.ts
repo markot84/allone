@@ -602,7 +602,12 @@ export function computeBriefingDataHash(data: BriefingData): string {
 
 const MAX_DAILY_GENERATIONS = 4;
 const MIN_REGEN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour cooldown between auto-updates
-const BRIEFING_CACHE_VERSION = 5;
+/** Bump whenever the PROMPT or the data feeding it changes, not only when the cached shape does:
+ * a stored briefing is prose written under the old rules and will otherwise be shown until it
+ * expires. The data hash covers changing *values*; this covers changing *logic*. Exported so the
+ * localStorage copy follows the same number — the two markers had already drifted (v5 vs v4),
+ * which is why a rewritten prompt kept serving yesterday's text. */
+export const BRIEFING_CACHE_VERSION = 6;
 
 /** Calendar day in local timezone (YYYY-MM-DD) — consistent with "today" for the user */
 export function getLocalDateKey(d = new Date()): string {
