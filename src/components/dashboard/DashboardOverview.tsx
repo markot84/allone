@@ -1153,6 +1153,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           brandName={currentBrand.name}
           inventory={briefingInventory}
           campaigns={periodCampaigns}
+          campaignsLoaded={!campaignsLoading}
           segments={dashboardRfmSegments}
           totalOrganicRevenue={organicRevenueInPeriod}
           ga4={{

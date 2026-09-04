@@ -262,3 +262,28 @@ describe('collectBriefingData inventory', () => {
     expect(with16).not.toBe(with15);
   });
 });
+
+describe('campaignsLoaded', () => {
+  const base = {
+    campaigns: [] as Campaign[],
+    segments: [] as RFMSegment[],
+    totalOrganicRevenue: 0,
+    ga4: {
+      totals: { sessions: 0, users: 0, newUsers: 0, bounceRate: 0, conversions: 0 },
+      weeklyChange: null,
+      hasData: false,
+    },
+    alerts: [] as AutomationAlert[],
+    brandName: 'Acme',
+  };
+
+  it('defaults to loaded when the caller says nothing', () => {
+    expect(collectBriefingData(base).revenue.campaignsLoaded).toBe(true);
+  });
+
+  it('carries a false flag so an empty list is not read as "no advertising ran"', () => {
+    const data = collectBriefingData({ ...base, campaignsLoaded: false });
+    expect(data.revenue.campaignsLoaded).toBe(false);
+    expect(data.revenue.campaignCount).toBe(0);
+  });
+});

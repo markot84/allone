@@ -23,6 +23,9 @@ interface MorningBriefingProps {
   /** Stock figures from Product Intelligence — never recounted here. Null ⇒ no stock section. */
   inventory?: BriefingInventory | null;
   campaigns: Campaign[];
+  /** False while the campaign query is in flight — keeps the briefing from reading an empty
+   * list as "no advertising ran". */
+  campaignsLoaded?: boolean;
   segments: RFMSegment[];
   totalOrganicRevenue: number;
   ga4: {
@@ -195,6 +198,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
 
   const buildData = useCallback(() => collectBriefingData({
     campaigns: props.campaigns,
+    campaignsLoaded: props.campaignsLoaded,
     segments: props.segments,
     totalOrganicRevenue: props.totalOrganicRevenue,
     ga4: props.ga4,
@@ -213,7 +217,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
           dataFreshness: props.ecommerce.dataFreshness,
         }
       : undefined,
-  }), [props.campaigns, props.segments, props.totalOrganicRevenue, props.ga4, props.alerts, brandName, props.inventory, props.ecommerce, props.yearOverYear]);
+  }), [props.campaigns, props.campaignsLoaded, props.segments, props.totalOrganicRevenue, props.ga4, props.alerts, brandName, props.inventory, props.ecommerce, props.yearOverYear]);
 
   const buildDataRef = useRef(buildData);
   buildDataRef.current = buildData;
@@ -408,6 +412,19 @@ export function MorningBriefing(props: MorningBriefingProps) {
     }
     setLoading(false);
   }, [brandId, loading]);
+
+  /** The narrative is cached; the figures under it are live. When the data has moved since the
+   * text was written, the two can contradict each other — a briefing generated while campaigns
+   * were still empty announced "απουσία δεδομένων από τις διαφημιστικές καμπάνιες" above a strip
+   * showing €9K of spend. Cheap to compute: collectBriefingData no longer walks the catalogue. */
+  const narrativeStale = useMemo(() => {
+    if (!briefing) return false;
+    try {
+      return computeBriefingDataHash(buildData()) !== briefing.dataHash;
+    } catch {
+      return false;
+    }
+  }, [briefing, buildData]);
 
   /** Deterministic YoY block: the model is told NOT to narrate the comparison, we render it. */
   const yoyComparison = useMemo(() => {
@@ -619,7 +636,18 @@ export function MorningBriefing(props: MorningBriefingProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
               >
-                <div className="mb-4 text-[14px] leading-relaxed text-[var(--nts-charcoal)]">
+                {narrativeStale && (
+                  <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-snug text-amber-800">
+                    <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                    <span>
+                      Τα δεδομένα άλλαξαν αφότου γράφτηκε αυτό το κείμενο — τα νούμερα παρακάτω είναι τα τρέχοντα.
+                      Το briefing ξαναγράφεται.
+                    </span>
+                  </div>
+                )}
+                <div
+                  className={`mb-4 text-[14px] leading-relaxed text-[var(--nts-charcoal)] ${narrativeStale ? 'opacity-60' : ''}`}
+                >
                   <FormattedProse content={briefing.narrative} variant="compact" className="[&_p]:text-[14px] [&_li]:text-[14px]" />
                 </div>
 

@@ -24,6 +24,9 @@ export interface BriefingData {
     totalSpend: number;
     roas: number;
     campaignCount: number;
+    /** False while the campaign query is still in flight. An empty list then means "not loaded",
+     * never "no advertising ran" — the prompt must not reason from it. */
+    campaignsLoaded: boolean;
   };
   dataQuality: {
     ecommerceLatestPositiveRevenueDay: string | null;
@@ -135,6 +138,8 @@ export function collectBriefingData(params: {
   };
   alerts: AutomationAlert[];
   brandName: string;
+  /** False while campaigns are still loading; defaults to true. See `revenue.campaignsLoaded`. */
+  campaignsLoaded?: boolean;
   /** From Product Intelligence — see `BriefingInventory`. Null/omitted ⇒ no stock section. */
   inventory?: BriefingInventory | null;
   ecommerce?: {
@@ -154,7 +159,7 @@ export function collectBriefingData(params: {
   /** Same window one year back — see `computeBriefingYearOverYear`. Omitted when not comparable. */
   yearOverYear?: BriefingYearOverYear;
 }): BriefingData {
-  const { campaigns, segments, totalOrganicRevenue, ga4, alerts, brandName, inventory, ecommerce, yearOverYear } = params;
+  const { campaigns, segments, totalOrganicRevenue, ga4, alerts, brandName, campaignsLoaded, inventory, ecommerce, yearOverYear } = params;
 
   const metrics = calculateCampaignMetrics(campaigns);
   const ecommerceSourceActive = Boolean(ecommerce?.hasData);
@@ -191,6 +196,7 @@ export function collectBriefingData(params: {
       totalSpend: metrics.totalSpend,
       roas: metrics.roas,
       campaignCount: campaigns.length,
+      campaignsLoaded: campaignsLoaded ?? true,
     },
     dataQuality: {
       ecommerceLatestPositiveRevenueDay: ecommerce?.dataFreshness?.latestPositiveRevenueDay ?? null,
@@ -453,7 +459,7 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
   // Absence of campaign rows is a data gap, not evidence that the brand stopped advertising.
   // Without this the model wrote "τζίρος αποκλειστικά από οργανικές πηγές, χωρίς καμία
   // διαφημιστική υποστήριξη" purely because the connectors had delivered nothing for the window.
-  if (data.revenue.campaignCount === 0) {
+  if (data.revenue.campaignCount === 0 && data.revenue.campaignsLoaded) {
     sections.push(
       `[ΔΙΑΦΗΜΙΣΗ — ΠΡΟΣΟΧΗ] Δεν έχουν φτάσει στο Performance+ δεδομένα καμπανιών για αυτή την περίοδο. ` +
         'Αυτό ΔΕΝ σημαίνει ότι δεν έγινε διαφήμιση. ΜΗΝ γράψεις ότι ο τζίρος είναι αποκλειστικά οργανικός, ' +
