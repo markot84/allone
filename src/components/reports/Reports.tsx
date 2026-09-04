@@ -18,6 +18,7 @@ import {
   Tag,
 } from 'lucide-react';
 import { Card, CardHeader, Badge, Button, Spinner, PageHeader, ModalHeader } from '../common';
+import { useProductIntelligenceAggregateDoc } from '../../hooks/useProductIntelligenceAggregate';
 import { useProductSource } from '../../hooks/useProductSource';
 import { useSegments } from '../../hooks/useSegments';
 import { useCampaigns } from '../../hooks/useCampaigns';
@@ -106,6 +107,9 @@ export function Reports() {
   const toast = useToast();
   const { currentBrand } = useBrand();
   const { products, count: productsCount } = useProductSource();
+  // Parent-level count for the "Products in catalog" stat card; report-row counts stay per-variant (the exports emit variant rows).
+  const piDoc = useProductIntelligenceAggregateDoc();
+  const catalogCount = (piDoc.aggregate?.groupedSummary ?? piDoc.aggregate?.summary)?.total_skus ?? productsCount;
   const { segments } = useSegments();
   const segmentsCount = segments.length;
   const { campaigns } = useCampaigns();
@@ -364,7 +368,7 @@ export function Reports() {
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card padding="md">
           <div className="text-center">
-            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{productsCount}</p>
+            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{catalogCount}</p>
             <p className="text-sm text-[#4A4A4A] mt-1">Products</p>
             <p className="text-xs text-[#22C55E]">In catalog</p>
           </div>
