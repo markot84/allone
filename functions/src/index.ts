@@ -113,6 +113,11 @@ import {
   setDb as setEpsilonNetDb,
 } from './epsilonNetConnector';
 import {
+  saveContactPigeonCredentials,
+  fetchContactPigeonData,
+  setDb as setContactPigeonDb,
+} from './contactPigeonConnector';
+import {
   saveEntersoftCredentials,
   fetchEntersoftData,
   setDb as setEntersoftDb,
@@ -190,6 +195,7 @@ setMagentoDb(db);
 setMegaventoryDb(db);
 setSoftOneDb(db);
 setEpsilonNetDb(db);
+setContactPigeonDb(db);
 setEntersoftDb(db);
 setEcommerceAggDb(db);
 setDataAnalysisRfmDb(db);
@@ -1348,6 +1354,9 @@ export const connectorDisconnect = onRequest(
         clearPayload.password = '';
         clearPayload.lastItemsMaxRevision = 0;
       }
+      if (provider === 'contact_pigeon') {
+        clearPayload.apiKey = '';
+      }
       if (provider === 'entersoft') {
         clearPayload.webApiBaseUrl = '';
         clearPayload.userId = '';
@@ -1581,6 +1590,8 @@ export const connectorSync = onRequest(
         result = await fetchSoftOneData(brandId);
       } else if (provider === 'epsilon_net') {
         result = await fetchEpsilonNetData(brandId);
+      } else if (provider === 'contact_pigeon') {
+        result = await fetchContactPigeonData(brandId);
       } else if (provider === 'entersoft') {
         result = await fetchEntersoftData(brandId);
       } else if (provider === 'ga4') {
@@ -2473,6 +2484,14 @@ export const connectorSaveCredentials = onRequest(
         }
         const result = await saveEpsilonNetCredentials(brandId, { subscriptionKey, email, password });
         res.status(200).json(result);
+      } else if (provider === 'contact_pigeon') {
+        const { apiKey } = req.body as { apiKey?: string };
+        if (!apiKey) {
+          res.status(400).json({ error: 'Missing Contact Pigeon apiKey' });
+          return;
+        }
+        const result = await saveContactPigeonCredentials(brandId, { apiKey });
+        res.status(200).json(result);
       } else if (provider === 'entersoft') {
         const b = req.body as {
           webApiBaseUrl?: string;
@@ -2909,6 +2928,7 @@ async function executeBrandNightlyWave(
       if (data.meta?.connected) phase.wrap('Meta', fetchMetaCampaigns(brandId));
       if (data.tiktok?.connected) phase.wrap('TikTok', fetchTikTokCampaigns(brandId));
       if (data.merchant?.connected) phase.wrap('Merchant', fetchPriceBenchmarks(brandId));
+      if (data.contact_pigeon?.connected) phase.wrap('Contact Pigeon', fetchContactPigeonData(brandId));
       break;
     case 'ecommerce':
       if (data.shopify?.connected) phase.wrap('Shopify', fetchShopifyData(brandId));

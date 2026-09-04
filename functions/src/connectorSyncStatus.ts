@@ -20,6 +20,7 @@ export const CONNECTOR_DOC_KEY: Record<string, string> = {
   SoftOne: 'softone',
   'Epsilon Net': 'epsilon_net',
   Entersoft: 'entersoft',
+  'Contact Pigeon': 'contact_pigeon',
 };
 
 /** Set (error string) or clear (null) {key}.lastSyncError on the brand's connector doc. Non-fatal. */
