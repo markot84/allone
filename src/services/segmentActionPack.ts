@@ -101,7 +101,8 @@ function csvEscape(val: string | number): string {
   return s;
 }
 
-function rowsToCsv(rows: (string | number)[][]): string {
+/** Exported for the parity test that locks the chunked variant to identical output. */
+export function rowsToCsv(rows: (string | number)[][]): string {
   return rows.map(r => r.map(csvEscape).join(',')).join('\n');
 }
 
@@ -116,6 +117,37 @@ function downloadCsv(content: string, filename: string) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+/** Customer lists reach tens of thousands of rows. Building the whole file in one synchronous
+ * pass locked the tab for seconds — the browser cannot paint while JS holds the thread. These
+ * variants do the same work in chunks and hand the event loop back between them, so the page
+ * stays responsive while the file is assembled. */
+const EXPORT_CHUNK_ROWS = 2000;
+
+function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+export async function rowsToCsvChunked(rows: (string | number)[][]): Promise<string> {
+  const parts: string[] = [];
+  for (let i = 0; i < rows.length; i += EXPORT_CHUNK_ROWS) {
+    parts.push(
+      rows.slice(i, i + EXPORT_CHUNK_ROWS).map((r) => r.map(csvEscape).join(',')).join('\n')
+    );
+    if (i + EXPORT_CHUNK_ROWS < rows.length) await yieldToBrowser();
+  }
+  return parts.join('\n');
+}
+
+/** Chunked twin of `sanitizeSheet`; `aoa_to_sheet` itself stays synchronous. */
+async function sanitizeSheetChunked(XLSX: typeof import('xlsx'), rows: unknown[][]) {
+  const sanitized: unknown[][] = [];
+  for (let i = 0; i < rows.length; i += EXPORT_CHUNK_ROWS) {
+    for (const row of rows.slice(i, i + EXPORT_CHUNK_ROWS)) sanitized.push(sanitizeRow(row));
+    if (i + EXPORT_CHUNK_ROWS < rows.length) await yieldToBrowser();
+  }
+  return XLSX.utils.aoa_to_sheet(sanitized);
 }
 
 /** aoa_to_sheet with SEC-M5 formula-injection sanitization applied to every cell. */
@@ -453,11 +485,11 @@ export async function exportSegmentCustomerList(
 
   if (format === 'csv') {
     const allRows = [headers, ...rows];
-    downloadCsv(rowsToCsv(allRows), `${brand}_Customers_${segName}_${date}.csv`);
+    downloadCsv(await rowsToCsvChunked(allRows), `${brand}_Customers_${segName}_${date}.csv`);
   } else {
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
-    const ws = sanitizeSheet(XLSX,[
+    const ws = await sanitizeSheetChunked(XLSX, [
       [`CUSTOMER LIST — ${segment.name}`, '', '', '', '', '', '', ''],
       ['Brand', brandName || '—', '', 'Total', customers.length, '', '', ''],
       ['Generated', date, '', '', '', '', '', ''],
@@ -504,7 +536,7 @@ export async function exportAllSegmentCustomerLists(
         allRows.push([c.customerId, c.email || '', (c as { name?: string }).name || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);
       }
     }
-    downloadCsv(rowsToCsv(allRows), `${brand}_AllCustomers_BySegment_${date}.csv`);
+    downloadCsv(await rowsToCsvChunked(allRows), `${brand}_AllCustomers_BySegment_${date}.csv`);
   } else {
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
@@ -515,9 +547,10 @@ export async function exportAllSegmentCustomerLists(
         ? importedCustomers
         : (inMemoryCustomers.length > 0 ? inMemoryCustomers : importedCustomers);
       if (customers.length === 0) continue;
+      await yieldToBrowser();
       totalCount += customers.length;
       const rows = customers.map(c => [c.customerId, c.email || '', (c as { name?: string }).name || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);
-      const ws = sanitizeSheet(XLSX,[headers, ...rows]);
+      const ws = await sanitizeSheetChunked(XLSX, [headers, ...rows]);
       ws['!cols'] = [{ wch: 22 }, { wch: 28 }, { wch: 20 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
       XLSX.utils.book_append_sheet(wb, ws, seg.name.substring(0, 28).replace(/[[\]:*?/\\]/g, ''));
     }
