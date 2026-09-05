@@ -635,112 +635,6 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         }
       />
 
-      <Card padding="lg" className="border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/5">
-        <CardHeader
-          title="Εμπορικό context"
-          subtitle="Ενεργές πληροφορίες από τη σελίδα Εμπορικές Πληροφορίες και από διαλόγους με τον Mark που τροφοδοτούν αυτό το Marketing Plan."
-          icon={<MessageSquareText size={18} className="text-[var(--nts-accent)]" />}
-        />
-        {activeInfo.length === 0 ? (
-          <div className="mt-4 rounded-xl border border-dashed border-[var(--nts-accent)]/25 bg-white/70 p-3">
-            <p className="text-sm font-medium text-[#1A1A1A]">Δεν υπάρχουν ακόμη ενεργές εμπορικές πληροφορίες για αυτό το Marketing Plan.</p>
-            <p className="mt-1 text-xs text-[#6B7280]">
-              Πρόσθεσε πληροφορίες από τη σελίδα «Εμπορικές Πληροφορίες» ή ρώτησε τον Mark και πάτησε «Καταχώριση & άνοιγμα Marketing Plan». Θα χρησιμοποιηθούν ως context, όχι ως απόλυτα δεδομένα.
-            </p>
-            <Button className="mt-3" variant="ghost" size="sm" onClick={() => onSectionChange?.('commercial-info')}>
-              Άνοιγμα Εμπορικών Πληροφοριών
-            </Button>
-          </div>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {activeInfo.slice(0, 4).map((info) => (
-              <div key={info.id} className="rounded-xl border border-white/70 bg-white/80 p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={info.source === 'mark' ? 'orange' : 'info'}>
-                    {info.source === 'mark' ? 'από Mark' : 'Εμπορικές Πληροφορίες'}
-                  </Badge>
-                  <Badge variant="default">{COMMERCIAL_FACTOR_LABEL[info.factorType] ?? info.factorType}</Badge>
-                  <span className="text-xs text-[#6B7280]">
-                    {COMMERCIAL_DIRECTION_LABEL[info.direction] ?? info.direction} · επίδραση {COMMERCIAL_MAGNITUDE_LABEL[info.magnitude] ?? info.magnitude} · βεβαιότητα {COMMERCIAL_CONFIDENCE_LABEL[info.confidence] ?? info.confidence}
-                    {(info.horizonFrom || info.horizonTo) ? ` · ${info.horizonFrom ?? '…'} → ${info.horizonTo ?? '…'}` : ''}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm font-semibold text-[#1A1A1A]">{info.summary}</p>
-                {(info.brands.length > 0 || info.categories.length > 0 || info.parentSkus.length > 0) && (
-                  <p className="mt-1 text-xs text-[#6B7280]">
-                    {[
-                      info.brands.length ? `επωνυμίες: ${info.brands.join(', ')}` : '',
-                      info.categories.length ? `κατηγορίες: ${info.categories.join(', ')}` : '',
-                      info.parentSkus.length ? `parent SKU: ${info.parentSkus.join(', ')}` : '',
-                    ].filter(Boolean).join(' · ')}
-                  </p>
-                )}
-                {info.markContext?.summaryBullets && info.markContext.summaryBullets.length > 0 && (
-                  <ul className="mt-2 space-y-1 text-xs text-[#4A4A4A]">
-                    {info.markContext.summaryBullets.map((bullet, idx) => (
-                      <li key={`${info.id}-${idx}`} className="flex gap-2">
-                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nts-accent)]" />
-                        <span>{bullet}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-            {activeInfo.length > 4 && (
-              <p className="text-xs text-[#6B7280]">
-                +{activeInfo.length - 4} ακόμη ενεργές πληροφορίες λαμβάνονται υπόψη στο πλάνο.
-              </p>
-            )}
-          </div>
-        )}
-      </Card>
-
-      {/* Period selector */}
-      <Card padding="lg">
-        <CardHeader title="Περίοδος & δεδομένα βάσης" icon={<Calendar size={18} className="text-[var(--nts-accent)]" />} />
-        <div className="mt-3 flex flex-wrap gap-2">
-          {PRESETS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setPreset(p.id)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${
-                preset === p.id
-                  ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
-                  : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <ContextPill label="Νέα περίοδος" value={`${period.fromDate} → ${period.toDate}`} />
-          <ContextPill label="Βάση σύγκρισης" value={`${lastYearFrom} → ${lastYearTo}`} />
-          <ContextPill
-            label="Κάλυψη SKU"
-            value={skuCoverage ? `${formatNumber(skuCoverage)} ενεργά SKU` : 'Χωρίς δεδομένα καταλόγου'}
-          />
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button
-            variant="primary"
-            icon={generating ? <Spinner size="sm" /> : <Sparkles size={16} />}
-            onClick={regenerate}
-            disabled={!brandId || generating}
-          >
-            {generating ? 'Δημιουργία…' : draft ? 'Επαναδημιουργία plan' : 'Δημιουργία enriched plan'}
-        </Button>
-          {loadingContext && !draft && (
-            <span className="text-xs text-[#6B7280]">Φόρτωση δεδομένων βάσης (περσινές πωλήσεις & απόθεμα)…</span>
-          )}
-          {generateError && (
-            <span className="text-xs font-medium text-rose-600">⚠ {generateError} · πάτησε «Δημιουργία» ξανά.</span>
-          )}
-        </div>
-      </Card>
-
       {/* Staged progress loader while base data loads / the plan is synthesized */}
       {!draft && (generating || (loadingContext && !generateError)) && (
         <PlanProgress stages={planStages} pct={planProgressPct} generating={generating} />
@@ -1006,6 +900,112 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           </PlanSection>
         </>
       )}
+
+      <Card padding="lg" className="border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/5">
+        <CardHeader
+          title="Εμπορικό context"
+          subtitle="Ενεργές πληροφορίες από τη σελίδα Εμπορικές Πληροφορίες και από διαλόγους με τον Mark που τροφοδοτούν αυτό το Marketing Plan."
+          icon={<MessageSquareText size={18} className="text-[var(--nts-accent)]" />}
+        />
+        {activeInfo.length === 0 ? (
+          <div className="mt-4 rounded-xl border border-dashed border-[var(--nts-accent)]/25 bg-white/70 p-3">
+            <p className="text-sm font-medium text-[#1A1A1A]">Δεν υπάρχουν ακόμη ενεργές εμπορικές πληροφορίες για αυτό το Marketing Plan.</p>
+            <p className="mt-1 text-xs text-[#6B7280]">
+              Πρόσθεσε πληροφορίες από τη σελίδα «Εμπορικές Πληροφορίες» ή ρώτησε τον Mark και πάτησε «Καταχώριση & άνοιγμα Marketing Plan». Θα χρησιμοποιηθούν ως context, όχι ως απόλυτα δεδομένα.
+            </p>
+            <Button className="mt-3" variant="ghost" size="sm" onClick={() => onSectionChange?.('commercial-info')}>
+              Άνοιγμα Εμπορικών Πληροφοριών
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {activeInfo.slice(0, 4).map((info) => (
+              <div key={info.id} className="rounded-xl border border-white/70 bg-white/80 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={info.source === 'mark' ? 'orange' : 'info'}>
+                    {info.source === 'mark' ? 'από Mark' : 'Εμπορικές Πληροφορίες'}
+                  </Badge>
+                  <Badge variant="default">{COMMERCIAL_FACTOR_LABEL[info.factorType] ?? info.factorType}</Badge>
+                  <span className="text-xs text-[#6B7280]">
+                    {COMMERCIAL_DIRECTION_LABEL[info.direction] ?? info.direction} · επίδραση {COMMERCIAL_MAGNITUDE_LABEL[info.magnitude] ?? info.magnitude} · βεβαιότητα {COMMERCIAL_CONFIDENCE_LABEL[info.confidence] ?? info.confidence}
+                    {(info.horizonFrom || info.horizonTo) ? ` · ${info.horizonFrom ?? '…'} → ${info.horizonTo ?? '…'}` : ''}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm font-semibold text-[#1A1A1A]">{info.summary}</p>
+                {(info.brands.length > 0 || info.categories.length > 0 || info.parentSkus.length > 0) && (
+                  <p className="mt-1 text-xs text-[#6B7280]">
+                    {[
+                      info.brands.length ? `επωνυμίες: ${info.brands.join(', ')}` : '',
+                      info.categories.length ? `κατηγορίες: ${info.categories.join(', ')}` : '',
+                      info.parentSkus.length ? `parent SKU: ${info.parentSkus.join(', ')}` : '',
+                    ].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+                {info.markContext?.summaryBullets && info.markContext.summaryBullets.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-xs text-[#4A4A4A]">
+                    {info.markContext.summaryBullets.map((bullet, idx) => (
+                      <li key={`${info.id}-${idx}`} className="flex gap-2">
+                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nts-accent)]" />
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+            {activeInfo.length > 4 && (
+              <p className="text-xs text-[#6B7280]">
+                +{activeInfo.length - 4} ακόμη ενεργές πληροφορίες λαμβάνονται υπόψη στο πλάνο.
+              </p>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* Period selector */}
+      <Card padding="lg">
+        <CardHeader title="Περίοδος & δεδομένα βάσης" icon={<Calendar size={18} className="text-[var(--nts-accent)]" />} />
+        <div className="mt-3 flex flex-wrap gap-2">
+          {PRESETS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setPreset(p.id)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${
+                preset === p.id
+                  ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
+                  : 'border-[#E5E7EB] text-[#4A4A4A] hover:border-[var(--nts-accent)]'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <ContextPill label="Νέα περίοδος" value={`${period.fromDate} → ${period.toDate}`} />
+          <ContextPill label="Βάση σύγκρισης" value={`${lastYearFrom} → ${lastYearTo}`} />
+          <ContextPill
+            label="Κάλυψη SKU"
+            value={skuCoverage ? `${formatNumber(skuCoverage)} ενεργά SKU` : 'Χωρίς δεδομένα καταλόγου'}
+          />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            variant="primary"
+            icon={generating ? <Spinner size="sm" /> : <Sparkles size={16} />}
+            onClick={regenerate}
+            disabled={!brandId || generating}
+          >
+            {generating ? 'Δημιουργία…' : draft ? 'Επαναδημιουργία plan' : 'Δημιουργία enriched plan'}
+        </Button>
+          {loadingContext && !draft && (
+            <span className="text-xs text-[#6B7280]">Φόρτωση δεδομένων βάσης (περσινές πωλήσεις & απόθεμα)…</span>
+          )}
+          {generateError && (
+            <span className="text-xs font-medium text-rose-600">⚠ {generateError} · πάτησε «Δημιουργία» ξανά.</span>
+          )}
+        </div>
+      </Card>
 
       {/* Helper: learnings from past decisions (below the plan, collapsed by default) */}
       <LearningsCard
