@@ -206,14 +206,28 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       if (path !== 'products') return;
       const params = new URLSearchParams(queryString || '');
       const stock = params.get('stock');
+      const filter = params.get('filter');
+      if (!stock && !filter) return;
+
+      // A briefing action promises one specific set of products. Whatever else was filtering the
+      // table has to go, or the arrival lands on an intersection nobody asked for — and when the
+      // leftover filter is the wider one, on what reads as the whole catalogue.
+      setSearchQuery('');
+      setCategoryInclude(null);
+      setBrandInclude(null);
+      setTagInclude(null);
+      setMarginFilter('all');
+      setProductDateFrom('');
+      setProductDateTo('');
+      setStockCardFilter('all');
+      setStockAgeFilter('all');
+      setCurrentPage(1);
+
       if (stock === 'low' || stock === 'dead' || stock === 'excess' || stock === 'healthy') {
         setStockCardFilter(stock);
-        setCurrentPage(1);
       }
-      const filter = params.get('filter');
       if (filter === 'high-margin-low-stock') {
         setStockAgeFilter('high-margin-low-stock');
-        setCurrentPage(1);
       }
     };
     applyFromHash();

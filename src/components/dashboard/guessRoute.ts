@@ -5,7 +5,7 @@ export function guessRoute(action: string): GuessResult {
   // PER-337: strip accents so keywords match real AI phrasing («παραγγελία» vs 'παραγγελι').
   const lower = action.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   // Reorder/low-stock before the ecommerce branch — «παραγγελία για προϊόντα με χαμηλό απόθεμα» is a restock, not orders.
-  if (lower.includes('χαμηλο αποθεμα') || lower.includes('low stock') || lower.includes('reorder') || lower.includes('restock') || lower.includes('αναπαραγγ') || lower.includes('παραγγειλ') || lower.includes('διαθεσιμοτητα') || lower.includes('εξαντλ') || (lower.includes('παραγγελια') && lower.includes('προιον'))) {
+  if (lower.includes('χαμηλο αποθεμα') || lower.includes('low stock') || lower.includes('reorder') || lower.includes('restock') || lower.includes('αναπαραγγ') || lower.includes('παραγγειλ') || lower.includes('διαθεσιμοτητα') || lower.includes('εξαντλ') || lower.includes('αναπληρωσ') || lower.includes('ελλειψ') || (lower.includes('παραγγελια') && lower.includes('προιον'))) {
     return { section: 'products', hashQuery: 'stock=low' };
   }
   if (lower.includes('ecom') || lower.includes('eshop') || lower.includes('παραγγελι') || lower.includes('aov') || lower.includes('true roas')) {
@@ -17,8 +17,14 @@ export function guessRoute(action: string): GuessResult {
   if (lower.includes('excess') || lower.includes('πλεονα')) {
     return { section: 'products', hashQuery: 'stock=excess' };
   }
-  if (lower.includes('high-margin') || lower.includes('high margin') || lower.includes('αναπληρωσ')) {
+  if (lower.includes('high-margin') || lower.includes('high margin')) {
     return { section: 'products', hashQuery: 'filter=high-margin-low-stock' };
+  }
+  // The briefing tells the owner to check connector sync when campaign or analytics data is
+  // missing for the period. That instruction was landing back on the dashboard it came from;
+  // connectors are managed on the Data page.
+  if (lower.includes('συγχρονισμ') || lower.includes('connector') || lower.includes('sync') || lower.includes('συνδεσ')) {
+    return { section: 'data' };
   }
   const pairs: [string, GuessResult][] = [
     ['campaign', { section: 'campaigns' }],
