@@ -52,6 +52,7 @@ import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useChannelActivations } from '../../hooks/useChannelActivations';
 import { exportAllSegmentActionPacks, exportStrategyPlan, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
 import { classifyStockHealth } from '../../utils/productUtils';
+import { matchSegmentByName, matchSegmentsByName } from '../../utils/segmentNameMatch';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent } from '../../utils/format';
 import { sanitizeCustomerMessage, containsForbiddenContent } from '../../utils/customerMessageSanitizer';
@@ -502,7 +503,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     if (ai && ai.length > 0) {
       // join with RFM data to get color/customers/revenue share
       return ai.map((rs) => {
-        const match = rfmSegments.find((s) => s.name === rs.name);
+        // The model writes its own names — «Customers Needing Attention» for «Need Attention».
+        // Exact equality left those without a customer count on the card, and out of the exports.
+        const match = matchSegmentByName(rs.name, rfmSegments);
         return {
           name: rs.name,
           fit: rs.fit,
@@ -532,8 +535,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
    * every RFM segment exported 39K customers where the strategy covers 12,8K. Falls back to all
    * segments only if no recommended name matches, so the hub can never export nothing. */
   const strategySegments = useMemo(() => {
-    const names = new Set(recommendedSegments.map((s) => s.name));
-    const matched = rfmSegments.filter((s) => names.has(s.name));
+    const matched = matchSegmentsByName(recommendedSegments.map((s) => s.name), rfmSegments);
     return matched.length > 0 ? matched : rfmSegments;
   }, [recommendedSegments, rfmSegments]);
 
