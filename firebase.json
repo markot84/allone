@@ -36,6 +36,26 @@
         ]
       },
       {
+        "//": "Header rules match the REQUEST path, not the rewritten file. Nobody types /index.html — the app is opened at / and at SPA routes, which fell through to Firebase's default max-age=3600. Browsers then kept the previous entry document, pointing at the previous hashed assets, and served the whole old app for an hour after every deploy.",
+        "source": "/",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "//": "Same for the routes served by the SPA rewrite.",
+        "source": "/@(privacy|terms|invite/**|redeem/**)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
         "source": "**",
         "headers": [
           {
