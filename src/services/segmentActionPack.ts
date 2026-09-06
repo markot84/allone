@@ -97,6 +97,20 @@ export type ExportFormat = 'xlsx' | 'csv';
 /** Reports rows written out of the total, so a long export can show real progress instead of a spinner. */
 export type ExportProgress = (done: number, total: number) => void;
 
+/** Which customers a segment's export carries.
+ *
+ * The segments on the page are the ones the strategy was chosen from and the ones the audience
+ * card counts; when they carry customers, those customers are the export. The Firestore
+ * `segment_customers` collection is only the fallback for segments that carry none (aggregate
+ * mode, where the customer lists live server-side).
+ *
+ * It used to be "whichever set is larger". That let a 38K Megaventory universe stand in for
+ * the 12,8K the strategy actually evaluated, so a five-segment export ran to 34K rows and never
+ * reconciled with the card above it — the file exported people the strategy had never seen. */
+export function pickSegmentCustomers<A, B>(inMemory: A[] | undefined, imported: B[]): (A | B)[] {
+  return inMemory && inMemory.length > 0 ? inMemory : imported;
+}
+
 function csvEscape(val: string | number): string {
   // Neutralize formula injection (SEC-M5) before CSV quoting.
   const s = String(sanitizeSpreadsheetCell(val ?? ''));
@@ -464,13 +478,14 @@ export async function exportSegmentCustomerList(
   format: ExportFormat = 'csv',
   onProgress?: ExportProgress,
 ): Promise<{ count: number }> {
-  const importedCustomers = await SegmentCustomersService.getForSegment(brandId, segment.id);
+  // The page's segment wins outright; Firestore is fetched only when it carries no customers
+  // (see pickSegmentCustomers). Skipping the forced-server read when it is not needed also
+  // removes a network round trip from the export the owner sees as slow.
   const inMemoryCustomers = segment.customers ?? [];
-  // Prefer the larger dataset: in-memory order-computed customers (with emails) take priority
-  // over a smaller/stale set from Firestore (e.g. Cloud Function that caps at 200/segment).
-  const customers = importedCustomers.length > inMemoryCustomers.length
-    ? importedCustomers
-    : (inMemoryCustomers.length > 0 ? inMemoryCustomers : importedCustomers);
+  const customers = pickSegmentCustomers(
+    inMemoryCustomers,
+    inMemoryCustomers.length > 0 ? [] : await SegmentCustomersService.getForSegment(brandId, segment.id),
+  );
   if (customers.length === 0) throw new Error('Δεν υπάρχουν customer-level δεδομένα με email/customer id για αυτό το segment.');
 
   const date = new Date().toISOString().split('T')[0];
@@ -523,7 +538,12 @@ export async function exportAllSegmentCustomerLists(
   format: ExportFormat = 'csv',
   onProgress?: ExportProgress,
 ): Promise<{ count: number }> {
-  const allCustomers = await SegmentCustomersService.getAllBySegment(brandId);
+  // Firestore is only consulted for segments that carry no customers of their own
+  // (see pickSegmentCustomers); when every segment does, the forced-server read is skipped.
+  const needsImported = segments.some((seg) => (seg.customers?.length ?? 0) === 0);
+  const allCustomers = needsImported
+    ? await SegmentCustomersService.getAllBySegment(brandId)
+    : new Map<string, { customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]>();
   const hasDerivedCustomers = segments.some((seg) => (seg.customers?.length ?? 0) > 0);
   if (allCustomers.size === 0 && !hasDerivedCustomers) {
     throw new Error('Δεν υπάρχουν customer-level δεδομένα με email/customer id για export.');
@@ -537,14 +557,7 @@ export async function exportAllSegmentCustomerLists(
   /** Resolved once: the CSV and XLSX branches used to repeat this selection, and progress needs
    * the row total before the first row is written. */
   const perSegment = segments
-    .map((seg) => {
-      const imported = allCustomers.get(seg.id) || [];
-      const inMemory = seg.customers ?? [];
-      const customers = imported.length > inMemory.length
-        ? imported
-        : (inMemory.length > 0 ? inMemory : imported);
-      return { seg, customers };
-    })
+    .map((seg) => ({ seg, customers: pickSegmentCustomers(seg.customers, allCustomers.get(seg.id) || []) }))
     .filter(({ customers }) => customers.length > 0);
 
   const totalCount = perSegment.reduce((sum, { customers }) => sum + customers.length, 0);

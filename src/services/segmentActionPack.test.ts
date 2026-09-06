@@ -2,7 +2,26 @@
  * synchronous pass froze the tab. Only the *how* changed — these lock the output byte-for-byte
  * against the original, including across a chunk boundary. */
 import { describe, expect, it } from 'vitest';
-import { rowsToCsv, rowsToCsvChunked } from './segmentActionPack';
+import { pickSegmentCustomers, rowsToCsv, rowsToCsvChunked } from './segmentActionPack';
+
+describe('pickSegmentCustomers — the export carries the customers the strategy was built on', () => {
+  const card = [{ customerId: 'a' }, { customerId: 'b' }];
+  const megaventory = [{ customerId: 'a' }, { customerId: 'b' }, { customerId: 'c' }, { customerId: 'd' }];
+
+  it("takes the page's own customers even when Firestore holds a larger universe", () => {
+    // This was the 34K-rows-for-a-12,8K-strategy case: "larger wins" is the wrong rule.
+    expect(pickSegmentCustomers(card, megaventory)).toBe(card);
+  });
+
+  it('falls back to Firestore only when the segment carries no customers itself', () => {
+    expect(pickSegmentCustomers([], megaventory)).toBe(megaventory);
+    expect(pickSegmentCustomers(undefined, megaventory)).toBe(megaventory);
+  });
+
+  it('is empty when neither side has anyone, so the caller can refuse honestly', () => {
+    expect(pickSegmentCustomers([], [])).toEqual([]);
+  });
+});
 
 /** Rows carrying every case csvEscape has to handle: separators, quotes, newlines, and the
  * leading characters a spreadsheet would execute as a formula. */
