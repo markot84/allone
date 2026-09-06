@@ -32,6 +32,7 @@ import {
   Check,
   Star,
   Package,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   PieChart,
@@ -52,7 +53,7 @@ import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useChannelActivations } from '../../hooks/useChannelActivations';
 import { exportAllSegmentActionPacks, exportStrategyPlan, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
 import { classifyStockHealth } from '../../utils/productUtils';
-import { matchSegmentByName, matchSegmentsByName } from '../../utils/segmentNameMatch';
+import { matchSegmentByName, matchSegmentsByName, segmentSetSignature } from '../../utils/segmentNameMatch';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent } from '../../utils/format';
 import { sanitizeCustomerMessage, containsForbiddenContent } from '../../utils/customerMessageSanitizer';
@@ -272,6 +273,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const { products, isLoading: productsLoading } = useProductSource({ enabled: useLocalFallback });
   const { isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
   const { segments: rfmSegments, dataCoverage } = useSegments();
+  /** Which segments exist right now. Stamped on each recommendation and compared on load, the
+   * same way `brandProfileContextSig` is — a stored audience must not outlive the segments it
+   * named. e-tennis kept a «Customers Needing Attention» from June after the RFM writer had
+   * replaced it with «At Risk». */
+  const segmentsSig = useMemo(() => segmentSetSignature(rfmSegments), [rfmSegments]);
   const {
     activeStrategy,
     getStrategyName,
@@ -417,6 +423,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         scenario,
         segment,
         fitLevel: 'good',
+        segmentsSig,
         brandContext: { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats, brandProfileText },
         segmentFitList,
         context: 'activation',
@@ -445,7 +452,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       if (silent) setIsSilentUpgrading(false);
       else setAiGenerating(false);
     }
-  }, [strategyId, scenarioId, currentBrand, brandProfileText, rfmSegments, products, queryClient, toast, activeStrategy, signalCoverage, dataCoverage, channelInsight.ready, channelInsight.categories, channelInsight.totalCount]);
+  }, [strategyId, scenarioId, currentBrand, brandProfileText, rfmSegments, segmentsSig, products, queryClient, toast, activeStrategy, signalCoverage, dataCoverage, channelInsight.ready, channelInsight.categories, channelInsight.totalCount]);
 
   useEffect(() => {
     if (autoGenTriggered.current) return;
@@ -470,16 +477,20 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     // We use the central sanitizer detector (DRY with render-time sanitization).
     const violatingMessages = playbook.some((e) => containsForbiddenContent(e.message));
     const staleBrandProfileContext = aiRecommendation.brandProfileContextSig !== brandProfileContextSig;
+    // The segment set changed underneath the stored audience (or predates the signature). Only
+    // once segments have actually loaded — an empty list mid-load is not a changed set.
+    const staleSegments = rfmSegments.length > 0 && aiRecommendation.segmentsSig !== segmentsSig;
     if (
       hasPerSegmentSignal &&
       !tooFewSegments &&
       !violatingMessages &&
-      !staleBrandProfileContext
+      !staleBrandProfileContext &&
+      !staleSegments
     )
       return;
     silentUpgradeAttempts.current += 1;
     generateRecommendation(true);
-  }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, brandProfileContextSig, generateRecommendation]);
+  }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, brandProfileContextSig, segmentsSig, generateRecommendation]);
 
   const { getStatus, getNote, isIncluded, updateActivation, isSaving } = useChannelActivations(strategyId);
 
@@ -513,6 +524,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           color: match?.color ?? '#7C3AED',
           count: match?.count ?? 0,
           revenueShare: match?.revenue_share ?? 0,
+          /** False = the recommendation names a segment the brand no longer has. Shown as such
+           * rather than as a tile with no figures. */
+          resolved: match != null,
         };
       });
     }
@@ -527,6 +541,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         color: s.color,
         count: s.count,
         revenueShare: s.revenue_share,
+        resolved: true,
       }));
   }, [aiRecommendation, rfmSegments]);
 
@@ -1225,6 +1240,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     )}
                   </div>
                   <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[#4A4A4A]">
+                    {!seg.resolved && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                        <AlertTriangle size={10} /> Δεν υπάρχει πια στα segments — η σύσταση ανανεώνεται
+                      </span>
+                    )}
                     {seg.count > 0 && (
                       <span><span className="font-mono font-semibold">{formatNumber(seg.count)}</span> πελάτες</span>
                     )}
@@ -1735,6 +1755,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       {/* Downloads Hub */}
       <DownloadsHub
         segments={strategySegments}
+        unresolvedSegmentNames={recommendedSegments.filter((s) => !s.resolved).map((s) => s.name)}
         brandName={currentBrand?.name}
         brandId={currentBrand?.id}
         channelRecommendation={aiRecommendation}
@@ -1957,6 +1978,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
 interface DownloadsHubProps {
   segments: import('../../types').RFMSegment[];
+  /** Segments the strategy names that no longer exist in the brand's data — said out loud in
+   * the tile text instead of quietly exporting fewer than promised. */
+  unresolvedSegmentNames?: string[];
   brandName?: string;
   channelRecommendation: ChannelRecommendation | null;
   activeStrategy: ReturnType<typeof useActiveStrategy>['activeStrategy'];
@@ -1966,7 +1990,11 @@ interface DownloadsHubProps {
   brandId?: string;
 }
 
-function DownloadsHub({ segments, brandName, channelRecommendation, activeStrategy, scenarioId, monthlyBudget, toast, brandId }: DownloadsHubProps) {
+function DownloadsHub({ segments, unresolvedSegmentNames = [], brandName, channelRecommendation, activeStrategy, scenarioId, monthlyBudget, toast, brandId }: DownloadsHubProps) {
+  const segmentScopeLabel =
+    unresolvedSegmentNames.length > 0
+      ? `${segments.length} από ${segments.length + unresolvedSegmentNames.length} segments της στρατηγικής (${unresolvedSegmentNames.join(', ')}: δεν υπάρχει πια)`
+      : `${segments.length} segments της στρατηγικής`;
   const [exporting, setExporting] = useState<string | null>(null);
   /** Customer lists run to tens of thousands of rows; a spinner alone reads as a hung page. */
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null);
@@ -2039,7 +2067,7 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
             <div className="flex-1">
               <h3 className="font-semibold text-[#1A1A1A] text-sm">Action Pack στρατηγικής</h3>
               <p className="text-xs text-[#4A4A4A] mt-0.5">
-                {segments.length} segments της στρατηγικής · Profile, Channel Plan & Templates
+                {segmentScopeLabel} · Profile, Channel Plan & Templates
               </p>
             </div>
           </div>
@@ -2088,7 +2116,7 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
             <div className="flex-1">
               <h3 className="font-semibold text-[#1A1A1A] text-sm">Customer Lists ανά Segment</h3>
               <p className="text-xs text-[#4A4A4A] mt-0.5">
-                {segments.length} segments της στρατηγικής · Customer IDs, emails, RFM scores — έτοιμα για Custom Audiences & email campaigns
+                {segmentScopeLabel} · Customer IDs, emails, RFM scores — έτοιμα για Custom Audiences & email campaigns
               </p>
             </div>
             <div className="flex gap-2">

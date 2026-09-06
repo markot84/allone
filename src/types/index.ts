@@ -565,6 +565,10 @@ export interface ChannelRecommendation {
   channelPlaybook?: ChannelPlaybookEntry[];
   /** Signature of Brand Profile prompt context used to generate customer-facing copy. */
   brandProfileContextSig?: string;
+  /** Signature of the segment set the audience was chosen from (`segmentSetSignature`). When the
+   * brand's segments change underneath a stored recommendation, the page regenerates it instead
+   * of naming segments that no longer exist. */
+  segmentsSig?: string;
 }
 
 /** Extra marketing costs (agency, tools, one-off) — stored in the active strategy, used in ROI. */

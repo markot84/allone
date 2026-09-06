@@ -2,7 +2,7 @@
  * the two do not always agree. A dropped match exports fewer customers than the strategy covers;
  * a wrong match exports the wrong ones. Both are locked here. */
 import { describe, expect, it } from 'vitest';
-import { matchSegmentByName, matchSegmentsByName, normalizeSegmentName } from './segmentNameMatch';
+import { matchSegmentByName, matchSegmentsByName, normalizeSegmentName, segmentSetSignature } from './segmentNameMatch';
 
 type Seg = { name: string; id: string };
 
@@ -73,6 +73,24 @@ describe('matchSegmentsByName', () => {
     const matched = matchSegmentsByName(['Customers Needing Attention', 'Need Attention'], POOL);
     // The literal name claims the segment; the paraphrase then finds nothing left to take.
     expect(matched.map((s) => s.id)).toEqual(['attention']);
+  });
+});
+
+describe('segmentSetSignature', () => {
+  it('is the same set regardless of order, case or punctuation', () => {
+    const a = segmentSetSignature([{ name: 'Champions' }, { name: "Can't Lose Them" }, { name: 'Lost' }]);
+    const b = segmentSetSignature([{ name: 'LOST' }, { name: 'Can’t Lose Them' }, { name: 'champions' }]);
+    expect(a).toBe(b);
+  });
+
+  it('changes when a segment is replaced — the case that went unnoticed for months', () => {
+    const june = segmentSetSignature([{ name: 'Champions' }, { name: 'Customers Needing Attention' }]);
+    const now = segmentSetSignature([{ name: 'Champions' }, { name: 'At Risk' }]);
+    expect(june).not.toBe(now);
+  });
+
+  it('is empty for no segments, so a mid-load empty list is not a "changed" set', () => {
+    expect(segmentSetSignature([])).toBe('');
   });
 });
 

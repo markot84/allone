@@ -93,3 +93,16 @@ export function matchSegmentsByName<T extends { name: string }>(names: string[],
 export function matchSegmentByName<T extends { name: string }>(name: string, pool: T[]): T | null {
   return matchSegmentsByName([name], pool)[0] ?? null;
 }
+
+/** Identity of a segment SET, independent of order and spelling — so a recommendation can
+ * record which segments it was built against and be told when that set has changed underneath
+ * it. The RFM writer that produced «Customers Needing Attention» was later replaced by one that
+ * produces «At Risk»; the strategy kept naming the vanished segment for months, with nothing to
+ * say so. */
+export function segmentSetSignature(segments: ReadonlyArray<{ name: string }>): string {
+  return segments
+    .map((s) => normalizeSegmentName(s.name))
+    .filter(Boolean)
+    .sort()
+    .join('|');
+}

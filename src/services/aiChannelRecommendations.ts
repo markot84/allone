@@ -129,12 +129,15 @@ export interface GenerateRecommendationsParams {
   triage?: TriagePromptContext;
   provenance?: ProvenancePromptContext;
   audience?: AudiencePromptContext;
+  /** Identity of the segment set this recommendation is built against — stamped on the result so
+   * the page can detect when the segments have since changed. */
+  segmentsSig?: string;
 }
 
 export async function generateChannelRecommendations(
   params: GenerateRecommendationsParams
 ): Promise<ChannelRecommendation | null> {
-  const { scenario, segment, fitLevel, brandContext, segmentFitList, totalBudget, campaignPerformance, context, triage, provenance, audience } = params;
+  const { scenario, segment, fitLevel, brandContext, segmentFitList, totalBudget, campaignPerformance, context, triage, provenance, audience, segmentsSig } = params;
   const brandProfileContextSig = hashBrandProfilePromptText(brandContext?.brandProfileText);
 
   const behavioral = deriveBehavioralProfile(segment);
@@ -196,5 +199,5 @@ PREDICTIVE METRICS (${segment.name}):
     throw new Error('AI response could not be parsed');
   }
 
-  return { ...result, brandProfileContextSig };
+  return { ...result, brandProfileContextSig, ...(segmentsSig ? { segmentsSig } : {}) };
 }
