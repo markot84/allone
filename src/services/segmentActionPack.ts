@@ -94,6 +94,9 @@ function getTemplatesForSegment(segment: RFMSegment): CampaignTemplate[] {
 
 export type ExportFormat = 'xlsx' | 'csv';
 
+/** Reports rows written out of the total, so a long export can show real progress instead of a spinner. */
+export type ExportProgress = (done: number, total: number) => void;
+
 function csvEscape(val: string | number): string {
   // Neutralize formula injection (SEC-M5) before CSV quoting.
   const s = String(sanitizeSpreadsheetCell(val ?? ''));
@@ -129,22 +132,24 @@ function yieldToBrowser(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-export async function rowsToCsvChunked(rows: (string | number)[][]): Promise<string> {
+export async function rowsToCsvChunked(rows: (string | number)[][], onChunk?: (rowsDone: number) => void): Promise<string> {
   const parts: string[] = [];
   for (let i = 0; i < rows.length; i += EXPORT_CHUNK_ROWS) {
     parts.push(
       rows.slice(i, i + EXPORT_CHUNK_ROWS).map((r) => r.map(csvEscape).join(',')).join('\n')
     );
+    onChunk?.(Math.min(i + EXPORT_CHUNK_ROWS, rows.length));
     if (i + EXPORT_CHUNK_ROWS < rows.length) await yieldToBrowser();
   }
   return parts.join('\n');
 }
 
 /** Chunked twin of `sanitizeSheet`; `aoa_to_sheet` itself stays synchronous. */
-async function sanitizeSheetChunked(XLSX: typeof import('xlsx'), rows: unknown[][]) {
+async function sanitizeSheetChunked(XLSX: typeof import('xlsx'), rows: unknown[][], onChunk?: (rowsDone: number) => void) {
   const sanitized: unknown[][] = [];
   for (let i = 0; i < rows.length; i += EXPORT_CHUNK_ROWS) {
     for (const row of rows.slice(i, i + EXPORT_CHUNK_ROWS)) sanitized.push(sanitizeRow(row));
+    onChunk?.(Math.min(i + EXPORT_CHUNK_ROWS, rows.length));
     if (i + EXPORT_CHUNK_ROWS < rows.length) await yieldToBrowser();
   }
   return XLSX.utils.aoa_to_sheet(sanitized);
@@ -457,6 +462,7 @@ export async function exportSegmentCustomerList(
   segment: RFMSegment,
   brandName?: string,
   format: ExportFormat = 'csv',
+  onProgress?: ExportProgress,
 ): Promise<{ count: number }> {
   const importedCustomers = await SegmentCustomersService.getForSegment(brandId, segment.id);
   const inMemoryCustomers = segment.customers ?? [];
@@ -483,9 +489,14 @@ export async function exportSegmentCustomerList(
     c.rfmScore || '',
   ]);
 
+  const total = rows.length;
+  onProgress?.(0, total);
+  /** The chunk callback counts header rows too; clamp so the bar never overshoots. */
+  const report = (rowsDone: number) => onProgress?.(Math.min(rowsDone, total), total);
+
   if (format === 'csv') {
     const allRows = [headers, ...rows];
-    downloadCsv(await rowsToCsvChunked(allRows), `${brand}_Customers_${segName}_${date}.csv`);
+    downloadCsv(await rowsToCsvChunked(allRows, report), `${brand}_Customers_${segName}_${date}.csv`);
   } else {
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
@@ -496,7 +507,7 @@ export async function exportSegmentCustomerList(
       [''],
       headers,
       ...rows,
-    ]);
+    ], report);
     ws['!cols'] = [{ wch: 22 }, { wch: 28 }, { wch: 20 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
     XLSX.utils.book_append_sheet(wb, ws, segment.name.substring(0, 28));
     XLSX.writeFile(wb, `${brand}_Customers_${segName}_${date}.xlsx`);
@@ -510,6 +521,7 @@ export async function exportAllSegmentCustomerLists(
   segments: RFMSegment[],
   brandName?: string,
   format: ExportFormat = 'csv',
+  onProgress?: ExportProgress,
 ): Promise<{ count: number }> {
   const allCustomers = await SegmentCustomersService.getAllBySegment(brandId);
   const hasDerivedCustomers = segments.some((seg) => (seg.customers?.length ?? 0) > 0);
@@ -519,43 +531,54 @@ export async function exportAllSegmentCustomerLists(
 
   const date = new Date().toISOString().split('T')[0];
   const brand = safeBrandName(brandName);
-  let totalCount = 0;
 
   const headers = ['Customer ID', 'Email', 'Όνομα', 'Segment', 'Recency', 'Frequency', 'Monetary', 'RFM Score'];
 
+  /** Resolved once: the CSV and XLSX branches used to repeat this selection, and progress needs
+   * the row total before the first row is written. */
+  const perSegment = segments
+    .map((seg) => {
+      const imported = allCustomers.get(seg.id) || [];
+      const inMemory = seg.customers ?? [];
+      const customers = imported.length > inMemory.length
+        ? imported
+        : (inMemory.length > 0 ? inMemory : imported);
+      return { seg, customers };
+    })
+    .filter(({ customers }) => customers.length > 0);
+
+  const totalCount = perSegment.reduce((sum, { customers }) => sum + customers.length, 0);
+  let written = 0;
+  const report = () => onProgress?.(written, totalCount);
+  report();
+
+  const toRow = (c: { customerId: string; email?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }, segName: string) =>
+    [c.customerId, c.email || '', (c as { name?: string }).name || '', segName, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || ''];
+
   if (format === 'csv') {
     const allRows: (string | number)[][] = [headers];
-    for (const seg of segments) {
-      const importedCustomers = allCustomers.get(seg.id) || [];
-      const inMemoryCustomers = seg.customers ?? [];
-      const customers = importedCustomers.length > inMemoryCustomers.length
-        ? importedCustomers
-        : (inMemoryCustomers.length > 0 ? inMemoryCustomers : importedCustomers);
-      totalCount += customers.length;
-      for (const c of customers) {
-        allRows.push([c.customerId, c.email || '', (c as { name?: string }).name || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);
-      }
+    for (const { seg, customers } of perSegment) {
+      for (const c of customers) allRows.push(toRow(c, seg.name));
+      written += customers.length;
+      report();
+      await yieldToBrowser();
     }
     downloadCsv(await rowsToCsvChunked(allRows), `${brand}_AllCustomers_BySegment_${date}.csv`);
-  } else {
-    const XLSX = await import('xlsx');
-    const wb = XLSX.utils.book_new();
-    for (const seg of segments) {
-      const importedCustomers = allCustomers.get(seg.id) || [];
-      const inMemoryCustomers = seg.customers ?? [];
-      const customers = importedCustomers.length > inMemoryCustomers.length
-        ? importedCustomers
-        : (inMemoryCustomers.length > 0 ? inMemoryCustomers : importedCustomers);
-      if (customers.length === 0) continue;
-      await yieldToBrowser();
-      totalCount += customers.length;
-      const rows = customers.map(c => [c.customerId, c.email || '', (c as { name?: string }).name || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);
-      const ws = await sanitizeSheetChunked(XLSX, [headers, ...rows]);
-      ws['!cols'] = [{ wch: 22 }, { wch: 28 }, { wch: 20 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
-      XLSX.utils.book_append_sheet(wb, ws, seg.name.substring(0, 28).replace(/[[\]:*?/\\]/g, ''));
-    }
-    XLSX.writeFile(wb, `${brand}_AllCustomers_BySegment_${date}.xlsx`);
+    return { count: totalCount };
   }
+
+  const XLSX = await import('xlsx');
+  const wb = XLSX.utils.book_new();
+  for (const { seg, customers } of perSegment) {
+    await yieldToBrowser();
+    const rows = customers.map((c) => toRow(c, seg.name));
+    const ws = await sanitizeSheetChunked(XLSX, [headers, ...rows]);
+    ws['!cols'] = [{ wch: 22 }, { wch: 28 }, { wch: 20 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws, seg.name.substring(0, 28).replace(/[[\]:*?/\\]/g, ''));
+    written += customers.length;
+    report();
+  }
+  XLSX.writeFile(wb, `${brand}_AllCustomers_BySegment_${date}.xlsx`);
 
   return { count: totalCount };
 }

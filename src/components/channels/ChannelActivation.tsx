@@ -39,7 +39,7 @@ import {
   Cell,
   Tooltip,
 } from 'recharts';
-import { Card, CardHeader, Badge, Button, Spinner, PageHeader, ModalHeader, ProductThumbnail } from '../common';
+import { Card, CardHeader, Badge, Button, Spinner, PageHeader, ModalHeader, ProductThumbnail, ProgressBar } from '../common';
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import { useToast } from '../common/Toast';
 import { useProductSource } from '../../hooks/useProductSource';
@@ -526,6 +526,16 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         revenueShare: s.revenue_share,
       }));
   }, [aiRecommendation, rfmSegments]);
+
+  /** The exports in the Downloads Hub belong to the active strategy, like everything else on this
+   * page — the audience card right above them says «5 segments επιλεγμένα από AI». Handing them
+   * every RFM segment exported 39K customers where the strategy covers 12,8K. Falls back to all
+   * segments only if no recommended name matches, so the hub can never export nothing. */
+  const strategySegments = useMemo(() => {
+    const names = new Set(recommendedSegments.map((s) => s.name));
+    const matched = rfmSegments.filter((s) => names.has(s.name));
+    return matched.length > 0 ? matched : rfmSegments;
+  }, [recommendedSegments, rfmSegments]);
 
   // Auto-select the first recommended segment when the recommendation changes
   useEffect(() => {
@@ -1722,7 +1732,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
       {/* Downloads Hub */}
       <DownloadsHub
-        segments={rfmSegments}
+        segments={strategySegments}
         brandName={currentBrand?.name}
         brandId={currentBrand?.id}
         channelRecommendation={aiRecommendation}
@@ -1956,6 +1966,8 @@ interface DownloadsHubProps {
 
 function DownloadsHub({ segments, brandName, channelRecommendation, activeStrategy, scenarioId, monthlyBudget, toast, brandId }: DownloadsHubProps) {
   const [exporting, setExporting] = useState<string | null>(null);
+  /** Customer lists run to tens of thousands of rows; a spinner alone reads as a hung page. */
+  const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null);
   const hasSegments = segments.length > 0;
 
   type Fmt = 'xlsx' | 'csv';
@@ -1963,13 +1975,17 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
   const handleExportCustomerLists = async (fmt: Fmt = 'csv') => {
     if (!brandId || !hasSegments) return;
     setExporting('customers');
+    setExportProgress({ done: 0, total: 0 });
     try {
-      const { count } = await exportAllSegmentCustomerLists(brandId, segments, brandName, fmt);
+      const { count } = await exportAllSegmentCustomerLists(brandId, segments, brandName, fmt, (done, total) =>
+        setExportProgress({ done, total })
+      );
       toast.success(`${count} customers exported (.${fmt})`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed');
     }
     setExporting(null);
+    setExportProgress(null);
   };
 
   const handleExportAllPacks = async (fmt: Fmt = 'xlsx') => {
@@ -2019,9 +2035,9 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
               <Users size={22} className="text-[var(--nts-accent)]" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-[#1A1A1A] text-sm">All Segments Action Pack</h3>
+              <h3 className="font-semibold text-[#1A1A1A] text-sm">Action Pack στρατηγικής</h3>
               <p className="text-xs text-[#4A4A4A] mt-0.5">
-                {segments.length} segments · Profile, Channel Plan & Templates
+                {segments.length} segments της στρατηγικής · Profile, Channel Plan & Templates
               </p>
             </div>
           </div>
@@ -2070,7 +2086,7 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
             <div className="flex-1">
               <h3 className="font-semibold text-[#1A1A1A] text-sm">Customer Lists ανά Segment</h3>
               <p className="text-xs text-[#4A4A4A] mt-0.5">
-                Customer IDs, emails, RFM scores — έτοιμα για Custom Audiences & email campaigns
+                {segments.length} segments της στρατηγικής · Customer IDs, emails, RFM scores — έτοιμα για Custom Audiences & email campaigns
               </p>
             </div>
             <div className="flex gap-2">
@@ -2082,6 +2098,23 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
               </button>
             </div>
           </div>
+          {exporting === 'customers' && exportProgress && (
+            <div className="mt-3">
+              <div className="mb-1 flex items-center justify-between text-xs text-[#4A4A4A]">
+                <span>
+                  {exportProgress.total > 0
+                    ? `Προετοιμασία αρχείου — ${formatNumber(exportProgress.done)} από ${formatNumber(exportProgress.total)} πελάτες`
+                    : 'Ανάκτηση πελατών…'}
+                </span>
+                {exportProgress.total > 0 && (
+                  <span className="font-mono">
+                    {Math.round((exportProgress.done / exportProgress.total) * 100)}%
+                  </span>
+                )}
+              </div>
+              <ProgressBar value={exportProgress.done} max={Math.max(1, exportProgress.total)} color="#10B981" size="sm" />
+            </div>
+          )}
         </div>
       )}
 
