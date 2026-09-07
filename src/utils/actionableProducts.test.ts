@@ -89,3 +89,36 @@ describe('parent/model grouping without Magento', () => {
     expect(rows[0].key).toBe('MAGENTO-PARENT');
   });
 });
+
+describe('pre-aggregated PI grouped rows', () => {
+  it('carries the server group aggregates instead of re-deriving them', () => {
+    const grouped = product({
+      sku: 'SHORT-01',
+      stock_level: 14,
+      price: 20,
+      parent_sku: 'SHORT-01',
+      variant_count: 6,
+      stock_value: 311.5,
+      price_min: 18,
+      price_max: 26,
+    } as Partial<Product>);
+    const [row] = groupProductsForDecisionExport([grouped], undefined, { preAggregated: true });
+    expect(row.variantCount).toBe(6);
+    expect(row.totalValue).toBe(311.5);
+    expect(row.minPrice).toBe(18);
+    expect(row.maxPrice).toBe(26);
+    expect(row.totalStock).toBe(14);
+  });
+
+  it('ignores the denormalized variant_count on variant-level rows', () => {
+    // Ungrouped PI rows carry their parent's size; without the flag it must not become the
+    // group's size — two dead variants of a 6-variant parent are two variants, not six.
+    const rows = groupProductsForDecisionExport([
+      product({ sku: 'A-S', stock_level: 1, parent_sku: 'A', variant_count: 6 } as Partial<Product>),
+      product({ sku: 'A-L', stock_level: 2, parent_sku: 'A', variant_count: 6 } as Partial<Product>),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].variantCount).toBe(2);
+    expect(rows[0].totalStock).toBe(3);
+  });
+});

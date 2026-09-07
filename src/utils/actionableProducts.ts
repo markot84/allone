@@ -68,11 +68,22 @@ export function getProductDecisionKey(
   return normalizeSkuPart(product.sku || product.id);
 }
 
+/** A row read from a Product Intelligence *grouped* page is already one parent/model: it carries
+ * the group's own `variant_count`, `stock_value` and price range, and its `stock_level` is the
+ * group total. Re-deriving those here would report «1 variant» for a parent that has twelve.
+ * Only ever set for grouped pages — the variant-level rows carry a denormalized `variant_count`
+ * of their parent's size, which is not the size of the group being built here. */
+export interface DecisionGroupingOptions {
+  preAggregated?: boolean;
+}
+
 export function groupProductsForDecisionExport(
   products: Product[],
-  lookupEnrichment?: ProductEnrichmentLookup
+  lookupEnrichment?: ProductEnrichmentLookup,
+  options?: DecisionGroupingOptions
 ): DecisionProductRow[] {
   const groups = new Map<string, DecisionProductRow>();
+  const preAggregated = options?.preAggregated === true;
 
   for (const product of products) {
     if (!isActionableStockProduct(product)) continue;
@@ -87,17 +98,24 @@ export function groupProductsForDecisionExport(
     const existing = groups.get(key);
 
     if (!existing) {
+      const declared = preAggregated ? (product as unknown as {
+        variant_count?: number; stock_value?: number; price_min?: number; price_max?: number;
+      }) : null;
+      const declaredVariants = Number(declared?.variant_count ?? 0) || 0;
+      const declaredValue = Number(declared?.stock_value ?? 0) || 0;
+      const declaredMin = Number(declared?.price_min ?? 0) || 0;
+      const declaredMax = Number(declared?.price_max ?? 0) || 0;
       groups.set(key, {
         key,
         representative: product,
         representativeEnrichment: enrichment,
         skus: product.sku ? [product.sku] : [],
         totalStock: stock,
-        totalValue: value,
-        minPrice: price,
-        maxPrice: price,
+        totalValue: declaredValue > 0 ? declaredValue : value,
+        minPrice: declaredMin > 0 ? declaredMin : price,
+        maxPrice: declaredMax > 0 ? declaredMax : price,
         category: product.category || '',
-        variantCount: 1,
+        variantCount: declaredVariants > 1 ? declaredVariants : 1,
         priorityTag: String(product.priority_tag || ''),
         marginPercentage: margin,
       });

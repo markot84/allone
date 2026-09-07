@@ -392,9 +392,18 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   }, [insightReady, inventoryPlayContext, requestInsightFeed]);
   /** True while the owner is waiting for feed rows they asked for. */
   const feedRowsPending = !feedAutoLoads && !insightFeedReady && inventoryPlayContext !== 'dead_stock' && channelInsight.ready;
+  /** In the dead-stock play the rows are already the server's parent/model groups — the very rows
+   * AI Insights counted — so they must be carried through, not re-derived. */
+  const deadRowsArePreGrouped = inventoryPlayContext === 'dead_stock' && channelInsight.ready && channelInsight.deadIsGrouped;
   const decisionProductRows = useMemo(
-    () => groupProductsForDecisionExport(feedProducts, lookupMagentoEnrichment),
-    [feedProducts, lookupMagentoEnrichment]
+    () => groupProductsForDecisionExport(feedProducts, lookupMagentoEnrichment, { preAggregated: deadRowsArePreGrouped }),
+    [feedProducts, lookupMagentoEnrichment, deadRowsArePreGrouped]
+  );
+  /** Variants behind the parent/model rows. Summing `variantCount` is right in both modes: the
+   * server rows declare it, and client-grouped rows counted it while grouping. */
+  const decisionVariantTotal = useMemo(
+    () => decisionProductRows.reduce((sum, row) => sum + (row.variantCount || 1), 0),
+    [decisionProductRows]
   );
   const hasInventoryPlay = inventoryPlayContext === 'dead_stock';
 
@@ -1065,7 +1074,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             title="Dead stock action products"
             subtitle={deadStockLoading
               ? 'Φόρτωση προϊόντων…'
-              : `${formatNumber(decisionProductRows.length)} parent/model rows από ${formatNumber(feedProducts.length)} ενεργά variants με απόθεμα`}
+              : `${formatNumber(decisionProductRows.length)} parent/model rows από ${formatNumber(decisionVariantTotal)} ενεργά variants με απόθεμα`}
             icon={<Package size={18} className="text-amber-700" />}
             action={
               <div className="flex flex-wrap gap-2">
