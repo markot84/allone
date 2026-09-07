@@ -229,7 +229,7 @@ export function CommercialInfoPage() {
         title={
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-[var(--nts-charcoal)] sm:text-2xl">
             <Lightbulb size={24} className="shrink-0 text-[var(--nts-accent)]" />
-            Εμπορικές Πληροφορίες
+            Market Signals
           </h2>
         }
         description={

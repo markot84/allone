@@ -705,7 +705,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'offers', label: moduleConfig.offers.label, icon: ClipboardList, group: 'commercial' },
         { id: 'marketing-plan', label: 'Marketing Plan', icon: ClipboardList, group: 'marketing' },
         { id: 'brand-profile', label: 'Brand Profile', icon: Palette, group: 'marketing' },
-        { id: 'commercial-info', label: 'Εμπορικές Πληροφορίες', icon: Lightbulb, group: 'marketing' },
+        { id: 'commercial-info', label: 'Market Signals', icon: Lightbulb, group: 'marketing' },
         { id: 'channels', label: moduleConfig.channels.label, icon: MegaphoneIcon, group: 'marketing' },
         { id: 'campaigns', label: moduleConfig.campaigns.label, icon: Target, group: 'marketing' },
         { id: 'analytics', label: moduleConfig.analytics.label, icon: BarChart3, group: 'marketing' },
