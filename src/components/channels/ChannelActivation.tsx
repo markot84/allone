@@ -71,6 +71,12 @@ import { useMagentoProductEnrichment } from '../../hooks/useMagentoProductEnrich
 import type { ChannelRecommendation, BudgetAction } from '../../types';
 
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
+
+/** In-stock variants the page will pull on mount. Beyond this the feed rows — and the Magento
+ * enrichment + thumbnails fetched for every one of their SKUs — are loaded when the owner opens a
+ * preview or an export, not while the page is painting. */
+const FEED_AUTOLOAD_LIMIT = 3000;
+
 type InventoryPlayContext = 'dead_stock' | null;
 
 function useInventoryPlayContext(): InventoryPlayContext {
@@ -354,11 +360,23 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   // Instant «active variants with stock» count from the summary — shown before the feed rows load.
   const adsFeedCount = channelInsight.ready ? channelInsight.activeStockCount : activeStockProducts.length;
 
-  // Load the bounded in-stock feed once, only when it's actually needed (normal/Ads-feed view).
-  const { ready: insightReady, requestFeed: requestInsightFeed } = channelInsight;
+  // Load the in-stock feed on mount only while it is genuinely small. Every feed row becomes a SKU
+  // in `feedSkus`, and enrichment + thumbnails are fetched for that set: a catalog with tens of
+  // thousands of in-stock variants turned page load into a catalog-sized fetch. Above the limit the
+  // feed waits for the owner to ask for it (preview / export), which is what PER-166 intended by
+  // "loaded on demand". The count on the card comes from the aggregate summary either way.
+  const { ready: insightReady, requestFeed: requestInsightFeed, feedReady: insightFeedReady, feedLoading: insightFeedLoading } = channelInsight;
+  const feedAutoLoads = adsFeedCount > 0 && adsFeedCount <= FEED_AUTOLOAD_LIMIT;
   useEffect(() => {
+    if (insightReady && inventoryPlayContext !== 'dead_stock' && feedAutoLoads) requestInsightFeed();
+  }, [insightReady, inventoryPlayContext, requestInsightFeed, feedAutoLoads]);
+  /** Preview and export need the actual rows; asking for them is what loads the feed on a large
+   * catalog. Safe to call repeatedly — the hook only flips a flag. */
+  const ensureFeedRequested = useCallback(() => {
     if (insightReady && inventoryPlayContext !== 'dead_stock') requestInsightFeed();
   }, [insightReady, inventoryPlayContext, requestInsightFeed]);
+  /** True while the owner is waiting for feed rows they asked for. */
+  const feedRowsPending = !feedAutoLoads && !insightFeedReady && inventoryPlayContext !== 'dead_stock' && channelInsight.ready;
   const decisionProductRows = useMemo(
     () => groupProductsForDecisionExport(feedProducts, lookupMagentoEnrichment),
     [feedProducts, lookupMagentoEnrichment]
@@ -573,7 +591,17 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   // Feed export
   const exportFeed = async (feedType: string, format: 'csv' | 'xlsx') => {
-    if (feedProducts.length === 0) { toast.error('Δεν υπάρχουν ενεργά προϊόντα με απόθεμα για export'); return; }
+    if (feedProducts.length === 0) {
+      // On a large catalog the rows arrive after the owner asks for them — an empty feed here
+      // means "still loading", not "nothing to export".
+      ensureFeedRequested();
+      toast.error(
+        feedRowsPending
+          ? 'Φορτώνουμε τις γραμμές του feed — δοκιμάστε ξανά σε λίγο.'
+          : 'Δεν υπάρχουν ενεργά προϊόντα με απόθεμα για export'
+      );
+      return;
+    }
     let headers: string[] = [];
     let rows: Array<Array<string | number>> = [];
     switch (feedType) {
@@ -938,7 +966,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               size="sm"
               className="min-h-[36px] w-full sm:w-auto"
               icon={<Download size={16} />}
-              onClick={() => setShowExportAllModal(true)}
+              onClick={() => { ensureFeedRequested(); setShowExportAllModal(true); }}
             >
               Εξαγωγή feeds
             </Button>
@@ -1674,10 +1702,19 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               <div className="space-y-2 text-sm text-[#4A4A4A]">
                 <div className="flex justify-between">
                   <span>{feed === 'Ads Feed' ? 'Active variants' : 'Parent/model rows'}</span>
-                  <span className="font-mono">{formatNumber(feed === 'Ads Feed' ? adsFeedCount : decisionProductRows.length)}</span>
+                  {/* The parent/model count needs the feed rows themselves; on a large catalog those
+                      load when the owner asks, so say that instead of showing a confident 0. */}
+                  <span className="font-mono">
+                    {feed === 'Ads Feed'
+                      ? formatNumber(adsFeedCount)
+                      : feedRowsPending
+                        ? (insightFeedLoading ? 'φόρτωση…' : '—')
+                        : formatNumber(decisionProductRows.length)}
+                  </span>
                 </div>
                 <div className="text-[11px] text-[#9CA3AF] leading-snug">
                   Default export excludes zero-stock / inactive historical SKUs.
+                  {feed !== 'Ads Feed' && feedRowsPending && !insightFeedLoading && ' Οι γραμμές υπολογίζονται στην προεπισκόπηση / εξαγωγή.'}
                 </div>
                 {feed === 'Ads Feed' && (
                   <>
@@ -1697,8 +1734,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 )}
               </div>
               <div className="flex gap-2 mt-4">
-                <Button variant="ghost" size="sm" icon={<Eye size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); setPreviewFeed(feed); }}>Προεπισκόπηση</Button>
-                <Button variant="secondary" size="sm" icon={<Download size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); setSelectedFeed(feed); setShowExportModal(true); }}>Εξαγωγή</Button>
+                <Button variant="ghost" size="sm" icon={<Eye size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); ensureFeedRequested(); setPreviewFeed(feed); }}>Προεπισκόπηση</Button>
+                <Button variant="secondary" size="sm" icon={<Download size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); ensureFeedRequested(); setSelectedFeed(feed); setShowExportModal(true); }}>Εξαγωγή</Button>
               </div>
             </motion.div>
           ))}
@@ -1759,7 +1796,13 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 title={<h2 className="text-xl font-bold text-[#1A1A1A]">Προεπισκόπηση feed</h2>}
                 description={
                   <p className="text-sm text-[#4A4A4A]">
-                    {previewFeed} · {formatNumber(previewFeed === 'Ads Feed' ? adsFeedCount : decisionProductRows.length)} ενεργές γραμμές · δείγμα {Math.min(8, previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} γραμμών
+                    {previewFeed}
+                    {previewFeed === 'Ads Feed'
+                      ? ` · ${formatNumber(adsFeedCount)} ενεργές γραμμές`
+                      : feedRowsPending
+                        ? ''
+                        : ` · ${formatNumber(decisionProductRows.length)} ενεργές γραμμές`}
+                    {feedProducts.length > 0 && ` · δείγμα ${Math.min(8, previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} γραμμών`}
                   </p>
                 }
                 actions={
@@ -1769,7 +1812,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 }
               />
               <div className="p-6 overflow-auto flex-1 min-h-0">
-                {feedProducts.length === 0 ? (
+                {feedProducts.length === 0 && feedRowsPending ? (
+                  <SectionLoading
+                    title="Φορτώνουμε τις γραμμές του feed"
+                    text="Ο κατάλογος είναι μεγάλος, γι' αυτό οι γραμμές κατεβαίνουν όταν τις ζητήσετε και όχι σε κάθε άνοιγμα της σελίδας."
+                  />
+                ) : feedProducts.length === 0 ? (
                   <p className="text-sm text-[#4A4A4A] text-center py-8">Δεν υπάρχουν προϊόντα στο catalog για προεπισκόπηση.</p>
                 ) : (
                   (() => {

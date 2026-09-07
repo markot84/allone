@@ -70,3 +70,43 @@ describe('fetchMagentoProductsForSkus (PER-335 scoped fetch)', () => {
     }
   });
 });
+
+describe('bounded fan-out', () => {
+  it('mapWithLimit never runs more than the limit at once', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const out = await __test.mapWithLimit(Array.from({ length: 50 }, (_, i) => i), 8, async (n: number) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 1));
+      inFlight -= 1;
+      return n * 2;
+    });
+    expect(peak).toBeLessThanOrEqual(8);
+    expect(out).toEqual(Array.from({ length: 50 }, (_, i) => i * 2));
+  });
+
+  it('reads the collection once above the chunk ceiling and keeps only the wanted rows', async () => {
+    const calls: Array<unknown[]> = [];
+    const { FirestoreService } = await import('../services/firestore');
+    const orig = FirestoreService.getDocuments;
+    FirestoreService.getDocuments = (async (...args: unknown[]) => {
+      calls.push(args);
+      return [
+        { id: 'wanted-sku', sku: 'SKU-1' },
+        { id: 'wanted-parent', sku: 'OTHER', itemGroupId: 'SKU-2' },
+        { id: 'unrelated', sku: 'NOT-IN-FEED', itemGroupId: 'NOPE' },
+      ];
+    }) as typeof FirestoreService.getDocuments;
+    try {
+      const skus = Array.from({ length: __test.MAX_CHUNKED_SKUS + 1 }, (_, i) => `SKU-${i}`);
+      const out = await __test.fetchMagentoProductsForSkus('e-tennis', skus);
+      // One collection read instead of 2 × ceil(n/30) concurrent queries.
+      expect(calls.length).toBe(1);
+      expect((calls[0] as unknown[])[1]).toEqual([]);
+      expect(out.map((d) => (d as { id: string }).id)).toEqual(['wanted-sku', 'wanted-parent']);
+    } finally {
+      FirestoreService.getDocuments = orig;
+    }
+  });
+});

@@ -30,11 +30,19 @@ export function flattenDeadPages(pages: Array<{ products?: Product[] } | null>):
   return pages.flatMap((p) => p?.products ?? []);
 }
 
+/** Pages fetched at once. A large catalog has hundreds of pages per bucket and `Promise.all` over
+ * all of them opened that many reads simultaneously, four buckets deep. */
+const MAX_CONCURRENT_PAGES = 6;
+
 async function loadBucket(brandId: string, bucket: ProductIntelligenceBucket, pageCount: number): Promise<Product[]> {
   if (pageCount <= 0) return [];
-  const pages = await Promise.all(
-    Array.from({ length: pageCount }, (_, i) => fetchProductIntelligencePage(brandId, bucket, i + 1))
-  );
+  const pages: Array<{ products?: Product[] } | null> = [];
+  for (let start = 1; start <= pageCount; start += MAX_CONCURRENT_PAGES) {
+    const size = Math.min(MAX_CONCURRENT_PAGES, pageCount - start + 1);
+    pages.push(
+      ...(await Promise.all(Array.from({ length: size }, (_, i) => fetchProductIntelligencePage(brandId, bucket, start + i))))
+    );
+  }
   return flattenDeadPages(pages);
 }
 
