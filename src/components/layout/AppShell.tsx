@@ -111,11 +111,14 @@ function SidebarNav({
               <NavList.LeadingVisual>
                 {<item.icon size={16} />}
               </NavList.LeadingVisual>
-              <span className="flex items-center gap-2">
-                {item.label}
+              {/* The badge is the one part that must never wrap: «90ημ» broke across two lines
+                  inside its own pill on the narrow sidebar. It keeps its width, and the label
+                  beside it is the part allowed to wrap. */}
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="min-w-0">{item.label}</span>
                 {item.badge && (
                   <span
-                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none"
+                    className="shrink-0 whitespace-nowrap text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none"
                     style={{ backgroundColor: `${item.badgeColor}20`, color: item.badgeColor }}
                   >
                     {item.badge}
@@ -729,8 +732,17 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'hr', 'territories', 'coordination', 'automation', 'data', 'invite', 'help',
           ]
         : [
-            'brands', 'dashboard', 'roi', 'insights', 'reports', 'ecommerce', 'rfm', 'competitive', 'strategy', 'policy-impact',
-            'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'coordination', 'automation', 'data', 'invite', 'help',
+            // The e-shop owner's working order: what is on the shelf, then what the market is
+            // doing, then the commercial decision, then how it gets executed. Procurement sits
+            // above Market & Data on purpose — stock is where the owner starts the day.
+            // Group labels are emitted whenever `group` changes, so each group's items must stay
+            // contiguous here. The B2B order above is deliberately left as it was.
+            'brands', 'dashboard', 'roi', 'insights', 'reports',
+            'products', 'suppliers', 'procurement',
+            'ecommerce', 'rfm', 'competitive',
+            'strategy', 'policy-impact',
+            'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar',
+            'finances', 'coordination', 'automation', 'data', 'invite', 'help',
           ];
 
       const itemMap = new Map(commonItems.map((item) => [item.id, item]));
