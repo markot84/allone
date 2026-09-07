@@ -1,3 +1,4 @@
+import { segmentCustomersWriterFor } from '../../utils/segmentCustomersWriter';
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -227,10 +228,14 @@ export function RFMAnalysis() {
     if (!currentBrand?.id) return;
     try {
       if (segment) {
-        const { count } = await exportSegmentCustomerList(currentBrand.id, segment, currentBrand.name, fmt);
+        const { count } = await exportSegmentCustomerList(
+          currentBrand.id, segment, currentBrand.name, fmt, undefined, segmentCustomersWriterFor(rfmDataSource),
+        );
         toast.success(`${count} customers exported (.${fmt})`);
       } else {
-        const { count } = await exportAllSegmentCustomerLists(currentBrand.id, rfmSegments, currentBrand.name, fmt);
+        const { count } = await exportAllSegmentCustomerLists(
+          currentBrand.id, rfmSegments, currentBrand.name, fmt, undefined, segmentCustomersWriterFor(rfmDataSource),
+        );
         toast.success(`${count} customers exported (.${fmt})`);
       }
     } catch (e) {

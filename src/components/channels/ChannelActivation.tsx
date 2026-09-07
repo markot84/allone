@@ -1,3 +1,4 @@
+import { segmentCustomersWriterFor, type SegmentCustomersWriter } from '../../utils/segmentCustomersWriter';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { escapeHtml } from '../../utils/escapeHtml';
 import { GrowthPlayPanel, usePlayContext } from './GrowthPlayPanel';
@@ -202,6 +203,23 @@ function PieSkeleton() {
   );
 }
 
+/** The page-level loader scaled to one card, so "the strategy is loading" and "the segments are
+ * loading" look the same to the owner — instead of tiles that briefly claim a segment is missing
+ * while the analysis document is still on its way. */
+function SectionLoading({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="mx-auto max-w-xl py-10 text-center" aria-busy="true">
+      <Spinner size="lg" className="mx-auto mb-4" />
+      <h3 className="mb-2 text-base font-semibold text-[var(--nts-charcoal)]">{title}</h3>
+      <p className="mx-auto mb-5 max-w-md text-sm text-[var(--nts-medium-gray)]">{text}</p>
+      <div className="mx-auto space-y-2">
+        <Skeleton className="mx-auto h-3 w-72 max-w-full" />
+        <Skeleton className="mx-auto h-3 w-56 max-w-full" />
+      </div>
+    </div>
+  );
+}
+
 function ChannelCardSkeleton({ delay = 0 }: { delay?: number }) {
   return (
     <div
@@ -249,7 +267,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   // made once a month, or on «Ανανέωση Ανάλυσης» in Data Analysis; this page reads that result,
   // falling back to the imported segments when the monthly aggregate is empty — the same
   // options the Dashboard, the assistant and the automation runner already use.
-  const { segments: rfmSegments } = useSegments({ skipOrderHydration: true, useServerAggregate: true });
+  const { segments: rfmSegments, isLoading: segmentsLoading, dataSource: segmentsDataSource } = useSegments({ skipOrderHydration: true, useServerAggregate: true });
   /** The strategy names its audience; the segments are whatever Data Analysis has produced since.
    * A name the analysis no longer carries is shown as such (e-tennis kept a «Customers Needing
    * Attention» from June after the RFM writer had replaced it with «At Risk») — nothing here
@@ -352,6 +370,14 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
    * not on load, not when the segment set moves, not from a button — so what the owner sees is
    * exactly what the strategy page produced. A strategy without one points back there. */
   const aiRecommendation = activeStrategy?.activationRecommendation ?? activeStrategy?.channelRecommendation ?? null;
+  /** Commercial Strategy saves the strategy first and writes its channel recommendation a few
+   * seconds later (triggerAIGeneration). A freshly saved strategy without one is being produced,
+   * not missing — the owner gets the loader, not the "go create it" state. Three minutes is far
+   * beyond the generation time; past it, the honest reading is that generation failed there. */
+  const recommendationPending =
+    !aiRecommendation &&
+    !!activeStrategy?.updatedAt &&
+    Date.now() - new Date(activeStrategy.updatedAt).getTime() < 3 * 60 * 1000;
 
   const { getStatus, getNote, isIncluded, updateActivation, isSaving } = useChannelActivations(strategyId);
 
@@ -1040,9 +1066,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           <CardHeader
             title="Στόχευση κοινού"
             subtitle={
-              aiRecommendation?.targetSegments?.length
-                ? `${recommendedSegments.length} segments επιλεγμένα από AI για τη στρατηγική «${strategyName}»`
-                : `Top segments βάσει εσόδων (περιμένουμε AI σύσταση για segment-specific brief)`
+              segmentsLoading
+                ? 'Φορτώνουμε τα segments της Ανάλυσης…'
+                : aiRecommendation?.targetSegments?.length
+                  ? `${recommendedSegments.length} segments επιλεγμένα από AI για τη στρατηγική «${strategyName}»`
+                  : `Top segments βάσει εσόδων (περιμένουμε AI σύσταση για segment-specific brief)`
             }
             icon={<Users size={18} className="text-[var(--nts-accent)]" />}
             action={
@@ -1055,6 +1083,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               </div>
             }
           />
+          {segmentsLoading ? (
+            <SectionLoading
+              title="Φορτώνουμε τα segments της Ανάλυσης"
+              text="Διαβάζουμε την τελευταία ανάλυση RFM για να αντιστοιχίσουμε το κοινό της στρατηγικής. Λίγα δευτερόλεπτα."
+            />
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
             {recommendedSegments.map((seg) => {
               const isActive = selectedSegmentName === seg.name;
@@ -1120,6 +1154,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               );
             })}
           </div>
+          )}
         </Card>
       )}
 
@@ -1210,6 +1245,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 )}
               </div>
             </>
+          ) : recommendationPending ? (
+            <SectionLoading
+              title="Ετοιμάζουμε τις AI συστάσεις"
+              text="Το Commercial Strategy μόλις αποθήκευσε τη στρατηγική και παράγει τώρα τη μίξη καναλιών. Λίγα δευτερόλεπτα."
+            />
           ) : (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
@@ -1415,6 +1455,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               })}
 
             </div>
+          ) : recommendationPending ? (
+            <SectionLoading
+              title="Ετοιμάζουμε τα channel briefs"
+              text="Παράγονται μαζί με τη μίξη καναλιών στο Commercial Strategy. Λίγα δευτερόλεπτα."
+            />
           ) : (
             <div className="flex items-center justify-center py-16">
               <div className="text-center">
@@ -1598,6 +1643,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       <DownloadsHub
         segments={strategySegments}
         unresolvedSegmentNames={recommendedSegments.filter((s) => !s.resolved).map((s) => s.name)}
+        customersWriter={segmentCustomersWriterFor(segmentsDataSource)}
         brandName={currentBrand?.name}
         brandId={currentBrand?.id}
         channelRecommendation={aiRecommendation}
@@ -1823,6 +1869,9 @@ interface DownloadsHubProps {
   /** Segments the strategy names that no longer exist in the brand's data — said out loud in
    * the tile text instead of quietly exporting fewer than promised. */
   unresolvedSegmentNames?: string[];
+  /** The `segment_customers` writer behind `segments`, so the customer lists export the audience
+   * the cards show and not every writer's rows for the same segment ids. */
+  customersWriter: SegmentCustomersWriter | null;
   brandName?: string;
   channelRecommendation: ChannelRecommendation | null;
   activeStrategy: ReturnType<typeof useActiveStrategy>['activeStrategy'];
@@ -1832,7 +1881,7 @@ interface DownloadsHubProps {
   brandId?: string;
 }
 
-function DownloadsHub({ segments, unresolvedSegmentNames = [], brandName, channelRecommendation, activeStrategy, scenarioId, monthlyBudget, toast, brandId }: DownloadsHubProps) {
+function DownloadsHub({ segments, unresolvedSegmentNames = [], customersWriter, brandName, channelRecommendation, activeStrategy, scenarioId, monthlyBudget, toast, brandId }: DownloadsHubProps) {
   const segmentScopeLabel =
     unresolvedSegmentNames.length > 0
       ? `${segments.length} από ${segments.length + unresolvedSegmentNames.length} segments της στρατηγικής (${unresolvedSegmentNames.join(', ')}: δεν υπάρχει πια)`
@@ -1849,8 +1898,13 @@ function DownloadsHub({ segments, unresolvedSegmentNames = [], brandName, channe
     setExporting('customers');
     setExportProgress({ done: 0, total: 0 });
     try {
-      const { count } = await exportAllSegmentCustomerLists(brandId, segments, brandName, fmt, (done, total) =>
-        setExportProgress({ done, total })
+      const { count } = await exportAllSegmentCustomerLists(
+        brandId,
+        segments,
+        brandName,
+        fmt,
+        (done, total) => setExportProgress({ done, total }),
+        customersWriter,
       );
       toast.success(`${count} customers exported (.${fmt})`);
     } catch (e) {

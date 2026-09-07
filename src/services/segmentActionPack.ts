@@ -1,3 +1,4 @@
+import type { SegmentCustomersWriter } from '../utils/segmentCustomersWriter';
 /**
  * Segment Action Pack — generates structured Excel exports
  * that bridge analysis → marketing execution.
@@ -477,6 +478,8 @@ export async function exportSegmentCustomerList(
   brandName?: string,
   format: ExportFormat = 'csv',
   onProgress?: ExportProgress,
+  /** Which `segment_customers` writer produced the segment shown — see segmentCustomersWriter.ts. */
+  writer?: SegmentCustomersWriter | null,
 ): Promise<{ count: number }> {
   // The page's segment wins outright; Firestore is fetched only when it carries no customers
   // (see pickSegmentCustomers). Skipping the forced-server read when it is not needed also
@@ -484,7 +487,7 @@ export async function exportSegmentCustomerList(
   const inMemoryCustomers = segment.customers ?? [];
   const customers = pickSegmentCustomers(
     inMemoryCustomers,
-    inMemoryCustomers.length > 0 ? [] : await SegmentCustomersService.getForSegment(brandId, segment.id),
+    inMemoryCustomers.length > 0 ? [] : await SegmentCustomersService.getForSegment(brandId, segment.id, { writer }),
   );
   if (customers.length === 0) throw new Error('Δεν υπάρχουν customer-level δεδομένα με email/customer id για αυτό το segment.');
 
@@ -537,12 +540,16 @@ export async function exportAllSegmentCustomerLists(
   brandName?: string,
   format: ExportFormat = 'csv',
   onProgress?: ExportProgress,
+  /** Which `segment_customers` writer produced the segments shown — see segmentCustomersWriter.ts.
+   * Without it the read merges every writer's rows for a segment id: five segments whose cards
+   * summed to 6.9K exported 35K rows, the e-shop analysis plus the ERP RFM. */
+  writer?: SegmentCustomersWriter | null,
 ): Promise<{ count: number }> {
   // Firestore is only consulted for segments that carry no customers of their own
   // (see pickSegmentCustomers); when every segment does, the forced-server read is skipped.
   const needsImported = segments.some((seg) => (seg.customers?.length ?? 0) === 0);
   const allCustomers = needsImported
-    ? await SegmentCustomersService.getAllBySegment(brandId)
+    ? await SegmentCustomersService.getAllBySegment(brandId, { writer })
     : new Map<string, { customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]>();
   const hasDerivedCustomers = segments.some((seg) => (seg.customers?.length ?? 0) > 0);
   if (allCustomers.size === 0 && !hasDerivedCustomers) {

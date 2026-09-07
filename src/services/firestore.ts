@@ -1,3 +1,4 @@
+import { isSegmentCustomersDocFrom, type SegmentCustomersWriter } from '../utils/segmentCustomersWriter';
 import { 
   collection,
   collectionGroup,
@@ -426,23 +427,35 @@ export function dedupeCustomersById<T extends { customerId?: string }>(rows: T[]
   });
 }
 
+/** `segment_customers` rows are read for one writer at a time (see segmentCustomersWriter.ts): the
+ * Data Analysis aggregator and the ERP RFM writer both store «champions» for the same brand, and
+ * reading them together exported the union of two customer universes. The filter runs after the
+ * read on purpose — a manual import writes no `source`, so "imported" cannot be expressed as a
+ * Firestore clause, and one query shape means no new composite index. No writer given = the
+ * historical merge, kept only for callers that have not said which segments they show. */
+function keepSegmentCustomersDocs<T extends { source?: string | null }>(docs: T[], writer: SegmentCustomersWriter | null | undefined): T[] {
+  return writer ? docs.filter((d) => isSegmentCustomersDocFrom(writer, d)) : docs;
+}
+
 export const SegmentCustomersService = {
-  async getForSegment(brandId: string, segmentId: string): Promise<{ customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]> {
+  async getForSegment(brandId: string, segmentId: string, opts?: { writer?: SegmentCustomersWriter | null }): Promise<{ customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]> {
     const docs = await FirestoreService.getDocuments<{
       segmentId: string;
+      source?: string;
       customers: { customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
-    }>('segment_customers', [where('segmentId', '==', segmentId)], brandId, { forceServer: true });
+    }>('segment_customers',[where('segmentId', '==', segmentId)], brandId, { forceServer: true });
     // Dedupe by customerId — a brand can carry rows from multiple RFM writers (megaventory_rfm +
     // data_analysis_rfm) for the same segment.
-    return dedupeCustomersById(docs.flatMap(d => d.customers || []));
+    return dedupeCustomersById(keepSegmentCustomersDocs(docs, opts?.writer).flatMap(d => d.customers || []));
   },
-  async getAllBySegment(brandId: string): Promise<Map<string, { customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]>> {
+  async getAllBySegment(brandId: string, opts?: { writer?: SegmentCustomersWriter | null }): Promise<Map<string, { customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]>> {
     const docs = await FirestoreService.getDocuments<{
       segmentId: string;
+      source?: string;
       customers: { customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
-    }>('segment_customers', [], brandId, { forceServer: true });
+    }>('segment_customers',[], brandId, { forceServer: true });
     const map = new Map<string, typeof docs[0]['customers']>();
-    for (const d of docs) {
+    for (const d of keepSegmentCustomersDocs(docs, opts?.writer)) {
       const existing = map.get(d.segmentId) || [];
       existing.push(...(d.customers || []));
       map.set(d.segmentId, existing);
