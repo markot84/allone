@@ -296,7 +296,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   // Magento product enrichment — fills image_link, link, description, gtin, mpn,
   // color, size, item_group_id in the Ads Feed from the raw `magento_products` collection.
-  const { bySku: magentoBySku, bySkuLower: magentoBySkuLower, config: magentoConnector, count: magentoEnrichedCount } = useMagentoProductEnrichment();
   const { getThumbnailUrl } = useProductThumbnails();
 
   // Provenance snapshot — gives the AI the data-source mix (connector vs
@@ -327,12 +326,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const strategyId = activeStrategy?.id ?? null;
   const scenarioId = activeStrategy?.scenarioId ?? null;
 
-  const lookupMagentoEnrichment = useCallback((sku: string) => {
-    const trimmed = (sku || '').trim();
-    if (!trimmed) return null;
-    return magentoBySku.get(trimmed) || magentoBySkuLower.get(trimmed.toLowerCase()) || null;
-  }, [magentoBySku, magentoBySkuLower]);
-
   const activeStockProducts = useMemo(
     () => products.filter(isActionableStockProduct),
     [products]
@@ -360,6 +353,24 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   // loaded on demand) when the aggregate is ready; otherwise from the local catalog fallback.
   const adsFeedProducts = channelInsight.ready ? channelInsight.feedProducts : activeStockProducts;
   const feedProducts = inventoryPlayContext === 'dead_stock' ? deadStockActionProducts : adsFeedProducts;
+
+  // Magento enrichment is only ever looked up for the feed rows below, so fetch it for exactly
+  // those SKUs. Called with no options this hook downloads the brand's entire `magento_products`
+  // collection — 74.191 documents for e-tennis — and builds four lookup maps on the main thread,
+  // which is the "Page Unresponsive" that hit after the segments had already rendered. The PI
+  // page was scoped this way in PER-335; this was the last unbounded caller. An empty SKU list
+  // skips the fetch altogether.
+  const feedSkus = useMemo(
+    () => feedProducts.map((p) => (p.sku || '').trim()).filter(Boolean),
+    [feedProducts]
+  );
+  const { bySku: magentoBySku, bySkuLower: magentoBySkuLower, config: magentoConnector, count: magentoEnrichedCount } =
+    useMagentoProductEnrichment({ skus: feedSkus });
+  const lookupMagentoEnrichment = useCallback((sku: string) => {
+    const trimmed = (sku || '').trim();
+    if (!trimmed) return null;
+    return magentoBySku.get(trimmed) || magentoBySkuLower.get(trimmed.toLowerCase()) || null;
+  }, [magentoBySku, magentoBySkuLower]);
   // Instant «active variants with stock» count from the summary — shown before the feed rows load.
   const adsFeedCount = channelInsight.ready ? channelInsight.activeStockCount : activeStockProducts.length;
 
