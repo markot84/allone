@@ -349,9 +349,21 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     () => feedProducts.map((p) => (p.sku || '').trim()).filter(Boolean),
     [feedProducts]
   );
-  const { bySku: magentoBySku, bySkuLower: magentoBySkuLower, config: magentoConnector, count: magentoEnrichedCount } =
-    useMagentoProductEnrichment({ skus: feedSkus });
-  const { getThumbnailUrl } = useProductThumbnails({ skus: feedSkus });
+  /** Only the Ads Feed and the dead-stock table read Magento fields (image_link, gtin, mpn, color,
+   * size, item_group_id / thumbnails). The Email Feed needs none of them — it groups by the
+   * `parent_sku` the PI rows already carry — so it must not drag the catalog in behind it. */
+  const needsMagentoEnrichment =
+    inventoryPlayContext === 'dead_stock' ||
+    previewFeed === 'Ads Feed' ||
+    selectedFeed === 'Ads Feed' ||
+    showExportAllModal;
+  const enrichmentSkus = useMemo(
+    () => (needsMagentoEnrichment ? feedSkus : []),
+    [needsMagentoEnrichment, feedSkus]
+  );
+  const { bySku: magentoBySku, bySkuLower: magentoBySkuLower, config: magentoConnector, count: magentoEnrichedCount, isLoading: magentoLoading } =
+    useMagentoProductEnrichment({ skus: enrichmentSkus });
+  const { getThumbnailUrl } = useProductThumbnails({ skus: enrichmentSkus });
   const lookupMagentoEnrichment = useCallback((sku: string) => {
     const trimmed = (sku || '').trim();
     if (!trimmed) return null;
@@ -600,6 +612,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           ? 'Φορτώνουμε τις γραμμές του feed — δοκιμάστε ξανά σε λίγο.'
           : 'Δεν υπάρχουν ενεργά προϊόντα με απόθεμα για export'
       );
+      return;
+    }
+    // Only the Ads Feed carries Magento columns; exporting it mid-fetch would ship empty
+    // image_link / gtin / mpn instead of failing loudly.
+    if ((feedType === 'Ads Feed' || feedType === 'Google Shopping') && magentoConnector.connected && magentoLoading) {
+      toast.error('Φορτώνουμε το Magento enrichment — δοκιμάστε ξανά σε λίγο.');
       return;
     }
     let headers: string[] = [];
@@ -1720,8 +1738,17 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   <>
                     <div className="flex justify-between">
                       <span>Magento enrichment</span>
+                      {/* The catalog is fetched when the Ads Feed is previewed or exported, so
+                          before that there is no count to give — «0 SKUs» would read as "Magento
+                          returned nothing". */}
                       <span className={`font-mono ${magentoEnrichedCount > 0 ? 'text-emerald-600' : 'text-[#9CA3AF]'}`}>
-                        {magentoConnector.connected ? `${formatNumber(magentoEnrichedCount)} SKUs` : '— off'}
+                        {!magentoConnector.connected
+                          ? '— off'
+                          : magentoLoading
+                            ? 'φόρτωση…'
+                            : magentoEnrichedCount > 0
+                              ? `${formatNumber(magentoEnrichedCount)} SKUs`
+                              : 'στην εξαγωγή'}
                       </span>
                     </div>
                     <div className="text-[11px] text-[#9CA3AF] leading-snug pt-1">

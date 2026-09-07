@@ -50,14 +50,21 @@ function normalizeSkuPart(value: string): string {
   return value.trim().replace(/\s+/g, '').toUpperCase();
 }
 
-/** Declared relations only (Magento itemGroupId) — the old split/first-segment fallback grouped
- * unrelated SKUs by prefix coincidence; without a declared parent a SKU is its own group (matches PI). */
+/** Declared relations only (Magento itemGroupId, or the ERP `parent_sku` the Product Intelligence
+ * rows already carry) — the old split/first-segment fallback grouped unrelated SKUs by prefix
+ * coincidence; without a declared parent a SKU is its own group (matches PI).
+ *
+ * `parent_sku` is the same field the server groups by (collapseByParentSku), so reading it here
+ * gives the identical parent/model rows without fetching the Magento catalog: 145 of every 150 PI
+ * feed rows carry one, and asking Magento for the other spelling of it cost 38,9MB per export. */
 export function getProductDecisionKey(
   product: Product,
   enrichment?: MagentoProductEnrichment | null
 ): string {
   const itemGroupId = normalizeSkuPart(enrichment?.itemGroupId ?? '');
   if (itemGroupId) return itemGroupId;
+  const parentSku = normalizeSkuPart(String((product as { parent_sku?: unknown }).parent_sku ?? ''));
+  if (parentSku) return parentSku;
   return normalizeSkuPart(product.sku || product.id);
 }
 
