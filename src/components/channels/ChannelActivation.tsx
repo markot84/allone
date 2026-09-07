@@ -1074,7 +1074,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             title="Dead stock action products"
             subtitle={deadStockLoading
               ? 'Φόρτωση προϊόντων…'
-              : `${formatNumber(decisionProductRows.length)} parent/model rows από ${formatNumber(decisionVariantTotal)} ενεργά variants με απόθεμα`}
+              // Same vocabulary as Product Intelligence — «προϊόντα (κωδικοί)» — so the owner can
+              // read the two pages against each other. The SKU count is dropped when it matches
+              // the product count: every dead group here is a single-SKU product.
+              : `${formatNumber(decisionProductRows.length)} προϊόντα${
+                  decisionVariantTotal !== decisionProductRows.length ? ` (${formatNumber(decisionVariantTotal)} κωδικοί)` : ''
+                } χωρίς πωλήσεις, με διαθέσιμο απόθεμα`}
             icon={<Package size={18} className="text-amber-700" />}
             action={
               <div className="flex flex-wrap gap-2">
