@@ -1,5 +1,5 @@
 import { segmentCustomersWriterFor, type SegmentCustomersWriter } from '../../utils/segmentCustomersWriter';
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { escapeHtml } from '../../utils/escapeHtml';
 import { GrowthPlayPanel, usePlayContext } from './GrowthPlayPanel';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -295,6 +295,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const [selectedFeed, setSelectedFeed] = useState<string | null>(null);
   const [previewFeed, setPreviewFeed] = useState<string | null>(null);
   const [showExportAllModal, setShowExportAllModal] = useState(false);
+  /** Exports asked for before their rows (or Magento enrichment) had arrived; they run themselves
+   * as soon as the data lands, so the owner presses the button once. */
+  const [pendingFeedExports, setPendingFeedExports] = useState<Array<{ feed: string; format: 'csv' | 'xlsx' }>>([]);
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [budgetInput, setBudgetInput] = useState('');
@@ -605,19 +608,22 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const exportFeed = async (feedType: string, format: 'csv' | 'xlsx') => {
     if (feedProducts.length === 0) {
       // On a large catalog the rows arrive after the owner asks for them — an empty feed here
-      // means "still loading", not "nothing to export".
-      ensureFeedRequested();
-      toast.error(
-        feedRowsPending
-          ? 'Φορτώνουμε τις γραμμές του feed — δοκιμάστε ξανά σε λίγο.'
-          : 'Δεν υπάρχουν ενεργά προϊόντα με απόθεμα για export'
-      );
+      // means "still loading", not "nothing to export". Queue the export instead of sending the
+      // owner away to press the button again: one click, then the file.
+      if (feedRowsPending) {
+        ensureFeedRequested();
+        setPendingFeedExports((q) => [...q, { feed: feedType, format }]);
+        toast.success('Φορτώνουμε τις γραμμές — η εξαγωγή ξεκινά μόλις είναι έτοιμες.');
+        return;
+      }
+      toast.error('Δεν υπάρχουν ενεργά προϊόντα με απόθεμα για export');
       return;
     }
     // Only the Ads Feed carries Magento columns; exporting it mid-fetch would ship empty
-    // image_link / gtin / mpn instead of failing loudly.
+    // image_link / gtin / mpn instead of waiting for them.
     if ((feedType === 'Ads Feed' || feedType === 'Google Shopping') && magentoConnector.connected && magentoLoading) {
-      toast.error('Φορτώνουμε το Magento enrichment — δοκιμάστε ξανά σε λίγο.');
+      setPendingFeedExports((q) => [...q, { feed: feedType, format }]);
+      toast.success('Φορτώνουμε το Magento enrichment — η εξαγωγή ξεκινά μόλις είναι έτοιμο.');
       return;
     }
     let headers: string[] = [];
@@ -729,6 +735,24 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       } catch { toast.error('Σφάλμα κατά την εξαγωγή Excel. Δοκιμάστε CSV.'); }
     }
   };
+
+  /** Behind a ref so the drain effect below doesn't re-run on every render just because
+   * `exportFeed` is a fresh closure each time. */
+  const exportFeedRef = useRef(exportFeed);
+  useEffect(() => { exportFeedRef.current = exportFeed; });
+  const adsEnrichmentPending = magentoConnector.connected && magentoLoading;
+  useEffect(() => {
+    if (pendingFeedExports.length === 0 || feedProducts.length === 0) return;
+    const runnable = pendingFeedExports.filter(
+      (job) => !((job.feed === 'Ads Feed' || job.feed === 'Google Shopping') && adsEnrichmentPending)
+    );
+    if (runnable.length === 0) return;
+    setPendingFeedExports((queue) => queue.filter((job) => !runnable.includes(job)));
+    // Staggered like the "export all feeds" path — browsers drop simultaneous downloads.
+    runnable.forEach((job, i) => {
+      window.setTimeout(() => void exportFeedRef.current(job.feed, job.format), i * 500);
+    });
+  }, [pendingFeedExports, feedProducts.length, adsEnrichmentPending]);
 
   const getFeedPreviewTable = useCallback(
     (feedType: string) => {
