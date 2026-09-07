@@ -963,17 +963,20 @@ function computeScope(orders: NormalizedOrder[], catalog: Map<string, CatalogDim
     group.sumM += m;
     if (customer.firstOrder < group.firstOrder) group.firstOrder = customer.firstOrder;
     if (customer.lastOrder > group.lastOrder) group.lastOrder = customer.lastOrder;
-    if (group.customers.length < 200) {
-      group.customers.push({
-        customerId: customer.key,
-        ...(customer.email ? { email: customer.email } : {}),
-        ...(customer.name ? { name: customer.name } : {}),
-        recency: recencyDays[index] ?? 0,
-        frequency: customer.orderCount,
-        monetary: Math.round(customer.revenue * 100) / 100,
-        rfmScore: `${r}-${f}-${m}`,
-      });
-    }
+    // Every member, not a sample. The 200-per-segment cap dated from when these rows were embedded
+    // in the aggregate doc; they are stripped from it now (stripCustomers) and persisted chunked in
+    // segment_customers, which is what the customer-list exports read — so the cap only meant
+    // «Champions» (2.074 on the card) exported 200 rows, and the rest of the list came from the
+    // ERP writer's rows for the same segment id.
+    group.customers.push({
+      customerId: customer.key,
+      ...(customer.email ? { email: customer.email } : {}),
+      ...(customer.name ? { name: customer.name } : {}),
+      recency: recencyDays[index] ?? 0,
+      frequency: customer.orderCount,
+      monetary: Math.round(customer.revenue * 100) / 100,
+      rfmScore: `${r}-${f}-${m}`,
+    });
     bySegment.set(segment.id, group);
   });
 
