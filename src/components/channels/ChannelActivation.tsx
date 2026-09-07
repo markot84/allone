@@ -296,8 +296,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   // Magento product enrichment — fills image_link, link, description, gtin, mpn,
   // color, size, item_group_id in the Ads Feed from the raw `magento_products` collection.
-  const { getThumbnailUrl } = useProductThumbnails();
-
   // Provenance snapshot — gives the AI the data-source mix (connector vs
   // movement vs procurement vs import) so it can calibrate the rationale.
   const { coverage: signalCoverage } = useProductSignals(products);
@@ -358,14 +356,18 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   // those SKUs. Called with no options this hook downloads the brand's entire `magento_products`
   // collection — 74.191 documents for e-tennis — and builds four lookup maps on the main thread,
   // which is the "Page Unresponsive" that hit after the segments had already rendered. The PI
-  // page was scoped this way in PER-335; this was the last unbounded caller. An empty SKU list
-  // skips the fetch altogether.
+  // page was scoped this way in PER-335. `useProductThumbnails` wraps the same hook and passes
+  // its options through verbatim, so it is scoped here too (same SKU set → same cached query);
+  // called bare, as it used to be at the top of this component, it re-downloaded everything and
+  // kept the freeze alive after the direct call had been scoped. An empty SKU list skips the
+  // fetch altogether.
   const feedSkus = useMemo(
     () => feedProducts.map((p) => (p.sku || '').trim()).filter(Boolean),
     [feedProducts]
   );
   const { bySku: magentoBySku, bySkuLower: magentoBySkuLower, config: magentoConnector, count: magentoEnrichedCount } =
     useMagentoProductEnrichment({ skus: feedSkus });
+  const { getThumbnailUrl } = useProductThumbnails({ skus: feedSkus });
   const lookupMagentoEnrichment = useCallback((sku: string) => {
     const trimmed = (sku || '').trim();
     if (!trimmed) return null;
