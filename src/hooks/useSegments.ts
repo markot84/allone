@@ -130,6 +130,15 @@ function aggregateQueryGate(a: { isDataAnalysis: boolean; useServerAggregate: bo
 function catalogQueryGate(a: { ordersQueryEnabled: boolean; shouldUseAggregate: boolean; hasUsableSnapshot: boolean; ordersPending: boolean; rawOrdersCount: number }): boolean {
   return a.ordersQueryEnabled && !a.shouldUseAggregate && !a.hasUsableSnapshot && !a.ordersPending && a.rawOrdersCount > 0;
 }
+/** Whether a browser-cached analysis snapshot may stand in for the live segments. On the RFM
+ * page it bridges the orders load and an empty result. Pages that only consume the monthly
+ * analysis (`skipOrderHydration`) never get one: their orders query is disabled, and a disabled
+ * query reports `isPending: true` forever in React Query v5 — the bare flag is what kept Channel
+ * Activation on a months-old client-side snapshot while Data Analysis showed the real segments. */
+function snapshotGate(a: { skipOrderHydration: boolean; ordersQueryEnabled: boolean; ordersPending: boolean; isLoading: boolean; segmentsCount: number }): boolean {
+  if (a.skipOrderHydration) return false;
+  return a.isLoading || (a.ordersQueryEnabled && a.ordersPending) || a.segmentsCount === 0;
+}
 
 export type UseSegmentsOptions = {
   /** `data_analysis`: Data Analysis page — orders first from ERP connectors, then e-shop;
@@ -569,18 +578,18 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     shouldUseAggregate,
   ]);
 
-  useEffect(() => {
-    if (!liveSnapshotPayload || isLoading || ordersPending) return;
-    writeAnalysisSnapshot(liveSnapshotPayload);
-  }, [liveSnapshotPayload, isLoading, ordersPending]);
+  /** Only the RFM page writes the snapshot, and only once its own orders are in — a disabled
+   * orders query is not "loading" (see `snapshotGate`). */
+  const snapshotWritable = !skipOrderHydration && !isLoading && !(ordersQueryEnabled && ordersPending);
 
-  const shouldUseSnapshot =
-    !!usableSnapshot &&
-    (isLoading || ordersPending || segments.length === 0);
-  const shouldUseStaleSnapshot =
-    !!staleAnalysisSnapshot &&
-    !shouldUseAggregate &&
-    (isLoading || ordersPending || segments.length === 0);
+  useEffect(() => {
+    if (!snapshotWritable || !liveSnapshotPayload) return;
+    writeAnalysisSnapshot(liveSnapshotPayload);
+  }, [snapshotWritable, liveSnapshotPayload]);
+
+  const snapshotWanted = snapshotGate({ skipOrderHydration, ordersQueryEnabled, ordersPending, isLoading, segmentsCount: segments.length });
+  const shouldUseSnapshot = !!usableSnapshot && snapshotWanted;
+  const shouldUseStaleSnapshot = !!staleAnalysisSnapshot && !shouldUseAggregate && snapshotWanted;
   const displayedSnapshot = shouldUseSnapshot ? usableSnapshot : shouldUseStaleSnapshot ? staleAnalysisSnapshot : null;
   const displayedSegments = displayedSnapshot ? displayedSnapshot.segments : segments;
   const displayedTotalCustomers = displayedSnapshot ? displayedSnapshot.totalCustomers : totalCustomers;
@@ -662,4 +671,4 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   };
 }
 
-export const __test = { selectAggregateScope, ordersQueryGate, aggregateQueryGate, catalogQueryGate };
+export const __test = { selectAggregateScope, ordersQueryGate, aggregateQueryGate, catalogQueryGate, snapshotGate };

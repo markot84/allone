@@ -169,3 +169,31 @@ describe('catalogQueryGate', () => {
     expect(catalogQueryGate({ ...base, ordersQueryEnabled: false })).toBe(false);
   });
 });
+
+describe('snapshotGate', () => {
+  const { snapshotGate } = __test;
+  const base = { skipOrderHydration: false, ordersQueryEnabled: true, ordersPending: false, isLoading: false, segmentsCount: 6 };
+
+  it('RFM page: a snapshot bridges the orders load and an empty result', () => {
+    expect(snapshotGate({ ...base, ordersPending: true })).toBe(true);
+    expect(snapshotGate({ ...base, isLoading: true })).toBe(true);
+    expect(snapshotGate({ ...base, segmentsCount: 0 })).toBe(true);
+  });
+
+  it('RFM page: steps aside once orders are in and segments exist', () => {
+    expect(snapshotGate(base)).toBe(false);
+  });
+
+  it('consumer pages never serve a snapshot — even though a disabled orders query reports pending forever', () => {
+    // Channel Activation showed 2.874 from a months-old browser snapshot while Data Analysis said 9.750.
+    const consumer = { ...base, skipOrderHydration: true, ordersQueryEnabled: false, ordersPending: true };
+    expect(snapshotGate(consumer)).toBe(false);
+    expect(snapshotGate({ ...consumer, segmentsCount: 0 })).toBe(false);
+    expect(snapshotGate({ ...consumer, isLoading: true })).toBe(false);
+  });
+
+  it('a disabled orders query is not "loading" on any page', () => {
+    // RFM page with no connected platform (import source): the snapshot must not mask the imported segments.
+    expect(snapshotGate({ ...base, ordersQueryEnabled: false, ordersPending: true })).toBe(false);
+  });
+});
