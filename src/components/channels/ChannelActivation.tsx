@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { escapeHtml } from '../../utils/escapeHtml';
 import { GrowthPlayPanel, usePlayContext } from './GrowthPlayPanel';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -53,25 +53,16 @@ import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useChannelActivations } from '../../hooks/useChannelActivations';
 import { exportAllSegmentActionPacks, exportStrategyPlan, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
 import { classifyStockHealth } from '../../utils/productUtils';
-import { matchSegmentByName, matchSegmentsByName, segmentSetSignature } from '../../utils/segmentNameMatch';
+import { matchSegmentByName, matchSegmentsByName } from '../../utils/segmentNameMatch';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent } from '../../utils/format';
-import { sanitizeCustomerMessage, containsForbiddenContent } from '../../utils/customerMessageSanitizer';
-import { logger } from '../../utils/logger';
+import { sanitizeCustomerMessage } from '../../utils/customerMessageSanitizer';
 import {
   groupProductsForDecisionExport,
   isActionableStockProduct,
   type DecisionProductRow,
 } from '../../utils/actionableProducts';
 import { scenarios } from '../../data';
-import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
-import { formatBrandProfileForPrompt, hashBrandProfilePromptText } from '../../services/brandProfile';
-import { useProductSignals } from '../../hooks/useProductSignals';
-import { buildTriagePromptContext, buildProvenancePromptContext } from '../../utils/aiPromptContext';
-import { rankSegments } from '../../utils/segmentRelevance';
-import type { TriageOrigin } from '../../hooks/useActiveStrategy';
-import { FirestoreService } from '../../services/firestore';
-import { useQueryClient } from '@tanstack/react-query';
 import { getModuleLabel, effectiveBrandTypeForModules } from '../../config/modules';
 import { getProductStrategyLabels } from '../../utils/adsFeedStrategyLabels';
 import { sanitizeSpreadsheetCell, sanitizeRow } from '../../utils/spreadsheetSafe';
@@ -104,18 +95,6 @@ function useInventoryPlayContext(): InventoryPlayContext {
 
   return context;
 }
-
-const FALLBACK_SEGMENT = {
-  id: 'all_customers',
-  name: 'All Customers',
-  rfm_score: '—',
-  count: 0,
-  percentage: 100,
-  revenue_share: 100,
-  color: 'var(--nts-accent)',
-  description: 'Σύνολο διαθέσιμου κοινού μέχρι να ολοκληρωθεί η RFM ανάλυση.',
-  icon: '',
-};
 
 // Funnel stage palette — chosen for maximum visual differentiation
 // (distinct hue per stage, balanced contrast on a white background).
@@ -255,14 +234,6 @@ interface ChannelActivationProps {
 
 export function ChannelActivation({ onSectionChange }: ChannelActivationProps = {}) {
   const { currentBrand } = useBrand();
-  const brandProfileText = useMemo(
-    () => formatBrandProfileForPrompt(currentBrand?.brandProfile),
-    [currentBrand?.brandProfile]
-  );
-  const brandProfileContextSig = useMemo(
-    () => hashBrandProfilePromptText(brandProfileText),
-    [brandProfileText]
-  );
   const pageTitle = getModuleLabel('channels', effectiveBrandTypeForModules(currentBrand));
   const inventoryPlayContext = useInventoryPlayContext();
   // PER-166: the server PI aggregate drives the dead-stock list + the Ads-feed counts, so the page
@@ -278,12 +249,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   // made once a month, or on «Ανανέωση Ανάλυσης» in Data Analysis; this page reads that result,
   // falling back to the imported segments when the monthly aggregate is empty — the same
   // options the Dashboard, the assistant and the automation runner already use.
-  const { segments: rfmSegments, dataCoverage } = useSegments({ skipOrderHydration: true, useServerAggregate: true });
-  /** Which segments exist right now. Stamped on each recommendation and compared on load, the
-   * same way `brandProfileContextSig` is — a stored audience must not outlive the segments it
-   * named. e-tennis kept a «Customers Needing Attention» from June after the RFM writer had
-   * replaced it with «At Risk». */
-  const segmentsSig = useMemo(() => segmentSetSignature(rfmSegments), [rfmSegments]);
+  const { segments: rfmSegments } = useSegments({ skipOrderHydration: true, useServerAggregate: true });
+  /** The strategy names its audience; the segments are whatever Data Analysis has produced since.
+   * A name the analysis no longer carries is shown as such (e-tennis kept a «Customers Needing
+   * Attention» from June after the RFM writer had replaced it with «At Risk») — nothing here
+   * regenerates the audience; that is Commercial Strategy's job. */
   const {
     activeStrategy,
     getStrategyName,
@@ -291,14 +261,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     isSavingBudget,
     isLoading: strategyLoading,
   } = useActiveStrategy();
-  const queryClient = useQueryClient();
   const toast = useToast();
-
-  // Magento product enrichment — fills image_link, link, description, gtin, mpn,
-  // color, size, item_group_id in the Ads Feed from the raw `magento_products` collection.
-  // Provenance snapshot — gives the AI the data-source mix (connector vs
-  // movement vs procurement vs import) so it can calibrate the rationale.
-  const { coverage: signalCoverage } = useProductSignals(products);
 
   const playContext = usePlayContext();
   const [playDismissed, setPlayDismissed] = useState(false);
@@ -312,9 +275,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const [noteText, setNoteText] = useState('');
   const [budgetInput, setBudgetInput] = useState('');
   const [editingBudget, setEditingBudget] = useState(false);
-  const [aiGenerating, setAiGenerating] = useState(false);
-  /** Background silent upgrade — show a subtle indicator, NOT a full skeleton. */
-  const [isSilentUpgrading, setIsSilentUpgrading] = useState(false);
   /** Expand state per Marketing Brief section — all collapsed by default. */
   const [expandedBriefSections, setExpandedBriefSections] = useState<Record<string, boolean>>({});
   /** Active segment context — drives the per-segment campaign messages & marketing briefs. */
@@ -387,130 +347,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   );
   const hasInventoryPlay = inventoryPlayContext === 'dead_stock';
 
-  // Read detailed activation recommendation (generated on strategy save, context: 'activation')
+  /** The channel recommendation is produced once, by Commercial Strategy, when the owner saves
+   * the strategy (context: 'activation'); this page only reads it. Nothing here regenerates it —
+   * not on load, not when the segment set moves, not from a button — so what the owner sees is
+   * exactly what the strategy page produced. A strategy without one points back there. */
   const aiRecommendation = activeStrategy?.activationRecommendation ?? activeStrategy?.channelRecommendation ?? null;
-  const aiLoading = aiGenerating;
-
-  // Auto-generate AI recommendation if strategy exists but recommendation is missing
-  const hasRealStrategyId = !!strategyId && !strategyId.startsWith('default_') && !!scenarioId;
-  const autoGenTriggered = useRef(false);
-  /** How many times we've silently re-run for legacy/violating payloads (max 3). */
-  const silentUpgradeAttempts = useRef(0);
-  const MAX_SILENT_UPGRADES = 3;
-
-  /** Generate an AI recommendation. `silent=true` → no toast (background upgrade). */
-  const generateRecommendation = useCallback(async (silent = false) => {
-    if (!strategyId || !scenarioId || !currentBrand) return;
-    const scenario = scenarios.find(s => s.id === scenarioId) ?? scenarios[0];
-    const segment = rfmSegments[0] ?? FALLBACK_SEGMENT;
-
-    if (silent) setIsSilentUpgrading(true);
-    else setAiGenerating(true);
-    try {
-      // PER-166: categories/count come from the server aggregate when the local catalog isn't loaded.
-      const topCats = channelInsight.ready
-        ? channelInsight.categories.map(c => c.name).filter(Boolean).slice(0, 5)
-        : [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
-      const savedTriage = (activeStrategy as { triageOrigin?: TriageOrigin } | null)?.triageOrigin ?? null;
-      const triagePromptCtx = buildTriagePromptContext(savedTriage);
-      const productCountForPrompt = channelInsight.ready ? channelInsight.totalCount : products.length;
-      const provenancePromptCtx = buildProvenancePromptContext(signalCoverage, productCountForPrompt);
-      // Critical: pass ALL ranked segments (ideal+good) so the AI doesn't arbitrarily
-      // pick a single segment. We use the active strategy's weights.
-      const strategyWeights =
-        (activeStrategy as { weights?: Record<string, number> } | null)?.weights ?? scenario.weights;
-      const ranked = rankSegments(rfmSegments, strategyWeights);
-      const fittingSegments = ranked.filter((rs) => rs.fit === 'ideal' || rs.fit === 'good');
-      const segmentFitList = fittingSegments.length > 0
-        ? fittingSegments.map((rs) => ({
-            name: rs.segment.name,
-            fit: rs.fit,
-            description: rs.segment.description,
-            count: rs.segment.count,
-            revenueShare: rs.segment.revenue_share,
-          }))
-        : [
-            {
-              name: FALLBACK_SEGMENT.name,
-              fit: 'good' as const,
-              description: FALLBACK_SEGMENT.description,
-              count: 0,
-              revenueShare: 100,
-            },
-          ];
-      const rec = await generateChannelRecommendations({
-        scenario,
-        segment,
-        fitLevel: 'good',
-        segmentsSig,
-        brandContext: { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats, brandProfileText },
-        segmentFitList,
-        context: 'activation',
-        triage: triagePromptCtx,
-        provenance: provenancePromptCtx,
-        audience: dataCoverage,
-      });
-
-      const clean = JSON.parse(JSON.stringify(rec));
-      await FirestoreService.setDocument('active_strategies', strategyId, {
-        activationRecommendation: clean,
-        updatedAt: new Date().toISOString(),
-      } as Record<string, unknown>);
-      // Critical: refetchActive — otherwise the UI keeps the old payload for 1-2s
-      // until the next poll. refetchQueries forces an immediate refresh.
-      await queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
-      await queryClient.refetchQueries({ queryKey: ['activeStrategy'] });
-      if (!silent) toast.success('AI συστάσεις δημιουργήθηκαν');
-    } catch (err) {
-      logger.error('[ChannelActivation] AI generation failed:', { err });
-      if (!silent) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        toast.error(`AI error: ${msg}`);
-      }
-    } finally {
-      if (silent) setIsSilentUpgrading(false);
-      else setAiGenerating(false);
-    }
-  }, [strategyId, scenarioId, currentBrand, brandProfileText, rfmSegments, segmentsSig, products, queryClient, toast, activeStrategy, signalCoverage, dataCoverage, channelInsight.ready, channelInsight.categories, channelInsight.totalCount]);
-
-  useEffect(() => {
-    if (autoGenTriggered.current) return;
-    if (!hasRealStrategyId || aiRecommendation || aiGenerating) return;
-    autoGenTriggered.current = true;
-    generateRecommendation();
-  }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, generateRecommendation]);
-
-  /** Silent background regenerate of legacy payloads missing per-segment channelPlaybook
-   * (priority/budgetSharePct) — no spinner/toast; cache invalidate refreshes the UI. */
-  useEffect(() => {
-    if (silentUpgradeAttempts.current >= MAX_SILENT_UPGRADES) return;
-    if (!hasRealStrategyId || !aiRecommendation || aiGenerating) return;
-    const playbook = aiRecommendation.channelPlaybook ?? [];
-    const hasPerSegmentSignal = playbook.some(
-      (e) => e.priority === 'primary' || e.priority === 'secondary' || (typeof e.budgetSharePct === 'number' && e.budgetSharePct > 0)
-    );
-    // Extra upgrade trigger: legacy payloads or AI that returned <2 segments
-    // (almost always wrong — even narrow policies have 2-4 fitting segments).
-    const tooFewSegments = (aiRecommendation.targetSegments?.length ?? 0) < 2;
-    // Trigger upgrade if any customer-facing message contains segment names or internal jargon.
-    // We use the central sanitizer detector (DRY with render-time sanitization).
-    const violatingMessages = playbook.some((e) => containsForbiddenContent(e.message));
-    const staleBrandProfileContext = aiRecommendation.brandProfileContextSig !== brandProfileContextSig;
-    // Deliberately NOT a trigger: a changed segment set. The recommendation records `segmentsSig`
-    // so a stale audience can be shown as stale, but regenerating it is the owner's call via
-    // «Ανανέωση». Auto-regenerating on every set change re-ran the recommendation each time the
-    // segments shifted between load phases, and the owner read it as the analysis running on
-    // its own inside this page.
-    if (
-      hasPerSegmentSignal &&
-      !tooFewSegments &&
-      !violatingMessages &&
-      !staleBrandProfileContext
-    )
-      return;
-    silentUpgradeAttempts.current += 1;
-    generateRecommendation(true);
-  }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, brandProfileContextSig, generateRecommendation]);
 
   const { getStatus, getNote, isIncluded, updateActivation, isSaving } = useChannelActivations(strategyId);
 
@@ -1206,15 +1047,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             icon={<Users size={18} className="text-[var(--nts-accent)]" />}
             action={
               <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
-                {isSilentUpgrading && (
-                  <span
-                    className="inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]"
-                    title="Το AI ανανεώνει τις συστάσεις στο background — δε χρειάζεται να περιμένεις"
-                  >
-                    <Spinner size="sm" />
-                    Ανανέωση…
-                  </span>
-                )}
                 {selectedSegmentName && (
                   <span className="min-w-0 text-[11px] text-[#9CA3AF]">
                     Ενεργό: <span className="font-semibold text-[#1A1A1A]">{selectedSegmentName}</span>
@@ -1262,7 +1094,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[#4A4A4A]">
                     {!seg.resolved && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                        <AlertTriangle size={10} /> Δεν υπάρχει πια στα segments — πατήστε Ανανέωση
+                        <AlertTriangle size={10} /> Δεν υπάρχει στα segments της Ανάλυσης
                       </span>
                     )}
                     {seg.count > 0 && (
@@ -1310,7 +1142,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             }
             icon={<PieChartIcon size={20} className="text-[var(--nts-accent)]" />}
           />
-          {(aiLoading || campaignsLoading) ? (
+          {(strategyLoading || campaignsLoading) ? (
             <>
               <PieSkeleton />
               <div className="space-y-2 mt-4">
@@ -1382,14 +1214,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν AI συστάσεις για αυτή τη στρατηγική</p>
-                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Πατήστε για δημιουργία συστάσεων AI</p>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => generateRecommendation()}
-                  disabled={aiGenerating}
-                >
-                  {aiGenerating ? <><Spinner size="sm" className="mr-1" /> Δημιουργία...</> : 'Δημιουργία AI Συστάσεων'}
+                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Δημιουργούνται στο Commercial Strategy, με την αποθήκευση της στρατηγικής</p>
+                <Button variant="primary" size="sm" onClick={() => onSectionChange?.('strategy')}>
+                  Άνοιγμα Commercial Strategy
                 </Button>
               </div>
             </div>
@@ -1418,7 +1245,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             }
           />
 
-          {aiLoading ? (
+          {strategyLoading ? (
             <div className="space-y-3">
               {[0, 1, 2, 3].map((i) => (
                 <ChannelCardSkeleton key={i} delay={i * 90} />
@@ -1591,15 +1418,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           ) : (
             <div className="flex items-center justify-center py-16">
               <div className="text-center">
-                <p className="text-sm text-[#4A4A4A]">Αναμονή AI συστάσεων...</p>
-                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Δημιουργήστε channel briefs βάσει της στρατηγικής σας</p>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => generateRecommendation()}
-                  disabled={aiGenerating}
-                >
-                  {aiGenerating ? <><Spinner size="sm" className="mr-1" /> Δημιουργία...</> : 'Δημιουργία AI Briefs'}
+                <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν channel briefs για αυτή τη στρατηγική</p>
+                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Παράγονται μαζί με τη στρατηγική στο Commercial Strategy</p>
+                <Button variant="primary" size="sm" onClick={() => onSectionChange?.('strategy')}>
+                  Άνοιγμα Commercial Strategy
                 </Button>
               </div>
             </div>
