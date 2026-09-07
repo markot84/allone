@@ -103,12 +103,14 @@ export function useChannelActivationInsight(options: { loadDead?: boolean } = {}
     categories: agg?.categories ?? [],
     totalCount: agg?.totalCount ?? 0,
     /** Dead-stock products (loaded in the dead-stock play). */
-    deadProducts: deadQuery.data ?? [],
+    deadProducts: loadDead ? deadQuery.data ?? [] : [],
     deadLoading: loadDead && !!agg && deadQuery.isPending,
-    /** In-stock feed products (loaded after requestFeed). */
-    feedProducts: feedQuery.data ?? [],
+    /** In-stock feed products (loaded after requestFeed). `enabled` only gates fetching — a query
+     * still hands back whatever sits in the cache, so without this guard a cached run resurrected
+     * the whole feed on mount and the caller's "load it on demand" never applied. */
+    feedProducts: feedRequested ? feedQuery.data ?? [] : [],
     feedLoading: feedRequested && !!agg && feedQuery.isPending,
-    feedReady: !!feedQuery.data,
+    feedReady: feedRequested && !!feedQuery.data,
     requestFeed: useCallback(() => setFeedRequested(true), []),
   };
 }

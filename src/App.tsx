@@ -153,7 +153,7 @@ function MobileQuickActions({
   );
 }
 
-const QUERY_CACHE_KEY = 'PERF_PLUS_QUERY_CACHE_v16';
+const QUERY_CACHE_KEY = 'PERF_PLUS_QUERY_CACHE_v17';
 
 if (typeof window !== 'undefined') {
   try {
@@ -193,6 +193,18 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               if (key === 'campaigns' || key === 'search_intelligence' || key === 'priceBenchmarks' || key === 'priceInsights') return false;
               // Product query shape changed; always refetch it from Firestore.
               if (key === 'products') return false;
+              // Channel Activation's catalog-sized payloads. The sync persister JSON.stringifies the
+              // WHOLE cache on every write (throttled to 1s), so one of these entries — a 14.5k-row
+              // in-stock feed, or 74k `magento_products` rows — turns every cache write into a
+              // multi-second main-thread block and then a quota-exceeded wipe. Firestore's own
+              // IndexedDB cache already serves them.
+              if (
+                key === 'magentoProductsRaw' ||
+                key === 'channel_activation_feed' ||
+                key === 'channel_activation_dead'
+              ) {
+                return false;
+              }
               // Heavy procurement / Product Intelligence payloads served by Firestore IndexedDB; in localStorage
               // they'd serialize MBs per brand change, block the main thread, and exceed quota → cache wipe.
               if (
