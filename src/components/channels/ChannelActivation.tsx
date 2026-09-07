@@ -272,7 +272,13 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const useLocalFallback = !channelInsight.isLoading && !channelInsight.ready;
   const { products, isLoading: productsLoading } = useProductSource({ enabled: useLocalFallback });
   const { isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
-  const { segments: rfmSegments, dataCoverage } = useSegments();
+  // Consume the segments Data Analysis produced — never compute them here. The default mode
+  // pulls 400 days of orders and runs RFM on the main thread on every visit (the "Page
+  // Unresponsive" the owner hit), and the set it yields shifts between load phases. Segments are
+  // made once a month, or on «Ανανέωση Ανάλυσης» in Data Analysis; this page reads that result,
+  // falling back to the imported segments when the monthly aggregate is empty — the same
+  // options the Dashboard, the assistant and the automation runner already use.
+  const { segments: rfmSegments, dataCoverage } = useSegments({ skipOrderHydration: true, useServerAggregate: true });
   /** Which segments exist right now. Stamped on each recommendation and compared on load, the
    * same way `brandProfileContextSig` is — a stored audience must not outlive the segments it
    * named. e-tennis kept a «Customers Needing Attention» from June after the RFM writer had
@@ -477,20 +483,21 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     // We use the central sanitizer detector (DRY with render-time sanitization).
     const violatingMessages = playbook.some((e) => containsForbiddenContent(e.message));
     const staleBrandProfileContext = aiRecommendation.brandProfileContextSig !== brandProfileContextSig;
-    // The segment set changed underneath the stored audience (or predates the signature). Only
-    // once segments have actually loaded — an empty list mid-load is not a changed set.
-    const staleSegments = rfmSegments.length > 0 && aiRecommendation.segmentsSig !== segmentsSig;
+    // Deliberately NOT a trigger: a changed segment set. The recommendation records `segmentsSig`
+    // so a stale audience can be shown as stale, but regenerating it is the owner's call via
+    // «Ανανέωση». Auto-regenerating on every set change re-ran the recommendation each time the
+    // segments shifted between load phases, and the owner read it as the analysis running on
+    // its own inside this page.
     if (
       hasPerSegmentSignal &&
       !tooFewSegments &&
       !violatingMessages &&
-      !staleBrandProfileContext &&
-      !staleSegments
+      !staleBrandProfileContext
     )
       return;
     silentUpgradeAttempts.current += 1;
     generateRecommendation(true);
-  }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, brandProfileContextSig, segmentsSig, generateRecommendation]);
+  }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, brandProfileContextSig, generateRecommendation]);
 
   const { getStatus, getNote, isIncluded, updateActivation, isSaving } = useChannelActivations(strategyId);
 
@@ -1242,7 +1249,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[#4A4A4A]">
                     {!seg.resolved && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                        <AlertTriangle size={10} /> Δεν υπάρχει πια στα segments — η σύσταση ανανεώνεται
+                        <AlertTriangle size={10} /> Δεν υπάρχει πια στα segments — πατήστε Ανανέωση
                       </span>
                     )}
                     {seg.count > 0 && (
