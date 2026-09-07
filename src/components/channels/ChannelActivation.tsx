@@ -1061,7 +1061,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       )}
 
       {/* Recommended Segments — only the segments that fit this specific policy */}
-      {recommendedSegments.length > 0 && (
+      {/* `segmentsLoading` keeps the card mounted before the first segment lands: without it the
+          fallback list is empty, the card is not rendered at all, and its loader never shows —
+          the section appears out of nowhere once the analysis arrives. */}
+      {(segmentsLoading || recommendedSegments.length > 0) && (
         <Card padding="lg">
           <CardHeader
             title="Στόχευση κοινού"
@@ -1644,6 +1647,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         segments={strategySegments}
         unresolvedSegmentNames={recommendedSegments.filter((s) => !s.resolved).map((s) => s.name)}
         customersWriter={segmentCustomersWriterFor(segmentsDataSource)}
+        isLoading={segmentsLoading}
         brandName={currentBrand?.name}
         brandId={currentBrand?.id}
         channelRecommendation={aiRecommendation}
@@ -1872,6 +1876,10 @@ interface DownloadsHubProps {
   /** The `segment_customers` writer behind `segments`, so the customer lists export the audience
    * the cards show and not every writer's rows for the same segment ids. */
   customersWriter: SegmentCustomersWriter | null;
+  /** True while `useSegments` is still resolving. Until it settles the hook serves the imported
+   * fallback set, so the hub would mount, swap its numbers, and — for one window — export the ERP
+   * writer's audience under the e-shop's segment names. */
+  isLoading?: boolean;
   brandName?: string;
   channelRecommendation: ChannelRecommendation | null;
   activeStrategy: ReturnType<typeof useActiveStrategy>['activeStrategy'];
@@ -1881,7 +1889,7 @@ interface DownloadsHubProps {
   brandId?: string;
 }
 
-function DownloadsHub({ segments, unresolvedSegmentNames = [], customersWriter, brandName, channelRecommendation, activeStrategy, scenarioId, monthlyBudget, toast, brandId }: DownloadsHubProps) {
+function DownloadsHub({ segments, unresolvedSegmentNames = [], customersWriter, isLoading = false, brandName, channelRecommendation, activeStrategy, scenarioId, monthlyBudget, toast, brandId }: DownloadsHubProps) {
   const segmentScopeLabel =
     unresolvedSegmentNames.length > 0
       ? `${segments.length} από ${segments.length + unresolvedSegmentNames.length} segments της στρατηγικής (${unresolvedSegmentNames.join(', ')}: δεν υπάρχει πια)`
@@ -1942,6 +1950,24 @@ function DownloadsHub({ segments, unresolvedSegmentNames = [], customersWriter, 
     } catch { toast.error('Export failed'); }
     setExporting(null);
   };
+
+  /** Same loader the audience card above uses: the hub keeps its frame while the analysis lands,
+   * instead of appearing with the fallback segments and re-rendering a moment later. */
+  if (isLoading) {
+    return (
+      <Card padding="lg">
+        <CardHeader
+          title="Downloads Hub"
+          subtitle="Έτοιμα action plans & templates για άμεση εκτέλεση"
+          icon={<FileDown size={20} className="text-[var(--nts-accent)]" />}
+        />
+        <SectionLoading
+          title="Ετοιμάζουμε τα αρχεία της στρατηγικής"
+          text="Περιμένουμε τα segments της Ανάλυσης για να εξάγουμε ακριβώς το κοινό που δείχνουν οι κάρτες. Λίγα δευτερόλεπτα."
+        />
+      </Card>
+    );
+  }
 
   if (!hasSegments) return null;
 
