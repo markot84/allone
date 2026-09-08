@@ -11,6 +11,7 @@ export type ModuleId =
   | 'channels'
   | 'campaigns'
   | 'competitive'
+  | 'benchmarks'
   | 'analytics'
   | 'finances'
   | 'calendar'
@@ -42,6 +43,7 @@ export type AppSectionId =
   | 'channels'
   | 'campaigns'
   | 'competitive'
+  | 'benchmarks'
   | 'finances'
   | 'reports'
   | 'roi'
@@ -140,6 +142,88 @@ export interface Brand {
     /** Product-name substring (accent/case-insensitive), e.g. 'Court Cards', 'Unstrung'. */
     nameContains?: string[];
   };
+  /** Trade the brand is benchmarked against. Super-admin only (pinned in firestore.rules) — an
+   *  owner picking their own peer group picks their own result. Unset benchmarks against the
+   *  whole estate instead of against nothing. */
+  vertical?: BenchmarkVertical;
+  /** Withdraws the brand from cross-eshop benchmarking. Also withdraws its own comparison: a shop
+   *  that does not contribute a sample has no cohort to sit in. */
+  benchmarkOptOut?: boolean;
+}
+
+/** Trades a brand can be benchmarked against. Mirrors BENCHMARK_VERTICALS in
+ *  `functions/src/benchmarkAggregator.ts` — the server owns cohort assignment, this is the
+ *  vocabulary the admin UI offers. */
+export type BenchmarkVertical =
+  | 'fashion'
+  | 'footwear'
+  | 'sports'
+  | 'beauty'
+  | 'health_pharmacy'
+  | 'electronics'
+  | 'home_garden'
+  | 'food_beverage'
+  | 'baby_kids'
+  | 'pets'
+  | 'diy_industrial'
+  | 'books_media'
+  | 'jewellery_watches'
+  | 'automotive'
+  | 'other';
+
+export type BenchmarkVerticalKey = BenchmarkVertical | 'unclassified';
+export type BenchmarkSizeBand = 'micro' | 'small' | 'mid' | 'large';
+export type BenchmarkMetricId =
+  | 'aov'
+  | 'growthYoY'
+  | 'ordersPerCustomer'
+  | 'championsShare'
+  | 'directChannelShare';
+
+/** A cohort's spread for one metric. `n` is the number of shops behind it and is always shown:
+ *  a median over 6 shops and one over 60 are different claims. */
+export interface BenchmarkDistribution {
+  p25: number;
+  p50: number;
+  p75: number;
+  n: number;
+}
+
+export interface BenchmarkSeasonalityPoint {
+  /** Calendar month, `01`–`12`. */
+  month: string;
+  /** Cohort median index, 100 = the cohort's average month. */
+  index: number;
+  n: number;
+}
+
+/** `benchmark_cohorts/{cohortId}` — anonymous, server-written, no absolute figures. */
+export interface BenchmarkCohort {
+  cohortId: string;
+  vertical: BenchmarkVerticalKey | 'all';
+  sizeBand: BenchmarkSizeBand | 'all';
+  brandCount: number;
+  metrics: Partial<Record<BenchmarkMetricId, BenchmarkDistribution>>;
+  seasonality: BenchmarkSeasonalityPoint[] | null;
+  minCohortBrands: number;
+  /** Firestore Timestamp — read through `coerceToDate`. */
+  updatedAt?: unknown;
+}
+
+/** `benchmark_self/{brandId}` — this brand's own values, computed by the same code that built the
+ *  distributions, so the marker and the spread behind it cannot drift apart. */
+export interface BenchmarkSelf {
+  brandId: string;
+  vertical: BenchmarkVerticalKey;
+  sizeBand: BenchmarkSizeBand;
+  metrics: Partial<Record<BenchmarkMetricId, number>>;
+  seasonality: number[] | null;
+  /** Published cohorts this brand may be compared against, most specific first. */
+  cohortChain: string[];
+  eligible: boolean;
+  reason?: 'opted_out' | 'insufficient_data';
+  /** Firestore Timestamp — read through `coerceToDate`. */
+  updatedAt?: unknown;
 }
 
 export type BrandArchetype =

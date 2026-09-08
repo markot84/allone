@@ -37,6 +37,7 @@ import {
   Pie,
 } from 'recharts';
 import { Button, Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
+import { isSectionHidden } from '../../config/modules';
 import { useEcommerceSummary, type EcommerceTopProduct } from '../../hooks/useEcommerceSummary';
 import { useEcommerceChannelDaily, sumChannelDailyWindow } from '../../hooks/useEcommerceChannelDaily';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
@@ -248,7 +249,8 @@ function OrderStatusBadge({ status }: { status: string }) {
   );
 }
 
-export function EcommerceDashboard() {
+/** `onSectionChange` exists only for the Benchmarking cross-link; the page navigates nowhere else. */
+export function EcommerceDashboard({ onSectionChange }: { onSectionChange?: (section: string) => void } = {}) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   // This page reads only orders/breakdowns/topProducts/recentOrders, never SKU stats or
@@ -751,6 +753,14 @@ export function EcommerceDashboard() {
                 ? ecomm.syncedAt.toDate().toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                 : '—'}
             </p>
+          ) : undefined
+        }
+        actions={
+          // Guarded, so the reduced build never shows a link into a section it has switched off.
+          onSectionChange && !isSectionHidden('benchmarks') ? (
+            <Button variant="secondary" size="sm" onClick={() => onSectionChange('benchmarks')}>
+              Σύγκριση με τον κλάδο
+            </Button>
           ) : undefined
         }
       />

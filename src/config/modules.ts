@@ -35,6 +35,7 @@ export const APP_SECTIONS: AppSectionId[] = [
   'channels',
   'campaigns',
   'competitive',
+  'benchmarks',
   'analytics',
   'ecommerce',
   'finances',
@@ -71,7 +72,7 @@ export const APP_SECTIONS: AppSectionId[] = [
  * the dashboard tiles and the cross-links that point at it are all guarded by `isSectionHidden`,
  * so they reappear on their own.
  *
- * Kept visible: dashboard, rfm, competitive, strategy, campaigns, ecommerce, analytics,
+ * Kept visible: dashboard, rfm, competitive, benchmarks, strategy, campaigns, ecommerce, analytics,
  * brand-profile, calendar (Content Strategy), products, the whole data/* import flow,
  * plus brands, invite, help and admin.
  */
@@ -135,6 +136,9 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'channels', label: 'Channel Activation', b2bLabel: 'Sales Activation', b2bStatus: 'core', b2cStatus: 'core' },
   { id: 'campaigns', label: 'Campaigns', b2bLabel: 'Demand Generation', b2bStatus: 'core', b2cStatus: 'core' },
   { id: 'competitive', label: 'Competitive Intelligence', b2bLabel: 'Market Intelligence', b2bStatus: 'optional', b2cStatus: 'core' },
+  /** Cross-eshop benchmarking. Core on B2C (it is built from e-shop order data) and optional on
+   *  B2B, where a brand may have no storefront to compare. */
+  { id: 'benchmarks', label: 'Benchmarking', b2bLabel: 'Benchmarking', b2bStatus: 'optional', b2cStatus: 'core' },
   { id: 'analytics', label: 'Web Analytics (GA4)', b2bLabel: 'Web Analytics', b2bStatus: 'optional', b2cStatus: 'core' },
   { id: 'finances', label: 'Finances', b2bLabel: 'Commercial Finance', b2bStatus: 'core', b2cStatus: 'core' },
   { id: 'calendar', label: 'Content Strategy', b2bLabel: 'Thought Leadership', b2bStatus: 'optional', b2cStatus: 'core' },
@@ -164,6 +168,7 @@ const SECTION_TO_MODULE: Partial<Record<AppSectionId, ModuleId>> = {
   channels: 'channels',
   campaigns: 'campaigns',
   competitive: 'competitive',
+  benchmarks: 'benchmarks',
   analytics: 'analytics',
   ecommerce: 'ecommerce',
   finances: 'finances',

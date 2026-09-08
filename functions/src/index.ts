@@ -55,6 +55,7 @@ import {
   setDb as setCompetitorDb,
 } from './competitorMonitor';
 import { computeAggregatesForBrand, computeAggregatesForAllBrands } from './aggregateStats';
+import { computeBenchmarkCohorts } from './benchmarkAggregator';
 import { evaluateAllBrandsServerSide } from './serverAlerts';
 import { sendDigestForAllBrands } from './dailyDigest';
 import { sendReorderEmailForBrand, sendReorderEmailsForAllBrands } from './reorderEmail';
@@ -3251,6 +3252,28 @@ export const scheduledProductIntelligence = onSchedule(
   })
 );
 
+/**
+ * Cross-eshop benchmark cohorts.
+ *
+ * Runs after `scheduledSyncEcommerce` (08:10) so every brand's `ecommerce_summary` is the current
+ * one. Reading yesterday's summaries would not break anything, but it would put the report a day
+ * behind the dashboard it is compared against, which reads as a bug.
+ *
+ * One invocation covers the whole estate: it is one document read per brand, not a per-brand
+ * rebuild, so there is nothing here to shard.
+ */
+export const scheduledBenchmarks = onSchedule(
+  { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '1GiB', timeoutSeconds: 900, schedule: 'every day 08:10' },
+  async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
+    try {
+      const result = await computeBenchmarkCohorts();
+      logger.info(`[scheduledBenchmarks] ${result.samples}/${result.brands} brands → ${result.cohorts} cohorts`);
+    } catch (error) {
+      logger.error('[scheduledBenchmarks] failed:', { alertKey: ALERT.benchmarkAggregateFailed, err: error });
+    }
+  })
+);
+
 /** POST /geminiProxy (Bearer FIREBASE_ID_TOKEN) — { systemPrompt, userPrompt, model?, temperature? }
  * → { text }. The API key stays server-side (Firebase Secret). */
 
@@ -3907,6 +3930,38 @@ export const refreshAggregates = onRequest(
       res.status(200).json({ success: true, brandId });
     } catch (error) {
       logger.error('[refreshAggregates]', { alertKey: ALERT.aggregateStatsFailed, err: error });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * POST /rebuildBenchmarks — rebuild every cohort now.
+ *
+ * Super-admin only, and deliberately not brand-scoped: the caller is rebuilding numbers derived
+ * from the whole estate, so brand membership is the wrong gate. Exists because the first build
+ * after a deploy should not wait for tomorrow's 08:10, and because assigning a brand's vertical
+ * changes cohort membership immediately in the admin's mind and should do the same in Firestore.
+ */
+export const rebuildBenchmarks = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 540, memory: '1GiB' },
+  async (req, res) => {
+    if (await applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { denyAndLog(res, 401, 'Missing auth'); return; }
+
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
+      if (!(await isUidSuperAdmin(decoded.uid))) {
+        denyAndLog(res, 403, 'Super admin only');
+        return;
+      }
+      const result = await computeBenchmarkCohorts();
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      logger.error('[rebuildBenchmarks]', { alertKey: ALERT.benchmarkAggregateFailed, err: error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }

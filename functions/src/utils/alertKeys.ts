@@ -67,6 +67,7 @@ export const ALERT = {
   stockMovementTrackFailed: 'stock_movement_track_failed',
   procurementSignalsFailed: 'procurement_signals_failed',
   competitorMonitorFailed: 'competitor_monitor_failed',
+  benchmarkAggregateFailed: 'benchmark_aggregate_failed',
 
   // ── Notifications / alerts ────────────────────────────────────────────────
   emailSendFailed: 'email_send_failed',

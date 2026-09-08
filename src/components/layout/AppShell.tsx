@@ -26,7 +26,7 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2, HeartHandshake, MapPin, ClipboardList, Palette, Lightbulb, ChevronRight } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2, HeartHandshake, MapPin, ClipboardList, Palette, Lightbulb, ChevronRight, Gauge } from 'lucide-react';
 import { NotificationBell } from '../coordination/NotificationBell';
 
 const RAIL_OPEN_KEY = 'perf-plus-rail-open';
@@ -1026,6 +1026,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'rfm', label: moduleConfig.rfm.label, icon: OrganizationIcon, group: 'commerce' },
         { id: 'accounts', label: moduleConfig.accounts.label, icon: Users, group: 'commerce' },
         { id: 'competitive', label: moduleConfig.competitive.label, icon: SearchIcon, group: 'commerce' },
+        { id: 'benchmarks', label: moduleConfig.benchmarks.label, icon: Gauge, group: 'commerce' },
         { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'commercial', ...(strategyBadge ? { badge: strategyBadge.text } : {}) },
         { id: 'policy-impact', label: 'Policy Impact', icon: BarChart3, group: 'commercial' },
         { id: 'markets', label: moduleConfig.markets.label, icon: Globe2, group: 'commercial' },
@@ -1053,11 +1054,11 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
       const ordered = isB2B
         ? [
-            'brands', 'dashboard', 'roi', 'insights', 'reports', 'accounts', 'competitive', 'strategy', 'policy-impact', 'markets', 'sales', 'offers',
+            'brands', 'dashboard', 'roi', 'insights', 'reports', 'accounts', 'competitive', 'benchmarks', 'strategy', 'policy-impact', 'markets', 'sales', 'offers',
             'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'hr', 'territories', 'coordination', 'automation', 'data', 'invite', 'help',
           ]
         : [
-            'brands', 'dashboard', 'roi', 'insights', 'reports', 'ecommerce', 'rfm', 'competitive', 'strategy', 'policy-impact',
+            'brands', 'dashboard', 'roi', 'insights', 'reports', 'ecommerce', 'rfm', 'competitive', 'benchmarks', 'strategy', 'policy-impact',
             'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'coordination', 'automation', 'data', 'invite', 'help',
           ];
 

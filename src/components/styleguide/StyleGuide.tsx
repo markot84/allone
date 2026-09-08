@@ -15,6 +15,7 @@ import {
   LegendKey,
   MONO,
   MetricSpark,
+  BenchmarkBand,
   MetricTile,
   PillButton,
   SignalCard,
@@ -708,6 +709,55 @@ function VocabularyPreview() {
   );
 }
 
+/**
+ * The Benchmark Band in the four states it actually renders in: ahead of the trade, behind it, a
+ * metric the brand cannot report, and a metric too few shops could contribute.
+ *
+ * The last two are here because they are the states that get skipped in review and then ship as a
+ * blank strip that reads as a zero.
+ */
+function BenchmarkBandPreview() {
+  const spread = { p25: 41.2, p50: 48.4, p75: 61.05, n: 14 };
+  return (
+    <SignalCard style={{ gap: 24 }}>
+      <SignalCardHeader eyebrow="Benchmark band" title="Where our number sits in the trade" />
+      <BenchmarkBand
+        label="Μέση αξία παραγγελίας"
+        question="Είναι καλό το καλάθι μου για τον κλάδο μου;"
+        value={64.5}
+        spread={spread}
+        format={(v) => `€${v.toFixed(2).replace('.', ',')}`}
+        goodWhenRising
+      />
+      <BenchmarkBand
+        label="Παραγγελίες ανά πελάτη"
+        question="Επιστρέφουν οι πελάτες μου όσο επιστρέφουν στον ανταγωνισμό;"
+        value={1.12}
+        spread={{ p25: 1.3, p50: 1.6, p75: 2.1, n: 14 }}
+        format={(v) => v.toFixed(2).replace('.', ',')}
+        goodWhenRising
+      />
+      <BenchmarkBand
+        label="Ανάπτυξη YoY"
+        question="Μεγαλώνω επειδή μεγαλώνει η αγορά;"
+        definition="Καταστήματα με λιγότερο από 24 μήνες ιστορικό δεν μετρούν εδώ."
+        value={null}
+        spread={{ p25: -0.02, p50: 0.06, p75: 0.19, n: 9 }}
+        format={(v) => `${v > 0 ? '+' : ''}${(v * 100).toFixed(1).replace('.', ',')}%`}
+        goodWhenRising
+      />
+      <BenchmarkBand
+        label="Μερίδα Champions"
+        question="Πόσο συγκεντρωμένη είναι η αξία στους καλούς πελάτες;"
+        value={0.18}
+        spread={null}
+        format={(v) => `${(v * 100).toFixed(1).replace('.', ',')}%`}
+        goodWhenRising
+      />
+    </SignalCard>
+  );
+}
+
 /** The shared primitives, which are the same vocabulary wearing their old API. */
 function PrimitivesPreview() {
   return (
@@ -933,6 +983,13 @@ export function StyleGuide() {
           description="Every card in the app is one of these: a white panel, an eyebrow over a title, a labelled figure, a chip, a pill, a legend key, an axis row or a skeleton. Two typefaces do the work — Plus Jakarta Sans for prose, JetBrains Mono for anything that is a measurement or a label about one. If it is set in mono, it is data."
         >
           <VocabularyPreview />
+        </Section>
+
+        <Section
+          title="Benchmark band"
+          description="The comparison idiom: the trade's interquartile range as a filled box, its median as a line, our own value as an orange marker. Deliberately not interactive — everything it knows is printed beside it rather than hidden behind a hover, because a comparison a keyboard user cannot reach is not a comparison. It also has to be legible when it has nothing to say: a metric we cannot report keeps the spread and drops the marker, and a cohort under the k-anonymity floor says so in words rather than rendering an empty strip."
+        >
+          <BenchmarkBandPreview />
         </Section>
 
         <Section

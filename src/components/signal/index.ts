@@ -26,6 +26,8 @@ export {
   AdsPerformanceChart,
   SegmentShareBar,
   MetricSpark,
+  SeasonalityCompareChart,
   type AdsPoint,
 } from './SignalCharts';
+export { BenchmarkBand } from './BenchmarkBand';
 export { SignalAlerts } from './SignalAlerts';

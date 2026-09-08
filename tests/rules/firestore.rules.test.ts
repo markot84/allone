@@ -782,6 +782,7 @@ describe('Y. server-write-only aggregates are client-immutable', () => {
     'erp_sku_velocity',
     'procurement_signals',
     'magento_parent_links',
+    'benchmark_self',
   ] as const;
 
   beforeEach(async () => {
@@ -858,5 +859,57 @@ describe('W4. write tiers: feed_sources (owner/admin only)', () => {
 
   it("denies another brand's member touching our feed sources", async () => {
     await assertFails(updateDoc(doc(authed(MEMBER_B), 'feed_sources/fsA'), { url: 'https://x', brandId: BRAND_A }));
+  });
+});
+
+// Z. cross-eshop benchmarking. `benchmark_cohorts` is the one collection in the schema that is
+// deliberately NOT brand-scoped: a cohort belongs to no tenant, its id is `vertical__sizeBand`, and
+// the aggregator leaves every absolute figure behind. That makes "any signed-in user may read it"
+// correct rather than lax — but it also means the rule has to be pinned by a test, because widening
+// it further, or letting a client write it, is how a benchmark turns into a disclosure.
+
+describe('Z. benchmarking: anonymous cohorts readable, brand-scoped self, client-immutable', () => {
+  beforeEach(async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, 'benchmark_cohorts/fashion__mid'), {
+        brandCount: 7,
+        metrics: { aov: { p25: 40, p50: 48, p75: 61, n: 7 } },
+      });
+      await setDoc(doc(db, `benchmark_self/${BRAND_A}`), { brandId: BRAND_A, metrics: { aov: 62 } });
+    });
+  });
+
+  it('any signed-in user may read a cohort, including one outside every brand', async () => {
+    await assertSucceeds(getDoc(doc(authed(MEMBER_A), 'benchmark_cohorts/fashion__mid')));
+    await assertSucceeds(getDoc(doc(authed(MEMBER_B), 'benchmark_cohorts/fashion__mid')));
+    await assertSucceeds(getDoc(doc(authed(OUTSIDER), 'benchmark_cohorts/fashion__mid')));
+  });
+
+  it('an unauthenticated reader may not', async () => {
+    await assertFails(getDoc(doc(unauth(), 'benchmark_cohorts/fashion__mid')));
+  });
+
+  it('no client identity may write a cohort, not even a super-admin', async () => {
+    for (const uid of [MEMBER_A, ADMIN_A, OWNER_A, SUPER_ADMIN]) {
+      await assertFails(
+        setDoc(doc(authed(uid), 'benchmark_cohorts/fashion__mid'), { brandCount: 1 }, { merge: true }),
+      );
+    }
+    await assertFails(deleteDoc(doc(authed(SUPER_ADMIN), 'benchmark_cohorts/fashion__mid')));
+  });
+
+  it("a brand's own benchmark values stay brand-scoped", async () => {
+    await assertSucceeds(getDoc(doc(authed(MEMBER_A), `benchmark_self/${BRAND_A}`)));
+    await assertFails(getDoc(doc(authed(MEMBER_B), `benchmark_self/${BRAND_A}`)));
+    await assertFails(getDoc(doc(unauth(), `benchmark_self/${BRAND_A}`)));
+  });
+
+  it('an owner cannot re-point their brand at a flattering cohort: `vertical` is super-admin only', async () => {
+    await assertFails(updateDoc(doc(authed(OWNER_A), `brands/${BRAND_A}`), { vertical: 'jewellery_watches' }));
+    await assertSucceeds(updateDoc(doc(authed(SUPER_ADMIN), `brands/${BRAND_A}`), { vertical: 'jewellery_watches' }));
+  });
+
+  it('an owner CAN withdraw their own brand from benchmarking', async () => {
+    await assertSucceeds(updateDoc(doc(authed(OWNER_A), `brands/${BRAND_A}`), { benchmarkOptOut: true }));
   });
 });
