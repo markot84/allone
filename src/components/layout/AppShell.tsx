@@ -702,7 +702,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'accounts', label: moduleConfig.accounts.label, icon: Users, group: 'commerce' },
         { id: 'competitive', label: moduleConfig.competitive.label, icon: SearchIcon, group: 'commerce' },
         { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'commercial', ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
-        { id: 'policy-impact', label: 'Policy Impact', icon: BarChart3, group: 'commercial' },
+        { id: 'policy-impact', label: 'Policy Impact', icon: BarChart3, group: 'commerce' },
         { id: 'markets', label: moduleConfig.markets.label, icon: Globe2, group: 'commercial' },
         { id: 'sales', label: moduleConfig.sales.label, icon: Handshake, group: 'commercial' },
         { id: 'offers', label: moduleConfig.offers.label, icon: ClipboardList, group: 'commercial' },
@@ -728,7 +728,9 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
       const ordered = isB2B
         ? [
-            'brands', 'dashboard', 'roi', 'insights', 'reports', 'accounts', 'competitive', 'strategy', 'policy-impact', 'markets', 'sales', 'offers',
+            // 'policy-impact' follows 'competitive' here only because it moved into the commerce
+            // group: a group's ids must stay contiguous or its header is printed twice.
+            'brands', 'dashboard', 'roi', 'insights', 'reports', 'accounts', 'competitive', 'policy-impact', 'strategy', 'markets', 'sales', 'offers',
             'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'hr', 'territories', 'coordination', 'automation', 'data', 'invite', 'help',
           ]
         : [
@@ -739,8 +741,8 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             // contiguous here. The B2B order above is deliberately left as it was.
             'brands', 'dashboard', 'roi', 'insights', 'reports',
             'products', 'suppliers', 'procurement',
-            'ecommerce', 'rfm', 'competitive',
-            'strategy', 'policy-impact',
+            'ecommerce', 'rfm', 'competitive', 'policy-impact',
+            'strategy',
             'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar',
             'finances', 'coordination', 'automation', 'data', 'invite', 'help',
           ];
