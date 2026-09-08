@@ -2928,7 +2928,11 @@ async function executeBrandNightlyWave(
       if (data.meta?.connected) phase.wrap('Meta', fetchMetaCampaigns(brandId));
       if (data.tiktok?.connected) phase.wrap('TikTok', fetchTikTokCampaigns(brandId));
       if (data.merchant?.connected) phase.wrap('Merchant', fetchPriceBenchmarks(brandId));
-      if (data.contact_pigeon?.connected) phase.wrap('Contact Pigeon', fetchContactPigeonData(brandId));
+      // ContactPigeon is deliberately NOT called nightly. `fetchContactPigeonData` persists nothing
+      // (PER-294 is a fetch-spike: CP's documented API exposes account lists and one subscriber at a
+      // time, no campaign/KPI endpoint), so a nightly run spent calls on a shared third-party API and
+      // threw the answer away. The manual «fetch» button still calls it, which is what proves a
+      // connection works. Restore this line only once there is something worth storing.
       break;
     case 'ecommerce':
       if (data.shopify?.connected) phase.wrap('Shopify', fetchShopifyData(brandId));
