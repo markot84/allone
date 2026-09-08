@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, Layers, Info, RefreshCw } from 'lucide-react';
 import type { Product, SalesBaseCategorySource, SalesBasePresetId, SalesBaseScope } from '../../types';
+import { BOUNDED_SCOPE_COPY, type BoundedProductScope } from '../../hooks/useBoundedProductSource';
 import {
   SALES_BASE_PRESET_OPTIONS,
   calculateSalesHeatScore,
@@ -81,6 +82,11 @@ interface SalesBaseSetupModalProps {
   onRefreshStats?: () => Promise<void>;
   /** True while the bounded product source is still loading — shows a loading note instead of a false 0. */
   productsLoading?: boolean;
+  /** What one row of `products` is. Since PER-319 this page is fed collapsed Parent SKUs, and calling
+   * them «SKU» is what made its total look comparable to an ERP SKU count or a variant-level figure —
+   * three different questions under one word. Defaults to the variant reading, which is the
+   * conservative one: it never claims rows are collapsed when the caller has not said so. */
+  productScope?: BoundedProductScope;
 }
 
 export function SalesBaseSetupModal({
@@ -95,7 +101,9 @@ export function SalesBaseSetupModal({
   hasMovementWindows,
   onRefreshStats,
   productsLoading = false,
+  productScope = 'catalog',
 }: SalesBaseSetupModalProps) {
+  const scopeCopy = BOUNDED_SCOPE_COPY[productScope];
   const [refreshing, setRefreshing] = useState(false);
   const [refreshDone, setRefreshDone] = useState(false);
   const [preset, setPreset] = useState<SalesBasePresetId>('all');
@@ -223,7 +231,7 @@ export function SalesBaseSetupModal({
           <thead className="sticky top-0 bg-white border-b border-[#F3F4F6] z-[1]">
             <tr className="text-[#9CA3AF]">
               <th className="px-3 py-2 font-medium">Ομάδα</th>
-              <th className="px-3 py-2 font-medium text-right">SKU</th>
+              <th className="px-3 py-2 font-medium text-right">{scopeCopy.unitSingular}</th>
               <th className="px-3 py-2 font-medium text-right">Μέσο score</th>
             </tr>
           </thead>
@@ -243,7 +251,7 @@ export function SalesBaseSetupModal({
         </table>
         {restCount > 0 && (
           <p className="text-[10px] text-[#9CA3AF] px-3 py-2 border-t border-[#F3F4F6]">
-            +{restCount} ακόμα ομάδες με λιγότερα SKU (συμπεριλαμβάνονται στο σύνολο παρακάτω).
+            +{restCount} ακόμα ομάδες με λιγότερα {scopeCopy.unit} (συμπεριλαμβάνονται στο σύνολο παρακάτω).
           </p>
         )}
       </div>
@@ -270,7 +278,7 @@ export function SalesBaseSetupModal({
             <div>
               <h2 className="text-base font-bold text-[#1A1A1A]">Sales Optimization — εύρος με φίλτρα</h2>
               <p className="text-xs text-[#6B7280] mt-1 leading-relaxed">
-                Ορίστε preset ρυθμού πωλήσεων και φίλτρα. Η στρατηγική εφαρμόζεται σε <strong>όλα</strong> τα SKU που
+                Ορίστε preset ρυθμού πωλήσεων και φίλτρα. Η στρατηγική εφαρμόζεται σε <strong>όλα</strong> τα {scopeCopy.unit} που
                 πληρούν τα κριτήρια. Παρακάτω εμφανίζεται συνοπτική εικόνα ανά μάρκα και κατηγορία, χωρίς αναλυτική λίστα προϊόντων.
               </p>
             </div>
@@ -478,8 +486,12 @@ export function SalesBaseSetupModal({
                   <>Φόρτωση καταλόγου προϊόντων…</>
                 ) : (
                   <>
-                    Σύνολο <span className="text-[var(--nts-accent)]">{totalMatched.toLocaleString('el-GR')}</span> SKU
-                    ταιριάζουν με τα κριτήρια.
+                    Σύνολο <span className="text-[var(--nts-accent)]">{totalMatched.toLocaleString('el-GR')}</span>
+                    {/* The denominator is what stops a filtered subset from reading as the whole
+                        universe — the reason this total matched no other source. Dropped when
+                        nothing is filtered out, so «6.460 από 6.460» never appears. */}
+                    {totalMatched !== products.length && <> από {products.length.toLocaleString('el-GR')}</>}
+                    {' '}{scopeCopy.unit} ταιριάζουν με τα κριτήρια.
                   </>
                 )}
                 {excludedCategories.length > 0 && (
@@ -488,8 +500,13 @@ export function SalesBaseSetupModal({
                   </span>
                 )}
               </p>
+              {!productsLoading && (
+                <p className="text-[10px] text-[#6B7280] mt-1">
+                  Εύρος: {scopeCopy.unit} · μόνο με διαθέσιμο απόθεμα · πηγή: {scopeCopy.origin}
+                </p>
+              )}
               <p className="text-[10px] text-[#6B7280] mt-1">
-                Στην επόμενη οθόνη επιλέγετε διάρκεια· η στρατηγική ισχύει για όλα αυτά τα SKU (όχι επιλογή ανά
+                Στην επόμενη οθόνη επιλέγετε διάρκεια· η στρατηγική ισχύει για όλα αυτά τα {scopeCopy.unit} (όχι επιλογή ανά
                 γραμμή).
               </p>
             </div>
@@ -502,7 +519,10 @@ export function SalesBaseSetupModal({
             )}
 
             {totalMatched === 0 && !productsLoading && (
-              <p className="text-xs text-center text-[#9CA3AF] py-6">Δεν βρέθηκε κανένα SKU που να ικανοποιεί τα επιλεγμένα φίλτρα ή preset.</p>
+              <p className="text-xs text-center text-[#9CA3AF] py-6">
+                Δεν βρέθηκε κανένα {scopeCopy.unitSingular} που να ικανοποιεί τα επιλεγμένα φίλτρα ή preset
+                {products.length > 0 && <> (η βάση έχει {products.length.toLocaleString('el-GR')} {scopeCopy.unit})</>}.
+              </p>
             )}
           </div>
 
