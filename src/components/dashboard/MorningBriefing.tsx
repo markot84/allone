@@ -1,10 +1,12 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Sparkles, ArrowRight, AlertTriangle, Zap, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sparkles, ArrowRight, AlertTriangle, CalendarClock, Minus, TrendingDown, TrendingUp, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tooltip, toPlainProseText } from '../common';
 import { BriefingNarrative } from './BriefingNarrative';
-import type { BriefingResult } from '../../services/morningBriefing';
+import type { BriefingInventory, BriefingResult, BriefingYearOverYear } from '../../services/morningBriefing';
 import {
+  BRIEFING_CACHE_VERSION,
+  briefingHeadlineRevenue,
   MAX_DAILY_GENERATIONS,
   collectBriefingData,
   generateMorningBriefing,
@@ -13,16 +15,22 @@ import {
   briefingResultFromCache,
   computeBriefingDataHash,
 } from '../../services/morningBriefing';
-import type { Product, Campaign, RFMSegment, AutomationAlert } from '../../types';
-import { isSectionHidden } from '../../config/modules';
+import { calculateCampaignMetrics } from '../../utils/roiUtils';
+import { formatCurrencyCompact, formatNumber } from '../../utils/format';
+import type { Campaign, RFMSegment, AutomationAlert } from '../../types';
+import { guessRoute } from './guessRoute';
 
 const MONO = "'JetBrains Mono', monospace";
 
 interface MorningBriefingProps {
   brandId: string;
   brandName: string;
-  products: Product[];
+  /** Stock figures from Product Intelligence — never recounted here. Null ⇒ no stock section. */
+  inventory?: BriefingInventory | null;
   campaigns: Campaign[];
+  /** False while the campaign query is in flight — keeps the briefing from reading an empty
+   * list as "no advertising ran". */
+  campaignsLoaded?: boolean;
   segments: RFMSegment[];
   totalOrganicRevenue: number;
   ga4: {
@@ -31,7 +39,6 @@ interface MorningBriefingProps {
     hasData: boolean;
   };
   alerts: AutomationAlert[];
-  supplierTodMap?: Map<string, number>;
   ecommerce?: {
     hasData: boolean;
     totalRevenue: number;
@@ -46,6 +53,9 @@ interface MorningBriefingProps {
       suspectedSyncGap: boolean;
     };
   };
+  /** Same window one year back (see `computeBriefingYearOverYear`). Feeds the prompt and the
+   * deterministic comparison strip under the narrative. */
+  yearOverYear?: BriefingYearOverYear;
   onSectionChange?: (section: string, opts?: { hashQuery?: string }) => void;
   hasAnyData: boolean;
   /** Selected dashboard period key (e.g. 'current_month'). Scopes cache & prompt. */
@@ -59,54 +69,28 @@ interface MorningBriefingProps {
   financeKey?: string;
 }
 
-/** Real app sections — not `inventory` (no such route). */
-type GuessResult = { section: string; hashQuery?: string };
-
-function guessRoute(action: string): GuessResult {
-  const lower = action.toLowerCase();
-  if (lower.includes('ecom') || lower.includes('eshop') || lower.includes('παραγγελι') || lower.includes('aov') || lower.includes('true roas')) {
-    return { section: 'ecommerce' };
-  }
-  if (lower.includes('dead') || lower.includes('νεκρ')) {
-    return { section: 'products', hashQuery: 'stock=dead' };
-  }
-  if (lower.includes('excess') || lower.includes('πλεόνασμα')) {
-    return { section: 'products', hashQuery: 'stock=excess' };
-  }
-  if (lower.includes('high-margin') || lower.includes('high margin') || lower.includes('αναπλήρωση')) {
-    return { section: 'products', hashQuery: 'filter=high-margin-low-stock' };
-  }
-  const pairs: [string, GuessResult][] = [
-    ['campaign', { section: 'campaigns' }],
-    ['καμπάνι', { section: 'campaigns' }],
-    ['stock', { section: 'products' }],
-    ['απόθεμα', { section: 'products' }],
-    ['inventory', { section: 'products' }],
-    ['segment', { section: 'rfm' }],
-    ['at risk', { section: 'rfm' }],
-    ['champions', { section: 'rfm' }],
-    ['rfm', { section: 'rfm' }],
-    ['content', { section: 'calendar' }],
-    ['strategy', { section: 'strategy' }],
-    ['budget', { section: 'channels' }],
-    ['roas', { section: 'roi' }],
-    ['roi', { section: 'roi' }],
-  ];
-  for (const [keyword, route] of pairs) {
-    // A keyword pointing at a section switched off for this build falls through to the next
-    // match (and ultimately to the dashboard) instead of producing a dead action.
-    if (lower.includes(keyword) && !isSectionHidden(route.section)) return route;
-  }
-  return { section: 'dashboard' };
-}
-
 const SIGNIFICANCE_CHECK_INTERVAL = 15 * 60 * 1000; // 15 minutes
 /** Small delay after stable KPIs; the heavy work waits on `metricsReady`. */
 const INIT_DELAY_MS = 150;
 
+const BRIEFING_STORAGE_PREFIX = `perf-plus-ai-briefing-v${BRIEFING_CACHE_VERSION}:`;
+
 function briefingStorageKey(brandId: string, period = 'current_month') {
-  return `perf-plus-ai-briefing-v4:${brandId}:${getLocalDateKey()}:${period}`;
+  return `${BRIEFING_STORAGE_PREFIX}${brandId}:${getLocalDateKey()}:${period}`;
 }
+
+/** Drop briefings written under an older prompt so they cannot be re-read after a version bump. */
+function dropStaleBriefingStorage() {
+  try {
+    Object.keys(window.localStorage)
+      .filter((key) => key.startsWith('perf-plus-ai-briefing-v') && !key.startsWith(BRIEFING_STORAGE_PREFIX))
+      .forEach((key) => window.localStorage.removeItem(key));
+  } catch {
+    /* private mode / quota — nothing to clean up then. */
+  }
+}
+
+if (typeof window !== 'undefined') dropStaleBriefingStorage();
 
 function loadBriefingFromStorage(brandId: string, period = 'current_month'): BriefingResult | null {
   try {
@@ -157,6 +141,80 @@ function loadCollapsedPref(brandId: string): boolean {
   }
 }
 
+type YoyValueFormat = 'currency' | 'number' | 'ratio';
+
+interface YoyRow {
+  key: string;
+  label: string;
+  current: number;
+  previous: number;
+  format: YoyValueFormat;
+  /** Ad spend is not "better" when it rises — it stays neutral instead of green/red. */
+  directional: boolean;
+  /** False when the current side was never measured for this window (no GA4 days, no campaigns).
+   * Such a row is dropped: "-100% vs last year" would read as a collapse, not a data gap. */
+  measured: boolean;
+}
+
+function formatYoyValue(value: number, format: YoyValueFormat): string {
+  if (format === 'currency') return formatCurrencyCompact(value);
+  if (format === 'ratio') return `${formatNumber(value, 1)}x`;
+  return formatNumber(value);
+}
+
+/** Percent change against last year, or null when there is no base to divide by. */
+function yoyChangePct(current: number, previous: number): number | null {
+  if (previous <= 0) return null;
+  return ((current - previous) / previous) * 100;
+}
+
+function YoyComparisonStrip({ label, rows }: { label: string; rows: YoyRow[] }) {
+  return (
+    <div className="mb-4 rounded-xl border border-[var(--nts-border-gray)] bg-[var(--nts-bg-subtle)] px-3 py-2.5">
+      <p className="mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--nts-medium-gray)]">
+        <CalendarClock size={12} className="shrink-0" />
+        Σύγκριση με πέρσι
+        <span className="font-normal normal-case tracking-normal">· {label}</span>
+      </p>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-5">
+        {rows.map((row) => {
+          const pct = yoyChangePct(row.current, row.previous);
+          const flat = pct !== null && Math.abs(pct) < 0.05;
+          const up = pct !== null && !flat && pct > 0;
+          const down = pct !== null && !flat && pct < 0;
+          const DeltaIcon = up ? TrendingUp : down ? TrendingDown : Minus;
+          const deltaColor = !row.directional || pct === null || flat
+            ? 'text-[var(--nts-medium-gray)]'
+            : up
+              ? 'text-[var(--success)]'
+              : 'text-[var(--danger)]';
+          return (
+            <div key={row.key} className="min-w-0">
+              <dt className="truncate text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--nts-medium-gray)]">
+                {row.label}
+              </dt>
+              <dd className="mt-0.5 text-[13px] font-semibold leading-tight text-[var(--nts-charcoal)]">
+                {formatYoyValue(row.current, row.format)}
+              </dd>
+              <dd className={`mt-0.5 flex items-center gap-1 text-[11px] leading-tight ${deltaColor}`}>
+                <DeltaIcon size={11} className="shrink-0" />
+                <span className="font-medium">
+                  {pct === null
+                    ? 'χωρίς περσινή βάση'
+                    : `${pct > 0 ? '+' : ''}${formatNumber(pct, 1)}%`}
+                </span>
+                <span className="truncate text-[var(--nts-medium-gray)]">
+                  πέρσι {formatYoyValue(row.previous, row.format)}
+                </span>
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </div>
+  );
+}
+
 export function MorningBriefing(props: MorningBriefingProps) {
   const { brandId, brandName, hasAnyData, onSectionChange } = props;
   const period = props.period ?? 'current_month';
@@ -179,14 +237,15 @@ export function MorningBriefing(props: MorningBriefingProps) {
   briefingLatestRef.current = briefing;
 
   const buildData = useCallback(() => collectBriefingData({
-    products: props.products,
     campaigns: props.campaigns,
+    campaignsLoaded: props.campaignsLoaded,
     segments: props.segments,
     totalOrganicRevenue: props.totalOrganicRevenue,
     ga4: props.ga4,
     alerts: props.alerts,
     brandName,
-    supplierTodMap: props.supplierTodMap,
+    inventory: props.inventory,
+    yearOverYear: props.yearOverYear,
     ecommerce: props.ecommerce
       ? {
           hasData: props.ecommerce.hasData,
@@ -198,7 +257,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
           dataFreshness: props.ecommerce.dataFreshness,
         }
       : undefined,
-  }), [props.products, props.campaigns, props.segments, props.totalOrganicRevenue, props.ga4, props.alerts, brandName, props.supplierTodMap, props.ecommerce]);
+  }), [props.campaigns, props.campaignsLoaded, props.segments, props.totalOrganicRevenue, props.ga4, props.alerts, brandName, props.inventory, props.ecommerce, props.yearOverYear]);
 
   /** Same collection the prompt is built from — the tokenizer matches the narrative against it, so
    *  it has to be the identical data, not a re-derivation. */
@@ -263,7 +322,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
 
   // First generation only if no briefing exists for today + period
   const hasSubstantiveData =
-    props.products.length > 0 ||
+    (props.inventory?.totalProducts ?? 0) > 0 ||
     props.campaigns.length > 0 ||
     Boolean(props.ecommerce?.connectedPlatforms?.length);
 
@@ -398,6 +457,59 @@ export function MorningBriefing(props: MorningBriefingProps) {
     }
     setLoading(false);
   }, [brandId, loading]);
+
+  /** The narrative is cached; the figures under it are live. When the data has moved since the
+   * text was written, the two can contradict each other — a briefing generated while campaigns
+   * were still empty announced "απουσία δεδομένων από τις διαφημιστικές καμπάνιες" above a strip
+   * showing €9K of spend. Cheap to compute: collectBriefingData no longer walks the catalogue. */
+  const narrativeStale = useMemo(() => {
+    if (!briefing) return false;
+    try {
+      return computeBriefingDataHash(buildData()) !== briefing.dataHash;
+    } catch {
+      return false;
+    }
+  }, [briefing, buildData]);
+
+  /** Deterministic YoY block: the model is told NOT to narrate the comparison, we render it. */
+  const yoyComparison = useMemo(() => {
+    const yoy = props.yearOverYear;
+    if (!yoy?.hasPreviousData) return null;
+
+    const metrics = calculateCampaignMetrics(props.campaigns);
+    const storeRevenue = props.ecommerce?.totalRevenue ?? 0;
+    const current = {
+      revenue: briefingHeadlineRevenue({
+        ecommerceSourceActive: Boolean(props.ecommerce?.hasData),
+        storeRevenue,
+        organicRevenue: props.totalOrganicRevenue,
+        campaignRevenue: metrics.totalRevenue,
+      }),
+      orders: props.ecommerce?.orderCount ?? 0,
+      spend: metrics.totalSpend,
+      // True ROAS: e-shop turnover ÷ ad spend — same measure as the previous-year side.
+      trueRoas: metrics.totalSpend > 0 ? storeRevenue / metrics.totalSpend : 0,
+      sessions: props.ga4.totals.sessions,
+    };
+
+    // No campaigns overlap this window ⇒ ad cost was not measured, it is not "zero spend".
+    const adsMeasured = props.campaigns.length > 0;
+    const trafficMeasured = props.ga4.hasData;
+
+    const allRows: YoyRow[] = [
+      { key: 'revenue', label: 'Έσοδα', current: current.revenue, previous: yoy.previous.revenue, format: 'currency', directional: true, measured: true },
+      { key: 'orders', label: 'Παραγγελίες', current: current.orders, previous: yoy.previous.orders, format: 'number', directional: true, measured: true },
+      { key: 'spend', label: 'Διαφ. δαπάνη', current: current.spend, previous: yoy.previous.spend, format: 'currency', directional: false, measured: adsMeasured },
+      // Labelled ROAS at the user's request. The field keeps the name `trueRoas` because
+      // `revenue.roas` already exists and means the platforms' attributed ratio — one label,
+      // two distinct values, so the code has to stay able to tell them apart.
+      { key: 'trueRoas', label: 'ROAS', current: current.trueRoas, previous: yoy.previous.trueRoas, format: 'ratio', directional: true, measured: adsMeasured },
+      { key: 'sessions', label: 'Επισκέψεις', current: current.sessions, previous: yoy.previous.sessions, format: 'number', directional: true, measured: trafficMeasured },
+    ];
+    const rows = allRows.filter((row) => row.measured && (row.current > 0 || row.previous > 0));
+
+    return rows.length > 0 ? { label: yoy.previousPeriodLabel, rows } : null;
+  }, [props.yearOverYear, props.campaigns, props.ecommerce, props.totalOrganicRevenue, props.ga4.hasData, props.ga4.totals.sessions]);
 
   /** Loading the full order history — KPIs climb but the text must not run ahead. */
   const awaitingEcommMetrics =
@@ -631,15 +743,43 @@ export function MorningBriefing(props: MorningBriefingProps) {
               exit={{ opacity: 0 }}
               style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}
             >
-              <BriefingNarrative
-                narrative={toPlainProseText(briefing.narrative)}
-                data={briefingData}
-                segments={props.segments}
-                campaigns={props.campaigns}
-                platforms={props.ecommerce?.connectedPlatforms}
-                onNavigate={onSectionChange}
-                animate={firstReadOfDay}
-              />
+              {narrativeStale && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 8,
+                    padding: '8px 11px',
+                    borderRadius: 8,
+                    background: 'var(--warning-light)',
+                    color: 'var(--text-primary)',
+                    fontSize: 12,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  <AlertTriangle size={14} style={{ flex: 'none', marginTop: 2 }} />
+                  <span>
+                    Τα δεδομένα άλλαξαν αφότου γράφτηκε αυτό το κείμενο — τα νούμερα παρακάτω είναι τα
+                    τρέχοντα. Το briefing ξαναγράφεται.
+                  </span>
+                </div>
+              )}
+
+              <div style={{ opacity: narrativeStale ? 0.6 : 1, minWidth: 0 }}>
+                <BriefingNarrative
+                  narrative={toPlainProseText(briefing.narrative)}
+                  data={briefingData}
+                  segments={props.segments}
+                  campaigns={props.campaigns}
+                  platforms={props.ecommerce?.connectedPlatforms}
+                  onNavigate={onSectionChange}
+                  animate={firstReadOfDay}
+                />
+              </div>
+
+              {yoyComparison && (
+                <YoyComparisonStrip label={yoyComparison.label} rows={yoyComparison.rows} />
+              )}
 
               {briefing.actions.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

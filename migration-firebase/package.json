@@ -5,5 +5,8 @@
   "type": "module",
   "dependencies": {
     "firebase-admin": "^13.10.0"
+  },
+  "overrides": {
+    "websocket-driver": "^0.7.5"
   }
 }

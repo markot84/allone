@@ -12,6 +12,7 @@ export interface ProductData {
   stock_age_days: number;
   price: number;
   cost_price?: number;
+  avg_cost?: number;
   revenue_period?: number;
   qty_sold_period?: number;
   first_available_date?: string;
@@ -56,6 +57,14 @@ export function validateProduct(
   const firstAvailableDate = pick(row, 'ημ.πρώτης_παραλ.', 'first_available_date', 'first_available', 'available_date', 'date_added', 'created_date', 'creation_date', 'inventory_date', 'ημερομηνία_πρώτης_παραλαβής');
   const price = pick(row, 'λιανικής', 'χονδρικής', 'sell_price', 'price', 'unit_price', 'retail_price', 'τιμή', 'msrp');
   const costPrice = pick(row, 'τιμή_αγοράς', 'cost_price', 'cost', 'κόστος');
+  // A file with only avg_cost also feeds cost_price (pick's substring fuzz on 'cost') — fine: WAC is the best available cost.
+  // Up to 3 WAC columns; avg_cost = mean of the non-empty ones.
+  const avgCostVals = [
+    pick(row, 'avg_cost_1', 'μεσοσταθμικό_κόστος_κτήσης_1', 'κόστος_κτήσης_1', 'avg_cost', 'average_cost', 'μεσοσταθμικό_κόστος', 'μεσοσταθμικό_κόστος_κτήσης', 'μέση_τιμή_κτήσης'),
+    pick(row, 'avg_cost_2', 'μεσοσταθμικό_κόστος_κτήσης_2', 'κόστος_κτήσης_2'),
+    pick(row, 'avg_cost_3', 'μεσοσταθμικό_κόστος_κτήσης_3', 'κόστος_κτήσης_3'),
+  ].map((v) => parseFloat(String(v ?? '').replace(',', '.')) || 0).filter((n) => n > 0);
+  const avgCost = avgCostVals.length ? String(Math.round((avgCostVals.reduce((a, b) => a + b, 0) / avgCostVals.length) * 100) / 100) : '';
   const revenuePeriod = pick(row, 'revenue_period', 'revenue');
   const qtySoldPeriod = pick(row, 'πωλήσεις', 'qty_sold_period', 'qty_sold', 'quantity_sold', 'sales', 'sold', 'units_sold');
   const priority = pick(row, 'priority_tag', 'priority_flag', 'priority', 'tag', 'label', 'alerts', 'κατάσταση');
@@ -103,6 +112,7 @@ export function validateProduct(
     stock_age_days: stockAgeDays,
     price: sellPriceNum,
     ...(costPrice ? { cost_price: costPriceNum } : {}),
+    ...(avgCost && (parseFloat(String(avgCost).replace(',', '.')) || 0) > 0 ? { avg_cost: parseFloat(String(avgCost).replace(',', '.')) } : {}),
     ...(revenuePeriod ? { revenue_period: parseFloat(String(revenuePeriod || '0').replace(',', '.')) || 0 } : {}),
     ...(qtySoldPeriod ? { qty_sold_period: Math.round(parseFloat(String(qtySoldPeriod).replace(',', '.')) || 0) } : {}),
     ...(firstAvailableDate ? { first_available_date: firstAvailableDate } : {}),

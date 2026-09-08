@@ -892,6 +892,9 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                         if (h === 'Status') return 'active';
                         if (h === 'Sell_Price') return '99.99';
                         if (h === 'Cost_Price') return '60.00';
+                        if (h === 'Avg_Cost_1') return '57.50';
+                        if (h === 'Avg_Cost_2') return '55.10';
+                        if (h === 'Avg_Cost_3') return '52.80';
                         if (h === 'List_Price') return '119.99';
                         if (h === 'Stock_On_Hand') return '100';
                         if (h === 'Available_Stock') return '88';

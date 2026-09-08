@@ -30,12 +30,40 @@ export function flattenDeadPages(pages: Array<{ products?: Product[] } | null>):
   return pages.flatMap((p) => p?.products ?? []);
 }
 
-async function loadBucket(brandId: string, bucket: ProductIntelligenceBucket, pageCount: number): Promise<Product[]> {
-  if (pageCount <= 0) return [];
-  const pages = await Promise.all(
-    Array.from({ length: pageCount }, (_, i) => fetchProductIntelligencePage(brandId, bucket, i + 1))
+/** Pages fetched at once. A large catalog has hundreds of pages per bucket and `Promise.all` over
+ * all of them opened that many reads simultaneously, four buckets deep. The cap exists to stop
+ * that storm, not to serialize the load: e-tennis is 97 in-stock pages, and at 6 in flight the
+ * owner waited about a minute for them. Each page is one ~100KB doc read, so the wall clock here
+ * is round-trip latency, not bandwidth. */
+const MAX_CONCURRENT_PAGES = 16;
+
+/** Every (bucket, page) read of a request goes through one pool, so a finished read starts the
+ * next immediately instead of the whole batch waiting on its slowest member, and four buckets
+ * loading together still never exceed the cap between them. */
+async function loadBuckets(
+  brandId: string,
+  counts: Array<[ProductIntelligenceBucket, number]>
+): Promise<Product[]> {
+  const jobs: Array<[ProductIntelligenceBucket, number]> = [];
+  for (const [bucket, pageCount] of counts) {
+    for (let page = 1; page <= pageCount; page += 1) jobs.push([bucket, page]);
+  }
+  if (jobs.length === 0) return [];
+
+  const pages = new Array<{ products?: Product[] } | null>(jobs.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(MAX_CONCURRENT_PAGES, jobs.length) }, async () => {
+      for (let i = next++; i < jobs.length; i = next++) {
+        pages[i] = await fetchProductIntelligencePage(brandId, jobs[i][0], jobs[i][1]);
+      }
+    })
   );
   return flattenDeadPages(pages);
+}
+
+async function loadBucket(brandId: string, bucket: ProductIntelligenceBucket, pageCount: number): Promise<Product[]> {
+  return loadBuckets(brandId, [[bucket, pageCount]]);
 }
 
 /** Sum of the in-stock buckets — the «active variants with stock» count, shown without any page load. */
@@ -78,10 +106,7 @@ export function useChannelActivationInsight(options: { loadDead?: boolean } = {}
   // 3) Full in-stock feed — only once requested (export/preview).
   const feedQuery = useQuery({
     queryKey: ['channel_activation_feed', brandId],
-    queryFn: async () => {
-      const lists = await Promise.all(FEED_BUCKETS.map((b) => loadBucket(brandId!, b, agg?.pagesByBucket?.[b] ?? 0)));
-      return lists.flat();
-    },
+    queryFn: () => loadBuckets(brandId!, FEED_BUCKETS.map((b) => [b, agg?.pagesByBucket?.[b] ?? 0])),
     enabled: !!brandId && !!agg && feedRequested,
     ...QUERY_OPTS,
   });
@@ -95,12 +120,14 @@ export function useChannelActivationInsight(options: { loadDead?: boolean } = {}
     categories: agg?.categories ?? [],
     totalCount: agg?.totalCount ?? 0,
     /** Dead-stock products (loaded in the dead-stock play). */
-    deadProducts: deadQuery.data ?? [],
+    deadProducts: loadDead ? deadQuery.data ?? [] : [],
     deadLoading: loadDead && !!agg && deadQuery.isPending,
-    /** In-stock feed products (loaded after requestFeed). */
-    feedProducts: feedQuery.data ?? [],
+    /** In-stock feed products (loaded after requestFeed). `enabled` only gates fetching — a query
+     * still hands back whatever sits in the cache, so without this guard a cached run resurrected
+     * the whole feed on mount and the caller's "load it on demand" never applied. */
+    feedProducts: feedRequested ? feedQuery.data ?? [] : [],
     feedLoading: feedRequested && !!agg && feedQuery.isPending,
-    feedReady: !!feedQuery.data,
+    feedReady: feedRequested && !!feedQuery.data,
     requestFeed: useCallback(() => setFeedRequested(true), []),
   };
 }

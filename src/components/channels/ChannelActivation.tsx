@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { segmentCustomersWriterFor, type SegmentCustomersWriter } from '../../utils/segmentCustomersWriter';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { escapeHtml } from '../../utils/escapeHtml';
 import { GrowthPlayPanel, usePlayContext } from './GrowthPlayPanel';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -32,6 +33,7 @@ import {
   Check,
   Star,
   Package,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   PieChart,
@@ -39,7 +41,7 @@ import {
   Cell,
   Tooltip,
 } from 'recharts';
-import { Card, CardHeader, Badge, Button, Spinner, PageHeader, ModalHeader, ProductThumbnail } from '../common';
+import { Card, CardHeader, Badge, Button, Spinner, PageHeader, ModalHeader, ProductThumbnail, ProgressBar } from '../common';
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import { useToast } from '../common/Toast';
 import { useProductSource } from '../../hooks/useProductSource';
@@ -52,24 +54,16 @@ import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useChannelActivations } from '../../hooks/useChannelActivations';
 import { exportAllSegmentActionPacks, exportStrategyPlan, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
 import { classifyStockHealth } from '../../utils/productUtils';
+import { matchSegmentByName, matchSegmentsByName } from '../../utils/segmentNameMatch';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent } from '../../utils/format';
-import { sanitizeCustomerMessage, containsForbiddenContent } from '../../utils/customerMessageSanitizer';
-import { logger } from '../../utils/logger';
+import { sanitizeCustomerMessage } from '../../utils/customerMessageSanitizer';
 import {
   groupProductsForDecisionExport,
   isActionableStockProduct,
   type DecisionProductRow,
 } from '../../utils/actionableProducts';
 import { scenarios } from '../../data';
-import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
-import { formatBrandProfileForPrompt, hashBrandProfilePromptText } from '../../services/brandProfile';
-import { useProductSignals } from '../../hooks/useProductSignals';
-import { buildTriagePromptContext, buildProvenancePromptContext } from '../../utils/aiPromptContext';
-import { rankSegments } from '../../utils/segmentRelevance';
-import type { TriageOrigin } from '../../hooks/useActiveStrategy';
-import { FirestoreService } from '../../services/firestore';
-import { useQueryClient } from '@tanstack/react-query';
 import { getModuleLabel, effectiveBrandTypeForModules } from '../../config/modules';
 import { getProductStrategyLabels } from '../../utils/adsFeedStrategyLabels';
 import { sanitizeSpreadsheetCell, sanitizeRow } from '../../utils/spreadsheetSafe';
@@ -77,6 +71,12 @@ import { useMagentoProductEnrichment } from '../../hooks/useMagentoProductEnrich
 import type { ChannelRecommendation, BudgetAction } from '../../types';
 
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
+
+/** In-stock variants the page will pull on mount. Beyond this the feed rows — and the Magento
+ * enrichment + thumbnails fetched for every one of their SKUs — are loaded when the owner opens a
+ * preview or an export, not while the page is painting. */
+const FEED_AUTOLOAD_LIMIT = 3000;
+
 type InventoryPlayContext = 'dead_stock' | null;
 
 function useInventoryPlayContext(): InventoryPlayContext {
@@ -102,18 +102,6 @@ function useInventoryPlayContext(): InventoryPlayContext {
 
   return context;
 }
-
-const FALLBACK_SEGMENT = {
-  id: 'all_customers',
-  name: 'All Customers',
-  rfm_score: '—',
-  count: 0,
-  percentage: 100,
-  revenue_share: 100,
-  color: 'var(--nts-accent-text)',
-  description: 'Σύνολο διαθέσιμου κοινού μέχρι να ολοκληρωθεί η RFM ανάλυση.',
-  icon: '',
-};
 
 // Funnel stage palette — chosen for maximum visual differentiation
 // (distinct hue per stage, balanced contrast on a white background).
@@ -221,6 +209,23 @@ function PieSkeleton() {
   );
 }
 
+/** The page-level loader scaled to one card, so "the strategy is loading" and "the segments are
+ * loading" look the same to the owner — instead of tiles that briefly claim a segment is missing
+ * while the analysis document is still on its way. */
+function SectionLoading({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="mx-auto max-w-xl py-10 text-center" aria-busy="true">
+      <Spinner size="lg" className="mx-auto mb-4" />
+      <h3 className="mb-2 text-base font-semibold text-[var(--nts-charcoal)]">{title}</h3>
+      <p className="mx-auto mb-5 max-w-md text-sm text-[var(--nts-medium-gray)]">{text}</p>
+      <div className="mx-auto space-y-2">
+        <Skeleton className="mx-auto h-3 w-72 max-w-full" />
+        <Skeleton className="mx-auto h-3 w-56 max-w-full" />
+      </div>
+    </div>
+  );
+}
+
 function ChannelCardSkeleton({ delay = 0 }: { delay?: number }) {
   return (
     <div
@@ -253,14 +258,6 @@ interface ChannelActivationProps {
 
 export function ChannelActivation({ onSectionChange }: ChannelActivationProps = {}) {
   const { currentBrand } = useBrand();
-  const brandProfileText = useMemo(
-    () => formatBrandProfileForPrompt(currentBrand?.brandProfile),
-    [currentBrand?.brandProfile]
-  );
-  const brandProfileContextSig = useMemo(
-    () => hashBrandProfilePromptText(brandProfileText),
-    [brandProfileText]
-  );
   const pageTitle = getModuleLabel('channels', effectiveBrandTypeForModules(currentBrand));
   const inventoryPlayContext = useInventoryPlayContext();
   // PER-166: the server PI aggregate drives the dead-stock list + the Ads-feed counts, so the page
@@ -270,7 +267,17 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const useLocalFallback = !channelInsight.isLoading && !channelInsight.ready;
   const { products, isLoading: productsLoading } = useProductSource({ enabled: useLocalFallback });
   const { isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
-  const { segments: rfmSegments, dataCoverage } = useSegments();
+  // Consume the segments Data Analysis produced — never compute them here. The default mode
+  // pulls 400 days of orders and runs RFM on the main thread on every visit (the "Page
+  // Unresponsive" the owner hit), and the set it yields shifts between load phases. Segments are
+  // made once a month, or on «Ανανέωση Ανάλυσης» in Data Analysis; this page reads that result,
+  // falling back to the imported segments when the monthly aggregate is empty — the same
+  // options the Dashboard, the assistant and the automation runner already use.
+  const { segments: rfmSegments, isLoading: segmentsLoading, dataSource: segmentsDataSource } = useSegments({ skipOrderHydration: true, useServerAggregate: true });
+  /** The strategy names its audience; the segments are whatever Data Analysis has produced since.
+   * A name the analysis no longer carries is shown as such (e-tennis kept a «Customers Needing
+   * Attention» from June after the RFM writer had replaced it with «At Risk») — nothing here
+   * regenerates the audience; that is Commercial Strategy's job. */
   const {
     activeStrategy,
     getStrategyName,
@@ -278,17 +285,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     isSavingBudget,
     isLoading: strategyLoading,
   } = useActiveStrategy();
-  const queryClient = useQueryClient();
   const toast = useToast();
-
-  // Magento product enrichment — fills image_link, link, description, gtin, mpn,
-  // color, size, item_group_id in the Ads Feed from the raw `magento_products` collection.
-  const { bySku: magentoBySku, bySkuLower: magentoBySkuLower, config: magentoConnector, count: magentoEnrichedCount } = useMagentoProductEnrichment();
-  const { getThumbnailUrl } = useProductThumbnails();
-
-  // Provenance snapshot — gives the AI the data-source mix (connector vs
-  // movement vs procurement vs import) so it can calibrate the rationale.
-  const { coverage: signalCoverage } = useProductSignals(products);
 
   const playContext = usePlayContext();
   const [playDismissed, setPlayDismissed] = useState(false);
@@ -298,13 +295,13 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const [selectedFeed, setSelectedFeed] = useState<string | null>(null);
   const [previewFeed, setPreviewFeed] = useState<string | null>(null);
   const [showExportAllModal, setShowExportAllModal] = useState(false);
+  /** Exports asked for before their rows (or Magento enrichment) had arrived; they run themselves
+   * as soon as the data lands, so the owner presses the button once. */
+  const [pendingFeedExports, setPendingFeedExports] = useState<Array<{ feed: string; format: 'csv' | 'xlsx' }>>([]);
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [budgetInput, setBudgetInput] = useState('');
   const [editingBudget, setEditingBudget] = useState(false);
-  const [aiGenerating, setAiGenerating] = useState(false);
-  /** Background silent upgrade — show a subtle indicator, NOT a full skeleton. */
-  const [isSilentUpgrading, setIsSilentUpgrading] = useState(false);
   /** Expand state per Marketing Brief section — all collapsed by default. */
   const [expandedBriefSections, setExpandedBriefSections] = useState<Record<string, boolean>>({});
   /** Active segment context — drives the per-segment campaign messages & marketing briefs. */
@@ -313,12 +310,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   const strategyId = activeStrategy?.id ?? null;
   const scenarioId = activeStrategy?.scenarioId ?? null;
-
-  const lookupMagentoEnrichment = useCallback((sku: string) => {
-    const trimmed = (sku || '').trim();
-    if (!trimmed) return null;
-    return magentoBySku.get(trimmed) || magentoBySkuLower.get(trimmed.toLowerCase()) || null;
-  }, [magentoBySku, magentoBySkuLower]);
 
   const activeStockProducts = useMemo(
     () => products.filter(isActionableStockProduct),
@@ -347,138 +338,79 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   // loaded on demand) when the aggregate is ready; otherwise from the local catalog fallback.
   const adsFeedProducts = channelInsight.ready ? channelInsight.feedProducts : activeStockProducts;
   const feedProducts = inventoryPlayContext === 'dead_stock' ? deadStockActionProducts : adsFeedProducts;
+
+  // Magento enrichment is only ever looked up for the feed rows below, so fetch it for exactly
+  // those SKUs. Called with no options this hook downloads the brand's entire `magento_products`
+  // collection — 74.191 documents for e-tennis — and builds four lookup maps on the main thread,
+  // which is the "Page Unresponsive" that hit after the segments had already rendered. The PI
+  // page was scoped this way in PER-335. `useProductThumbnails` wraps the same hook and passes
+  // its options through verbatim, so it is scoped here too (same SKU set → same cached query);
+  // called bare, as it used to be at the top of this component, it re-downloaded everything and
+  // kept the freeze alive after the direct call had been scoped. An empty SKU list skips the
+  // fetch altogether.
+  const feedSkus = useMemo(
+    () => feedProducts.map((p) => (p.sku || '').trim()).filter(Boolean),
+    [feedProducts]
+  );
+  /** Only the Ads Feed and the dead-stock table read Magento fields (image_link, gtin, mpn, color,
+   * size, item_group_id / thumbnails). The Email Feed needs none of them — it groups by the
+   * `parent_sku` the PI rows already carry — so it must not drag the catalog in behind it. */
+  const needsMagentoEnrichment =
+    inventoryPlayContext === 'dead_stock' ||
+    previewFeed === 'Ads Feed' ||
+    selectedFeed === 'Ads Feed' ||
+    showExportAllModal;
+  const enrichmentSkus = useMemo(
+    () => (needsMagentoEnrichment ? feedSkus : []),
+    [needsMagentoEnrichment, feedSkus]
+  );
+  const { bySku: magentoBySku, bySkuLower: magentoBySkuLower, config: magentoConnector, count: magentoEnrichedCount, isLoading: magentoLoading } =
+    useMagentoProductEnrichment({ skus: enrichmentSkus });
+  const { getThumbnailUrl } = useProductThumbnails({ skus: enrichmentSkus });
+  const lookupMagentoEnrichment = useCallback((sku: string) => {
+    const trimmed = (sku || '').trim();
+    if (!trimmed) return null;
+    return magentoBySku.get(trimmed) || magentoBySkuLower.get(trimmed.toLowerCase()) || null;
+  }, [magentoBySku, magentoBySkuLower]);
   // Instant «active variants with stock» count from the summary — shown before the feed rows load.
   const adsFeedCount = channelInsight.ready ? channelInsight.activeStockCount : activeStockProducts.length;
 
-  // Load the bounded in-stock feed once, only when it's actually needed (normal/Ads-feed view).
-  const { ready: insightReady, requestFeed: requestInsightFeed } = channelInsight;
+  // Load the in-stock feed on mount only while it is genuinely small. Every feed row becomes a SKU
+  // in `feedSkus`, and enrichment + thumbnails are fetched for that set: a catalog with tens of
+  // thousands of in-stock variants turned page load into a catalog-sized fetch. Above the limit the
+  // feed waits for the owner to ask for it (preview / export), which is what PER-166 intended by
+  // "loaded on demand". The count on the card comes from the aggregate summary either way.
+  const { ready: insightReady, requestFeed: requestInsightFeed, feedReady: insightFeedReady, feedLoading: insightFeedLoading } = channelInsight;
+  const feedAutoLoads = adsFeedCount > 0 && adsFeedCount <= FEED_AUTOLOAD_LIMIT;
   useEffect(() => {
+    if (insightReady && inventoryPlayContext !== 'dead_stock' && feedAutoLoads) requestInsightFeed();
+  }, [insightReady, inventoryPlayContext, requestInsightFeed, feedAutoLoads]);
+  /** Preview and export need the actual rows; asking for them is what loads the feed on a large
+   * catalog. Safe to call repeatedly — the hook only flips a flag. */
+  const ensureFeedRequested = useCallback(() => {
     if (insightReady && inventoryPlayContext !== 'dead_stock') requestInsightFeed();
   }, [insightReady, inventoryPlayContext, requestInsightFeed]);
+  /** True while the owner is waiting for feed rows they asked for. */
+  const feedRowsPending = !feedAutoLoads && !insightFeedReady && inventoryPlayContext !== 'dead_stock' && channelInsight.ready;
   const decisionProductRows = useMemo(
     () => groupProductsForDecisionExport(feedProducts, lookupMagentoEnrichment),
     [feedProducts, lookupMagentoEnrichment]
   );
   const hasInventoryPlay = inventoryPlayContext === 'dead_stock';
 
-  // Read detailed activation recommendation (generated on strategy save, context: 'activation')
+  /** The channel recommendation is produced once, by Commercial Strategy, when the owner saves
+   * the strategy (context: 'activation'); this page only reads it. Nothing here regenerates it —
+   * not on load, not when the segment set moves, not from a button — so what the owner sees is
+   * exactly what the strategy page produced. A strategy without one points back there. */
   const aiRecommendation = activeStrategy?.activationRecommendation ?? activeStrategy?.channelRecommendation ?? null;
-  const aiLoading = aiGenerating;
-
-  // Auto-generate AI recommendation if strategy exists but recommendation is missing
-  const hasRealStrategyId = !!strategyId && !strategyId.startsWith('default_') && !!scenarioId;
-  const autoGenTriggered = useRef(false);
-  /** How many times we've silently re-run for legacy/violating payloads (max 3). */
-  const silentUpgradeAttempts = useRef(0);
-  const MAX_SILENT_UPGRADES = 3;
-
-  /** Generate an AI recommendation. `silent=true` → no toast (background upgrade). */
-  const generateRecommendation = useCallback(async (silent = false) => {
-    if (!strategyId || !scenarioId || !currentBrand) return;
-    const scenario = scenarios.find(s => s.id === scenarioId) ?? scenarios[0];
-    const segment = rfmSegments[0] ?? FALLBACK_SEGMENT;
-
-    if (silent) setIsSilentUpgrading(true);
-    else setAiGenerating(true);
-    try {
-      // PER-166: categories/count come from the server aggregate when the local catalog isn't loaded.
-      const topCats = channelInsight.ready
-        ? channelInsight.categories.map(c => c.name).filter(Boolean).slice(0, 5)
-        : [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
-      const savedTriage = (activeStrategy as { triageOrigin?: TriageOrigin } | null)?.triageOrigin ?? null;
-      const triagePromptCtx = buildTriagePromptContext(savedTriage);
-      const productCountForPrompt = channelInsight.ready ? channelInsight.totalCount : products.length;
-      const provenancePromptCtx = buildProvenancePromptContext(signalCoverage, productCountForPrompt);
-      // Critical: pass ALL ranked segments (ideal+good) so the AI doesn't arbitrarily
-      // pick a single segment. We use the active strategy's weights.
-      const strategyWeights =
-        (activeStrategy as { weights?: Record<string, number> } | null)?.weights ?? scenario.weights;
-      const ranked = rankSegments(rfmSegments, strategyWeights);
-      const fittingSegments = ranked.filter((rs) => rs.fit === 'ideal' || rs.fit === 'good');
-      const segmentFitList = fittingSegments.length > 0
-        ? fittingSegments.map((rs) => ({
-            name: rs.segment.name,
-            fit: rs.fit,
-            description: rs.segment.description,
-            count: rs.segment.count,
-            revenueShare: rs.segment.revenue_share,
-          }))
-        : [
-            {
-              name: FALLBACK_SEGMENT.name,
-              fit: 'good' as const,
-              description: FALLBACK_SEGMENT.description,
-              count: 0,
-              revenueShare: 100,
-            },
-          ];
-      const rec = await generateChannelRecommendations({
-        scenario,
-        segment,
-        fitLevel: 'good',
-        brandContext: { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats, brandProfileText },
-        segmentFitList,
-        context: 'activation',
-        triage: triagePromptCtx,
-        provenance: provenancePromptCtx,
-        audience: dataCoverage,
-      });
-
-      const clean = JSON.parse(JSON.stringify(rec));
-      await FirestoreService.setDocument('active_strategies', strategyId, {
-        activationRecommendation: clean,
-        updatedAt: new Date().toISOString(),
-      } as Record<string, unknown>);
-      // Critical: refetchActive — otherwise the UI keeps the old payload for 1-2s
-      // until the next poll. refetchQueries forces an immediate refresh.
-      await queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
-      await queryClient.refetchQueries({ queryKey: ['activeStrategy'] });
-      if (!silent) toast.success('AI συστάσεις δημιουργήθηκαν');
-    } catch (err) {
-      logger.error('[ChannelActivation] AI generation failed:', { err });
-      if (!silent) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        toast.error(`AI error: ${msg}`);
-      }
-    } finally {
-      if (silent) setIsSilentUpgrading(false);
-      else setAiGenerating(false);
-    }
-  }, [strategyId, scenarioId, currentBrand, brandProfileText, rfmSegments, products, queryClient, toast, activeStrategy, signalCoverage, dataCoverage, channelInsight.ready, channelInsight.categories, channelInsight.totalCount]);
-
-  useEffect(() => {
-    if (autoGenTriggered.current) return;
-    if (!hasRealStrategyId || aiRecommendation || aiGenerating) return;
-    autoGenTriggered.current = true;
-    generateRecommendation();
-  }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, generateRecommendation]);
-
-  /** Silent background regenerate of legacy payloads missing per-segment channelPlaybook
-   * (priority/budgetSharePct) — no spinner/toast; cache invalidate refreshes the UI. */
-  useEffect(() => {
-    if (silentUpgradeAttempts.current >= MAX_SILENT_UPGRADES) return;
-    if (!hasRealStrategyId || !aiRecommendation || aiGenerating) return;
-    const playbook = aiRecommendation.channelPlaybook ?? [];
-    const hasPerSegmentSignal = playbook.some(
-      (e) => e.priority === 'primary' || e.priority === 'secondary' || (typeof e.budgetSharePct === 'number' && e.budgetSharePct > 0)
-    );
-    // Extra upgrade trigger: legacy payloads or AI that returned <2 segments
-    // (almost always wrong — even narrow policies have 2-4 fitting segments).
-    const tooFewSegments = (aiRecommendation.targetSegments?.length ?? 0) < 2;
-    // Trigger upgrade if any customer-facing message contains segment names or internal jargon.
-    // We use the central sanitizer detector (DRY with render-time sanitization).
-    const violatingMessages = playbook.some((e) => containsForbiddenContent(e.message));
-    const staleBrandProfileContext = aiRecommendation.brandProfileContextSig !== brandProfileContextSig;
-    if (
-      hasPerSegmentSignal &&
-      !tooFewSegments &&
-      !violatingMessages &&
-      !staleBrandProfileContext
-    )
-      return;
-    silentUpgradeAttempts.current += 1;
-    generateRecommendation(true);
-  }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, brandProfileContextSig, generateRecommendation]);
+  /** Commercial Strategy saves the strategy first and writes its channel recommendation a few
+   * seconds later (triggerAIGeneration). A freshly saved strategy without one is being produced,
+   * not missing — the owner gets the loader, not the "go create it" state. Three minutes is far
+   * beyond the generation time; past it, the honest reading is that generation failed there. */
+  const recommendationPending =
+    !aiRecommendation &&
+    !!activeStrategy?.updatedAt &&
+    Date.now() - new Date(activeStrategy.updatedAt).getTime() < 3 * 60 * 1000;
 
   const { getStatus, getNote, isIncluded, updateActivation, isSaving } = useChannelActivations(strategyId);
 
@@ -502,7 +434,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     if (ai && ai.length > 0) {
       // join with RFM data to get color/customers/revenue share
       return ai.map((rs) => {
-        const match = rfmSegments.find((s) => s.name === rs.name);
+        // The model writes its own names — «Customers Needing Attention» for «Need Attention».
+        // Exact equality left those without a customer count on the card, and out of the exports.
+        const match = matchSegmentByName(rs.name, rfmSegments);
         return {
           name: rs.name,
           fit: rs.fit,
@@ -510,6 +444,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           color: match?.color ?? '#7C3AED',
           count: match?.count ?? 0,
           revenueShare: match?.revenue_share ?? 0,
+          /** False = the recommendation names a segment the brand no longer has. Shown as such
+           * rather than as a tile with no figures. */
+          resolved: match != null,
         };
       });
     }
@@ -524,8 +461,18 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         color: s.color,
         count: s.count,
         revenueShare: s.revenue_share,
+        resolved: true,
       }));
   }, [aiRecommendation, rfmSegments]);
+
+  /** The exports in the Downloads Hub belong to the active strategy, like everything else on this
+   * page — the audience card right above them says «5 segments επιλεγμένα από AI». Handing them
+   * every RFM segment exported 39K customers where the strategy covers 12,8K. Falls back to all
+   * segments only if no recommended name matches, so the hub can never export nothing. */
+  const strategySegments = useMemo(() => {
+    const matched = matchSegmentsByName(recommendedSegments.map((s) => s.name), rfmSegments);
+    return matched.length > 0 ? matched : rfmSegments;
+  }, [recommendedSegments, rfmSegments]);
 
   // Auto-select the first recommended segment when the recommendation changes
   useEffect(() => {
@@ -659,7 +606,26 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   // Feed export
   const exportFeed = async (feedType: string, format: 'csv' | 'xlsx') => {
-    if (feedProducts.length === 0) { toast.error('Δεν υπάρχουν ενεργά προϊόντα με απόθεμα για export'); return; }
+    if (feedProducts.length === 0) {
+      // On a large catalog the rows arrive after the owner asks for them — an empty feed here
+      // means "still loading", not "nothing to export". Queue the export instead of sending the
+      // owner away to press the button again: one click, then the file.
+      if (feedRowsPending) {
+        ensureFeedRequested();
+        setPendingFeedExports((q) => [...q, { feed: feedType, format }]);
+        toast.success('Φορτώνουμε τις γραμμές — η εξαγωγή ξεκινά μόλις είναι έτοιμες.');
+        return;
+      }
+      toast.error('Δεν υπάρχουν ενεργά προϊόντα με απόθεμα για export');
+      return;
+    }
+    // Only the Ads Feed carries Magento columns; exporting it mid-fetch would ship empty
+    // image_link / gtin / mpn instead of waiting for them.
+    if ((feedType === 'Ads Feed' || feedType === 'Google Shopping') && magentoConnector.connected && magentoLoading) {
+      setPendingFeedExports((q) => [...q, { feed: feedType, format }]);
+      toast.success('Φορτώνουμε το Magento enrichment — η εξαγωγή ξεκινά μόλις είναι έτοιμο.');
+      return;
+    }
     let headers: string[] = [];
     let rows: Array<Array<string | number>> = [];
     switch (feedType) {
@@ -769,6 +735,24 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       } catch { toast.error('Σφάλμα κατά την εξαγωγή Excel. Δοκιμάστε CSV.'); }
     }
   };
+
+  /** Behind a ref so the drain effect below doesn't re-run on every render just because
+   * `exportFeed` is a fresh closure each time. */
+  const exportFeedRef = useRef(exportFeed);
+  useEffect(() => { exportFeedRef.current = exportFeed; });
+  const adsEnrichmentPending = magentoConnector.connected && magentoLoading;
+  useEffect(() => {
+    if (pendingFeedExports.length === 0 || feedProducts.length === 0) return;
+    const runnable = pendingFeedExports.filter(
+      (job) => !((job.feed === 'Ads Feed' || job.feed === 'Google Shopping') && adsEnrichmentPending)
+    );
+    if (runnable.length === 0) return;
+    setPendingFeedExports((queue) => queue.filter((job) => !runnable.includes(job)));
+    // Staggered like the "export all feeds" path — browsers drop simultaneous downloads.
+    runnable.forEach((job, i) => {
+      window.setTimeout(() => void exportFeedRef.current(job.feed, job.format), i * 500);
+    });
+  }, [pendingFeedExports, feedProducts.length, adsEnrichmentPending]);
 
   const getFeedPreviewTable = useCallback(
     (feedType: string) => {
@@ -1024,7 +1008,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               size="sm"
               className="min-h-[36px] w-full sm:w-auto"
               icon={<Download size={16} />}
-              onClick={() => setShowExportAllModal(true)}
+              onClick={() => { ensureFeedRequested(); setShowExportAllModal(true); }}
             >
               Εξαγωγή feeds
             </Button>
@@ -1147,27 +1131,23 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       )}
 
       {/* Recommended Segments — only the segments that fit this specific policy */}
-      {recommendedSegments.length > 0 && (
+      {/* `segmentsLoading` keeps the card mounted before the first segment lands: without it the
+          fallback list is empty, the card is not rendered at all, and its loader never shows —
+          the section appears out of nowhere once the analysis arrives. */}
+      {(segmentsLoading || recommendedSegments.length > 0) && (
         <Card padding="lg">
           <CardHeader
             title="Στόχευση κοινού"
             subtitle={
-              aiRecommendation?.targetSegments?.length
-                ? `${recommendedSegments.length} segments επιλεγμένα από AI για τη στρατηγική «${strategyName}»`
-                : `Top segments βάσει εσόδων (περιμένουμε AI σύσταση για segment-specific brief)`
+              segmentsLoading
+                ? 'Φορτώνουμε τα segments της Ανάλυσης…'
+                : aiRecommendation?.targetSegments?.length
+                  ? `${recommendedSegments.length} segments επιλεγμένα από AI για τη στρατηγική «${strategyName}»`
+                  : `Top segments βάσει εσόδων (περιμένουμε AI σύσταση για segment-specific brief)`
             }
             icon={<Users size={18} className="text-[var(--nts-accent-text)]" />}
             action={
               <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
-                {isSilentUpgrading && (
-                  <span
-                    className="inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent-text)]"
-                    title="Το AI ανανεώνει τις συστάσεις στο background — δε χρειάζεται να περιμένεις"
-                  >
-                    <Spinner size="sm" />
-                    Ανανέωση…
-                  </span>
-                )}
                 {selectedSegmentName && (
                   <span className="min-w-0 text-[11px] text-[#9CA3AF]">
                     Ενεργό: <span className="font-semibold text-[#1A1A1A]">{selectedSegmentName}</span>
@@ -1176,6 +1156,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               </div>
             }
           />
+          {segmentsLoading ? (
+            <SectionLoading
+              title="Φορτώνουμε τα segments της Ανάλυσης"
+              text="Διαβάζουμε την τελευταία ανάλυση RFM για να αντιστοιχίσουμε το κοινό της στρατηγικής. Λίγα δευτερόλεπτα."
+            />
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
             {recommendedSegments.map((seg) => {
               const isActive = selectedSegmentName === seg.name;
@@ -1213,6 +1199,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     )}
                   </div>
                   <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[#4A4A4A]">
+                    {!seg.resolved && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                        <AlertTriangle size={10} /> Δεν υπάρχει στα segments της Ανάλυσης
+                      </span>
+                    )}
                     {seg.count > 0 && (
                       <span><span className="font-mono font-semibold">{formatNumber(seg.count)}</span> πελάτες</span>
                     )}
@@ -1236,6 +1227,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               );
             })}
           </div>
+          )}
         </Card>
       )}
 
@@ -1258,7 +1250,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             }
             icon={<PieChartIcon size={20} className="text-[var(--nts-accent-text)]" />}
           />
-          {(aiLoading || campaignsLoading) ? (
+          {(strategyLoading || campaignsLoading) ? (
             <>
               <PieSkeleton />
               <div className="space-y-2 mt-4">
@@ -1326,18 +1318,18 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 )}
               </div>
             </>
+          ) : recommendationPending ? (
+            <SectionLoading
+              title="Ετοιμάζουμε τις AI συστάσεις"
+              text="Το Commercial Strategy μόλις αποθήκευσε τη στρατηγική και παράγει τώρα τη μίξη καναλιών. Λίγα δευτερόλεπτα."
+            />
           ) : (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν AI συστάσεις για αυτή τη στρατηγική</p>
-                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Πατήστε για δημιουργία συστάσεων AI</p>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => generateRecommendation()}
-                  disabled={aiGenerating}
-                >
-                  {aiGenerating ? <><Spinner size="sm" className="mr-1" /> Δημιουργία...</> : 'Δημιουργία AI Συστάσεων'}
+                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Δημιουργούνται στο Commercial Strategy, με την αποθήκευση της στρατηγικής</p>
+                <Button variant="primary" size="sm" onClick={() => onSectionChange?.('strategy')}>
+                  Άνοιγμα Commercial Strategy
                 </Button>
               </div>
             </div>
@@ -1366,7 +1358,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             }
           />
 
-          {aiLoading ? (
+          {strategyLoading ? (
             <div className="space-y-3">
               {[0, 1, 2, 3].map((i) => (
                 <ChannelCardSkeleton key={i} delay={i * 90} />
@@ -1536,18 +1528,18 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               })}
 
             </div>
+          ) : recommendationPending ? (
+            <SectionLoading
+              title="Ετοιμάζουμε τα channel briefs"
+              text="Παράγονται μαζί με τη μίξη καναλιών στο Commercial Strategy. Λίγα δευτερόλεπτα."
+            />
           ) : (
             <div className="flex items-center justify-center py-16">
               <div className="text-center">
-                <p className="text-sm text-[#4A4A4A]">Αναμονή AI συστάσεων...</p>
-                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Δημιουργήστε channel briefs βάσει της στρατηγικής σας</p>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => generateRecommendation()}
-                  disabled={aiGenerating}
-                >
-                  {aiGenerating ? <><Spinner size="sm" className="mr-1" /> Δημιουργία...</> : 'Δημιουργία AI Briefs'}
+                <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν channel briefs για αυτή τη στρατηγική</p>
+                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Παράγονται μαζί με τη στρατηγική στο Commercial Strategy</p>
+                <Button variant="primary" size="sm" onClick={() => onSectionChange?.('strategy')}>
+                  Άνοιγμα Commercial Strategy
                 </Button>
               </div>
             </div>
@@ -1722,7 +1714,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
       {/* Downloads Hub */}
       <DownloadsHub
-        segments={rfmSegments}
+        segments={strategySegments}
+        unresolvedSegmentNames={recommendedSegments.filter((s) => !s.resolved).map((s) => s.name)}
+        customersWriter={segmentCustomersWriterFor(segmentsDataSource)}
+        isLoading={segmentsLoading}
         brandName={currentBrand?.name}
         brandId={currentBrand?.id}
         channelRecommendation={aiRecommendation}
@@ -1749,17 +1744,35 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               <div className="space-y-2 text-sm text-[#4A4A4A]">
                 <div className="flex justify-between">
                   <span>{feed === 'Ads Feed' ? 'Active variants' : 'Parent/model rows'}</span>
-                  <span className="font-mono">{formatNumber(feed === 'Ads Feed' ? adsFeedCount : decisionProductRows.length)}</span>
+                  {/* The parent/model count needs the feed rows themselves; on a large catalog those
+                      load when the owner asks, so say that instead of showing a confident 0. */}
+                  <span className="font-mono">
+                    {feed === 'Ads Feed'
+                      ? formatNumber(adsFeedCount)
+                      : feedRowsPending
+                        ? (insightFeedLoading ? 'φόρτωση…' : '—')
+                        : formatNumber(decisionProductRows.length)}
+                  </span>
                 </div>
                 <div className="text-[11px] text-[#9CA3AF] leading-snug">
                   Default export excludes zero-stock / inactive historical SKUs.
+                  {feed !== 'Ads Feed' && feedRowsPending && !insightFeedLoading && ' Οι γραμμές υπολογίζονται στην προεπισκόπηση / εξαγωγή.'}
                 </div>
                 {feed === 'Ads Feed' && (
                   <>
                     <div className="flex justify-between">
                       <span>Magento enrichment</span>
+                      {/* The catalog is fetched when the Ads Feed is previewed or exported, so
+                          before that there is no count to give — «0 SKUs» would read as "Magento
+                          returned nothing". */}
                       <span className={`font-mono ${magentoEnrichedCount > 0 ? 'text-emerald-600' : 'text-[#9CA3AF]'}`}>
-                        {magentoConnector.connected ? `${formatNumber(magentoEnrichedCount)} SKUs` : '— off'}
+                        {!magentoConnector.connected
+                          ? '— off'
+                          : magentoLoading
+                            ? 'φόρτωση…'
+                            : magentoEnrichedCount > 0
+                              ? `${formatNumber(magentoEnrichedCount)} SKUs`
+                              : 'στην εξαγωγή'}
                       </span>
                     </div>
                     <div className="text-[11px] text-[#9CA3AF] leading-snug pt-1">
@@ -1772,8 +1785,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 )}
               </div>
               <div className="flex gap-2 mt-4">
-                <Button variant="ghost" size="sm" icon={<Eye size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); setPreviewFeed(feed); }}>Προεπισκόπηση</Button>
-                <Button variant="secondary" size="sm" icon={<Download size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); setSelectedFeed(feed); setShowExportModal(true); }}>Εξαγωγή</Button>
+                <Button variant="ghost" size="sm" icon={<Eye size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); ensureFeedRequested(); setPreviewFeed(feed); }}>Προεπισκόπηση</Button>
+                <Button variant="secondary" size="sm" icon={<Download size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); ensureFeedRequested(); setSelectedFeed(feed); setShowExportModal(true); }}>Εξαγωγή</Button>
               </div>
             </motion.div>
           ))}
@@ -1834,7 +1847,13 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 title={<h2 className="text-xl font-bold text-[var(--text-heading)]">Προεπισκόπηση feed</h2>}
                 description={
                   <p className="text-sm text-[#4A4A4A]">
-                    {previewFeed} · {formatNumber(previewFeed === 'Ads Feed' ? adsFeedCount : decisionProductRows.length)} ενεργές γραμμές · δείγμα {Math.min(8, previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} γραμμών
+                    {previewFeed}
+                    {previewFeed === 'Ads Feed'
+                      ? ` · ${formatNumber(adsFeedCount)} ενεργές γραμμές`
+                      : feedRowsPending
+                        ? ''
+                        : ` · ${formatNumber(decisionProductRows.length)} ενεργές γραμμές`}
+                    {feedProducts.length > 0 && ` · δείγμα ${Math.min(8, previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} γραμμών`}
                   </p>
                 }
                 actions={
@@ -1844,7 +1863,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 }
               />
               <div className="p-6 overflow-auto flex-1 min-h-0">
-                {feedProducts.length === 0 ? (
+                {feedProducts.length === 0 && feedRowsPending ? (
+                  <SectionLoading
+                    title="Φορτώνουμε τις γραμμές του feed"
+                    text="Ο κατάλογος είναι μεγάλος, γι' αυτό οι γραμμές κατεβαίνουν όταν τις ζητήσετε και όχι σε κάθε άνοιγμα της σελίδας."
+                  />
+                ) : feedProducts.length === 0 ? (
                   <p className="text-sm text-[#4A4A4A] text-center py-8">Δεν υπάρχουν προϊόντα στο catalog για προεπισκόπηση.</p>
                 ) : (
                   (() => {
@@ -1945,6 +1969,16 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
 interface DownloadsHubProps {
   segments: import('../../types').RFMSegment[];
+  /** Segments the strategy names that no longer exist in the brand's data — said out loud in
+   * the tile text instead of quietly exporting fewer than promised. */
+  unresolvedSegmentNames?: string[];
+  /** The `segment_customers` writer behind `segments`, so the customer lists export the audience
+   * the cards show and not every writer's rows for the same segment ids. */
+  customersWriter: SegmentCustomersWriter | null;
+  /** True while `useSegments` is still resolving. Until it settles the hook serves the imported
+   * fallback set, so the hub would mount, swap its numbers, and — for one window — export the ERP
+   * writer's audience under the e-shop's segment names. */
+  isLoading?: boolean;
   brandName?: string;
   channelRecommendation: ChannelRecommendation | null;
   activeStrategy: ReturnType<typeof useActiveStrategy>['activeStrategy'];
@@ -1954,8 +1988,14 @@ interface DownloadsHubProps {
   brandId?: string;
 }
 
-function DownloadsHub({ segments, brandName, channelRecommendation, activeStrategy, scenarioId, monthlyBudget, toast, brandId }: DownloadsHubProps) {
+function DownloadsHub({ segments, unresolvedSegmentNames = [], customersWriter, isLoading = false, brandName, channelRecommendation, activeStrategy, scenarioId, monthlyBudget, toast, brandId }: DownloadsHubProps) {
+  const segmentScopeLabel =
+    unresolvedSegmentNames.length > 0
+      ? `${segments.length} από ${segments.length + unresolvedSegmentNames.length} segments της στρατηγικής (${unresolvedSegmentNames.join(', ')}: δεν υπάρχει πια)`
+      : `${segments.length} segments της στρατηγικής`;
   const [exporting, setExporting] = useState<string | null>(null);
+  /** Customer lists run to tens of thousands of rows; a spinner alone reads as a hung page. */
+  const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null);
   const hasSegments = segments.length > 0;
 
   type Fmt = 'xlsx' | 'csv';
@@ -1963,13 +2003,22 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
   const handleExportCustomerLists = async (fmt: Fmt = 'csv') => {
     if (!brandId || !hasSegments) return;
     setExporting('customers');
+    setExportProgress({ done: 0, total: 0 });
     try {
-      const { count } = await exportAllSegmentCustomerLists(brandId, segments, brandName, fmt);
+      const { count } = await exportAllSegmentCustomerLists(
+        brandId,
+        segments,
+        brandName,
+        fmt,
+        (done, total) => setExportProgress({ done, total }),
+        customersWriter,
+      );
       toast.success(`${count} customers exported (.${fmt})`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed');
     }
     setExporting(null);
+    setExportProgress(null);
   };
 
   const handleExportAllPacks = async (fmt: Fmt = 'xlsx') => {
@@ -2001,6 +2050,24 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
     setExporting(null);
   };
 
+  /** Same loader the audience card above uses: the hub keeps its frame while the analysis lands,
+   * instead of appearing with the fallback segments and re-rendering a moment later. */
+  if (isLoading) {
+    return (
+      <Card padding="lg">
+        <CardHeader
+          title="Downloads Hub"
+          subtitle="Έτοιμα action plans & templates για άμεση εκτέλεση"
+          icon={<FileDown size={20} className="text-[var(--nts-accent)]" />}
+        />
+        <SectionLoading
+          title="Ετοιμάζουμε τα αρχεία της στρατηγικής"
+          text="Περιμένουμε τα segments της Ανάλυσης για να εξάγουμε ακριβώς το κοινό που δείχνουν οι κάρτες. Λίγα δευτερόλεπτα."
+        />
+      </Card>
+    );
+  }
+
   if (!hasSegments) return null;
 
   return (
@@ -2019,9 +2086,9 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
               <Users size={22} className="text-[var(--nts-accent-text)]" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-[#1A1A1A] text-sm">All Segments Action Pack</h3>
+              <h3 className="font-semibold text-[#1A1A1A] text-sm">Action Pack στρατηγικής</h3>
               <p className="text-xs text-[#4A4A4A] mt-0.5">
-                {segments.length} segments · Profile, Channel Plan & Templates
+                {segmentScopeLabel} · Profile, Channel Plan & Templates
               </p>
             </div>
           </div>
@@ -2070,7 +2137,7 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
             <div className="flex-1">
               <h3 className="font-semibold text-[#1A1A1A] text-sm">Customer Lists ανά Segment</h3>
               <p className="text-xs text-[#4A4A4A] mt-0.5">
-                Customer IDs, emails, RFM scores — έτοιμα για Custom Audiences & email campaigns
+                {segmentScopeLabel} · Customer IDs, emails, RFM scores — έτοιμα για Custom Audiences & email campaigns
               </p>
             </div>
             <div className="flex gap-2">
@@ -2082,6 +2149,23 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
               </button>
             </div>
           </div>
+          {exporting === 'customers' && exportProgress && (
+            <div className="mt-3">
+              <div className="mb-1 flex items-center justify-between text-xs text-[#4A4A4A]">
+                <span>
+                  {exportProgress.total > 0
+                    ? `Προετοιμασία αρχείου — ${formatNumber(exportProgress.done)} από ${formatNumber(exportProgress.total)} πελάτες`
+                    : 'Ανάκτηση πελατών…'}
+                </span>
+                {exportProgress.total > 0 && (
+                  <span className="font-mono">
+                    {Math.round((exportProgress.done / exportProgress.total) * 100)}%
+                  </span>
+                )}
+              </div>
+              <ProgressBar value={exportProgress.done} max={Math.max(1, exportProgress.total)} color="#10B981" size="sm" />
+            </div>
+          )}
         </div>
       )}
 

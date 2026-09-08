@@ -1,3 +1,4 @@
+import { segmentCustomersWriterFor } from '../../utils/segmentCustomersWriter';
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -235,10 +236,14 @@ export function RFMAnalysis() {
     if (!currentBrand?.id) return;
     try {
       if (segment) {
-        const { count } = await exportSegmentCustomerList(currentBrand.id, segment, currentBrand.name, fmt);
+        const { count } = await exportSegmentCustomerList(
+          currentBrand.id, segment, currentBrand.name, fmt, undefined, segmentCustomersWriterFor(rfmDataSource),
+        );
         toast.success(`${count} customers exported (.${fmt})`);
       } else {
-        const { count } = await exportAllSegmentCustomerLists(currentBrand.id, rfmSegments, currentBrand.name, fmt);
+        const { count } = await exportAllSegmentCustomerLists(
+          currentBrand.id, rfmSegments, currentBrand.name, fmt, undefined, segmentCustomersWriterFor(rfmDataSource),
+        );
         toast.success(`${count} customers exported (.${fmt})`);
       }
     } catch (e) {
@@ -1241,10 +1246,15 @@ function SegmentDetail({
                   ? 'Δεν υπάρχουν δεδομένα γραμμών προϊόντων για αυτό το segment'
                   : 'Δεν υπάρχουν δεδομένα για αυτή τη διάσταση'}
               </p>
-              {segmentsDataSource === 'ecommerce' && (
+              {segmentsDataSource === 'ecommerce' ? (
                 <p className="mt-2 max-w-md text-xs leading-relaxed text-[var(--text-muted)]">
                   Το RFM από e-shop χρειάζεται γραμμές παραγγελίας (SKU/title/product id). Μετά από πλήρες sync των connectors,
                   εδώ εμφανίζονται πραγματικές κατηγορίες και — όταν φορτώνει ο catalog — μάρκες/υποκατηγορίες από το κατάστημα και το ERP.
+                </p>
+              ) : (
+                <p className="mt-2 max-w-md text-xs leading-relaxed text-[var(--text-muted)]">
+                  Το mix κατανάλωσης υπολογίζεται από τις γραμμές ειδών του αρχείου εισαγωγής. Ανεβάστε αρχείο παραστατικών
+                  με στήλες ειδών ανά γραμμή (π.χ. κατηγορία, ομάδα, μάρκα/προμηθευτής, κωδικός, αξία) για να εμφανιστεί εδώ.
                 </p>
               )}
             </div>
@@ -1266,6 +1276,10 @@ function SegmentDetail({
               <p className="text-xs text-[var(--text-muted)] leading-relaxed">
                 Δεν εντοπίστηκε brand στο catalog για τις γραμμές του segment (ή όλα ως «Λοιπά»).
               </p>
+            ) : behavioral && segmentsDataSource !== 'ecommerce' ? (
+              <p className="text-xs text-[#6B7280] leading-relaxed">
+                Το αρχείο εισαγωγής δεν περιείχε στήλη μάρκας/προμηθευτή ανά γραμμή.
+              </p>
             ) : (
               <p className="text-xs text-[var(--text-secondary)]">Δεν υπάρχουν δεδομένα</p>
             )}
@@ -1282,6 +1296,10 @@ function SegmentDetail({
             ) : fromComputedOrders && hasCatalogRollups ? (
               <p className="text-xs text-[var(--text-muted)] leading-relaxed">
                 Δεν υπάρχουν υποκατηγορίες στο catalog (π.χ. δεύτερο επίπεδο Woo ή ERP subcategory).
+              </p>
+            ) : behavioral && segmentsDataSource !== 'ecommerce' ? (
+              <p className="text-xs text-[#6B7280] leading-relaxed">
+                Το αρχείο εισαγωγής δεν περιείχε στήλη υποομάδας/υποκατηγορίας ανά γραμμή.
               </p>
             ) : (
               <p className="text-xs text-[var(--text-secondary)]">Δεν υπάρχουν δεδομένα</p>

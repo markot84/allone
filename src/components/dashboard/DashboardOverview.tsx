@@ -28,12 +28,10 @@ import { useSegments } from '../../hooks/useSegments';
 import { useOrganic } from '../../hooks/useOrganic';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
-import { useSuppliers } from '../../hooks/useSuppliers';
 import { useBrand } from '../../hooks/useBrand';
 import { prefersEshopRevenuePerformance } from '../../utils/revenueSource';
-import { buildSupplierTodMap } from '../../utils/productUtils';
 import { useProductAggregates, useSegmentAggregates } from '../../hooks/useAggregates';
-import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
+import { useProductIntelligenceAggregate, useProductIntelligenceAggregateDoc } from '../../hooks/useProductIntelligenceAggregate';
 import { useProcurementSignals } from '../../hooks/useProcurementSignals';
 import { usePlan } from '../../hooks/usePlan';
 import { usePeriodScopedCampaigns } from '../../hooks/usePeriodScopedCampaigns';
@@ -69,6 +67,8 @@ import { useAiInsightsData } from '../insights/useAiInsightsData';
 import { useAutomationRunner } from '../../hooks/useAutomationRunner';
 import { useAutomationAlerts } from '../../hooks/useAutomation';
 import { MorningBriefing } from './MorningBriefing';
+import { computeBriefingYearOverYear } from '../../services/morningBriefing';
+import { shiftPeriodByYears } from '../../utils/periodComparison';
 import { eachDateInclusiveLocal, computeMarketingOverheadForPeriod } from '../../utils/marketingCostPeriod';
 import { getCostingReal12mTurnover } from '../../utils/procurement12mTurnover';
 import { coerceToDate } from '../../utils/coerceDate';
@@ -182,12 +182,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     brandId: null,
     segments: [],
   });
-  const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 }, { staticFirstPage: true });
-  const products = productIntelligence.page?.products ?? [];
+  const productIntelligence = useProductIntelligenceAggregateDoc();
+  /** Named low-stock products for the AI briefing prose — the PI bucket, not the 'all' page's first rows. */
+  const lowStockBucket = useProductIntelligenceAggregate('low', 1, {}, { staticFirstPage: true });
   const { isEnterprise } = usePlan();
   const { signalsBySku: procurementSignals } = useProcurementSignals();
   const { productStats } = useProductAggregates();
-  const { suppliers } = useSuppliers();
   const { totalOrganicRevenue, byMonth: organicByMonth, hasOrganicRevenue: hasOrganic, isLoading: organicLoading } = useOrganic();
   const { campaigns, hasImported: hasCampaigns, isLoading: campaignsLoading } = useCampaigns();
   const { activeStrategy, getStrategyName } = useActiveStrategy();
@@ -226,10 +226,6 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const showSegmentsStaleSourceNote =
     !segmentsLoading && rfmSegments.length > 0 && segmentsDataSource !== 'ecommerce';
 
-  const supplierTodMap = useMemo(
-    () => buildSupplierTodMap(suppliers, currentBrand?.inventoryThresholds?.defaultTod),
-    [suppliers, currentBrand?.inventoryThresholds?.defaultTod]
-  );
   const productsCount = productIntelligence.aggregate?.totalCount ?? productStats?.totalSkus ?? 0;
   const hasAnyData =
     hasOrganic ||
@@ -404,6 +400,46 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     [ecommHist.ordersByDay, periodDates.fromDate, periodDates.toDate]
   );
 
+  /** Same window one year back — every previous figure is derived exactly like its current twin. */
+  const previousPeriodDates = useMemo(
+    () => shiftPeriodByYears({ fromDate: periodDates.fromDate, toDate: periodDates.toDate }, -1),
+    [periodDates.fromDate, periodDates.toDate]
+  );
+
+  const previousPeriodCampaigns = usePeriodScopedCampaigns(campaignsTyped, previousPeriodDates);
+
+  const previousGa4OrganicEffective = useMemo(
+    () =>
+      mergeGa4OrganicDailyWithChannelFallback(
+        ga4.organicRevenueByDay,
+        ga4.totalOrganicRevenueFromChannels,
+        ga4.dateRange ?? undefined,
+        previousPeriodDates.fromDate,
+        previousPeriodDates.toDate
+      ),
+    [
+      ga4.organicRevenueByDay,
+      ga4.totalOrganicRevenueFromChannels,
+      ga4.dateRange?.start,
+      ga4.dateRange?.end,
+      previousPeriodDates.fromDate,
+      previousPeriodDates.toDate,
+    ]
+  );
+
+  const previousOrganicRevenue = useMemo(() => {
+    const rows = buildRoiTrendSeriesDaily(
+      mergeOrganicByMonthWithGa4(organicByMonth, previousGa4OrganicEffective),
+      [],
+      undefined,
+      previousPeriodDates.fromDate,
+      previousPeriodDates.toDate,
+      false,
+      previousGa4OrganicEffective
+    );
+    return rows.reduce((s, r) => s + r.organic, 0);
+  }, [organicByMonth, previousGa4OrganicEffective, previousPeriodDates.fromDate, previousPeriodDates.toDate]);
+
   /** AOV from real e-shop data (revenue/orders of the period). Reliable, no ad-platform double-counting. */
   const eshopAovInPeriod = useMemo(
     () => (ordersInPeriod > 0 ? storeRevenueInPeriod / ordersInPeriod : 0),
@@ -435,6 +471,28 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       conversions: sum.conversions,
       bounceRate: sum.bounceRate / days.length,
       hasData: true,
+    };
+  }, [ga4.dailyEntries, periodDates.fromDate, periodDates.toDate]);
+
+  /** `ga4.weeklyChange` compares the last 7 days of the WHOLE GA4 series against the 7 before
+   *  them, wherever the selected period sits. Feeding that to the briefing put a delta from a
+   *  different fortnight next to period figures — and the model opened with it as the most
+   *  urgent finding. Anchor it to the end of the selected period instead. */
+  const ga4WeeklyChangeInPeriod = useMemo(() => {
+    const days = ga4.dailyEntries.filter(
+      (d) => d.date >= periodDates.fromDate && d.date <= periodDates.toDate
+    );
+    if (days.length < 14) return null;
+    const last7 = days.slice(-7);
+    const prev7 = days.slice(-14, -7);
+    const sum = (arr: typeof days, pick: (d: typeof days[number]) => number) =>
+      arr.reduce((acc, d) => acc + (Number(pick(d)) || 0), 0);
+    const pctChange = (previous: number, current: number) =>
+      previous > 0 ? ((current - previous) / previous) * 100 : null;
+    return {
+      sessions: pctChange(sum(prev7, (d) => d.sessions), sum(last7, (d) => d.sessions)),
+      users: pctChange(sum(prev7, (d) => d.totalUsers), sum(last7, (d) => d.totalUsers)),
+      conversions: pctChange(sum(prev7, (d) => d.conversions), sum(last7, (d) => d.conversions)),
     };
   }, [ga4.dailyEntries, periodDates.fromDate, periodDates.toDate]);
 
@@ -624,6 +682,57 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     storeRevenueInPeriod > 0 &&
     !ecommAggregateFresh &&
     (ecommDaysSinceLatestRevenue ?? 0) >= 2;
+
+  /** Stock figures for the AI briefing come from Product Intelligence and are NOT recomputed:
+   *  the dashboard only holds the first page of the catalog, so recounting there reported a
+   *  150-row sample as if it were the whole catalog. groupedSummary matches the PI page's
+   *  default (parent-grouped) view, same rule as AI Insights (PER-336). */
+  const briefingInventory = useMemo(() => {
+    const aggregate = productIntelligence.aggregate;
+    const summary = aggregate?.groupedSummary ?? aggregate?.summary;
+    if (!aggregate || !summary) return null;
+    const costValue = summary.dead_stock.cost_value ?? 0;
+    return {
+      totalProducts: summary.total_skus || aggregate.totalCount,
+      deadStock: summary.dead_stock.count,
+      lowStock: summary.low_stock.count,
+      excessStock: summary.excess_stock.count,
+      // PER-317: cost×stock is the real tied capital; retail×stock is the fallback for older aggregates.
+      deadStockCapital: costValue > 0 ? costValue : summary.dead_stock.value,
+      deadStockCapitalIsCost: costValue > 0,
+      lowStockTopNames: (lowStockBucket.page?.products ?? [])
+        .slice(0, 5)
+        .map((p) => p.name)
+        .filter((n): n is string => !!n),
+    };
+  }, [productIntelligence.aggregate, lowStockBucket.page?.products]);
+
+  const briefingYearOverYear = useMemo(
+    () =>
+      computeBriefingYearOverYear({
+        period: { fromDate: periodDates.fromDate, toDate: periodDates.toDate },
+        ecommerceSourceActive: enabledModules.ecommerce && !!ecomm.hasData,
+        revenueByDay: ecommRevenueByDayRecord,
+        ordersByDay: ecommHist.ordersByDay,
+        previousCampaigns: previousPeriodCampaigns,
+        ga4DailyEntries: ga4.dailyEntries,
+        previousOrganicRevenue,
+        historyStartDate: currentBrand?.historyStartDate,
+      }),
+    [
+      periodDates.fromDate,
+      periodDates.toDate,
+      enabledModules.ecommerce,
+      ecomm.hasData,
+      ecommRevenueByDayRecord,
+      ecommHist.ordersByDay,
+      previousPeriodCampaigns,
+      ga4.dailyEntries,
+      previousOrganicRevenue,
+      currentBrand?.historyStartDate,
+    ]
+  );
+
   // Inventory value: Enterprise from procurement_signals (sum tied_capital = stock x cost; PI is
   // hidden there); Growth from the PI aggregate (procurement) or the products aggregate (ERP/import).
   const procurementInventoryValue = useMemo(() => {
@@ -1333,13 +1442,17 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   <MorningBriefing
                     brandId={currentBrand.id}
                     brandName={currentBrand.name}
-                    products={products}
+                    inventory={briefingInventory}
                     campaigns={periodCampaigns}
+                    campaignsLoaded={!campaignsLoading}
                     segments={dashboardRfmSegments}
                     totalOrganicRevenue={organicRevenueInPeriod}
-                    ga4={{ totals: ga4.totals, weeklyChange: ga4.weeklyChange, hasData: ga4.hasData }}
+                    ga4={{
+                      totals: ga4TotalsInPeriod,
+                      weeklyChange: ga4WeeklyChangeInPeriod,
+                      hasData: ga4.hasData && ga4TotalsInPeriod.hasData,
+                    }}
                     alerts={automationAlerts}
-                    supplierTodMap={supplierTodMap}
                     metricsReady={briefingReady}
                     financeKey={briefingFinanceKey}
                     ecommerce={{
@@ -1356,9 +1469,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                         suspectedSyncGap: hasSuspectedEcommSyncGap,
                       },
                     }}
+                    yearOverYear={briefingYearOverYear}
                     onSectionChange={onSectionChange}
                     hasAnyData={hasAnyData}
-                    period={dashPeriod}
+                    /** Cache scope. A bare 'custom' collides across ranges: the briefing is cached
+                     *  per `${day}:${period}`, so two different custom ranges on the same day shared
+                     *  one document and the second was served the first one's text. */
+                    period={dashPeriod === 'custom' ? `custom:${periodDates.fromDate}:${periodDates.toDate}` : dashPeriod}
                     periodLabel={
                       dashPeriod === 'custom'
                         ? `${periodDates.fromDate} — ${periodDates.toDate}`

@@ -73,11 +73,22 @@ function metricsFrom(data: BriefingData): KnownMetric[] {
   push({ value: rev.trueRoas, label: 'Συνολική απόδοση δαπάνης', source: 'Συνολικά έσοδα ÷ διαφημιστική δαπάνη', section: 'campaigns', scale: 'small' });
 
   const inv = data.inventory;
-  push({ value: inv.totalProducts, label: 'Προϊόντα στον κατάλογο', source: 'Product Intelligence', section: 'products', scale: 'absolute' });
-  push({ value: inv.deadStock, label: 'Προϊόντα σε νεκρό απόθεμα', source: 'Product Intelligence', section: 'products', hashQuery: 'stock=dead', scale: 'absolute' });
-  push({ value: inv.deadStockValue, label: 'Αξία νεκρού αποθέματος', source: 'Product Intelligence', section: 'products', hashQuery: 'stock=dead', scale: 'absolute' });
-  push({ value: inv.lowStock, label: 'Προϊόντα σε χαμηλό απόθεμα', source: 'Product Intelligence', section: 'products', hashQuery: 'stock=low', scale: 'absolute' });
-  push({ value: inv.excessStock, label: 'Προϊόντα σε πλεόνασμα', source: 'Product Intelligence', section: 'products', hashQuery: 'stock=excess', scale: 'absolute' });
+  if (inv) {
+    push({ value: inv.totalProducts, label: 'Προϊόντα στον κατάλογο', source: 'Product Intelligence', section: 'products', scale: 'absolute' });
+    push({ value: inv.deadStock, label: 'Προϊόντα σε νεκρό απόθεμα', source: 'Product Intelligence', section: 'products', hashQuery: 'stock=dead', scale: 'absolute' });
+    push({
+      value: inv.deadStockCapital,
+      // The figure is cost×stock or retail×stock depending on what PI could resolve; the popover
+      // must not call one the other.
+      label: inv.deadStockCapitalIsCost ? 'Δεσμευμένο κεφάλαιο σε νεκρό απόθεμα' : 'Αξία νεκρού αποθέματος',
+      source: 'Product Intelligence',
+      section: 'products',
+      hashQuery: 'stock=dead',
+      scale: 'absolute',
+    });
+    push({ value: inv.lowStock, label: 'Προϊόντα σε χαμηλό απόθεμα', source: 'Product Intelligence', section: 'products', hashQuery: 'stock=low', scale: 'absolute' });
+    push({ value: inv.excessStock, label: 'Προϊόντα σε πλεόνασμα', source: 'Product Intelligence', section: 'products', hashQuery: 'stock=excess', scale: 'absolute' });
+  }
 
   const seg = data.segments;
   push({ value: seg.totalCustomers, label: 'Πελάτες στην ανάλυση', source: 'Data Analysis (RFM)', section: 'rfm', scale: 'absolute' });
@@ -210,7 +221,7 @@ function entitySpans(text: string, data: BriefingData, context: TokenizeContext)
   for (const campaign of context.campaigns ?? []) add(campaign.name, 'Καμπάνια', 'campaigns');
   add(data.campaigns.topPerformer?.name, 'Καμπάνια', 'campaigns');
   add(data.campaigns.worstPerformer?.name, 'Καμπάνια', 'campaigns');
-  for (const name of data.inventory.lowStockTopNames) {
+  for (const name of data.inventory?.lowStockTopNames ?? []) {
     add(name, 'Προϊόν', 'products', `q=${encodeURIComponent(name)}`);
   }
   for (const platform of context.platforms ?? []) add(platform, 'Κανάλι πώλησης', 'ecommerce');

@@ -2,11 +2,11 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { buildAdvisorySystemPrompt } from '../data/aiAdvisoryFramework';
 import { callGemini } from './geminiProxy';
-import { classifyStockHealth, getProductTod } from '../utils/productUtils';
-import { calculateCampaignMetrics } from '../utils/roiUtils';
+import { calculateCampaignMetrics, sumDailyRevenueInPeriod } from '../utils/roiUtils';
+import { formatIsoRangeLabelGr, isIsoDay, shiftPeriodByYears } from '../utils/periodComparison';
 import { formatCurrency, formatNumber } from '../utils/format';
 import { parseJsonObject } from '../utils/aiJson';
-import type { Product, Campaign, RFMSegment, AutomationAlert } from '../types';
+import type { Campaign, RFMSegment, AutomationAlert } from '../types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,9 @@ export interface BriefingData {
     totalSpend: number;
     roas: number;
     campaignCount: number;
+    /** False while the campaign query is still in flight. An empty list then means "not loaded",
+     * never "no advertising ran" — the prompt must not reason from it. */
+    campaignsLoaded: boolean;
   };
   dataQuality: {
     ecommerceLatestPositiveRevenueDay: string | null;
@@ -39,14 +42,9 @@ export interface BriefingData {
     conversions: number;
     weeklyChange: { sessions: number | null; users: number | null; conversions: number | null } | null;
   } | null;
-  inventory: {
-    totalProducts: number;
-    deadStock: number;
-    lowStock: number;
-    excessStock: number;
-    deadStockValue: number;
-    lowStockTopNames: string[];
-  };
+  /** Null when Product Intelligence has no aggregate for the brand — the briefing then says
+    * nothing about stock rather than inventing figures. */
+  inventory: BriefingInventory | null;
   segments: {
     total: number;
     totalCustomers: number;
@@ -64,6 +62,37 @@ export interface BriefingData {
     topAlerts: string[];
   };
   brandName: string;
+  yearOverYear?: BriefingYearOverYear;
+}
+
+/** Inventory exactly as Product Intelligence reports it: whole catalog, the brand's stock-health
+ * thresholds, parent grouping — the same numbers the Product Intelligence page shows. The briefing
+ * must never recount these from a page of products. */
+export interface BriefingInventory {
+  totalProducts: number;
+  deadStock: number;
+  lowStock: number;
+  excessStock: number;
+  /** Capital sitting in dead stock. */
+  deadStockCapital: number;
+  /** True when `deadStockCapital` is cost×stock (δεσμευμένο κεφάλαιο); false = retail×stock. */
+  deadStockCapitalIsCost: boolean;
+  /** Names from the PI "low stock" bucket, for the prose. */
+  lowStockTopNames: string[];
+}
+
+export interface BriefingYearOverYear {
+  previousPeriodLabel: string;
+  previous: {
+    revenue: number;
+    orders: number;
+    /** Ad cost — the Campaigns table's Cost column (`amount_spent`), not budgeted marketing overhead. */
+    spend: number;
+    /** True ROAS: e-shop turnover ÷ ad spend. Never the platforms' attributed ROAS. */
+    trueRoas: number;
+    sessions: number;
+  };
+  hasPreviousData: boolean;
 }
 
 export interface MetricsSnapshot {
@@ -98,7 +127,6 @@ export interface CachedBriefing extends BriefingResult {
 // ── Data Collector ───────────────────────────────────────────────────────────
 
 export function collectBriefingData(params: {
-  products: Product[];
   campaigns: Campaign[];
   segments: RFMSegment[];
   /** Organic $ for the same period as the campaigns / e-shop in the snapshot (e.g. dashboard period). */
@@ -110,7 +138,10 @@ export function collectBriefingData(params: {
   };
   alerts: AutomationAlert[];
   brandName: string;
-  supplierTodMap?: Map<string, number>;
+  /** False while campaigns are still loading; defaults to true. See `revenue.campaignsLoaded`. */
+  campaignsLoaded?: boolean;
+  /** From Product Intelligence — see `BriefingInventory`. Null/omitted ⇒ no stock section. */
+  inventory?: BriefingInventory | null;
   ecommerce?: {
     hasData: boolean;
     totalRevenue: number;
@@ -125,19 +156,10 @@ export function collectBriefingData(params: {
       suspectedSyncGap: boolean;
     };
   };
+  /** Same window one year back — see `computeBriefingYearOverYear`. Omitted when not comparable. */
+  yearOverYear?: BriefingYearOverYear;
 }): BriefingData {
-  const { products, campaigns, segments, totalOrganicRevenue, ga4, alerts, brandName, supplierTodMap, ecommerce } = params;
-
-  const classify = (p: Product) => classifyStockHealth(p, getProductTod(p, supplierTodMap));
-  const deadStock = products.filter(p => classify(p) === 'dead');
-  const lowStock = products.filter(p => classify(p) === 'low');
-  const excessStock = products.filter(p => classify(p) === 'excess');
-  const deadStockValue = deadStock.reduce((sum, p) => sum + (p.price || 0) * (p.stock_level || 0), 0);
-
-  const lowStockTopNames = lowStock
-    .sort((a, b) => (b.revenue_period || 0) - (a.revenue_period || 0))
-    .slice(0, 5)
-    .map(p => p.name);
+  const { campaigns, segments, totalOrganicRevenue, ga4, alerts, brandName, campaignsLoaded, inventory, ecommerce, yearOverYear } = params;
 
   const metrics = calculateCampaignMetrics(campaigns);
   const ecommerceSourceActive = Boolean(ecommerce?.hasData);
@@ -174,6 +196,7 @@ export function collectBriefingData(params: {
       totalSpend: metrics.totalSpend,
       roas: metrics.roas,
       campaignCount: campaigns.length,
+      campaignsLoaded: campaignsLoaded ?? true,
     },
     dataQuality: {
       ecommerceLatestPositiveRevenueDay: ecommerce?.dataFreshness?.latestPositiveRevenueDay ?? null,
@@ -189,14 +212,7 @@ export function collectBriefingData(params: {
       conversions: ga4.totals.conversions,
       weeklyChange: ga4.weeklyChange,
     } : null,
-    inventory: {
-      totalProducts: products.length,
-      deadStock: deadStock.length,
-      lowStock: lowStock.length,
-      excessStock: excessStock.length,
-      deadStockValue,
-      lowStockTopNames,
-    },
+    inventory: inventory ?? null,
     segments: {
       total: segments.length,
       totalCustomers: segments.reduce((s, seg) => s + (seg.count || 0), 0),
@@ -211,23 +227,123 @@ export function collectBriefingData(params: {
       topAlerts: activeAlerts.slice(0, 3).map(a => a.title),
     },
     brandName,
+    ...(yearOverYear ? { yearOverYear } : {}),
+  };
+}
+
+/** The one revenue figure the briefing treats as headline, in every place it is quoted:
+ * the e-shop order turnover when that source is active (or non-zero anyway), otherwise the
+ * organic + ads-attributed blend. Snapshot, prompt and the YoY strip must all agree. */
+export function briefingHeadlineRevenue(input: {
+  ecommerceSourceActive: boolean;
+  storeRevenue: number;
+  organicRevenue: number;
+  campaignRevenue: number;
+}): number {
+  if (input.ecommerceSourceActive) return input.storeRevenue;
+  if (input.storeRevenue > 0) return input.storeRevenue;
+  return input.organicRevenue + input.campaignRevenue;
+}
+
+// ── Year-over-Year ───────────────────────────────────────────────────────────
+
+/** Sums the day-keyed order rows inside an inclusive window. */
+function sumOrdersInPeriod(
+  ordersByDay: { date: string; orders: number }[],
+  fromDate: string,
+  toDate: string,
+): number {
+  return ordersByDay.reduce(
+    (sum, r) => (r.date >= fromDate && r.date <= toDate ? sum + (Number(r.orders) || 0) : sum),
+    0,
+  );
+}
+
+/** Sums GA4 sessions inside an inclusive window. */
+function sumSessionsInPeriod(
+  dailyEntries: { date: string; sessions: number }[],
+  fromDate: string,
+  toDate: string,
+): number {
+  return dailyEntries.reduce(
+    (sum, d) => (d.date >= fromDate && d.date <= toDate ? sum + (Number(d.sessions) || 0) : sum),
+    0,
+  );
+}
+
+/** The same window one calendar year back, measured the same way as the current period.
+ *
+ * Returns `undefined` when the comparison cannot be made at all — malformed dates, or a
+ * previous window that ends before the brand's `historyStartDate` (data we deliberately
+ * never read). A window we CAN read but that turns out empty comes back with
+ * `hasPreviousData: false`, so callers stay silent instead of reporting a false -100%. */
+export function computeBriefingYearOverYear(params: {
+  period: { fromDate: string; toDate: string };
+  /** Mirrors `BriefingData.revenue.ecommerceSourceActive` — selects the revenue measure. */
+  ecommerceSourceActive: boolean;
+  /** Full-history e-shop revenue per day (YYYY-MM-DD → €). */
+  revenueByDay?: Record<string, number>;
+  /** Full-history e-shop orders per day. */
+  ordersByDay?: { date: string; orders: number }[];
+  /** Campaigns already schedule-scoped and prorated to the PREVIOUS window. */
+  previousCampaigns?: Campaign[];
+  /** Full-history GA4 daily rows. */
+  ga4DailyEntries?: { date: string; sessions: number }[];
+  /** Organic € for the previous window, derived exactly like the current period's. */
+  previousOrganicRevenue?: number;
+  /** Brand read-side history cutoff (YYYY-MM-DD). */
+  historyStartDate?: string | null;
+}): BriefingYearOverYear | undefined {
+  const { fromDate, toDate } = params.period;
+  if (!isIsoDay(fromDate) || !isIsoDay(toDate) || fromDate > toDate) return undefined;
+
+  const previousPeriod = shiftPeriodByYears({ fromDate, toDate }, -1);
+  const cutoff = params.historyStartDate?.trim();
+  // Nothing of the previous window survives the brand's history clamp → not comparable.
+  if (cutoff && isIsoDay(cutoff) && previousPeriod.toDate < cutoff) return undefined;
+
+  const metrics = calculateCampaignMetrics(params.previousCampaigns ?? []);
+  const storeRevenue = sumDailyRevenueInPeriod(params.revenueByDay, previousPeriod.fromDate, previousPeriod.toDate);
+  const revenue = briefingHeadlineRevenue({
+    ecommerceSourceActive: params.ecommerceSourceActive,
+    storeRevenue,
+    organicRevenue: params.previousOrganicRevenue ?? 0,
+    campaignRevenue: metrics.totalRevenue,
+  });
+
+  // True ROAS — store turnover per ad euro, the measure the business decides on.
+  const trueRoas = metrics.totalSpend > 0 ? storeRevenue / metrics.totalSpend : 0;
+  const orders = sumOrdersInPeriod(params.ordersByDay ?? [], previousPeriod.fromDate, previousPeriod.toDate);
+  const sessions = sumSessionsInPeriod(params.ga4DailyEntries ?? [], previousPeriod.fromDate, previousPeriod.toDate);
+
+  return {
+    previousPeriodLabel: formatIsoRangeLabelGr(previousPeriod.fromDate, previousPeriod.toDate),
+    previous: {
+      revenue: Math.round(revenue),
+      orders,
+      spend: Math.round(metrics.totalSpend),
+      trueRoas,
+      sessions,
+    },
+    hasPreviousData: revenue > 0 || orders > 0 || metrics.totalSpend > 0 || sessions > 0,
   };
 }
 
 // ── Metrics Snapshot ─────────────────────────────────────────────────────────
 
 function extractSnapshot(data: BriefingData): MetricsSnapshot {
-  const headlineRevenue = data.revenue.ecommerceSourceActive
-    ? data.revenue.storeRevenue
-    : data.revenue.storeRevenue > 0
-      ? data.revenue.storeRevenue
-      : data.revenue.totalOrganic + data.revenue.totalCampaignRevenue;
+  const headlineRevenue = briefingHeadlineRevenue({
+    ecommerceSourceActive: data.revenue.ecommerceSourceActive,
+    storeRevenue: data.revenue.storeRevenue,
+    organicRevenue: data.revenue.totalOrganic,
+    campaignRevenue: data.revenue.totalCampaignRevenue,
+  });
   return {
     totalRevenue: headlineRevenue,
     totalSpend: data.revenue.totalSpend,
     roas: data.revenue.roas,
-    deadStock: data.inventory.deadStock,
-    lowStock: data.inventory.lowStock,
+    deadStock: data.inventory?.deadStock ?? 0,
+    lowStock: data.inventory?.lowStock ?? 0,
     criticalAlerts: data.alerts.critical,
     campaignCount: data.revenue.campaignCount,
     atRiskPct: data.segments.atRiskPct,
@@ -299,21 +415,25 @@ export function detectSignificantChange(
 
 function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateContext?: string): string {
   const sections: string[] = [];
-  const fallbackBlendedRevenue = data.revenue.totalOrganic + data.revenue.totalCampaignRevenue;
   const ecActive = data.revenue.ecommerceSourceActive;
-  const headlineRevenue = ecActive
-    ? data.revenue.storeRevenue
-    : data.revenue.storeRevenue > 0
-      ? data.revenue.storeRevenue
-      : fallbackBlendedRevenue;
+  const headlineRevenue = briefingHeadlineRevenue({
+    ecommerceSourceActive: ecActive,
+    storeRevenue: data.revenue.storeRevenue,
+    organicRevenue: data.revenue.totalOrganic,
+    campaignRevenue: data.revenue.totalCampaignRevenue,
+  });
 
   sections.push(`[BRAND] "${data.brandName}" — ΚΑΝΟΝΑΣ: Όταν αναφέρεσαι στο brand στο κείμενο, γράψε "το brand ${data.brandName}" ή "για το brand ${data.brandName}". ΠΟΤΕ μην χρησιμοποιείς άρθρο γένους (ο/η/ο) πριν από το brand name.`);
   sections.push(`[ΠΕΡΙΟΔΟΣ ΑΝΑΛΥΣΗΣ] ${periodLabel} — όλα τα νούμερα αφορούν ΜΟΝΟ αυτήν την περίοδο.`);
 
+  // True ROAS (τζίρος e-shop ÷ δαπάνη) is the measure that counts; the platforms' attributed
+  // ratio is only quoted when there is no e-shop turnover to divide, and is labelled as such.
   const evPerAdEuro =
-    data.revenue.totalSpend > 0 && data.revenue.roas > 0
-      ? `Από τα συστήματα διαφημίσεων: περίπου ${formatNumber(data.revenue.roas, 1)}€ έσοδα για κάθε 1€ διαφημιστικής δαπάνης.`
-      : 'Δεν υπάρχει αξιόπιστος λόγος έσοδα προς δαπάνη για την περίοδο.';
+    data.revenue.totalSpend > 0 && data.revenue.trueRoas > 0
+      ? `Πραγματική απόδοση δαπάνης: περίπου ${formatNumber(data.revenue.trueRoas, 1)}€ τζίρος e-shop για κάθε 1€ διαφημιστικής δαπάνης. Αυτό είναι το μέτρο που μετράει — μην αναφέρεις άλλον λόγο απόδοσης.`
+      : data.revenue.totalSpend > 0 && data.revenue.roas > 0
+        ? `Δεν υπάρχει τζίρος e-shop για να μετρηθεί πραγματική απόδοση· οι πλατφόρμες διαφημίσεων καταγράφουν περίπου ${formatNumber(data.revenue.roas, 1)}€ ανά 1€ δαπάνης, νούμερο attribution και όχι εισπράξεις.`
+        : 'Δεν υπάρχει αξιόπιστος λόγος έσοδα προς δαπάνη για την περίοδο.';
 
   if (ecActive) {
     sections.push(
@@ -336,20 +456,26 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
     );
   }
 
+  // Absence of campaign rows is a data gap, not evidence that the brand stopped advertising.
+  // Without this the model wrote "τζίρος αποκλειστικά από οργανικές πηγές, χωρίς καμία
+  // διαφημιστική υποστήριξη" purely because the connectors had delivered nothing for the window.
+  if (data.revenue.campaignCount === 0 && data.revenue.campaignsLoaded) {
+    sections.push(
+      `[ΔΙΑΦΗΜΙΣΗ — ΠΡΟΣΟΧΗ] Δεν έχουν φτάσει στο Performance+ δεδομένα καμπανιών για αυτή την περίοδο. ` +
+        'Αυτό ΔΕΝ σημαίνει ότι δεν έγινε διαφήμιση. ΜΗΝ γράψεις ότι ο τζίρος είναι αποκλειστικά οργανικός, ' +
+        'ούτε ότι δεν υπήρξε διαφημιστική υποστήριξη. Ανάφερε ότι λείπουν τα στοιχεία καμπανιών και ότι πρέπει να ελεγχθεί ο συγχρονισμός.'
+    );
+  }
+
   if (ecActive && data.revenue.storeRevenue === 0) {
     sections.push(
       `[ΗΛΕΚΤΡΟΝΙΚΟ ΚΑΤΑΣΤΗΜΑ]` +
         ` Υπάρχουν δεδομένα e-shop στο allone για την επωνυμία, αλλά ο τζίρος στην επιλεγμένη περίοδο είναι 0 (${formatNumber(data.revenue.orderCount)} παραγγελίες). Αυτό μπορεί να σημαίνει κενό διάστημα ή ότι πρέπει να ελεγχθεί sync/imports — μη συγχέεις τα ads figures με τα έσοδα καταστήματος.`
     );
   } else if (data.revenue.storeRevenue > 0) {
-    const storePerAd =
-      data.revenue.totalSpend > 0 && data.revenue.trueRoas > 0
-        ? `Από πραγματικές παραγγελίες e-shop: περίπου ${formatNumber(data.revenue.trueRoas, 1)}€ τζίρος ανά 1€ διαφήμισης.`
-        : '';
     sections.push(
       `[ΗΛΕΚΤΡΟΝΙΚΟ ΚΑΤΑΣΤΗΜΑ]` +
         ` Τζίρος από παραγγελίες: ${formatCurrency(data.revenue.storeRevenue)}, παραγγελίες: ${formatNumber(data.revenue.orderCount)}, μέσο καλάθι: ${formatCurrency(data.revenue.aov)}.` +
-        ` ${storePerAd}` +
         ` Διαφορά τζίρου καταστήματος έναντι αυτού που «φαίνεται» από τις διαφημίσεις: ${formatCurrency(data.revenue.revenueGap)} (θετικό = ο καταστηματάρχης εισπράττει περισσότερα από όσα καταγράφει μόνο το ads attribution).`
     );
   }
@@ -357,13 +483,21 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
   if (data.ga4) {
     const wc = data.ga4.weeklyChange;
     const fmt = (v: number | null) => v !== null ? `${v >= 0 ? '+' : ''}${v.toFixed(1)}%` : 'N/A';
-    sections.push(`[TRAFFIC] Sessions: ${formatNumber(data.ga4.sessions)}, Users: ${formatNumber(data.ga4.users)}, New Users: ${formatNumber(data.ga4.newUsers)}, Conversions: ${formatNumber(data.ga4.conversions)}, Bounce: ${data.ga4.bounceRate.toFixed(1)}%${wc ? `, Weekly Δ: Sessions ${fmt(wc.sessions)}, Users ${fmt(wc.users)}, Conversions ${fmt(wc.conversions)}` : ''}`);
+    sections.push(`[TRAFFIC] Sessions: ${formatNumber(data.ga4.sessions)}, Users: ${formatNumber(data.ga4.users)}, New Users: ${formatNumber(data.ga4.newUsers)}, Conversions: ${formatNumber(data.ga4.conversions)}, Bounce: ${data.ga4.bounceRate.toFixed(1)}%${wc ? `, Τάση εντός περιόδου (οι 7 τελευταίες ημέρες της περιόδου έναντι των 7 προηγούμενων): Sessions ${fmt(wc.sessions)}, Users ${fmt(wc.users)}, Conversions ${fmt(wc.conversions)}` : ''}`);
   }
 
   const inv = data.inventory;
-  sections.push(
-    `[INVENTORY] ${inv.totalProducts} προϊόντα: ${inv.deadStock} σε αδράνεια, ${inv.lowStock} με χαμηλό απόθεμα, ${inv.excessStock} με πλεονάζον απόθεμα${inv.deadStockValue > 0 ? `, Δεσμευμένο κεφάλαιο σε αδρανές απόθεμα: ${formatCurrency(inv.deadStockValue)}` : ''}${inv.lowStockTopNames.length > 0 ? `, Προϊόντα ζήτησης με χαμηλό απόθεμα: ${inv.lowStockTopNames.join(', ')}` : ''}`
-  );
+  if (inv) {
+    const capitalLabel = inv.deadStockCapitalIsCost
+      ? 'Δεσμευμένο κεφάλαιο σε αδρανές απόθεμα (κόστος κτήσης × απόθεμα)'
+      : 'Αξία αδρανούς αποθέματος σε τιμές πώλησης';
+    sections.push(
+      `[ΑΠΟΘΕΜΑ — πηγή: Product Intelligence, ίδια νούμερα με τη σελίδα· μην τα ξαναϋπολογίσεις]` +
+        ` ${formatNumber(inv.totalProducts)} προϊόντα: ${formatNumber(inv.deadStock)} σε αδράνεια, ${formatNumber(inv.lowStock)} με χαμηλό απόθεμα, ${formatNumber(inv.excessStock)} με πλεονάζον απόθεμα` +
+        `${inv.deadStockCapital > 0 ? `. ${capitalLabel}: ${formatCurrency(inv.deadStockCapital)}` : ''}` +
+        `${inv.lowStockTopNames.length > 0 ? `. Προϊόντα ζήτησης με χαμηλό απόθεμα: ${inv.lowStockTopNames.join(', ')}` : ''}`
+    );
+  }
 
   if (data.segments.total > 0) {
     sections.push(`[SEGMENTS] ${data.segments.total} segments, ${formatNumber(data.segments.totalCustomers)} πελάτες, At Risk: ${data.segments.atRiskPct.toFixed(1)}%, Champions: ${data.segments.championsPct.toFixed(1)}%`);
@@ -384,6 +518,17 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
 
   if (data.alerts.count > 0) {
     sections.push(`[ALERTS] ${data.alerts.count} ενεργά (${data.alerts.critical} critical)${data.alerts.topAlerts.length > 0 ? ': ' + data.alerts.topAlerts.join(' | ') : ''}`);
+  }
+
+  if (data.yearOverYear?.hasPreviousData) {
+    sections.push(
+      `[ΣΥΓΚΡΙΣΗ ΜΕ ΠΕΡΣΙ] Η αντίστοιχη περίοδος πέρσι ήταν ${data.yearOverYear.previousPeriodLabel}. ` +
+        `Έσοδα: ${formatCurrency(data.yearOverYear.previous.revenue)}, παραγγελίες: ${formatNumber(data.yearOverYear.previous.orders)}, ` +
+        `διαφημιστική δαπάνη (Cost καμπανιών): ${formatCurrency(data.yearOverYear.previous.spend)}, ` +
+        `πραγματική απόδοση δαπάνης: ${formatNumber(data.yearOverYear.previous.trueRoas, 1)}x, ` +
+        `sessions: ${formatNumber(data.yearOverYear.previous.sessions)}. ` +
+        'Μην αναπτύξεις αυτή τη σύγκριση στο narrative· θα προστεθεί αυτόματα στο τέλος.'
+    );
   }
 
   if (updateContext) {
@@ -437,12 +582,14 @@ export function computeBriefingDataHash(data: BriefingData): string {
     data.revenue.storeRevenue,
     data.revenue.orderCount,
     data.revenue.totalSpend,
-    data.inventory.totalProducts,
-    data.inventory.deadStock,
-    data.inventory.lowStock,
+    data.inventory?.totalProducts ?? 0,
+    data.inventory?.deadStock ?? 0,
+    data.inventory?.lowStock ?? 0,
     data.segments.totalCustomers,
     data.alerts.count,
     data.ga4?.sessions ?? 0,
+    data.yearOverYear?.previous.revenue ?? 0,
+    data.yearOverYear?.previous.orders ?? 0,
   ].join('|');
   let hash = 0;
   for (let i = 0; i < key.length; i++) {
@@ -456,7 +603,12 @@ export function computeBriefingDataHash(data: BriefingData): string {
 /** Exported so the briefing card can print "2 από 4 ενημερώσεις" without hard-coding the cap. */
 export const MAX_DAILY_GENERATIONS = 4;
 const MIN_REGEN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour cooldown between auto-updates
-const BRIEFING_CACHE_VERSION = 4;
+/** Bump whenever the PROMPT or the data feeding it changes, not only when the cached shape does:
+ * a stored briefing is prose written under the old rules and will otherwise be shown until it
+ * expires. The data hash covers changing *values*; this covers changing *logic*. Exported so the
+ * localStorage copy follows the same number — the two markers had already drifted (v5 vs v4),
+ * which is why a rewritten prompt kept serving yesterday's text. */
+export const BRIEFING_CACHE_VERSION = 6;
 
 /** Calendar day in local timezone (YYYY-MM-DD) — consistent with "today" for the user */
 export function getLocalDateKey(d = new Date()): string {

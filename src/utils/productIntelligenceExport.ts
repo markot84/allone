@@ -4,7 +4,7 @@ import { safeBrandName } from '../services/reportExport';
 import { sanitizeSpreadsheetCell, sanitizeRow } from './spreadsheetSafe';
 
 // Mirrors the PI table columns (Brand + DOS, not the raw stock_age_days the UI never shows).
-const HEADERS = ['SKU', 'Name', 'Category', 'Brand', 'Margin %', 'Stock Level', 'DOS', 'Tag', 'Price', 'Value (€)', 'Stock Capacity', 'Stock Age Days'] as const;
+const HEADERS = ['SKU', 'Name', 'Category', 'Brand', 'Margin %', 'Stock Level', 'DOS', 'Tag', 'Price', 'Avg Cost (€)', 'Value (€)', 'Stock Capacity', 'Stock Age Days'] as const;
 
 function dosCell(p: Product): string {
   const dos = getDaysOfStock(p);
@@ -34,6 +34,7 @@ function rowsFromProducts(products: Product[]) {
     dosCell(p),
     p.priority_tag || '',
     priceCell(p),
+    p.avg_cost != null ? p.avg_cost.toFixed(2) : '',
     String(valueCell(p)),
     String(p.stock_capacity || 0),
     String(getStockAgeDays(p)),
@@ -86,6 +87,7 @@ export async function downloadProductIntelligenceXlsx(products: Product[], brand
     dosCell(p),
     p.priority_tag || '',
     priceCell(p),
+    p.avg_cost != null ? p.avg_cost : '',
     valueCell(p),
     p.stock_capacity || 0,
     getStockAgeDays(p),

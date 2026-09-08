@@ -15,6 +15,7 @@ const data: BriefingData = {
     totalSpend: 6900,
     roas: 2.68,
     campaignCount: 5,
+    campaignsLoaded: true,
   },
   dataQuality: {
     ecommerceLatestPositiveRevenueDay: null,
@@ -35,7 +36,8 @@ const data: BriefingData = {
     deadStock: 320,
     lowStock: 88,
     excessStock: 140,
-    deadStockValue: 27300,
+    deadStockCapital: 27300,
+    deadStockCapitalIsCost: true,
     lowStockTopNames: ['Καφετιέρα Espresso Pro'],
   },
   segments: {
@@ -99,7 +101,7 @@ describe('tokenizeBriefing', () => {
   it('stays silent when two different quantities share a value', () => {
     const ambiguous: BriefingData = {
       ...data,
-      inventory: { ...data.inventory, deadStock: 88 },
+      inventory: { ...data.inventory!, deadStock: 88 },
     };
     // 88 is now both lowStock and deadStock — attributing it either way would be a guess.
     expect(metrics(tokenizeBriefing('Υπάρχουν 88 προϊόντα σε πρόβλημα.', ambiguous))).toHaveLength(0);

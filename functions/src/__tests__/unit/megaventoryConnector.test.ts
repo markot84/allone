@@ -6,6 +6,7 @@ import {
   normalizeMvCustomReportRow,
   normalizeStockLocations,
   rollUpStockTotalsByProduct,
+  mvAvgCost,
 } from '../../megaventoryConnector';
 
 /** Per-location stock rows as normalized into `megaventory_stock`/aggregation shape. */
@@ -181,5 +182,22 @@ describe('normalizeMvCustomReportRow', () => {
   it('passes through a row with no Data array unchanged', () => {
     const out = normalizeMvCustomReportRow({ foo: 'bar' });
     expect(out.foo).toBe('bar');
+  });
+});
+
+describe('mvAvgCost (PER-327)', () => {
+  it('single company → its value', () => {
+    expect(mvAvgCost({ ProductPurchasePrice: 2, ProductUnitCost: [{ ProductUnitCost: 3.14 }] })).toBe(3.14);
+  });
+  it('multi company → the computed entry (≠ manual price)', () => {
+    expect(mvAvgCost({ ProductPurchasePrice: 5.85, ProductUnitCost: [{ ProductUnitCost: 5.85 }, { ProductUnitCost: 5.586 }] })).toBe(5.586);
+  });
+  it('all equal manual price → first', () => {
+    expect(mvAvgCost({ ProductPurchasePrice: 5.22, ProductUnitCost: [{ ProductUnitCost: 5.22 }, { ProductUnitCost: 5.22 }] })).toBe(5.22);
+  });
+  it('missing/empty/zero → null', () => {
+    expect(mvAvgCost({})).toBeNull();
+    expect(mvAvgCost({ ProductUnitCost: [] })).toBeNull();
+    expect(mvAvgCost({ ProductPurchasePrice: 0, ProductUnitCost: [{ ProductUnitCost: 0 }] })).toBeNull();
   });
 });

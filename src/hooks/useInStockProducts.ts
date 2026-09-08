@@ -15,10 +15,10 @@ import type { Product } from '../types';
 
 const IN_STOCK_BUCKETS: ProductIntelligenceBucket[] = ['healthy', 'low', 'dead', 'excess'];
 
-async function loadBucket(brandId: string, bucket: ProductIntelligenceBucket, pageCount: number): Promise<Product[]> {
+async function loadBucket(brandId: string, bucket: ProductIntelligenceBucket, pageCount: number, grouped: boolean): Promise<Product[]> {
   if (pageCount <= 0) return [];
   const pages = await Promise.all(
-    Array.from({ length: pageCount }, (_, i) => fetchProductIntelligencePage(brandId, bucket, i + 1))
+    Array.from({ length: pageCount }, (_, i) => fetchProductIntelligencePage(brandId, bucket, i + 1, grouped))
   );
   return pages.flatMap((p) => p?.products ?? []);
 }
@@ -28,7 +28,7 @@ export function useInStockProducts() {
   const brandId = currentBrand?.id ?? null;
 
   const { data, isPending } = useQuery({
-    queryKey: ['in_stock_products', brandId],
+    queryKey: ['in_stock_products_v2', brandId],
     queryFn: async (): Promise<Product[] | null> => {
       if (!brandId) return null;
       const agg = await fetchProductIntelligenceAggregate(brandId, null);
@@ -36,8 +36,11 @@ export function useInStockProducts() {
       // (the previous build's pages stay readable, see writePageDocs write-then-cleanup). Only a brand
       // with no Product Intelligence at all (no pages) falls back to the full catalog.
       if (!agg || !agg.pagesByBucket) return null;
+      // Parent SKUs by default everywhere products are shown: prefer the grouped `_g_` pages (PER-319).
+      const grouped = !!agg.groupedPagesByBucket;
+      const counts = grouped ? agg.groupedPagesByBucket : agg.pagesByBucket;
       const lists = await Promise.all(
-        IN_STOCK_BUCKETS.map((b) => loadBucket(brandId, b, agg.pagesByBucket?.[b] ?? 0))
+        IN_STOCK_BUCKETS.map((b) => loadBucket(brandId, b, counts?.[b] ?? 0, grouped))
       );
       return lists.flat();
     },

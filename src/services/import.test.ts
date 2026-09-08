@@ -28,7 +28,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { XMLParser } from 'fast-xml-parser';
-import { previewFileForProducts, isCustomerLevelData, isInvoiceLevelData, computeRfmRowsFromInvoices, parseCSV, detectDelimiter, isHeaderlessStatSheet, validateProduct, csvToObjects } from './import';
+import { previewFileForProducts, isCustomerLevelData, isInvoiceLevelData, computeRfmRowsFromInvoices, computeInvoiceRfm, parseCSV, detectDelimiter, isHeaderlessStatSheet, validateProduct, csvToObjects } from './import';
 import { makeProduct } from '../test/helpers';
 
 // ── Minimal DOMParser polyfill (DOM surface used by the two XML parsers) ──────
@@ -560,6 +560,41 @@ describe('segments import from purchase documents (PER-278)', () => {
     const objects = csvToObjects(rows, 'segments');
     expect(objects).toHaveLength(2);
     expect(isInvoiceLevelData(objects)).toBe(true);
+  });
+
+  it('PER-325: rolls up line dims into per-segment behavioral (airblock/Doctoris shapes)', () => {
+    // airblock shape: Εμπορ.κατηγορία/Υποομάδα, customer via Συναλλασσόμενος
+    const nts = (id: string, date: string, cat: string, sub: string, value: string, doc: string) => ({
+      'Συναλλαγή': doc, 'Ημερ/νία': date, 'Εμπορ.κατηγορία': cat, 'Υποομάδα': sub,
+      'Κωδικός': '034-662-0050', 'Ποσ. πώλησης': '1', 'Αξία πώλησης': value, 'Συναλλασσόμενος': id,
+    });
+    const { rows, behavioralBySegment } = computeInvoiceRfm([
+      nts('C1', '2026-08-20', 'ΠΝΕΥΜΑΤΙΚΑ', 'ΒΑΛΒΙΔΕΣ', '100', 'D1'),
+      nts('C1', '2026-08-21', 'ΠΝΕΥΜΑΤΙΚΑ', 'ΡΑΚΟΡ', '50', 'D2'),
+      nts('C2', '2026-01-01', 'ΔΙΚΤΥΩΣΗ', 'ΔΙΚΤΥΑ ΑΕΡΟΣ', '20', 'D3'),
+    ]);
+    expect(rows).toHaveLength(2);
+    const seg = rows.find((r) => r.customer_id === 'C1')!.segment;
+    const b = behavioralBySegment.get(seg.toLowerCase().replace(/\s+/g, '_'))!;
+    expect(b.category_affinity[0]).toMatchObject({ name: 'ΠΝΕΥΜΑΤΙΚΑ', revenue_eur: 150, revenue_share_pct: 100 });
+    expect(b.subcategory_affinity![0].name).toBe('ΒΑΛΒΙΔΕΣ');
+    expect(b.brand_affinity).toBeUndefined(); // no brand column → honest empty state
+    expect(b.persona).toBe(seg);
+
+    // Doctoris shape: Προμηθευτής=brand, Ομάδα=category, duplicate «Κωδικός» must NOT become the customer key
+    const doc = (email: string, date: string, brand: string, group: string, value: string, docNo: string) => ({
+      'Παραστατικό': docNo, 'Ημερ/νία': date, 'Αξία πώλησης': value, 'Προμηθευτής': brand,
+      'email': email, 'Ομάδα': group, 'Κωδικός': '007-016-167-0000', 'Ποσ.1 πώλησης': '1',
+    });
+    const out2 = computeInvoiceRfm([
+      doc('a@x.gr', '2026-08-01', 'DEKORPANEL', 'ΣΩΜΑΤΑ ΜΠΑΝΙΟΥ', '55', 'ΤΙΜ1'),
+      doc('b@x.gr', '2026-08-02', 'DEKORPANEL', 'ΣΩΜΑΤΑ ΜΠΑΝΙΟΥ', '40', 'ΤΙΜ2'),
+    ]);
+    expect(out2.rows).toHaveLength(2); // keyed by email, not the shared item Κωδικός
+    const b2 = out2.behavioralBySegment.get(out2.rows[0].segment.toLowerCase().replace(/\s+/g, '_'))!;
+    expect(b2.brand_affinity![0].name).toBe('DEKORPANEL');
+    expect(b2.category_affinity[0].name).toBe('ΣΩΜΑΤΑ ΜΠΑΝΙΟΥ');
+    expect(b2.subcategory_affinity).toBeUndefined();
   });
 
   it('handles Excel serial dates and skips rows without customer or date', () => {

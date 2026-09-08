@@ -30,7 +30,8 @@ export function useAiInsightsData(options: { skipOrderHydration?: boolean; useSe
     () =>
       piAggregate.aggregate
         ? {
-            summary: piAggregate.aggregate.summary,
+            // PER-336: groupedSummary matches the PI page's default (parent-grouped) counts; summary is per-variant.
+            summary: piAggregate.aggregate.groupedSummary ?? piAggregate.aggregate.summary,
             categoriesCount: piAggregate.aggregate.categories?.length ?? 0,
             totalCount: piAggregate.aggregate.totalCount,
           }

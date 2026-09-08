@@ -67,6 +67,15 @@ export type AppSectionId =
   | 'help'
   | 'admin';
 
+/** PER-320 Phase C: per-category/supplier stock-health override — categories match category OR subcategory; both lists present = AND; scope-less rules are dropped server-side. */
+export interface ThresholdOverrideRule {
+  id: string;
+  label?: string;
+  categories?: string[];
+  suppliers?: string[];
+  thresholds: Partial<Pick<NonNullable<Brand['inventoryThresholds']>, 'lowDaysOfCover' | 'excessDaysOfCover' | 'newStockGraceDays' | 'deadStockDays' | 'slowMovingMaxDailySales'>>;
+}
+
 export interface Brand {
   id: string;
   name: string;
@@ -107,6 +116,12 @@ export interface Brand {
     newStockGraceDays?: number;
     /** Days without sales after which stock counts as "dead" (PER-310). Default 60. */
     deadStockDays?: number;
+    /** Availability-history window (days) for the dead rule (PER-320). Default 180. */
+    deadStockWindowDays?: number;
+    /** Min % of the observed window a SKU must be in stock for "dead" (PER-320). Default 80. */
+    deadStockAvailabilityPct?: number;
+    /** Daily-sales ceiling below which a selling product is chipped "Slow Moving" (PER-320). Default 0.1. */
+    slowMovingMaxDailySales?: number;
     /** Brand-wide fallback supplier lead time (days), used when a supplier has no lead_time. Default 30. */
     defaultLeadTimeDays?: number;
     /** Brand-wide fallback Target Days of Stock, used when a supplier has no tod. Default 60. */
@@ -115,6 +130,8 @@ export interface Brand {
     reorderWarningMultiplier?: number;
     /** Send the weekly Monday reorder email (Low Stock grouped by supplier) to daily-digest recipients. Default false. */
     reorderEmailEnabled?: boolean;
+    /** PER-320 Phase C: ordered override rules — first match wins wholesale for its present keys; the server sanitizes (cap 50). */
+    thresholdOverrides?: ThresholdOverrideRule[];
   };
   /** PER-293 non-merchandise (services/vouchers/made-to-order): out of stock analytics, revenue kept; extends the built-in shipping/discount rule; unset = unchanged. */
   nonMerchandise?: {
@@ -424,6 +441,8 @@ export interface Product {
   /** Days in stock / catalog — optional (e.g. procurement feed without an age column). */
   stock_age_days?: number;
   priority_tag?: string;
+  /** PER-320: sells but extremely slowly — chip orthogonal to priority_tag. */
+  slow_moving?: boolean;
   price: number;
   /** Compare/list price from ERP when available. */
   compare_at_price?: number;
@@ -431,6 +450,8 @@ export interface Product {
   composite_score?: number;
   /** Cost price (Cost_Price in template) - optional */
   cost_price?: number;
+  /** PER-321: μεσοσταθμικό κόστος κτήσης από το ERP (MV ProductUnitCost)· στα group rows σταθμισμένο με το απόθεμα των variants. */
+  avg_cost?: number;
   /** PER-323: grouped rows — Σ(price×stock) των παιδιών; honest price range when variants differ. */
   stock_value?: number;
   price_min?: number;
@@ -544,6 +565,10 @@ export interface ChannelRecommendation {
   channelPlaybook?: ChannelPlaybookEntry[];
   /** Signature of Brand Profile prompt context used to generate customer-facing copy. */
   brandProfileContextSig?: string;
+  /** Signature of the segment set the audience was chosen from (`segmentSetSignature`). When the
+   * brand's segments change underneath a stored recommendation, the page regenerates it instead
+   * of naming segments that no longer exist. */
+  segmentsSig?: string;
 }
 
 /** Extra marketing costs (agency, tools, one-off) — stored in the active strategy, used in ROI. */

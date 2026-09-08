@@ -74,10 +74,10 @@ const PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT = 5000;
 
 const EMPTY_CATEGORY_ID = '__EMPTY_CAT__';
 /** Fixed priority_tag values (inventory intelligence) — always shown in the filter even if the client catalog lacks the field. */
-const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead', 'no_stock', 'price_pending'] as const;
+const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead', 'slow_moving', 'no_stock', 'price_pending'] as const;
 const STOCK_TAG_LABELS: Record<string, string> = {
   healthy: 'Healthy Stock', low: 'Low Stock', excess: 'Excess Stock',
-  dead: 'Dead Stock', no_stock: 'No Stock', price_pending: 'Price Pending',
+  dead: 'Dead Stock', slow_moving: 'Slow Moving', no_stock: 'No Stock', price_pending: 'Price Pending',
 };
 const productStockLevel = (product: Product): number =>
   getEffectiveStockLevel(product); // PER-306: one canonical stock order
@@ -214,14 +214,28 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       if (path !== 'products') return;
       const params = new URLSearchParams(queryString || '');
       const stock = params.get('stock');
+      const filter = params.get('filter');
+      if (!stock && !filter) return;
+
+      // A briefing action promises one specific set of products. Whatever else was filtering the
+      // table has to go, or the arrival lands on an intersection nobody asked for — and when the
+      // leftover filter is the wider one, on what reads as the whole catalogue.
+      setSearchQuery('');
+      setCategoryInclude(null);
+      setBrandInclude(null);
+      setTagInclude(null);
+      setMarginFilter('all');
+      setProductDateFrom('');
+      setProductDateTo('');
+      setStockCardFilter('all');
+      setStockAgeFilter('all');
+      setCurrentPage(1);
+
       if (stock === 'low' || stock === 'dead' || stock === 'excess' || stock === 'healthy') {
         setStockCardFilter(stock);
-        setCurrentPage(1);
       }
-      const filter = params.get('filter');
       if (filter === 'high-margin-low-stock') {
         setStockAgeFilter('high-margin-low-stock');
-        setCurrentPage(1);
       }
       // `?q=` — where the command palette lands when a SKU is picked.
       const search = params.get('q');
@@ -240,6 +254,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const brandId = currentBrand?.id ?? null;
   const lowDaysOfCover = currentBrand?.inventoryThresholds?.lowDaysOfCover ?? 30;
   const excessDaysOfCover = currentBrand?.inventoryThresholds?.excessDaysOfCover ?? 120;
+  const deadStockWindowDays = currentBrand?.inventoryThresholds?.deadStockWindowDays ?? 180;
+  const deadStockAvailabilityPct = currentBrand?.inventoryThresholds?.deadStockAvailabilityPct ?? 80;
   const { isEnterprise } = usePlan();
   const procurementModuleEnabled = currentBrand?.enabledModules?.procurement !== false;
   const { signalsBySku: piProcurementSignals } = useProcurementSignals();
@@ -247,13 +263,6 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   // must come from procurement (procurement-first).
   const expectsProcurementCatalog =
     isEnterprise && procurementModuleEnabled && Object.keys(piProcurementSignals || {}).length > 0;
-  const {
-    getThumbnailUrl,
-    magentoConnected,
-    magentoProductCatalogAccess,
-    magentoProductCount,
-    magentoLastSyncError,
-  } = useProductThumbnails();
   const { suppliers } = useSuppliers();
   const { benchmarks, count: benchmarkCount } = usePriceBenchmarks({ maxDocs: PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT });
   const tagStockBucket = useMemo((): ProductIntelligenceBucket | null => {
@@ -297,6 +306,18 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     !productDateFrom && !productDateTo && !includeNoStock &&
     groupByParent && sortField === 'margin_percentage' && sortDirection === 'desc';
   const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage, serverQuery, { staticDefault: isDefaultQuery });
+  // PER-335: thumbnails fetched only for visible-page SKUs — full magento_products was ~74k docs / minutes on e-tennis.
+  const pageSkus = useMemo(
+    () => (serverIntelligence.page?.products ?? []).map((p) => String(p.sku || '')).filter(Boolean),
+    [serverIntelligence.page?.products]
+  );
+  const {
+    getThumbnailUrl,
+    magentoConnected,
+    magentoProductCatalogAccess,
+    magentoProductCount,
+    magentoLastSyncError,
+  } = useProductThumbnails({ skus: pageSkus });
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -406,6 +427,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     ? (serverIntelligence.page?.groupedSummary ?? serverIntelligence.aggregate?.groupedSummary)
     : undefined;
   const cardsSummary = displayGroupedSummary ?? displaySummary;
+  const availabilityObserved = serverIntelligence.aggregate?.availabilityObservedDays ?? 0;
+  const availabilityHistoryNote = availabilityObserved > 0 && availabilityObserved < deadStockWindowDays
+    ? ` Τρέχον ιστορικό διαθεσιμότητας: ${availabilityObserved} ημέρες (ο κανόνας οξύνεται όσο συμπληρώνεται).`
+    : '';
   const cardsCountLabel = displayGroupedSummary ? 'προϊόντα' : 'SKUs';
   const bucketSub = (bucket: { count: number; cost_value?: number }) => {
     const counts = `${formatNumber(bucket.count)} ${cardsCountLabel}`;
@@ -877,7 +902,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={bucketSub(cardsSummary.dead_stock)}
           icon={<AlertCircle size={20} />}
                 color="var(--danger-600)"
-                tooltip="Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο. Αξία = τιμή πώλησης × απόθεμα ανά κωδικό (SKU)· το κόστος = τιμή κόστους × απόθεμα. Με ενεργή ομαδοποίηση κάρτες και πίνακας μετρούν ολόκληρα προϊόντα (γονείς)· χωρίς ομαδοποίηση, κωδικούς."
+                tooltip={`Προϊόντα χωρίς πωλήσεις που ήταν διαθέσιμα τουλάχιστον στο ${deadStockAvailabilityPct}% του παραθύρου ${deadStockWindowDays} ημερών — δεσμεύουν κεφάλαιο.${availabilityHistoryNote} Αξία = τιμή πώλησης × απόθεμα ανά κωδικό (SKU)· το κόστος = τιμή κόστους × απόθεμα. Με ενεργή ομαδοποίηση κάρτες και πίνακας μετρούν ολόκληρα προϊόντα (γονείς)· χωρίς ομαδοποίηση, κωδικούς. Τα όρια ρυθμίζονται στα «Όρια υγείας αποθέματος».`}
           active={stockCardFilter === 'dead'}
           onClick={() => selectStockCardFilter(stockCardFilter === 'dead' ? 'all' : 'dead')}
         />
@@ -1174,6 +1199,11 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     <SortIcon field="price" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden lg:table-cell">
+                  <Tooltip content="Μεσοσταθμικό κόστος κτήσης, όπως το υπολογίζει το ERP από τα παραστατικά αγορών· στα ομαδοποιημένα προϊόντα σταθμισμένο με το απόθεμα κάθε variant. Κενό όταν η πηγή δεν δίνει κόστος." size={12}>
+                    Κόστος κτήσης
+                  </Tooltip>
+                </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] hidden md:table-cell">
                   <Tooltip content="Τιμή × απόθεμα ανά κωδικό· στα ομαδοποιημένα προϊόντα το άθροισμα των παιδιών — το σύνολο της στήλης ταυτίζεται με τις κάρτες." size={12}>
                     Αξία
@@ -1455,6 +1485,7 @@ function ProductRow({
         </span>
       </td>
       <td className="px-3 py-2 hidden lg:table-cell">
+        <div className="flex flex-wrap items-center gap-1">
         {productDisplayTag(product) ? (
           <Badge
             variant={
@@ -1476,6 +1507,10 @@ function ProductRow({
         ) : (
           <span className="text-[10px] text-[var(--text-muted)]">—</span>
         )}
+        {product.slow_moving && (
+          <Badge variant="info" size="sm">Slow Moving</Badge>
+        )}
+        </div>
       </td>
       <td className="px-3 py-2 hidden sm:table-cell">
         <span className="text-xs font-mono text-[var(--text-primary)]" data-numeric>
@@ -1483,6 +1518,13 @@ function ProductRow({
             ? `€${formatCurrency(product.price_min, 2)}–${formatCurrency(product.price_max, 2)}`
             : `€${formatCurrency(product.price ?? 0, 2)}`}
         </span>
+      </td>
+      <td className="px-3 py-2 hidden lg:table-cell">
+        {product.avg_cost != null ? (
+          <span className="text-xs font-mono text-[#1A1A1A]">€{formatCurrency(product.avg_cost, 2)}</span>
+        ) : (
+          <span className="text-[10px] text-[#9CA3AF]">—</span>
+        )}
       </td>
       <td className="px-3 py-2 hidden md:table-cell">
         <span className="text-xs font-mono text-[var(--text-primary)]" data-numeric>

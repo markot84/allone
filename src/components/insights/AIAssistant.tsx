@@ -539,6 +539,8 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
   ]);
 
   const tenantPack = useMemo((): AssistantTenantPack => {
+    // PER-336: groupedSummary matches the PI page's default (parent-grouped) counts; summary is per-variant.
+    const piSummary = productIntelligence.aggregate?.groupedSummary ?? productIntelligence.aggregate?.summary;
     const rows = [...rfmSegments]
       .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))
       .slice(0, 12)
@@ -575,17 +577,17 @@ export function MarkAgent({ isOpen, onClose, autoStartVoice, onVoiceStarted }: A
         topCampaign: campaignSignals.topCampaign,
         weakCampaign: campaignSignals.weakCampaign,
       },
-      inventory: productIntelligence.aggregate?.summary
+      inventory: productIntelligence.aggregate && piSummary
         ? {
             sourceLabel: productIntelligence.aggregate.sourceLabel,
-            totalProducts: productIntelligence.aggregate.summary.total_skus,
-            totalValue: productIntelligence.aggregate.summary.total_value,
-            healthyStock: productIntelligence.aggregate.summary.healthy_stock.count,
-            deadStock: productIntelligence.aggregate.summary.dead_stock.count,
-            deadStockValue: productIntelligence.aggregate.summary.dead_stock.value,
-            lowStock: productIntelligence.aggregate.summary.low_stock.count,
-            excessStock: productIntelligence.aggregate.summary.excess_stock.count,
-            excessStockValue: productIntelligence.aggregate.summary.excess_stock.value,
+            totalProducts: piSummary.total_skus,
+            totalValue: piSummary.total_value,
+            healthyStock: piSummary.healthy_stock.count,
+            deadStock: piSummary.dead_stock.count,
+            deadStockValue: piSummary.dead_stock.value,
+            lowStock: piSummary.low_stock.count,
+            excessStock: piSummary.excess_stock.count,
+            excessStockValue: piSummary.excess_stock.value,
             // PER-165: forward the (cost-based) margin distribution so the assistant stops claiming
             // it can't see the cost — the data is in the aggregate it already holds.
             marginDistribution: productIntelligence.aggregate.charts?.marginDistribution,

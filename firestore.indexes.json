@@ -343,6 +343,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "brandId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "avg_cost",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

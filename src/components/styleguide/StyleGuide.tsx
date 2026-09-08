@@ -483,6 +483,7 @@ const DEMO_BRIEFING_DATA: BriefingData = {
   revenue: {
     totalOrganic: 4200, totalCampaignRevenue: 18500, storeRevenue: 32450, ecommerceSourceActive: true,
     trueRoas: 4.7, revenueGap: 0, orderCount: 214, aov: 151.6, totalSpend: 6900, roas: 2.68, campaignCount: 5,
+    campaignsLoaded: true,
   },
   dataQuality: {
     ecommerceLatestPositiveRevenueDay: null, ecommerceDaysSinceLatestRevenue: null,
@@ -493,7 +494,8 @@ const DEMO_BRIEFING_DATA: BriefingData = {
     weeklyChange: { sessions: 12.4, users: null, conversions: -3.1 },
   },
   inventory: {
-    totalProducts: 4500, deadStock: 320, lowStock: 88, excessStock: 140, deadStockValue: 27300,
+    totalProducts: 4500, deadStock: 320, lowStock: 88, excessStock: 140,
+    deadStockCapital: 27300, deadStockCapitalIsCost: true,
     lowStockTopNames: ['Καφετιέρα Espresso Pro'],
   },
   segments: { total: 5, totalCustomers: 3450, atRiskPct: 22.4, championsPct: 11.8, topSegment: { name: 'Hibernating', pct: 30.2 } },

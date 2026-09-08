@@ -185,16 +185,28 @@ async function readDiscontinuedSkus(db: Firestore, brandId: string): Promise<Set
 }
 
 /** Reads raw per-(sku, location) stock from megaventory_stock (unfiltered — every warehouse), so the
- *  snapshot stays faithful to the connector and any stockLocations selection folds at read time. */
+ *  snapshot stays faithful to the connector and any stockLocations selection folds at read time.
+ *  megaventory_stock rows carry an EMPTY sku (keyed by productId) — resolved via megaventory_products, else MV brands get no snapshot. */
 async function readMegaventoryStockByLocation(db: Firestore, brandId: string): Promise<PerLocationSnapshot> {
+  const skuByProductId = new Map<string, string>();
+  const productsQuery = db
+    .collection('megaventory_products')
+    .where('brandId', '==', brandId)
+    .select('productId', 'sku');
+  for await (const doc of productsQuery.stream() as AsyncIterable<QueryDocumentSnapshot>) {
+    const d = doc.data();
+    const pid = String(d.productId || '').trim();
+    const sku = String(d.sku || '').trim();
+    if (pid && sku) skuByProductId.set(pid, sku);
+  }
   const out: PerLocationSnapshot = {};
   const query = db
     .collection('megaventory_stock')
     .where('brandId', '==', brandId)
-    .select('sku', 'locationId', 'availableStock', 'physicalStock');
+    .select('sku', 'productId', 'locationId', 'availableStock', 'physicalStock');
   for await (const doc of query.stream() as AsyncIterable<QueryDocumentSnapshot>) {
     const d = doc.data();
-    const sku = String(d.sku || '').trim();
+    const sku = String(d.sku || '').trim() || skuByProductId.get(String(d.productId || '').trim()) || '';
     const loc = String(d.locationId || '').trim();
     if (!sku || !loc) continue;
     const a = typeof d.availableStock === 'number' ? d.availableStock : 0;

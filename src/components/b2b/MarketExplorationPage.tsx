@@ -4,6 +4,7 @@ import { MarketBriefExplorer } from './MarketBriefExplorer';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useGA4Data } from '../../hooks/useGA4Data';
+import { useProductIntelligenceAggregateDoc } from '../../hooks/useProductIntelligenceAggregate';
 import { useProductSource } from '../../hooks/useProductSource';
 import { useSuppliers } from '../../hooks/useSuppliers';
 
@@ -13,7 +14,11 @@ interface MarketExplorationPageProps {
 
 export function MarketExplorationPage({ onSectionChange }: MarketExplorationPageProps = {}) {
   const { activeStrategy, getStrategyName } = useActiveStrategy();
-  const { count: productsCount } = useProductSource();
+  // Parent-level count from the PI aggregate (matches the grouped PI page this links to); catalog load only as fallback.
+  const piDoc = useProductIntelligenceAggregateDoc();
+  const groupedCount = (piDoc.aggregate?.groupedSummary ?? piDoc.aggregate?.summary)?.total_skus;
+  const { count: sourceCount } = useProductSource({ enabled: !piDoc.isLoading && groupedCount == null });
+  const productsCount = groupedCount ?? sourceCount;
   const { suppliers } = useSuppliers();
   const { count: campaignsCount } = useCampaigns();
   const ga4 = useGA4Data();

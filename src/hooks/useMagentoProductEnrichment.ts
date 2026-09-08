@@ -2,7 +2,7 @@
  * + `connectors/{brandId}.magento`; doesn't touch `products` (merge happens in the UI). */
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { FirestoreService } from '../services/firestore';
 import { useBrand } from './useBrand';
@@ -82,9 +82,75 @@ function inferMagentoMediaBaseUrl(configuredMediaBaseUrl: string, storeUrl: stri
   return `${storeUrl.replace(/\/+$/, '')}/media`;
 }
 
-/** `enabled: false` skips the full magento_products download for pages that only conditionally need it (PER-307). */
-export function useMagentoProductEnrichment(options?: { enabled?: boolean }) {
+/** Firestore `in` filters accept at most 30 values. */
+const IN_CHUNK = 30;
+
+/** At most this many Firestore reads run at once. `Promise.all` over every chunk opened two
+ * queries per 30 SKUs simultaneously — a 30k-SKU feed asked the browser for 2.000 concurrent
+ * reads and the tab stopped responding. */
+const MAX_CONCURRENT_READS = 8;
+
+/** Past this many SKUs the per-SKU path costs more round trips than reading the collection once
+ * (a 30k-SKU feed = 2.000 queries), so above it we read once and filter locally to exactly the
+ * same rows. Below it the scoped reads stay cheaper than pulling the whole catalog. */
+const MAX_CHUNKED_SKUS = 3000;
+
+/** Runs `task` over `items` with a bounded number in flight. */
+async function mapWithLimit<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (let i = next++; i < items.length; i = next++) out[i] = await task(items[i]);
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+/** PER-335: fetch only rows matching the given SKUs (by `sku` + `itemGroupId` for parent images) instead of the full catalog. */
+async function fetchMagentoProductsForSkus(brandId: string, skus: string[]): Promise<RawMagentoProductDoc[]> {
+  const unique = [...new Set(skus.map((s) => s.trim()).filter(Boolean))];
+  if (unique.length === 0) return [];
+
+  const byId = new Map<string, RawMagentoProductDoc>();
+
+  if (unique.length > MAX_CHUNKED_SKUS) {
+    // One read, then the same predicate the chunked path applies server-side (sku OR itemGroupId
+    // in the wanted set), so both branches return an identical row set — the enriched-SKU count
+    // on the page stays the feed's, not the catalog's.
+    const wanted = new Set(unique);
+    const all = await FirestoreService.getDocuments<RawMagentoProductDoc & { id: string }>('magento_products', [], brandId);
+    for (const d of all) {
+      if (wanted.has(String(d.sku || '').trim()) || wanted.has(String(d.itemGroupId || '').trim())) byId.set(d.id, d);
+    }
+    return [...byId.values()];
+  }
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < unique.length; i += IN_CHUNK) chunks.push(unique.slice(i, i + IN_CHUNK));
+  const results = await mapWithLimit(
+    chunks.flatMap((chunk) => [
+      { field: 'sku', chunk },
+      { field: 'itemGroupId', chunk },
+    ]),
+    MAX_CONCURRENT_READS,
+    ({ field, chunk }) =>
+      FirestoreService.getDocuments<RawMagentoProductDoc & { id: string }>('magento_products', [where(field, 'in', chunk)], brandId)
+  );
+  for (const docs of results) for (const d of docs) byId.set(d.id, d);
+  return [...byId.values()];
+}
+
+/** `enabled: false` skips the full magento_products download (PER-307); `skus` scopes the fetch to those SKUs only (PER-335). */
+export function useMagentoProductEnrichment(options?: { enabled?: boolean; skus?: string[] }) {
   const enabled = options?.enabled ?? true;
+  const skus = options?.skus;
+  // Stable key: same SKU set in any order → same cached query. Memoized because the dedupe+sort
+  // runs over the caller's whole feed — tens of thousands of SKUs on a large catalog, and React
+  // Query re-hashes the joined string on top of that, on every single render.
+  const skusKey = useMemo(
+    () => (skus ? [...new Set(skus.map((s) => s.trim()).filter(Boolean))].sort().join('|') : null),
+    [skus]
+  );
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
 
@@ -115,9 +181,12 @@ export function useMagentoProductEnrichment(options?: { enabled?: boolean }) {
   });
 
   const productsQuery = useQuery({
-    queryKey: ['magentoProductsRaw', brandId],
+    queryKey: skusKey == null ? ['magentoProductsRaw', brandId] : ['magentoProductsRaw', brandId, skusKey],
     queryFn: async (): Promise<RawMagentoProductDoc[]> => {
       if (!brandId) return [];
+      if (skusKey != null) {
+        return skusKey === '' ? [] : fetchMagentoProductsForSkus(brandId, skusKey.split('|'));
+      }
       return FirestoreService.getDocuments<RawMagentoProductDoc>('magento_products', [], brandId);
     },
     enabled: enabled && !!brandId && (connectorQuery.data?.connected ?? false) && connectorQuery.data?.productCatalogAccess !== false,
@@ -189,4 +258,8 @@ export const __test = {
   buildImageLink,
   buildProductLink,
   inferMagentoMediaBaseUrl,
+  fetchMagentoProductsForSkus,
+  mapWithLimit,
+  MAX_CONCURRENT_READS,
+  MAX_CHUNKED_SKUS,
 };

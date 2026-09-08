@@ -61,3 +61,31 @@ describe('actionableProducts', () => {
   });
 });
 
+
+describe('parent/model grouping without Magento', () => {
+  it('groups variants by the parent_sku the PI rows carry, with no enrichment lookup', () => {
+    const rows = groupProductsForDecisionExport([
+      product({ sku: 'SHORT-01-S', stock_level: 2, price: 20, parent_sku: 'SHORT-01' } as Partial<Product>),
+      product({ sku: 'SHORT-01-L', stock_level: 3, price: 24, parent_sku: 'SHORT-01' } as Partial<Product>),
+      product({ sku: 'CAP-9', stock_level: 4, price: 10 }),
+    ]);
+    expect(rows).toHaveLength(2);
+    const parent = rows.find((r) => r.key === 'SHORT-01');
+    expect(parent?.variantCount).toBe(2);
+    expect(parent?.totalStock).toBe(5);
+    expect(parent?.skus.sort()).toEqual(['SHORT-01-L', 'SHORT-01-S']);
+    expect(rows.find((r) => r.key === 'CAP-9')?.variantCount).toBe(1);
+  });
+
+  it('still prefers a Magento itemGroupId when one is supplied', () => {
+    const rows = groupProductsForDecisionExport(
+      [
+        product({ sku: 'A-1', stock_level: 1, parent_sku: 'ERP-PARENT' } as Partial<Product>),
+        product({ sku: 'A-2', stock_level: 1, parent_sku: 'ERP-PARENT' } as Partial<Product>),
+      ],
+      () => ({ itemGroupId: 'MAGENTO-PARENT' } as never)
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].key).toBe('MAGENTO-PARENT');
+  });
+});

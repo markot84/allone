@@ -110,6 +110,11 @@ import {
   setDb as setEpsilonNetDb,
 } from './epsilonNetConnector';
 import {
+  saveContactPigeonCredentials,
+  fetchContactPigeonData,
+  setDb as setContactPigeonDb,
+} from './contactPigeonConnector';
+import {
   saveEntersoftCredentials,
   fetchEntersoftData,
   setDb as setEntersoftDb,
@@ -187,6 +192,7 @@ setMagentoDb(db);
 setMegaventoryDb(db);
 setSoftOneDb(db);
 setEpsilonNetDb(db);
+setContactPigeonDb(db);
 setEntersoftDb(db);
 setEcommerceAggDb(db);
 setDataAnalysisRfmDb(db);
@@ -1345,6 +1351,9 @@ export const connectorDisconnect = onRequest(
         clearPayload.password = '';
         clearPayload.lastItemsMaxRevision = 0;
       }
+      if (provider === 'contact_pigeon') {
+        clearPayload.apiKey = '';
+      }
       if (provider === 'entersoft') {
         clearPayload.webApiBaseUrl = '';
         clearPayload.userId = '';
@@ -1578,6 +1587,8 @@ export const connectorSync = onRequest(
         result = await fetchSoftOneData(brandId);
       } else if (provider === 'epsilon_net') {
         result = await fetchEpsilonNetData(brandId);
+      } else if (provider === 'contact_pigeon') {
+        result = await fetchContactPigeonData(brandId);
       } else if (provider === 'entersoft') {
         result = await fetchEntersoftData(brandId);
       } else if (provider === 'ga4') {
@@ -2130,6 +2141,12 @@ export const processMegaventorySyncJobs = onSchedule(
           ? { error: FieldValue.delete() }
           : { error: result.error || `Sync did not complete within ${MAX_CONTINUATIONS} continuation passes` }),
       });
+      // The ERP wave dies at the 1800s cap and never stamps success — the continuation is its tail, so it stamps the health record.
+      if (completedClean) {
+        await markNightlyJob('scheduledSyncErp', 'success', {
+          message: `completed via megaventory continuation (${job.brandId})`,
+        }).catch(() => undefined);
+      }
       if (!finalized) {
         // The stale sweep (or a newer claim) took the job from us — its verdict stands. Skip the
         // post-steps too: a newer pass owns the brand now and will refresh aggregates itself.
@@ -2464,6 +2481,14 @@ export const connectorSaveCredentials = onRequest(
         }
         const result = await saveEpsilonNetCredentials(brandId, { subscriptionKey, email, password });
         res.status(200).json(result);
+      } else if (provider === 'contact_pigeon') {
+        const { apiKey } = req.body as { apiKey?: string };
+        if (!apiKey) {
+          res.status(400).json({ error: 'Missing Contact Pigeon apiKey' });
+          return;
+        }
+        const result = await saveContactPigeonCredentials(brandId, { apiKey });
+        res.status(200).json(result);
       } else if (provider === 'entersoft') {
         const b = req.body as {
           webApiBaseUrl?: string;
@@ -2654,6 +2679,10 @@ const NIGHTLY_JOB_KEYS: NightlyJobKey[] = [
 
 /** A job that hasn't succeeded in this long is considered stale (jobs run daily). */
 const HEALTH_STALE_MS = 28 * 60 * 60 * 1000; // 28h — one missed daily run + slack
+// PER-334: scheduledReorderEmail is weekly (Monday 07:45), so the daily window false-alarmed Tue–Sun.
+const HEALTH_STALE_MS_BY_JOB: Partial<Record<NightlyJobKey, number>> = {
+  scheduledReorderEmail: (7 * 24 + 4) * 60 * 60 * 1000, // one missed weekly run + slack
+};
 
 function tsToMillis(v: unknown): number | null {
   if (v == null) return null;
@@ -2712,7 +2741,7 @@ export const healthWatch = onSchedule(
           continue;
         }
         // Stale: no successful run within the window.
-        if (lastSuccess == null || now - lastSuccess > HEALTH_STALE_MS) {
+        if (lastSuccess == null || now - lastSuccess > (HEALTH_STALE_MS_BY_JOB[job] ?? HEALTH_STALE_MS)) {
           logger.alert(`[HealthWatch] nightly job stale (no recent success)`, {
             alertKey: ALERT.healthWatchStaleJob,
             job,
@@ -2896,6 +2925,7 @@ async function executeBrandNightlyWave(
       if (data.meta?.connected) phase.wrap('Meta', fetchMetaCampaigns(brandId));
       if (data.tiktok?.connected) phase.wrap('TikTok', fetchTikTokCampaigns(brandId));
       if (data.merchant?.connected) phase.wrap('Merchant', fetchPriceBenchmarks(brandId));
+      if (data.contact_pigeon?.connected) phase.wrap('Contact Pigeon', fetchContactPigeonData(brandId));
       break;
     case 'ecommerce':
       if (data.shopify?.connected) phase.wrap('Shopify', fetchShopifyData(brandId));
@@ -3023,10 +3053,23 @@ async function executeBrandNightlyWave(
   }
 }
 
-async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: NightlyJobKey): Promise<void> {
+async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: NightlyJobKey, resumeOnly = false): Promise<void> {
   return runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
   const startedAt = Date.now();
-  await markNightlyJob(jobKey, 'running', { message: `Nightly wave "${wave}" started` });
+  // PER-326: the wave can die at the 1800s cap — per-brand progress lets a resume run finish only the leftovers.
+  const today = new Date().toISOString().slice(0, 10);
+  const healthRef = db.doc('system_health/nightly_jobs');
+  const jobRecord = ((await healthRef.get()).data()?.jobs as Record<string, { progress?: { date?: string; done?: string[] }; lastSuccessAt?: { toDate?: () => Date } }> | undefined)?.[jobKey];
+  const doneToday = new Set(jobRecord?.progress?.date === today ? jobRecord?.progress?.done ?? [] : []);
+  // Stale (yesterday's) progress must be reset BEFORE any arrayUnion, or old brands leak into today's done-list.
+  if (jobRecord?.progress && jobRecord.progress.date !== today) {
+    await healthRef.update({ [`jobs.${jobKey}.progress`]: { date: today, done: [] } }).catch(() => undefined);
+  }
+  if (resumeOnly && jobRecord?.lastSuccessAt?.toDate?.()?.toISOString().slice(0, 10) === today) {
+    logger.info(`[ScheduledSync] "${wave}" resume skipped — main run already succeeded today`);
+    return;
+  }
+  await markNightlyJob(jobKey, 'running', { message: `Nightly wave "${wave}" started${doneToday.size ? ` (resuming, ${doneToday.size} brands done)` : ''}` });
   logger.info(`[ScheduledSync] Starting "${wave}" wave`);
 
   try {
@@ -3036,9 +3079,11 @@ async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: Ni
     const concurrency = wave === 'ecommerce' ? 1 : NIGHTLY_CONNECTOR_SYNC_CONCURRENCY;
     await runPool(connectorsSnap.docs, concurrency, async (docSnap) => {
       const brandId = docSnap.id;
+      if (doneToday.has(brandId)) return;
       const data = docSnap.data();
       try {
         await executeBrandNightlyWave(brandId, data, wave);
+        await healthRef.set({ jobs: { [jobKey]: { progress: { date: today, done: FieldValue.arrayUnion(brandId) } } } }, { merge: true }).catch(() => undefined);
       } catch (err) {
         failedConnectorBrands += 1;
         logger.error(`[ScheduledSync/${wave}] Unexpected failure for ${brandId}:`, { alertKey: ALERT.nightlyWaveFailed, err });
@@ -3050,6 +3095,7 @@ async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: Ni
       durationMs,
       message: `Wave "${wave}" ok. connectors=${connectorsSnap.size} failedBrands=${failedConnectorBrands}`,
     });
+    await healthRef.update({ [`jobs.${jobKey}.progress`]: FieldValue.delete() }).catch(() => undefined);
     logger.info(`[ScheduledSync] "${wave}" wave completed`);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -3136,6 +3182,12 @@ export const scheduledSyncEcommerce = onSchedule(
   async () => runNightlyConnectorWaveJob('ecommerce', 'scheduledSyncEcommerce')
 );
 
+/** PER-326: finishes the ecommerce wave's leftover brands when the 05:20 run died at the 1800s cap; no-op after a clean run. */
+export const scheduledSyncEcommerceResume = onSchedule(
+  { ...nightlyConnectorScheduleBase, ...OPENCART_EGRESS_OPTIONS, schedule: 'every day 07:20', memory: '4GiB' as const, cpu: 2 },
+  async () => runNightlyConnectorWaveJob('ecommerce', 'scheduledSyncEcommerce', true)
+);
+
 /** GA4 + Search Console — 05:40 */
 export const scheduledSyncWebAnalytics = onSchedule(
   { ...nightlyConnectorScheduleBase, schedule: 'every day 05:40' },
@@ -3149,6 +3201,12 @@ export const scheduledSyncErp = onSchedule(
   // mirroring the processMegaventorySyncJobs bump for the same heavy stages.
   { ...nightlyConnectorScheduleBase, schedule: 'every day 06:00', memory: '4GiB' as const, cpu: 2 },
   async () => runNightlyConnectorWaveJob('erp', 'scheduledSyncErp')
+);
+
+/** ERP resume — 06:35: the e-tennis stock walk rides the 1800s cap (~03:28 finish, hard-killed some nights); reruns only the brands the main run didn't checkpoint. */
+export const scheduledSyncErpResume = onSchedule(
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 06:35', memory: '4GiB' as const, cpu: 2 },
+  async () => runNightlyConnectorWaveJob('erp', 'scheduledSyncErp', true)
 );
 
 /** Stock / competition — 06:40 (after the 06:00 ERP wave + up to a 30min timeout) */
@@ -4272,7 +4330,8 @@ export const scheduledAggregates = onSchedule(
     schedule: 'every day 07:00',
     timeZone: 'Europe/Athens',
     region: 'europe-west1',
-    memory: '512MiB',
+    // PER-333: segments/campaigns full .get()s ride ~513MiB as dailyMetrics grow; stream them if 1GiB ever tips.
+    memory: '1GiB',
     timeoutSeconds: 300,
   },
   async () => runWithLogContext({ uid: null, requestId: getRequestId() }, async () => {
