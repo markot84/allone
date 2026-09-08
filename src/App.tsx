@@ -205,6 +205,13 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               ) {
                 return false;
               }
+              // Commercial Strategy's bounded in-stock set — the same hazard, measured at 4,50MB of
+              // JSON (6.460 Parent SKUs × ~730B) on one staging brand. On its own that is at the
+              // ~5MB localStorage budget, so the write throws QuotaExceededError; no `retry` is
+              // configured, the persister swallows it, and NOTHING gets persisted — including the
+              // small entries that actually pay for first paint. Matched by prefix so a version
+              // bump of the query key cannot quietly put it back.
+              if (typeof key === 'string' && key.startsWith('in_stock_products')) return false;
               // Heavy procurement / Product Intelligence payloads served by Firestore IndexedDB; in localStorage
               // they'd serialize MBs per brand change, block the main thread, and exceed quota → cache wipe.
               if (
