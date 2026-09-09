@@ -904,17 +904,17 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       <Card padding="lg" className="border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/5">
         <CardHeader
           title="Εμπορικό context"
-          subtitle="Ενεργές πληροφορίες από τη σελίδα Εμπορικές Πληροφορίες και από διαλόγους με τον Mark που τροφοδοτούν αυτό το Marketing Plan."
+          subtitle="Ενεργές πληροφορίες από τη σελίδα Market Signals και από διαλόγους με τον Mark που τροφοδοτούν αυτό το Marketing Plan."
           icon={<MessageSquareText size={18} className="text-[var(--nts-accent-text)]" />}
         />
         {activeInfo.length === 0 ? (
           <div className="mt-4 rounded-xl border border-dashed border-[var(--nts-accent)]/25 bg-white/70 p-3">
             <p className="text-sm font-medium text-[#1A1A1A]">Δεν υπάρχουν ακόμη ενεργές εμπορικές πληροφορίες για αυτό το Marketing Plan.</p>
             <p className="mt-1 text-xs text-[#6B7280]">
-              Πρόσθεσε πληροφορίες από τη σελίδα «Εμπορικές Πληροφορίες» ή ρώτησε τον Mark και πάτησε «Καταχώριση & άνοιγμα Marketing Plan». Θα χρησιμοποιηθούν ως context, όχι ως απόλυτα δεδομένα.
+              Πρόσθεσε πληροφορίες από τη σελίδα «Market Signals» ή ρώτησε τον Mark και πάτησε «Καταχώριση & άνοιγμα Marketing Plan». Θα χρησιμοποιηθούν ως context, όχι ως απόλυτα δεδομένα.
             </p>
             <Button className="mt-3" variant="ghost" size="sm" onClick={() => onSectionChange?.('commercial-info')}>
-              Άνοιγμα Εμπορικών Πληροφοριών
+              Άνοιγμα Market Signals
             </Button>
           </div>
         ) : (
@@ -923,7 +923,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
               <div key={info.id} className="rounded-xl border border-white/70 bg-white/80 p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={info.source === 'mark' ? 'orange' : 'info'}>
-                    {info.source === 'mark' ? 'από Mark' : 'Εμπορικές Πληροφορίες'}
+                    {info.source === 'mark' ? 'από Mark' : 'Market Signals'}
                   </Badge>
                   <Badge variant="default">{COMMERCIAL_FACTOR_LABEL[info.factorType] ?? info.factorType}</Badge>
                   <span className="text-xs text-[#6B7280]">

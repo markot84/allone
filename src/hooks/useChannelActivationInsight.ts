@@ -42,7 +42,8 @@ const MAX_CONCURRENT_PAGES = 16;
  * loading together still never exceed the cap between them. */
 async function loadBuckets(
   brandId: string,
-  counts: Array<[ProductIntelligenceBucket, number]>
+  counts: Array<[ProductIntelligenceBucket, number]>,
+  grouped = false
 ): Promise<Product[]> {
   const jobs: Array<[ProductIntelligenceBucket, number]> = [];
   for (const [bucket, pageCount] of counts) {
@@ -55,15 +56,11 @@ async function loadBuckets(
   await Promise.all(
     Array.from({ length: Math.min(MAX_CONCURRENT_PAGES, jobs.length) }, async () => {
       for (let i = next++; i < jobs.length; i = next++) {
-        pages[i] = await fetchProductIntelligencePage(brandId, jobs[i][0], jobs[i][1]);
+        pages[i] = await fetchProductIntelligencePage(brandId, jobs[i][0], jobs[i][1], grouped);
       }
     })
   );
   return flattenDeadPages(pages);
-}
-
-async function loadBucket(brandId: string, bucket: ProductIntelligenceBucket, pageCount: number): Promise<Product[]> {
-  return loadBuckets(brandId, [[bucket, pageCount]]);
 }
 
 /** Sum of the in-stock buckets — the «active variants with stock» count, shown without any page load. */
@@ -95,10 +92,18 @@ export function useChannelActivationInsight(options: { loadDead?: boolean } = {}
   });
   const agg = aggQuery.data ?? null;
 
-  // 2) Dead bucket — only in the dead-stock play.
+  // 2) Dead bucket — only in the dead-stock play. Read the precomputed GROUPED pages when the
+  // brand has them: those are the parent/model rows whose count AI Insights reports («475
+  // κωδικοί»), while the variant-level bucket holds every dead variant behind them (6.876 for
+  // e-tennis). Re-grouping the variant rows on the client does not reproduce the grouped bucket —
+  // the server re-evaluates the stock bucket for the whole group, so a parent whose siblings sell
+  // is not dead — which is how one page said 475 and the other 3.909.
+  const groupedDeadPages = agg?.groupedPagesByBucket?.dead ?? 0;
+  const deadIsGrouped = groupedDeadPages > 0;
   const deadQuery = useQuery({
-    queryKey: ['channel_activation_dead', brandId],
-    queryFn: () => loadBucket(brandId!, 'dead', agg?.pagesByBucket?.dead ?? 0),
+    queryKey: ['channel_activation_dead', brandId, deadIsGrouped ? 'grouped' : 'variants'],
+    queryFn: () =>
+      loadBuckets(brandId!, [['dead', deadIsGrouped ? groupedDeadPages : agg?.pagesByBucket?.dead ?? 0]], deadIsGrouped),
     enabled: !!brandId && !!agg && loadDead,
     ...QUERY_OPTS,
   });
@@ -121,6 +126,9 @@ export function useChannelActivationInsight(options: { loadDead?: boolean } = {}
     totalCount: agg?.totalCount ?? 0,
     /** Dead-stock products (loaded in the dead-stock play). */
     deadProducts: loadDead ? deadQuery.data ?? [] : [],
+    /** True when `deadProducts` are the server's parent/model rows, so the caller must not
+     * re-derive variant counts or stock value from them. */
+    deadIsGrouped,
     deadLoading: loadDead && !!agg && deadQuery.isPending,
     /** In-stock feed products (loaded after requestFeed). `enabled` only gates fetching — a query
      * still hands back whatever sits in the cache, so without this guard a cached run resurrected

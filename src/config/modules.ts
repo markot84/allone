@@ -1,8 +1,13 @@
 import type { AppSectionId, Brand, ModuleId } from '../types';
 
 /** When false, all brands are treated as B2C. B2B/B2C type is set only by Super Admin; new brands stay B2C.
- * Off for the Marketing & Data Analysis build: every B2B-only section is in `HIDDEN_SECTIONS`, so leaving
- * the edition on would only surface B2B labels and dashboard tiles pointing at hidden pages. */
+ * Off for the Marketing & Data Analysis build, and upstream retired the B2B edition at the switch
+ * rather than by deletion: the code, the Firestore data and the module definitions all stay in
+ * place, and flipping this back restores the edition unchanged. With it off, `sales`, `accounts`,
+ * `markets`, `hr`, `offers` and `territories` resolve to hidden for every brand (edition-hidden
+ * modules ignore a brand's `enabledModules` override on purpose), and a deep link to one of them is
+ * redirected by `resolveAccessibleSection` instead of rendering nothing. A brand still typed B2B in
+ * Firestore keeps its data; it simply renders as B2C. */
 export const B2B_EDITION_ENABLED = false;
 
 export type ModuleEditionStatus = 'core' | 'optional' | 'hidden';
@@ -104,7 +109,7 @@ const STANDALONE_SECTION_LABELS: Partial<Record<AppSectionId, string>> = {
   'policy-impact': 'Policy Impact',
   'marketing-plan': 'Marketing Plan',
   'brand-profile': 'Brand Profile',
-  'commercial-info': 'Εμπορικές Πληροφορίες',
+  'commercial-info': 'Market Signals',
   invite: 'Invite users',
   concept: 'Concept',
   help: 'Help',

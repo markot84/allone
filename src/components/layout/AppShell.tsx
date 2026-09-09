@@ -242,7 +242,8 @@ function RailNav({
               whiteSpace: 'nowrap',
             }}
           >
-            {item.label}
+            {/* The badge keeps its width; the label beside it is the part that truncates. */}
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
             {item.badge && (
               <span
                 style={{
@@ -252,6 +253,8 @@ function RailNav({
                   lineHeight: 1,
                   padding: '3px 5px',
                   borderRadius: 999,
+                  flex: 'none',
+                  whiteSpace: 'nowrap',
                   background: 'var(--gold-500)',
                   color: 'var(--navy-900)',
                 }}
@@ -1027,13 +1030,13 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'accounts', label: moduleConfig.accounts.label, icon: Users, group: 'commerce' },
         { id: 'competitive', label: moduleConfig.competitive.label, icon: SearchIcon, group: 'commerce' },
         { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'commercial', ...(strategyBadge ? { badge: strategyBadge.text } : {}) },
-        { id: 'policy-impact', label: 'Policy Impact', icon: BarChart3, group: 'commercial' },
+        { id: 'policy-impact', label: 'Policy Impact', icon: BarChart3, group: 'commerce' },
         { id: 'markets', label: moduleConfig.markets.label, icon: Globe2, group: 'commercial' },
         { id: 'sales', label: moduleConfig.sales.label, icon: Handshake, group: 'commercial' },
         { id: 'offers', label: moduleConfig.offers.label, icon: ClipboardList, group: 'commercial' },
         { id: 'marketing-plan', label: 'Marketing Plan', icon: ClipboardList, group: 'marketing' },
         { id: 'brand-profile', label: 'Brand Profile', icon: Palette, group: 'marketing' },
-        { id: 'commercial-info', label: 'Εμπορικές Πληροφορίες', icon: Lightbulb, group: 'marketing' },
+        { id: 'commercial-info', label: 'Market Signals', icon: Lightbulb, group: 'marketing' },
         { id: 'channels', label: moduleConfig.channels.label, icon: MegaphoneIcon, group: 'marketing' },
         { id: 'campaigns', label: moduleConfig.campaigns.label, icon: Target, group: 'marketing' },
         { id: 'analytics', label: moduleConfig.analytics.label, icon: BarChart3, group: 'marketing' },
@@ -1053,12 +1056,23 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
       const ordered = isB2B
         ? [
-            'brands', 'dashboard', 'roi', 'insights', 'reports', 'accounts', 'competitive', 'strategy', 'policy-impact', 'markets', 'sales', 'offers',
+            // 'policy-impact' follows 'competitive' here only because it moved into the commerce
+            // group: a group's ids must stay contiguous or its header is printed twice.
+            'brands', 'dashboard', 'roi', 'insights', 'reports', 'accounts', 'competitive', 'policy-impact', 'strategy', 'markets', 'sales', 'offers',
             'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'hr', 'territories', 'coordination', 'automation', 'data', 'invite', 'help',
           ]
         : [
-            'brands', 'dashboard', 'roi', 'insights', 'reports', 'ecommerce', 'rfm', 'competitive', 'strategy', 'policy-impact',
-            'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'coordination', 'automation', 'data', 'invite', 'help',
+            // The e-shop owner's working order: what is on the shelf, then what the market is
+            // doing, then the commercial decision, then how it gets executed. Procurement sits
+            // above Market & Data on purpose — stock is where the owner starts the day.
+            // Group labels are emitted whenever `group` changes, so each group's items must stay
+            // contiguous here. The B2B order above is deliberately left as it was.
+            'brands', 'dashboard', 'roi', 'insights', 'reports',
+            'products', 'suppliers', 'procurement',
+            'ecommerce', 'rfm', 'competitive', 'policy-impact',
+            'strategy',
+            'marketing-plan', 'brand-profile', 'commercial-info', 'channels', 'campaigns', 'analytics', 'calendar',
+            'finances', 'coordination', 'automation', 'data', 'invite', 'help',
           ];
 
       const itemMap = new Map(commonItems.map((item) => [item.id, item]));

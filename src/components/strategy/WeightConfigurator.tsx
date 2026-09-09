@@ -33,7 +33,7 @@ import { WeightsRadar } from './WeightsRadar';
 import { emitStrategyCascade } from '../../utils/strategyCascade';
 import { SeasonalBanner } from './SeasonalBanner';
 import { SeasonalPeriodsModal } from './SeasonalPeriodsModal';
-import { useBoundedProductSource } from '../../hooks/useBoundedProductSource';
+import { useBoundedProductSource, BOUNDED_SCOPE_COPY } from '../../hooks/useBoundedProductSource';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { useProductSignals } from '../../hooks/useProductSignals';
 import { buildTriagePromptContext, buildProvenancePromptContext } from '../../utils/aiPromptContext';
@@ -359,6 +359,7 @@ export function WeightConfigurator({
     sourceLabel: sourceProductDataSourceLabel,
     sourceKind: sourceProductSourceKind,
     isLoading: sourceProductsLoading,
+    productScope: sourceProductScope,
   } = useBoundedProductSource();
   // staticFirstPage: read ONLY .aggregate; avoids the unfiltered CF (~1.5k reads) per mount.
   const serverProductIntelligence = useProductIntelligenceAggregate('all', 1, {}, { staticFirstPage: true });
@@ -368,6 +369,9 @@ export function WeightConfigurator({
   const productSourceKind = serverProductIntelligence.aggregate ? 'erp' : sourceProductSourceKind;
   // PER-179 — count the bounded in-stock set actually scored, not aggregate totalCount (includes no_stock).
   const productSourceCount = products.length;
+  /** Since PER-319 these rows are collapsed Parent SKUs, so every count printed on this surface must
+   * say so — an ERP SKU count and a Parent SKU count answer different questions. */
+  const scopeCopy = BOUNDED_SCOPE_COPY[sourceProductScope];
 
   const scenarioErpHints = useMemo(() => {
     if (!usingProcurement || products.length === 0) return undefined;
@@ -1616,7 +1620,7 @@ export function WeightConfigurator({
             onDeadToStockClearance={({ productIds, skus, tiedCapital, count }) => {
               setTriageOrigin({
                 bucket: 'erp_dead_stock',
-                label: `Dead stock (ERP) — ${count.toLocaleString('el-GR')} SKU`,
+                label: `Dead stock (ERP) — ${count.toLocaleString('el-GR')} ${scopeCopy.unit}`,
                 skus,
                 productIds,
                 tiedCapital,
@@ -1628,7 +1632,7 @@ export function WeightConfigurator({
             onExcessToStockClearance={({ productIds, skus, tiedCapital, count }) => {
               setTriageOrigin({
                 bucket: 'erp_excess_stock',
-                label: `Excess Stock (ERP) — ${count.toLocaleString('el-GR')} SKU`,
+                label: `Excess Stock (ERP) — ${count.toLocaleString('el-GR')} ${scopeCopy.unit}`,
                 skus,
                 productIds,
                 tiedCapital,
@@ -1919,10 +1923,10 @@ export function WeightConfigurator({
             title="Live Preview"
             subtitle={
               triageScopeCount > 0
-                ? `Εστίαση από διάγνωση: ${triageScopeCount} προϊόντα · προβολή top 100 (10 ανά σελίδα)`
+                ? `Εστίαση από διάγνωση: ${triageScopeCount} ${scopeCopy.unit} · προβολή top 100 (10 ανά σελίδα)`
                 : hasImported
-                  ? `Top 100 από ${productSourceCount.toLocaleString('el-GR')} προϊόντα (10 ανά σελίδα)`
-                  : 'Top 100 προτεραιοποιημένα προϊόντα (10 ανά σελίδα)'
+                  ? `Top 100 από ${productSourceCount.toLocaleString('el-GR')} ${scopeCopy.unit} (10 ανά σελίδα)`
+                  : `Top 100 προτεραιοποιημένα ${scopeCopy.unit} (10 ανά σελίδα)`
             }
             icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           />
@@ -2133,6 +2137,7 @@ export function WeightConfigurator({
         onClose={() => setSalesBaseSetupOpen(false)}
         products={salesBaseProducts}
         productsLoading={sourceProductsLoading}
+        productScope={sourceProductScope}
         initialScope={
           activeStrategy?.scenarioId === 'sales_base'
             ? (activeStrategy as { salesBaseScope?: SalesBaseScope }).salesBaseScope

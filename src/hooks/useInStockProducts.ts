@@ -28,8 +28,9 @@ export function useInStockProducts() {
   const brandId = currentBrand?.id ?? null;
 
   const { data, isPending } = useQuery({
-    queryKey: ['in_stock_products_v2', brandId],
-    queryFn: async (): Promise<Product[] | null> => {
+    // _v3: the payload carries `grouped` alongside the rows, so callers can name what they counted.
+    queryKey: ['in_stock_products_v3', brandId],
+    queryFn: async (): Promise<{ products: Product[]; grouped: boolean } | null> => {
       if (!brandId) return null;
       const agg = await fetchProductIntelligenceAggregate(brandId, null);
       // Serve whenever pages exist — including while a rebuild is `running` or after one `failed`
@@ -42,7 +43,7 @@ export function useInStockProducts() {
       const lists = await Promise.all(
         IN_STOCK_BUCKETS.map((b) => loadBucket(brandId, b, counts?.[b] ?? 0, grouped))
       );
-      return lists.flat();
+      return { products: lists.flat(), grouped };
     },
     enabled: !!brandId,
     staleTime: 10 * 60 * 1000,
@@ -52,9 +53,13 @@ export function useInStockProducts() {
 
   return {
     /** In-stock products from the server aggregate, or [] when not ready (→ caller falls back). */
-    products: data ?? [],
+    products: data?.products ?? [],
     /** True only when the aggregate was ready and the in-stock pages were loaded. */
     ready: data != null,
+    /** True when the rows are collapsed Parent SKUs (`_g_` pages), false when they are variant SKUs.
+     * Callers must not assume it: a brand whose Product Intelligence predates PER-319 has no grouped
+     * pages and is served variant rows from the very same hook. */
+    grouped: data?.grouped === true,
     isLoading: isPending,
   };
 }
