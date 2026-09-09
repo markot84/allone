@@ -475,18 +475,17 @@ export async function computeBenchmarkCohorts(): Promise<{ brands: number; sampl
     });
   }
 
-  // Every other brand gets an explicit `eligible: false` — including one that has never qualified.
-  //
-  // Writing this only for brands that already had a document was a bug you could not see from the
-  // server: a brand with no e-shop connected got no document at all, the page found nothing, and it
-  // reported "not computed yet" for a run that had in fact completed and deliberately skipped it.
-  // An absent document and a considered "no" are different answers, and only one of them is true.
+  // A brand that stops qualifying (opted out, connector removed, volume collapsed) must stop
+  // showing yesterday's comparison. `eligible: false` lets the page explain itself instead of
+  // rendering a stale marker.
   const sampled = new Set(samples.map((sample) => sample.brandId));
-  for (const brandId of brandsSnap.docs.map((d) => d.id)) {
+  for (const brandId of [...brandsSnap.docs.map((d) => d.id)]) {
     if (sampled.has(brandId)) continue;
-    await firestore.doc(`benchmark_self/${brandId}`).set(
+    const selfRef = firestore.doc(`benchmark_self/${brandId}`);
+    const selfSnap = await selfRef.get();
+    if (!selfSnap.exists) continue;
+    await selfRef.set(
       {
-        brandId,
         eligible: false,
         reason: optedOut.includes(brandId) ? 'opted_out' : 'insufficient_data',
         metrics: {},

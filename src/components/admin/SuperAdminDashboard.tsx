@@ -180,10 +180,6 @@ function BrandsTab() {
       }
       const body = (await res.json()) as { samples?: number; brands?: number; cohorts?: number };
       setBenchmarkRebuildResult(`${body.samples ?? 0}/${body.brands ?? 0} brands, ${body.cohorts ?? 0} ομάδες σύγκρισης`);
-      // `useBenchmarks` caches for an hour and does not refetch on mount — without this, a rebuild
-      // that worked leaves the report showing the state it had before the rebuild, which reads as
-      // the rebuild having failed.
-      queryClient.invalidateQueries({ queryKey: ['benchmarks'] });
     } catch (err) {
       logger.error('Failed to rebuild benchmarks:', { err });
       setBenchmarkRebuildResult('Απέτυχε');
