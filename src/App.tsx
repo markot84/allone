@@ -94,7 +94,6 @@ const SuppliersPage = lazyNamedWithRetry(() => import('./components/inventory/Su
 const CoordinationPage = lazyNamedWithRetry(() => import('./components/coordination'), 'CoordinationPage');
 const AutomationSettingsPage = lazyNamedWithRetry(() => import('./components/settings'), 'AutomationSettingsPage');
 const GA4Analytics = lazyNamedWithRetry(() => import('./components/analytics/GA4Analytics'), 'GA4Analytics');
-const BenchmarkReport = lazyNamedWithRetry(() => import('./components/benchmark'), 'BenchmarkReport');
 const HRPage = lazyNamedWithRetry(() => import('./components/hr/HRPage'), 'HRPage');
 const OfferBuilderPage = lazyNamedWithRetry(() => import('./components/offers/OfferBuilderPage'), 'OfferBuilderPage');
 const TerritoryPage = lazyNamedWithRetry(() => import('./components/territories/TerritoryPage'), 'TerritoryPage');
@@ -423,12 +422,10 @@ function AppMain() {
         return <AutomationSettingsPage />;
       case 'competitive':
         return <CompetitorInsights />;
-      case 'benchmarks':
-        return <BenchmarkReport />;
       case 'analytics':
         return <GA4Analytics />;
       case 'ecommerce':
-        return <EcommerceDashboard onSectionChange={handleSectionChange} />;
+        return <EcommerceDashboard />;
       case 'finances':
         return <BusinessFinances onSectionChange={handleSectionChange} />;
       case 'calendar':

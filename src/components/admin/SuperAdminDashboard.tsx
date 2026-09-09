@@ -18,13 +18,12 @@ import {
 } from '@primer/octicons-react';
 import { FirestoreService } from '../../services/firestore';
 import { MembersService } from '../../services/coordination';
-import { db, auth, storage, PROJECT_ID, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../../config/firebase';
+import { db, auth, storage, PROJECT_ID } from '../../config/firebase';
 import { collection, getDocs, doc, getDoc, limit, orderBy, query } from 'firebase/firestore';
 import { SUPPORT_EMAIL, APP_NAME } from '../../config/superAdmins';
 import { loadSuperAdmins, type SuperAdminsConfig } from '../../services/appConfig';
 import { getDefaultModuleEnabled, getEditionStatus, getModuleLabel, isSectionHidden } from '../../config/modules';
-import { BENCHMARK_VERTICAL_LABELS, BENCHMARK_VERTICAL_OPTIONS } from '../../config/benchmarks';
-import type { Brand, BenchmarkVertical, ChangelogEntry, ModuleId, BrandMemberRole, BrandDepartment } from '../../types';
+import type { Brand, ChangelogEntry, ModuleId, BrandMemberRole, BrandDepartment } from '../../types';
 import { ROLE_LABELS, DEPARTMENT_LABELS, normalizeBrandMemberRole } from '../../types';
 import { useAuth } from '../../hooks';
 import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
@@ -98,9 +97,6 @@ function BrandsTab() {
   const [updatingModule, setUpdatingModule] = useState<string | null>(null);
   const [updatingHistory, setUpdatingHistory] = useState<string | null>(null);
   const [historyDrafts, setHistoryDrafts] = useState<Record<string, string>>({});
-  const [updatingBenchmark, setUpdatingBenchmark] = useState<string | null>(null);
-  const [rebuildingBenchmarks, setRebuildingBenchmarks] = useState(false);
-  const [benchmarkRebuildResult, setBenchmarkRebuildResult] = useState<string | null>(null);
   const moduleToggleIds: ModuleId[] = (
     ['ecommerce', 'analytics', 'competitive', 'roi', 'sales', 'accounts', 'markets', 'procurement'] as ModuleId[]
     // Modules switched off for the build can't be re-enabled per brand, so don't offer a dead toggle.
@@ -155,71 +151,6 @@ function BrandsTab() {
       logger.error('Failed to update brand type:', { err });
     } finally {
       setUpdatingBrandType(null);
-    }
-  };
-
-  /** Cohorts are rebuilt nightly, but assigning a trade above changes which cohort a brand belongs
-   *  to, and waiting until tomorrow to see it makes the selector feel broken. */
-  const handleRebuildBenchmarks = async () => {
-    setRebuildingBenchmarks(true);
-    setBenchmarkRebuildResult(null);
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const res = await fetch(`${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/rebuildBenchmarks`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          ...(await getAppCheckHeader()),
-        },
-        body: '{}',
-      });
-      if (!res.ok) {
-        setBenchmarkRebuildResult(`Απέτυχε: HTTP ${res.status}`);
-        return;
-      }
-      const body = (await res.json()) as { samples?: number; brands?: number; cohorts?: number };
-      setBenchmarkRebuildResult(`${body.samples ?? 0}/${body.brands ?? 0} brands, ${body.cohorts ?? 0} ομάδες σύγκρισης`);
-    } catch (err) {
-      logger.error('Failed to rebuild benchmarks:', { err });
-      setBenchmarkRebuildResult('Απέτυχε');
-    } finally {
-      setRebuildingBenchmarks(false);
-    }
-  };
-
-  /** The benchmark cohort a brand is measured against. Super-admin only by design: an owner able to
-   *  pick their own peer group picks their own result, and `firestore.rules` pins the field for the
-   *  same reason. Cohort membership only changes on the next aggregator run, hence the rebuild
-   *  button below. */
-  const handleVerticalChange = async (brandId: string, vertical: string) => {
-    setUpdatingBenchmark(brandId);
-    try {
-      // Firestore never takes undefined; an empty selection means "no trade", which the aggregator
-      // reads as `unclassified` and benchmarks against the whole estate.
-      const payload: Partial<Brand> = vertical
-        ? { vertical: vertical as BenchmarkVertical }
-        : ({ vertical: '' } as unknown as Partial<Brand>);
-      await FirestoreService.updateDocument('brands', brandId, payload);
-      setBrands((prev) =>
-        prev.map((b) => (b.id === brandId ? { ...b, vertical: (vertical || undefined) as BenchmarkVertical | undefined } : b))
-      );
-    } catch (err) {
-      logger.error('Failed to update benchmark vertical:', { err });
-    } finally {
-      setUpdatingBenchmark(null);
-    }
-  };
-
-  const handleBenchmarkOptOutChange = async (brandId: string, optOut: boolean) => {
-    setUpdatingBenchmark(brandId);
-    try {
-      await FirestoreService.updateDocument('brands', brandId, { benchmarkOptOut: optOut });
-      setBrands((prev) => prev.map((b) => (b.id === brandId ? { ...b, benchmarkOptOut: optOut } : b)));
-    } catch (err) {
-      logger.error('Failed to update benchmark opt-out:', { err });
-    } finally {
-      setUpdatingBenchmark(null);
     }
   };
 
@@ -278,34 +209,9 @@ function BrandsTab() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        <Text as="p" style={{ color: 'var(--fgColor-muted)', fontSize: 14, margin: 0 }}>
-          Συνολικά {brands.length} brand{brands.length !== 1 ? 's' : ''} στο σύστημα
-        </Text>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {benchmarkRebuildResult && (
-            <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)' }}>{benchmarkRebuildResult}</Text>
-          )}
-          <button
-            type="button"
-            onClick={handleRebuildBenchmarks}
-            disabled={rebuildingBenchmarks}
-            style={{
-              padding: '6px 12px',
-              fontSize: 12,
-              fontWeight: 600,
-              borderRadius: 6,
-              border: '1px solid var(--borderColor-default, var(--border))',
-              background: 'var(--bgColor-default, var(--surface-0))',
-              color: 'var(--fgColor-default)',
-              cursor: rebuildingBenchmarks ? 'wait' : 'pointer',
-            }}
-            title="Ξαναχτίζει τις ομάδες σύγκρισης του Benchmarking Report για όλα τα brands. Τρέχει και αυτόματα κάθε μέρα στις 08:10."
-          >
-            {rebuildingBenchmarks ? 'Υπολογισμός…' : 'Rebuild benchmarks'}
-          </button>
-        </div>
-      </div>
+      <Text as="p" style={{ color: 'var(--fgColor-muted)', fontSize: 14, marginBottom: 16 }}>
+        Συνολικά {brands.length} brand{brands.length !== 1 ? 's' : ''} στο σύστημα
+      </Text>
       <div style={{ display: 'grid', gap: 12 }}>
         {brands.map((brand) => {
           const plan = brand.plan ?? 'growth';
@@ -479,45 +385,6 @@ function BrandsTab() {
                     </button>
                   )}
                   {updatingHistory === brand.id && (
-                    <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)' }}>Saving…</Text>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                  <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)' }}>
-                    Benchmark κλάδος:
-                  </Text>
-                  <select
-                    value={brand.vertical ?? ''}
-                    onChange={(e) => handleVerticalChange(brand.id, e.target.value)}
-                    disabled={updatingBenchmark === brand.id}
-                    style={{
-                      padding: '4px 8px',
-                      fontSize: 12,
-                      borderRadius: 6,
-                      border: '1px solid var(--borderColor-default, var(--border))',
-                      background: 'var(--bgColor-default, var(--surface-0))',
-                      color: 'var(--fgColor-default)',
-                      cursor: updatingBenchmark === brand.id ? 'wait' : 'pointer',
-                    }}
-                    title="Ορίζει την ομάδα σύγκρισης στο Benchmarking Report. Χωρίς κλάδο, το brand συγκρίνεται με το σύνολο των e-shops."
-                  >
-                    <option value="">— χωρίς κλάδο —</option>
-                    {BENCHMARK_VERTICAL_OPTIONS.map((vertical) => (
-                      <option key={vertical} value={vertical}>
-                        {BENCHMARK_VERTICAL_LABELS[vertical]}
-                      </option>
-                    ))}
-                  </select>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--fgColor-muted)', cursor: updatingBenchmark === brand.id ? 'wait' : 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={brand.benchmarkOptOut === true}
-                      onChange={(e) => handleBenchmarkOptOutChange(brand.id, e.target.checked)}
-                      disabled={updatingBenchmark === brand.id}
-                    />
-                    Εξαίρεση από benchmarking
-                  </label>
-                  {updatingBenchmark === brand.id && (
                     <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)' }}>Saving…</Text>
                   )}
                 </div>

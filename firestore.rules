@@ -125,15 +125,10 @@ service cloud.firestore {
       // for free via the same SDK path used to edit name/logo, so pin them: only a super-admin
       // (billing) may change them. `type` (B2B/B2C) stays owner-editable — it is a product setting,
       // not a paywall (BrandsPage edits it and no paid feature gates on it).
-      // `vertical` picks the benchmark cohort a brand is measured against, so an owner could shop
-      // for a flattering peer group by editing it; super-admin only, same as the paywall keys.
-      // `benchmarkOptOut` stays owner-editable on purpose: an opt-out nobody can exercise without
-      // asking permission is not an opt-out. Opting out also removes the brand's own comparison
-      // (see benchmarkAggregator), so it costs what it saves.
       allow update: if isBrandOwnerOrAdmin(brandId)
         && request.resource.data.createdBy == resource.data.createdBy
         && (isSuperAdmin()
-            || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['plan', 'enabledModules', 'vertical']));
+            || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['plan', 'enabledModules']));
       allow delete: if isBrandOwnerOrAdmin(brandId);
 
       // Brand members — προσοχή: collection group query `where userId == request.auth.uid` ΔΕΝ πρέπει
@@ -545,21 +540,6 @@ service cloud.firestore {
     }
     // E-commerce summary (keyed by brandId, server-write only)
     match /ecommerce_summary/{brandId} {
-      allow read: if isBrandMember(brandId);
-      allow write: if false;
-    }
-    // Cross-eshop benchmark cohorts. Readable by any signed-in user rather than brand-scoped,
-    // because a cohort belongs to no brand: the document id is `vertical__sizeBand` and the content
-    // is percentiles over at least BENCHMARK_MIN_COHORT_BRANDS shops, with every absolute figure
-    // left behind by the aggregator. There is nothing here to scope to a tenant, and nothing a
-    // reader could trace back to one. Server-write only.
-    match /benchmark_cohorts/{cohortId} {
-      allow read: if request.auth != null;
-      allow write: if false;
-    }
-    // The brand's own side of the comparison — its values for the same metrics, plus which cohorts
-    // it may be shown against. Brand-scoped, unlike the cohorts themselves. Server-write only.
-    match /benchmark_self/{brandId} {
       allow read: if isBrandMember(brandId);
       allow write: if false;
     }
